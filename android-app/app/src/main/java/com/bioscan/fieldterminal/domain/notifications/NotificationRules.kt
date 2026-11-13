@@ -4,13 +4,15 @@ import com.bioscan.fieldterminal.data.model.NotificationKind
 import com.bioscan.fieldterminal.data.model.NotificationPrefsRow
 import com.bioscan.fieldterminal.data.model.NotificationRuleRow
 import com.bioscan.fieldterminal.data.model.SupplementRow
-import com.bioscan.fieldterminal.domain.isDueOn
 import com.bioscan.fieldterminal.domain.doseTextOn
+import com.bioscan.fieldterminal.domain.isDueOn
 import com.bioscan.fieldterminal.domain.spec
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
 
 // Pure rule engine for the notification system -- no Android, no Supabase.
 // All times are LocalDateTime in the user's own zone; the scheduler converts
@@ -141,9 +143,9 @@ fun checkinNeeded(kind: String, morningWood: Int?, arousal: Int?): Boolean =
     }
 
 /** A notification_log.fired_at (a real instant, set by the database) as the local time in [zone]. */
-fun firedAtLocal(firedAt: String, zone: java.time.ZoneId): LocalDateTime? {
+fun firedAtLocal(firedAt: String, zone: ZoneId): LocalDateTime? {
     val text = firedAt.trim().replace(' ', 'T')
-    return runCatching { java.time.OffsetDateTime.parse(text).atZoneSameInstant(zone).toLocalDateTime() }.getOrNull()
-        ?: runCatching { java.time.OffsetDateTime.parse(text.replace(Regex("([+-]\\d{2})$"), "$1:00")).atZoneSameInstant(zone).toLocalDateTime() }.getOrNull()
+    return runCatching { OffsetDateTime.parse(text).atZoneSameInstant(zone).toLocalDateTime() }.getOrNull()
+        ?: runCatching { OffsetDateTime.parse(text.replace(Regex("([+-]\\d{2})$"), "$1:00")).atZoneSameInstant(zone).toLocalDateTime() }.getOrNull()
         ?: runCatching { LocalDateTime.parse(text.take(19)) }.getOrNull()
 }

@@ -1,17 +1,16 @@
 package com.bioscan.fieldterminal.ui.components
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -34,10 +33,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Bar graphs and diverging scales, as design/tokens/charts-bars-and-scales.md specifies them. Every bar chart in the
 // app draws through these helpers so the geometry is one rule set:
@@ -336,14 +335,14 @@ fun FTDivergingScale(
  * gutter of [width] left of the bars. Three labelled values, as the chart rules ask.
  */
 @androidx.compose.runtime.Composable
-fun BarYAxis(top: Double, format: (Double) -> String, height: androidx.compose.ui.unit.Dp, width: androidx.compose.ui.unit.Dp = 40.dp) {
-    androidx.compose.foundation.layout.BoxWithConstraints(androidx.compose.ui.Modifier.width(width).height(height)) {
+fun BarYAxis(top: Double, format: (Double) -> String, height: Dp, width: Dp = 40.dp) {
+    BoxWithConstraints(Modifier.width(width).height(height)) {
         val usable = maxHeight - FTBarSpec.TopPad
         for (f in listOf(1.0, 0.5, 0.0)) {
             val y = (FTBarSpec.TopPad + usable * (1 - f).toFloat() - 7.dp).coerceIn(0.dp, maxHeight - 12.dp)
-            androidx.compose.material3.Text(
-                format(top * f), style = com.bioscan.fieldterminal.ui.theme.FTType.Micro, color = FT.TextMuted,
-                modifier = androidx.compose.ui.Modifier.padding(top = y),
+            Text(
+                format(top * f), style = FTType.Micro, color = FT.TextMuted,
+                modifier = Modifier.padding(top = y),
             )
         }
     }

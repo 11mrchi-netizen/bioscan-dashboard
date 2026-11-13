@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -39,6 +40,8 @@ import com.bioscan.fieldterminal.data.MealItemSource
 import com.bioscan.fieldterminal.data.NutritionCronometerLookupRepository
 import com.bioscan.fieldterminal.data.NutritionMealEstimate
 import com.bioscan.fieldterminal.data.NutritionMealSaveRepository
+import com.bioscan.fieldterminal.data.PhotoAnswer
+import com.bioscan.fieldterminal.data.PhotoFood
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.calories
 import com.bioscan.fieldterminal.data.counts
@@ -53,11 +56,12 @@ import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private const val ADDING = -1
 
@@ -78,9 +82,9 @@ fun NutritionEstimateConfirmSheet(
     // Photo logging v3: rerun the estimate on the same photos with a tapped answer, or with what the meal really is.
     rerunning: Boolean = false,
     // Every answer picked, sent together (one rerun for all the questions, not one per tap).
-    onAnswer: ((List<com.bioscan.fieldterminal.data.PhotoAnswer>) -> Unit)? = null,
+    onAnswer: ((List<PhotoAnswer>) -> Unit)? = null,
     // What the meal really is, with any answers picked so far.
-    onCorrect: ((String, List<com.bioscan.fieldterminal.data.PhotoAnswer>) -> Unit)? = null,
+    onCorrect: ((String, List<PhotoAnswer>) -> Unit)? = null,
     onDismiss: () -> Unit,
     onSaved: () -> Unit,
 ) {
@@ -500,12 +504,12 @@ private fun FormFieldLabel(text: String) {
     Text(text, style = sheetActionLabelStyle, color = FT.TextSecondary, modifier = Modifier.padding(bottom = 6.dp))
 }
 
-private fun LocalDateTime.toIsoWithOffset(): String = this.atOffset(java.time.ZoneOffset.UTC).toString()
+private fun LocalDateTime.toIsoWithOffset(): String = this.atOffset(ZoneOffset.UTC).toString()
 
 // ---- Photo logging v3 ----
 
 /** The photo's own record of a food the lookup matched (looked up by its generic name). */
-private fun photoFoodFor(estimate: NutritionMealEstimate, query: String): com.bioscan.fieldterminal.data.PhotoFood? =
+private fun photoFoodFor(estimate: NutritionMealEstimate, query: String): PhotoFood? =
     estimate.items.firstOrNull { it.canonicalName.equals(query, ignoreCase = true) || it.name.equals(query, ignoreCase = true) }
 
 private fun levelColor(level: String) = when (level) {
@@ -516,7 +520,7 @@ private fun levelColor(level: String) = when (level) {
 
 /** Under a food: what the photo saw (name, portion, preparation), its confidence, and what it assumed. */
 @Composable
-private fun PhotoFoodNote(food: com.bioscan.fieldterminal.data.PhotoFood) {
+private fun PhotoFoodNote(food: PhotoFood) {
     Column(Modifier.padding(start = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         val seen = listOf(food.name, food.portion, food.preparation).filter { it.isNotBlank() }.distinct().joinToString(" · ")
         Text(
@@ -538,12 +542,12 @@ private fun PhotoFoodNote(food: com.bioscan.fieldterminal.data.PhotoFood) {
 private fun PhotoEstimatePanel(
     estimate: NutritionMealEstimate,
     rerunning: Boolean,
-    onAnswer: ((List<com.bioscan.fieldterminal.data.PhotoAnswer>) -> Unit)?,
-    onCorrect: ((String, List<com.bioscan.fieldterminal.data.PhotoAnswer>) -> Unit)?,
+    onAnswer: ((List<PhotoAnswer>) -> Unit)?,
+    onCorrect: ((String, List<PhotoAnswer>) -> Unit)?,
 ) {
     var correction by remember(estimate) { mutableStateOf("") }
     var picked by remember(estimate) { mutableStateOf<Map<String, String>>(emptyMap()) }
-    val answers = picked.map { (q, a) -> com.bioscan.fieldterminal.data.PhotoAnswer(q, a) }
+    val answers = picked.map { (q, a) -> PhotoAnswer(q, a) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         estimate.confidenceLevel?.let { level ->
             Text(
@@ -561,13 +565,13 @@ private fun PhotoEstimatePanel(
             estimate.questions.forEach { q ->
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(q.question, style = FTType.BodySmall, color = FT.TextPrimary)
-                    androidx.compose.foundation.layout.FlowRow(
+                    FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         q.options.forEach { option ->
                             val on = picked[q.question] == option
-                            val shape = androidx.compose.foundation.shape.RoundedCornerShape(50)
+                            val shape = RoundedCornerShape(50)
                             Text(
                                 option,
                                 style = FTType.Label,

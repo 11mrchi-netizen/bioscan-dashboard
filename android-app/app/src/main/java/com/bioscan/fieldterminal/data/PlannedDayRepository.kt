@@ -1,9 +1,11 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.WallClock
 import com.bioscan.fieldterminal.domain.fuel.CalendarSessionInput
 import com.bioscan.fieldterminal.domain.fuel.DemandHistory
 import com.bioscan.fieldterminal.domain.fuel.PlannedDay
 import com.bioscan.fieldterminal.domain.fuel.PlannedSessionInput
+import com.bioscan.fieldterminal.domain.fuel.RecentRun
 import com.bioscan.fieldterminal.domain.fuel.RecordedSessionInput
 import com.bioscan.fieldterminal.domain.fuel.StoredLink
 import com.bioscan.fieldterminal.domain.fuel.isTrainingSession
@@ -157,7 +159,7 @@ class PlannedDayRepository(private val supabase: SupabaseClient) {
             }
             out.mapNotNull { r ->
                 // Session starts are logged times (local digits, zero offset), unlike calendar events above, which are real UTC.
-                val s = com.bioscan.fieldterminal.domain.WallClock.zoned(r.startTime, zone) ?: return@mapNotNull null
+                val s = WallClock.zoned(r.startTime, zone) ?: return@mapNotNull null
                 RecordedSessionInput(r.id, r.type, s, r.durationMin ?: 0.0, r.caloriesActive, r.avgHr, r.rpe, r.distanceKm, r.elevationGainM)
             }
         }
@@ -190,6 +192,6 @@ fun demandHistory(recorded: List<RecordedSessionInput>, restingHr: Double?, maxH
     // Runs of the last 120 days with a distance, for timing calendar runs at the person's pace.
     val since = recorded.maxOfOrNull { it.start }?.minusDays(120)
     val runs = training.filter { it.type == "run" && (it.distanceKm ?: 0.0) > 0 && (since == null || it.start.isAfter(since)) }
-        .map { com.bioscan.fieldterminal.domain.fuel.RecentRun(it.distanceKm!!, it.ascentM ?: 0.0, it.durationMin) }
+        .map { RecentRun(it.distanceKm!!, it.ascentM ?: 0.0, it.durationMin) }
     return DemandHistory(kcal, trimp, restingHr, maxHr, weightKg, runs)
 }

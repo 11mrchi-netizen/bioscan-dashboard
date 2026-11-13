@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,6 +24,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.InterventionEventsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.EpisodicIntervention
 import com.bioscan.fieldterminal.data.model.ExpectationRow
 import com.bioscan.fieldterminal.data.model.TrackedOutcomeRow
@@ -42,14 +42,15 @@ import com.bioscan.fieldterminal.domain.windowText
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTDropdown
+import com.bioscan.fieldterminal.ui.components.FTRatingSlider
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZonedDateTime
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Sheets for repeatable, timed interventions (docs: "Interventions as repeatable, timed events"). Declaring an
 // intervention fixes what it is expected to change and the window each outcome is read in; the database locks those once
@@ -252,7 +253,7 @@ fun RateEventSheet(eventId: String, interventionName: String, onDismiss: () -> U
         Column(modifier = Modifier.fillMaxWidth().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("HOW DID IT FEEL · ${interventionName.uppercase()}", style = FTType.SectionTitle, color = FT.DomainLabs)
             Text("Rate it before looking at any numbers, so the data can't colour it. 0 is worst, 10 is best.", style = FTType.BodySmall, color = FT.TextSecondary)
-            com.bioscan.fieldterminal.ui.components.FTRatingSlider("HOW IT FELT", feeling?.toIntOrNull(), 0..10, FT.Metric.Mood, { feeling = it?.toString() }, lowWord = "worst", highWord = "best")
+            FTRatingSlider("HOW IT FELT", feeling?.toIntOrNull(), 0..10, FT.Metric.Mood, { feeling = it?.toString() }, lowWord = "worst", highWord = "best")
             SheetLabel("NOTE (OPTIONAL)")
             FieldTextField(note, { note = it }, "e.g. strip came off at 3am", singleLine = false)
             error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }

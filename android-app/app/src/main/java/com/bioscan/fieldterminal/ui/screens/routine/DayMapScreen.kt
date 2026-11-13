@@ -7,10 +7,9 @@ import android.graphics.PixelFormat
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
-import androidx.compose.foundation.border
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -18,7 +17,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -37,13 +35,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.draw.clipToBounds
-import com.bioscan.fieldterminal.ui.components.fitTo
 import com.bioscan.fieldterminal.data.MapSettingsStore
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.routine.DayFix
@@ -67,19 +64,16 @@ import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.PinnedPage
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
+import com.bioscan.fieldterminal.ui.components.fitTo
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
+import com.bioscan.fieldterminal.ui.components.stableMapView
 import com.bioscan.fieldterminal.ui.screens.settings.PlaceEditor
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.tileprovider.tilesource.XYTileSource
-import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.CustomZoomButtonsController
-import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polygon
@@ -87,6 +81,7 @@ import org.osmdroid.views.overlay.Polyline
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Day map (docs/routine-intelligence/README.md, "Day map and commute"): one day of what Locations recorded, on a map and
 // as a timeline. The path is drawn from the trip fixes, coloured by the activity Android reported with each fix; each
@@ -258,7 +253,7 @@ private fun DayMap(
         modifier = modifier.clipToBounds(),
         onRelease = { it.onDetach() },
         factory = { ctx ->
-            com.bioscan.fieldterminal.ui.components.stableMapView(ctx).apply {
+            stableMapView(ctx).apply {
                 // CARTO's dark tiles when a key is saved (Setup › Connected services), OpenStreetMap's own otherwise.
                 if (cartoKey != null) {
                     setTileSource(

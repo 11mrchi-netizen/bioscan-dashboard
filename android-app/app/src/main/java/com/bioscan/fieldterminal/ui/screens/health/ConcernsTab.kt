@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.health
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,15 +23,19 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.HealthConcernsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.SymptomCheckRow
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.ConcernOverviewDto
 import com.bioscan.fieldterminal.data.model.FindingDto
 import com.bioscan.fieldterminal.data.model.HealthConcernRow
 import com.bioscan.fieldterminal.data.model.HealthOverviewDto
 import com.bioscan.fieldterminal.domain.MetricState
+import com.bioscan.fieldterminal.domain.health.CHECK_PATTERNS
 import com.bioscan.fieldterminal.domain.health.HealthVocab
 import com.bioscan.fieldterminal.domain.health.concernStateOrder
 import com.bioscan.fieldterminal.domain.health.concernStateWord
 import com.bioscan.fieldterminal.domain.health.findingStatusWord
+import com.bioscan.fieldterminal.domain.health.illnessType
 import com.bioscan.fieldterminal.domain.health.isConcernOpen
 import com.bioscan.fieldterminal.domain.health.shortDate
 import com.bioscan.fieldterminal.ui.components.BodyMap
@@ -49,6 +52,8 @@ import com.bioscan.fieldterminal.ui.components.metricStateColor
 import com.bioscan.fieldterminal.ui.components.parallel
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.theme.FTType
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Health concerns (plan §5): Health › CONCERNS, and the same list on Training › INJURY filtered to concerns of the body.
@@ -79,7 +84,7 @@ fun ConcernsTab(onOpenConcern: (String) -> Unit, anatomicalOnly: Boolean = false
     var newInjury by remember { mutableStateOf(false) }
     var newIllness by remember { mutableStateOf<Pair<Set<String>, List<Long>>?>(null) }
     var symptomCheck by remember { mutableStateOf(false) }
-    var checks by remember { mutableStateOf<List<com.bioscan.fieldterminal.data.SymptomCheckRow>>(emptyList()) }
+    var checks by remember { mutableStateOf<List<SymptomCheckRow>>(emptyList()) }
     var showResolved by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
     val guard = rememberLoadGuard()
@@ -221,7 +226,7 @@ private fun ConcernRow(c: HealthConcernRow, o: ConcernOverviewDto?, vocab: Healt
             FTStatePill(concernStateWord(o?.state ?: "unobserved"))
         }
         val where = c.regions.joinToString { vocab.regionLabel(it.code, it.side) }.ifBlank {
-            if (c.kind == "systemic") listOfNotNull(c.categoryOrKind.uppercase(), com.bioscan.fieldterminal.domain.health.illnessType(c.illnessType)?.label?.uppercase()).joinToString(" · ") else ""
+            if (c.kind == "systemic") listOfNotNull(c.categoryOrKind.uppercase(), illnessType(c.illnessType)?.label?.uppercase()).joinToString(" · ") else ""
         }
         val parts = listOfNotNull(
             where.takeIf { it.isNotBlank() },
@@ -238,7 +243,7 @@ private fun ConcernRow(c: HealthConcernRow, o: ConcernOverviewDto?, vocab: Healt
 
 // The symptom checks of the last two weeks: small things, kept as answered, never an episode or a ceiling on the score.
 @Composable
-private fun SmallThingsCard(checks: List<com.bioscan.fieldterminal.data.SymptomCheckRow>, vocab: HealthVocab) {
+private fun SmallThingsCard(checks: List<SymptomCheckRow>, vocab: HealthVocab) {
     FTCard(
         title = "SMALL THINGS · 14 DAYS",
         info = "What you logged through SYMPTOM CHECK. They are kept as answered and count for nothing else: no episode, no " +
@@ -246,10 +251,10 @@ private fun SmallThingsCard(checks: List<com.bioscan.fieldterminal.data.SymptomC
     ) {
         checks.forEach { c ->
             val a = c.assessment
-            fun str(k: String) = (a?.get(k) as? kotlinx.serialization.json.JsonPrimitive)?.content
+            fun str(k: String) = (a?.get(k) as? JsonPrimitive)?.content
             val what = c.signals.joinToString { vocab.symptom(it.symptom)?.label ?: it.symptom }
-            val fits = (a?.get("patterns") as? kotlinx.serialization.json.JsonArray)?.mapNotNull {
-                com.bioscan.fieldterminal.domain.health.CHECK_PATTERNS[(it as? kotlinx.serialization.json.JsonPrimitive)?.content]?.label
+            val fits = (a?.get("patterns") as? JsonArray)?.mapNotNull {
+                CHECK_PATTERNS[(it as? JsonPrimitive)?.content]?.label
             }.orEmpty()
             val level = str("level")
             Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {

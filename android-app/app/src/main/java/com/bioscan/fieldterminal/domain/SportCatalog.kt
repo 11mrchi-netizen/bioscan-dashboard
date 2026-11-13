@@ -1,10 +1,9 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class)
 package com.bioscan.fieldterminal.domain
 
-import kotlinx.serialization.UseSerializers
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.LocalDate
-import java.time.temporal.ChronoUnit
 
 // ME › PERFORMANCE as a hub of sports. Every recorded activity type becomes a sport tile: Running, Strength and
 // Conditioning have their own pages; any other type (cycling, hiking, walking, yoga...) gets the generic sport page, so

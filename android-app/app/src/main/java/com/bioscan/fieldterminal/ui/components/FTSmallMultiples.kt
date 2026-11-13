@@ -13,18 +13,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.domain.oneADay
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // One cell of a small-multiples grid: a metric's own sparkline on its own scale, with its latest value.
 // Fewer than two points draws a "Building" cell instead of a line (never a line through one observation).
@@ -63,7 +64,7 @@ private fun SmallMultipleCell(item: SmallMultiple, modifier: Modifier) {
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(item.label.uppercase(), style = FTType.Label, color = FT.TextMuted, maxLines = 1)
-        Row(verticalAlignment = androidx.compose.ui.Alignment.Bottom) {
+        Row(verticalAlignment = Alignment.Bottom) {
             Text(item.latestText ?: "—", style = FTType.MetricMedium, color = FT.TextPrimary)
             if (item.latestText != null && item.unit.isNotEmpty()) {
                 Text(" ${item.unit}", style = FTType.Caption, color = FT.TextSecondary, modifier = Modifier.padding(bottom = 3.dp))
@@ -81,7 +82,7 @@ private fun SmallMultipleCell(item: SmallMultiple, modifier: Modifier) {
 private fun Sparkline(points: List<Pair<LocalDate, Double>>, color: Color) {
     // One point a day, spaced by date, the line broken where readings stop for longer than three usual gaps (and at
     // least a week), so a silence is not drawn as a straight trend.
-    val sorted = com.bioscan.fieldterminal.domain.oneADay(points)
+    val sorted = oneADay(points)
     if (sorted.isEmpty()) return
     val gaps = sorted.zipWithNext { a, b -> ChronoUnit.DAYS.between(a.first, b.first).toDouble() }.sorted()
     val maxGap = maxOf(7.0, 3 * (gaps.getOrNull(gaps.size / 2) ?: 1.0))

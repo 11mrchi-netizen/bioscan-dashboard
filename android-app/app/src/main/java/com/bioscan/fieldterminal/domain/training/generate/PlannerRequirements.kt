@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.domain.training.generate
 
-import com.bioscan.fieldterminal.domain.training.definition.CompositionDef
 import com.bioscan.fieldterminal.domain.training.definition.ConditioningProtocolDef
 import com.bioscan.fieldterminal.domain.training.definition.SlotDef
 import com.bioscan.fieldterminal.domain.training.definition.StrengthModuleDef

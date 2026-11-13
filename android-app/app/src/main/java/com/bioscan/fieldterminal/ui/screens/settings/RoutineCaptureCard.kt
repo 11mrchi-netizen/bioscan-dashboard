@@ -43,11 +43,12 @@ import com.bioscan.fieldterminal.ui.components.FTConfirmDestructive
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Routine intelligence R1 + R2 (docs/routine-intelligence/01-research-and-plan.md, section 10): the switches, grants and
 // collector health for PHONE USE and LOCATIONS, with the latest results so the gates can be checked by hand (screen time
@@ -116,7 +117,7 @@ private fun StreamControls(
     onTurnOff: () -> Unit,
     onDeleteAll: suspend () -> Unit,
     onChanged: () -> Unit,
-    scope: kotlinx.coroutines.CoroutineScope,
+    scope: CoroutineScope,
 ) {
     val enabled = remember(tick) { RoutineSettingsStore.isEnabled(context, stream) }
     val pausedUntil = remember(tick) { RoutineSettingsStore.pausedUntil(context, stream) }
@@ -162,7 +163,7 @@ private fun StreamControls(
 }
 
 @Composable
-private fun PhoneUsageSection(context: Context, tick: Int, reload: Int, onChanged: () -> Unit, scope: kotlinx.coroutines.CoroutineScope) {
+private fun PhoneUsageSection(context: Context, tick: Int, reload: Int, onChanged: () -> Unit, scope: CoroutineScope) {
     val collector = remember { PhoneUsageCollector(context) }
     val repo = remember { PhoneUsageRepository(SupabaseClientProvider.client) }
     val hasAccess = remember(tick) { collector.hasAccess() }
@@ -216,7 +217,7 @@ private fun PhoneUsageSection(context: Context, tick: Int, reload: Int, onChange
 }
 
 @Composable
-private fun LocationSection(context: Context, tick: Int, reload: Int, onChanged: () -> Unit, scope: kotlinx.coroutines.CoroutineScope) {
+private fun LocationSection(context: Context, tick: Int, reload: Int, onChanged: () -> Unit, scope: CoroutineScope) {
     val repo = remember { LocationRepository(SupabaseClientProvider.client) }
     val fine = remember(tick) { LocationCollector.hasFineLocation(context) }
     val background = remember(tick) { LocationCollector.hasBackgroundLocation(context) }

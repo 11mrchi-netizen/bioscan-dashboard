@@ -1,9 +1,9 @@
 package com.bioscan.hometerminal.env
 
-import java.time.Instant
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import java.time.Instant
 
 /** What the collector is doing, for the screen. The service and the activity share one process. */
 object CollectorStatus {

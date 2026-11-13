@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data.model
 
+import com.bioscan.fieldterminal.domain.ScheduleJson
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -177,5 +178,5 @@ data class SupplementScheduleRow(
     @SerialName("every_n_days") val everyNDays: Int? = null,
     @SerialName("time_of_day") val timeOfDay: String? = null,
     val slots: List<String> = emptyList(),
-    val schedule: com.bioscan.fieldterminal.domain.ScheduleJson? = null,
+    val schedule: ScheduleJson? = null,
 )

@@ -1,7 +1,6 @@
 package com.bioscan.fieldterminal.domain
 
 import java.time.LocalDate
-import java.time.temporal.ChronoUnit
 
 // Ported 1:1 from index.html's isSupplementActive() -- same
 // active-or-ended-within-7-days cutoff (reuses isStatusCurrentlyRelevant,

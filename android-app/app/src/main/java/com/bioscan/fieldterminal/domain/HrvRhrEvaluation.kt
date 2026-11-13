@@ -1,7 +1,9 @@
 package com.bioscan.fieldterminal.domain
 
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
+import java.time.temporal.TemporalAdjusters
 import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.sqrt
@@ -197,7 +199,7 @@ fun vitalsTrendSeries(points: List<Pair<LocalDate, Double>>, timeframe: VitalsTi
         ?.let { d -> points.filter { ChronoUnit.DAYS.between(it.first, asOf) <= d } }
         ?: points
     if (timeframe == VitalsTimeframe.Week) return windowed.sortedBy { it.first }
-    return windowed.groupBy { it.first.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY)) }
+    return windowed.groupBy { it.first.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)) }
         .toSortedMap()
         .map { (weekStart, values) -> weekStart to values.map { it.second }.average() }
 }

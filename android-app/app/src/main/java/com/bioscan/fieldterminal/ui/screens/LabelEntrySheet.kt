@@ -1,7 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens
 
 import android.net.Uri
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -36,14 +34,15 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.formatAmount
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
+import com.bioscan.fieldterminal.ui.components.FTChoiceChip
 import com.bioscan.fieldterminal.ui.components.FieldTextField
-import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.util.readAndCompressImage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // A packaged food no database knows (most Taiwanese products): photograph its nutrition label (營養標示), check the
 // numbers read from it -- or type them -- and save it under the barcode, so the next scan of it is instant.
@@ -99,7 +98,7 @@ fun LabelEntrySheet(
                 values.getValue(field.key).value = v?.let { formatAmount(if (kj && field.key == "calories") it / 4.184 else it) } ?: ""
             }
             checks = read.normalized.checks
-        } catch (e: kotlinx.coroutines.CancellationException) {
+        } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             readError = e.message ?: "Couldn't read the label"
@@ -210,7 +209,7 @@ fun LabelEntrySheet(
                     try {
                         val saved = repo.saveLabel(barcode, name.trim(), brand.trim().ifBlank { null }, label)
                         saved.food?.let(onSaved) ?: run { saveError = "no product returned" }
-                    } catch (e: kotlinx.coroutines.CancellationException) {
+                    } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
                         saveError = e.message ?: "Unknown error"
@@ -242,7 +241,7 @@ private fun String.toAmount(): Double? = trim().replace(',', '.').toDoubleOrNull
 
 @Composable
 // Selection is platinum (it was emerald, the "optimal" status colour).
-private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) = com.bioscan.fieldterminal.ui.components.FTChoiceChip(label, selected, onClick)
+private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) = FTChoiceChip(label, selected, onClick)
 
 @Composable
 private fun LabelFormLabel(text: String) {

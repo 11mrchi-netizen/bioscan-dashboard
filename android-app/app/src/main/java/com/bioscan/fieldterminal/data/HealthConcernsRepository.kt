@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.data
 
-import kotlinx.serialization.builtins.nullable
 import android.content.Context
 import com.bioscan.fieldterminal.data.model.AdherenceUpsert
 import com.bioscan.fieldterminal.data.model.ConcernStateDto
@@ -13,10 +12,13 @@ import com.bioscan.fieldterminal.data.model.NewInterventionConcern
 import com.bioscan.fieldterminal.data.model.NewTrialIntervention
 import com.bioscan.fieldterminal.data.model.RecentSessionRow
 import com.bioscan.fieldterminal.data.model.TrialReadDto
+import com.bioscan.fieldterminal.domain.health.CheckContext
 import com.bioscan.fieldterminal.domain.health.CheckInPlan
 import com.bioscan.fieldterminal.domain.health.HealthVocab
+import com.bioscan.fieldterminal.domain.health.IllnessPlan
 import com.bioscan.fieldterminal.domain.health.parseHealthVocab
 import com.bioscan.fieldterminal.domain.health.retraction
+import com.bioscan.fieldterminal.domain.score.IllnessCheckIn
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.postgrest.postgrest
@@ -25,9 +27,13 @@ import io.github.jan.supabase.postgrest.query.Order
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.put
@@ -63,7 +69,7 @@ class HealthConcernsRepository(private val supabase: SupabaseClient) {
                 .decodeList<PublishedRow>()
                 .distinctBy { it.key }
         }
-    } catch (e: kotlinx.coroutines.CancellationException) {
+    } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         emptyList()
@@ -87,7 +93,7 @@ class HealthConcernsRepository(private val supabase: SupabaseClient) {
 
     // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun loadAllFindings(): List<FindingDto> =
-        ReadCache.get("health.findings", tables = null, serializer = kotlinx.serialization.builtins.ListSerializer(FindingDto.serializer())) { fetchLoadAllFindings() }
+        ReadCache.get("health.findings", tables = null, serializer = ListSerializer(FindingDto.serializer())) { fetchLoadAllFindings() }
 
     private suspend fun fetchLoadAllFindings(): List<FindingDto> = published("health_finding").mapNotNull { it.decode<FindingDto>() }
 
@@ -95,7 +101,7 @@ class HealthConcernsRepository(private val supabase: SupabaseClient) {
 
     // ---- raw tables ----
 
-    suspend fun loadConcerns(): List<HealthConcernRow> = ReadCache.get("health.concerns.v2", tables = setOf("health_concerns"), serializer = kotlinx.serialization.builtins.ListSerializer(com.bioscan.fieldterminal.data.model.HealthConcernRow.serializer())) {
+    suspend fun loadConcerns(): List<HealthConcernRow> = ReadCache.get("health.concerns.v2", tables = setOf("health_concerns"), serializer = ListSerializer(HealthConcernRow.serializer())) {
         supabase.postgrest.from("health_concerns")
             .select(columns = Columns.list("id,title,kind,onset_type,regions,symptoms,excludes_from_baselines,archived_at,legacy_source,created_at,category,illness_type,label_diagnosis")) {
                 order("created_at", Order.DESCENDING)
@@ -117,9 +123,9 @@ class HealthConcernsRepository(private val supabase: SupabaseClient) {
      * The check-ins about one concern since [since], one per day: the highest TRAINING answer and the highest temperature
      * logged that day (scoring: the illness ceiling, domain/score/IllnessRead.kt). Retracted and superseded rows are left out.
      */
-    suspend fun loadIllnessCheckIns(concernId: String, since: LocalDate): List<com.bioscan.fieldterminal.domain.score.IllnessCheckIn> =
+    suspend fun loadIllnessCheckIns(concernId: String, since: LocalDate): List<IllnessCheckIn> =
         ReadCache.get("health.illness_checkins.v2.$concernId.$since", tables = setOf("health_observations", "health_signals"),
-            serializer = kotlinx.serialization.builtins.ListSerializer(IllnessDayRow.serializer())) {
+            serializer = ListSerializer(IllnessDayRow.serializer())) {
             val obs = supabase.postgrest.from("health_observations")
                 .select(columns = Columns.list("id,local_date,function_impact")) {
                     filter { eq("concern_id", concernId); gte("local_date", since.toString()); exact("superseded_at", null); eq("retracted", false) }
@@ -139,7 +145,7 @@ class HealthConcernsRepository(private val supabase: SupabaseClient) {
                 )
             }
         }.mapNotNull { r ->
-            runCatching { LocalDate.parse(r.date) }.getOrNull()?.let { com.bioscan.fieldterminal.domain.score.IllnessCheckIn(it, r.impact, r.temperatureC, r.severity, r.symptoms) }
+            runCatching { LocalDate.parse(r.date) }.getOrNull()?.let { IllnessCheckIn(it, r.impact, r.temperatureC, r.severity, r.symptoms) }
         }
 
     suspend fun lastCheckinDate(): LocalDate? = loadLatestObservations(1).firstOrNull()?.localDate?.let(LocalDate::parse)
@@ -162,7 +168,7 @@ class HealthConcernsRepository(private val supabase: SupabaseClient) {
     }
 
     /** An illness: its concern, first check-in and signals, and the start mark when it began before today. */
-    suspend fun saveIllness(plan: com.bioscan.fieldterminal.domain.health.IllnessPlan) {
+    suspend fun saveIllness(plan: IllnessPlan) {
         save(plan.checkIn)
         plan.startMark?.let { supabase.postgrest.from("health_episode_marks").insert(it) }
     }
@@ -202,7 +208,7 @@ class HealthConcernsRepository(private val supabase: SupabaseClient) {
     }
 
     /** What the symptom check prefills from: last night's sleep and the last three days' recorded training. */
-    suspend fun loadCheckContext(today: LocalDate = LocalDate.now()): com.bioscan.fieldterminal.domain.health.CheckContext {
+    suspend fun loadCheckContext(today: LocalDate = LocalDate.now()): CheckContext {
         val sleep = catching {
             supabase.postgrest.from("sleep_daily").select(columns = Columns.list("date,hours")) { filter { eq("date", today.toString()) } }
                 .decodeList<CheckSleepRow>().mapNotNull { it.hours }.maxOrNull()
@@ -213,7 +219,7 @@ class HealthConcernsRepository(private val supabase: SupabaseClient) {
                 filter { gte("start_time", today.minusDays(3).toString()); neq("type", "walk") }
             }.decodeList<CheckSessionRow>().mapNotNull { it.durationMin }
         }.getOrNull()
-        return com.bioscan.fieldterminal.domain.health.CheckContext(sleep, sessions?.sum(), sessions?.maxOrNull())
+        return CheckContext(sleep, sessions?.sum(), sessions?.maxOrNull())
     }
 
     /** Withdraws a check-in by saving a retraction that supersedes it; nothing is deleted. */
@@ -269,7 +275,7 @@ class HealthConcernsRepository(private val supabase: SupabaseClient) {
         }
         ReadCache.invalidateWrite("analysis_results")
         response.status.value in 200..299
-    } catch (e: kotlinx.coroutines.CancellationException) {
+    } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         false
@@ -305,14 +311,14 @@ private data class IllnessTempRow(
 internal data class IllnessDayRow(val date: String, val impact: Int?, val temperatureC: Double?, val severity: Int? = null, val symptoms: Set<String> = emptySet())
 
 /** One symptom check as the Health tab lists it. */
-data class SymptomCheckRow(val id: String, val date: String, val assessment: kotlinx.serialization.json.JsonObject?, val signals: List<CheckSignalRow>)
+data class SymptomCheckRow(val id: String, val date: String, val assessment: JsonObject?, val signals: List<CheckSignalRow>)
 
 @Serializable
 private data class CheckObsRow(
     val id: String,
     @kotlinx.serialization.SerialName("observed_at") val observedAt: String,
     @kotlinx.serialization.SerialName("local_date") val localDate: String,
-    val assessment: kotlinx.serialization.json.JsonObject? = null,
+    val assessment: JsonObject? = null,
 )
 
 @Serializable

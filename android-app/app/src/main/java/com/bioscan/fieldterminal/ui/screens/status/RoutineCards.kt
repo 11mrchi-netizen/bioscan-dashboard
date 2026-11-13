@@ -19,20 +19,15 @@ import com.bioscan.fieldterminal.data.routine.PlacesRepository
 import com.bioscan.fieldterminal.data.routine.RoutineRepository
 import com.bioscan.fieldterminal.data.routine.RoutineSettingsStore
 import com.bioscan.fieldterminal.data.routine.RoutineStream
-import com.bioscan.fieldterminal.domain.routine.PlaceCategory
+import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.domain.routine.PlacedVisit
-import com.bioscan.fieldterminal.domain.routine.RoutineYesterday
-import com.bioscan.fieldterminal.domain.routine.localDateOf
-import com.bioscan.fieldterminal.domain.routine.routineLines
 import com.bioscan.fieldterminal.domain.routine.unloggedExerciseVisits
 import com.bioscan.fieldterminal.ui.components.FTCard
-import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private val visitFmt = DateTimeFormatter.ofPattern("EEE d MMM · HH:mm")
 

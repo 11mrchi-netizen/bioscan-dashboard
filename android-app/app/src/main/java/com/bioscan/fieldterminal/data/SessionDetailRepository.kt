@@ -13,14 +13,17 @@ import com.bioscan.fieldterminal.data.model.ExerciseSessionDetailRow
 import com.bioscan.fieldterminal.domain.RouteAvailability
 import com.bioscan.fieldterminal.domain.RoutePoint
 import com.bioscan.fieldterminal.domain.SessionDetail
+import com.bioscan.fieldterminal.domain.SessionPause
 import com.bioscan.fieldterminal.domain.TimePoint
 import com.bioscan.fieldterminal.healthconnect.HealthConnectManager
 import com.bioscan.fieldterminal.healthconnect.readAllRecords
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
+import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import java.time.Duration
 import java.time.Instant
 
@@ -79,7 +82,7 @@ data class ZeppStrengthData(
     val sets: List<ZeppStrengthSetData> = emptyList(),
     // Zepp's current version of the exercises and its fingerprint (zepp-extract/strengthImport.ts). Kept as raw JSON so
     // an unexpected shape can never break the per-set data above; read with zeppExercises().
-    val exercises: kotlinx.serialization.json.JsonElement? = null,
+    val exercises: JsonElement? = null,
     val fingerprint: String? = null,
 )
 
@@ -127,7 +130,7 @@ suspend fun loadZeppWorkoutSummaries(supabase: SupabaseClient): List<ZeppWorkout
     ReadCache.kept("zepp.summaries", tables = setOf("zepp_workout_detail")) {
         supabase.postgrest.from("zepp_workout_detail")
             .select(columns = Columns.list("start_time,summary")) {
-                order("start_time", io.github.jan.supabase.postgrest.query.Order.ASCENDING)
+                order("start_time", Order.ASCENDING)
             }
             .decodeList<ZeppWorkoutDetailSummaryRow>()
     }
@@ -233,7 +236,7 @@ class SessionDetailRepository(
             distanceKm = toPoints(decoded.distanceKm),
             cadenceSpm = toPoints(decoded.cadenceSpm),
             verticalRatioPct = toPoints(decoded.verticalStrideRatioPct),
-            pauses = decoded.pauses.map { com.bioscan.fieldterminal.domain.SessionPause(it.startOffset, it.durationSec) },
+            pauses = decoded.pauses.map { SessionPause(it.startOffset, it.durationSec) },
         )
     }
 

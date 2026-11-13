@@ -36,18 +36,20 @@ import com.bioscan.fieldterminal.domain.RunDynamicsMarks
 import com.bioscan.fieldterminal.domain.RunMark
 import com.bioscan.fieldterminal.domain.SessionDetail
 import com.bioscan.fieldterminal.domain.SessionSplit
-import com.bioscan.fieldterminal.domain.TimePoint
-import com.bioscan.fieldterminal.domain.sessionAvgSpeedKmh
 import com.bioscan.fieldterminal.domain.analysis.SessionStateObject
 import com.bioscan.fieldterminal.domain.analysis.StateDimension
 import com.bioscan.fieldterminal.domain.heartRateZoneBreakdown
 import com.bioscan.fieldterminal.domain.heartRateZoneFor
 import com.bioscan.fieldterminal.domain.initialZoneMethod
 import com.bioscan.fieldterminal.domain.movingMinutes
+import com.bioscan.fieldterminal.domain.paceSeries
+import com.bioscan.fieldterminal.domain.sessionAvgSpeedKmh
+import com.bioscan.fieldterminal.domain.trail.GradeTimeSplit
 import com.bioscan.fieldterminal.domain.trail.elevationProfileWithOverlays
 import com.bioscan.fieldterminal.domain.trail.gradeTimeSplit
 import com.bioscan.fieldterminal.domain.zoneBounds
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTChevron
 import com.bioscan.fieldterminal.ui.components.HeartRateZoneBars
 import com.bioscan.fieldterminal.ui.components.HeartRateZoneMethodSwitch
 import com.bioscan.fieldterminal.ui.components.InfoHelpButton
@@ -59,16 +61,18 @@ import com.bioscan.fieldterminal.ui.components.TileMark
 import com.bioscan.fieldterminal.ui.components.TrailElevationChart
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.heartRateZoneColor
+import com.bioscan.fieldterminal.ui.screens.shoes.RunShoeBadge
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import kotlin.math.round
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // The run session page (the owner's structure, Oct 2026): SUMMARY, RUN DYNAMICS (collapsible sections), TRAIL, SPLITS;
 // the route stays in SessionDetailScreen. Every metric is a tile, two to a row (TileGrid). Rides, hikes and strength
 // keep SessionDetailScreen's own cards.
 
 private fun pace(minPerKm: Double): String = formatSplitPace((minPerKm * 60).roundToLong())
-private fun Double.roundToLong(): Long = kotlin.math.round(this).toLong()
+private fun Double.roundToLong(): Long = round(this).toLong()
 
 // ---- SUMMARY --------------------------------------------------------------------------------------------------------
 
@@ -94,7 +98,7 @@ fun RunSummaryCard(header: ExerciseSessionDetailRow, detail: SessionDetail?, zep
                 }
                 if (line.isNotBlank()) Text(line, style = FTType.BodySmall, color = FT.TextSecondary)
             }
-            com.bioscan.fieldterminal.ui.screens.shoes.RunShoeBadge(header.id, onOpenShoe)
+            RunShoeBadge(header.id, onOpenShoe)
         }
         TileGrid(
             listOfNotNull(
@@ -135,7 +139,7 @@ fun RunDynamicsCard(
     fun isOpen(s: DynamicsSection) = s.name !in folded
 
     val d = detail
-    val pace = remember(d) { com.bioscan.fieldterminal.domain.paceSeries(d?.speedKmh.orEmpty()) }
+    val pace = remember(d) { paceSeries(d?.speedKmh.orEmpty()) }
     val all = listOfNotNull(d?.heartRate, pace, d?.powerW, d?.cadenceSpm, d?.verticalRatioPct).filter { it.isNotEmpty() }
     val xRange = if (all.isNotEmpty()) all.minOf { it.first().offsetSeconds } to all.maxOf { it.last().offsetSeconds } else null
     val pauses = d?.pauses.orEmpty().map { it.startOffset to it.endOffset }
@@ -309,7 +313,7 @@ private fun Section(section: DynamicsSection, isOpen: Boolean, onToggle: (Dynami
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(section.title, style = FTType.LabelCaps, color = FT.TextPrimary, modifier = Modifier.weight(1f))
-        com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextSecondary, expanded = isOpen)
+        FTChevron(tint = FT.TextSecondary, expanded = isOpen)
     }
     tiles()
 }
@@ -355,7 +359,7 @@ private val GRADE_COLORS = listOf(FT.Category.Activity.c700, FT.Category.Activit
 
 // Uphill / flat / downhill as shares of moving time; the legend carries the words and percentages.
 @Composable
-private fun GradeSplitDonut(split: com.bioscan.fieldterminal.domain.trail.GradeTimeSplit) {
+private fun GradeSplitDonut(split: GradeTimeSplit) {
     val parts = listOf("UPHILL" to split.uphillSec, "FLAT" to split.flatSec, "DOWNHILL" to split.downhillSec)
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
         Canvas(Modifier.size(96.dp)) {

@@ -33,18 +33,18 @@ import com.bioscan.fieldterminal.domain.compositeInputs
 import com.bioscan.fieldterminal.domain.computeCircadianAlignment
 import com.bioscan.fieldterminal.domain.demotes
 import com.bioscan.fieldterminal.domain.evaluateSri
-import com.bioscan.fieldterminal.domain.sleepIndex
 import com.bioscan.fieldterminal.domain.score.Series
+import com.bioscan.fieldterminal.domain.sleepIndex
 import com.bioscan.fieldterminal.ui.components.parallel
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.screens.status.rememberScorecards
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private val DEEP = FT.Metric.StageDeep
 private val LIGHT = FT.Metric.StageLight

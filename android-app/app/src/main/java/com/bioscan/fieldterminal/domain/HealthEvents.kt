@@ -1,8 +1,5 @@
 package com.bioscan.fieldterminal.domain
 
-import com.bioscan.fieldterminal.data.model.IllnessRow
-import com.bioscan.fieldterminal.data.model.InjuryRow
-import com.bioscan.fieldterminal.data.model.MedicationEntry
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 

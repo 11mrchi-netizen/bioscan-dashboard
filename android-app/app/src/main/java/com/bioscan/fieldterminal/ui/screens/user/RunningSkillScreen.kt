@@ -1,10 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens.user
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -13,21 +10,17 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AgingProfileOverview
 import com.bioscan.fieldterminal.data.RunFormPoint
 import com.bioscan.fieldterminal.data.RunningHistory
-import com.bioscan.fieldterminal.domain.DataAvailability
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.DisplayValue
 import com.bioscan.fieldterminal.domain.HILLS_MIN_M_PER_KM
-import com.bioscan.fieldterminal.domain.PerformanceTimeframe
-import com.bioscan.fieldterminal.domain.toPerformanceTimeframe
 import com.bioscan.fieldterminal.domain.QUALITY_Z4_SHARE
 import com.bioscan.fieldterminal.domain.RecordRun
-import com.bioscan.fieldterminal.domain.RunCategory
 import com.bioscan.fieldterminal.domain.RunBaseline
+import com.bioscan.fieldterminal.domain.RunCategory
 import com.bioscan.fieldterminal.domain.RunCategoryBasis
 import com.bioscan.fieldterminal.domain.WeekBucket
 import com.bioscan.fieldterminal.domain.bucketWeeklyStacked
@@ -36,8 +29,6 @@ import com.bioscan.fieldterminal.domain.levels.formatPace
 import com.bioscan.fieldterminal.domain.runRecords
 import com.bioscan.fieldterminal.domain.trailingWeeklyAverage
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
-import com.bioscan.fieldterminal.ui.components.FTCard
-import com.bioscan.fieldterminal.ui.components.FTDataState
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.FTStackedWeeklyBars
@@ -47,10 +38,14 @@ import com.bioscan.fieldterminal.ui.components.StackPart
 import com.bioscan.fieldterminal.ui.components.StatTileSpec
 import com.bioscan.fieldterminal.ui.components.TileGrid
 import com.bioscan.fieldterminal.ui.components.TrendSeries
+import com.bioscan.fieldterminal.ui.screens.detail.DetailScreen
+import com.bioscan.fieldterminal.ui.screens.detail.EmptyLine
+import com.bioscan.fieldterminal.ui.screens.detail.LocalRangeDays
+import com.bioscan.fieldterminal.ui.screens.performance.RecentSessions
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private val DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy")
 
@@ -78,9 +73,9 @@ private enum class RunSurface(val label: String) { ROAD("ROAD"), TRAIL("TRAIL") 
 /** The Running page (ME › PERFORMANCE › Running). */
 @Composable
 fun RunningScreen(onBack: () -> Unit, onOpenSession: (Long) -> Unit) {
-    com.bioscan.fieldterminal.ui.screens.detail.DetailScreen("RUNNING", onBack, eyebrow = "PERFORMANCE", domain = FT.Domain.Load) {
+    DetailScreen("RUNNING", onBack, eyebrow = "PERFORMANCE", domain = FT.Domain.Load) {
         LoadedContent(load = { UserDataCache.running() }) { RunningContent(it) }
-        com.bioscan.fieldterminal.ui.screens.performance.RecentSessions("run", onOpenSession)
+        RecentSessions("run", onOpenSession)
     }
 }
 
@@ -92,7 +87,7 @@ private fun RunningContent(history: RunningHistory) {
     val vo2Percentile by produceState<Double?>(initialValue = null) { value = catching { UserDataCache.vo2Percentile() }.getOrNull() }
     val level = remember(history, vo2Percentile) { runningLevelOf(history, vo2Percentile) }
     val today = remember { LocalDate.now() }
-    val from = today.minusDays(com.bioscan.fieldterminal.ui.screens.detail.LocalRangeDays.current - 1L)
+    val from = today.minusDays(LocalRangeDays.current - 1L)
 
     SkillHeroCard(
         Skill.RUNNING, level,
@@ -170,7 +165,7 @@ private fun VolumeCard(history: RunningHistory, from: LocalDate, today: LocalDat
             "trailing 4-week average.",
     ) {
         if (inWindow.isEmpty()) {
-            com.bioscan.fieldterminal.ui.screens.detail.EmptyLine("No runs with distance in this window.")
+            EmptyLine("No runs with distance in this window.")
             return@Section
         }
         val weeks = bucketWeeklyStacked(history.runs, { it.date }, { it.distanceKm }, { partIndex(it.category) }, RUN_PARTS.size, from, today)
@@ -219,7 +214,7 @@ private fun RawAndMedianCard(
     com.bioscan.fieldterminal.ui.screens.detail.Section(title = title, info = info) {
         val raw = all.filter { !it.first.isBefore(from) }
         if (raw.isEmpty()) {
-            com.bioscan.fieldterminal.ui.screens.detail.EmptyLine(emptyText)
+            EmptyLine(emptyText)
             return@Section
         }
         val line = baseline.line(all).filter { !it.first.isBefore(from) }
@@ -295,7 +290,7 @@ private fun CadenceStrideCard(form: List<RunFormPoint>, from: LocalDate, today: 
         val cadenceMedian = baseline.line(cadenceAll).filter { !it.first.isBefore(from) }
         val stride = baseline.line(form.series { it.strideCm }).filter { !it.first.isBefore(from) }
         if (cadence.isEmpty() && stride.isEmpty()) {
-            com.bioscan.fieldterminal.ui.screens.detail.EmptyLine("No ${if (trail) "trail" else "road"} runs with cadence in this window.")
+            EmptyLine("No ${if (trail) "trail" else "road"} runs with cadence in this window.")
             return@Section
         }
         val dates = (cadence + stride).map { it.first }
@@ -338,7 +333,7 @@ private fun RecordsCard(history: RunningHistory, trail: Boolean, today: LocalDat
         val records = remember(runs, trail) { runRecords(runs, trail, today) }
         val longest = records.longest
         if (longest == null) {
-            com.bioscan.fieldterminal.ui.screens.detail.EmptyLine("No ${if (trail) "trail" else "road"} runs recorded yet.")
+            EmptyLine("No ${if (trail) "trail" else "road"} runs recorded yet.")
             return@Section
         }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

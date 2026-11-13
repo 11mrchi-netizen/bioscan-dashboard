@@ -8,6 +8,7 @@ import com.bioscan.fieldterminal.domain.analysis.Directionality
 import com.bioscan.fieldterminal.domain.analysis.InputCompleteness
 import com.bioscan.fieldterminal.domain.analysis.Provenance
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 
 // DAV-197 (docs/analysis-layer-2/22-comparable-sets-and-personal-comparison.md).
 // Wires DAV-194 (personalBaseline), DAV-198 (comparableSet, applied by the
@@ -51,7 +52,7 @@ fun comparePersonal(
     // Analysis review A3: rank against the same window the baseline uses (the label says PERSONAL (28d)); it used to rank
     // against everything the caller loaded (~200 days for HRV and RHR).
     val sortedHistory = history
-        .filter { java.time.temporal.ChronoUnit.DAYS.between(it.first, asOf) in 0..PERSONAL_BASELINE_WINDOW_DAYS.toLong() }
+        .filter { ChronoUnit.DAYS.between(it.first, asOf) in 0..PERSONAL_BASELINE_WINDOW_DAYS.toLong() }
         .map { it.second }
         .sorted()
     // Percentile rank: fraction of the window at or below the current value -- inclusive, so a current value equal to

@@ -1,7 +1,5 @@
 package com.bioscan.fieldterminal.domain.integrity
 
-import java.time.Instant
-
 enum class IntegritySeverity {
     INFO,
     WARNING,

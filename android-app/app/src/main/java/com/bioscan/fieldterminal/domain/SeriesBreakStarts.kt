@@ -1,8 +1,8 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class)
 package com.bioscan.fieldterminal.domain
 
-import kotlinx.serialization.UseSerializers
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.LocalDate
 
 // Analysis Layer 3 / R1 (docs/analysis-layer-3). A baseline restarts only after a CONFIRMED series break: a statistical

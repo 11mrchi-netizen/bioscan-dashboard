@@ -18,8 +18,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // DAV-288: carbs/protein/fat as a share of macro grams (not calories -- grams
 // is what MACROS already shows elsewhere on this page, so the donut reads

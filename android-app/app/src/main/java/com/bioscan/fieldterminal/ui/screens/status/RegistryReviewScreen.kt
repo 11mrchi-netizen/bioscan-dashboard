@@ -1,8 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -20,20 +18,22 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.EvidenceReviewItem
 import com.bioscan.fieldterminal.data.InteractionReviewItem
+import com.bioscan.fieldterminal.data.LabWatchReviewItem
 import com.bioscan.fieldterminal.data.RegistryReviewRepository
 import com.bioscan.fieldterminal.data.RegistryReviewRow
 import com.bioscan.fieldterminal.data.ReviewState
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.reviewState
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.screens.detail.Section
 import com.bioscan.fieldterminal.ui.screens.today.FullScreenOverlay
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.launch
 import java.time.OffsetDateTime
 import java.time.ZoneId
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Review of the shared registries (evidence_records: what an ingredient is expected to do; interaction_records: pairs to
 // watch). Every row was seeded from a cited source and marked unreviewed. Here the owner reads each claim with its
@@ -87,7 +87,7 @@ private fun InteractionReviewItem.entry() = Entry(
     url = citationUrl(pmidDoi, sourceUrl),
 )
 
-private fun com.bioscan.fieldterminal.data.LabWatchReviewItem.entry() = Entry(
+private fun LabWatchReviewItem.entry() = Entry(
     "lab_watch", id, version, reviewStatus,
     title = "${substanceAliases.firstOrNull()?.replaceFirstChar { it.uppercase() } ?: "?"} → $markerLabel" +
         (minDailyAmount?.let { " (from ${com.bioscan.fieldterminal.domain.formatAmount(it)} ${amountUnit.orEmpty()} a day)" } ?: ""),

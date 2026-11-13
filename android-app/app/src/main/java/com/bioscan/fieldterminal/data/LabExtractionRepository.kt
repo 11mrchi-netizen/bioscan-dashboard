@@ -1,13 +1,14 @@
 package com.bioscan.fieldterminal.data
 
-import com.bioscan.fieldterminal.domain.LenientJson
 import android.util.Base64
+import com.bioscan.fieldterminal.domain.LenientJson
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -119,7 +120,7 @@ private val RESPONSE_SCHEMA = buildJsonObject {
                     put("ref_high", buildJsonObject { put("type", "NUMBER") })
                 },
             )
-            put("required", buildJsonArray { add(kotlinx.serialization.json.JsonPrimitive("marker_name")) })
+            put("required", buildJsonArray { add(JsonPrimitive("marker_name")) })
         },
     )
 }

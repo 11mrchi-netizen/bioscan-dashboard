@@ -35,9 +35,10 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.TimeField
+import com.bioscan.fieldterminal.ui.screens.shoes.ShoesCard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalTime
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private val PLATE_CHOICES = listOf(0.5, 1.25, 2.5, 5.0, 10.0, 15.0, 20.0, 25.0)
 
@@ -61,7 +62,7 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenShoe: (Long) -> Unit = {}) 
             } else {
                 state.error?.let { Text(it, color = FT.Critical, style = FTType.BodySmall) }
                 EquipmentCard(state)
-                com.bioscan.fieldterminal.ui.screens.shoes.ShoesCard(onOpenShoe)
+                ShoesCard(onOpenShoe)
                 ScheduleCard(state)
                 HeartRateZonesCard(state)
                 Spacer(Modifier.height(24.dp))

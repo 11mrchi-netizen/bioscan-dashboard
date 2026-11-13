@@ -19,10 +19,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -37,30 +37,35 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.data.AddEntryRepository
 import com.bioscan.fieldterminal.data.LOG_PAGE_DAYS
 import com.bioscan.fieldterminal.data.LOG_WINDOW_DAYS
 import com.bioscan.fieldterminal.data.LogFeed
 import com.bioscan.fieldterminal.data.LogRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.domain.DayMark
 import com.bioscan.fieldterminal.domain.LogCategory
-import com.bioscan.fieldterminal.domain.LogEntry
 import com.bioscan.fieldterminal.domain.LogDay
+import com.bioscan.fieldterminal.domain.LogEntry
 import com.bioscan.fieldterminal.domain.LogEntryKind
 import com.bioscan.fieldterminal.domain.LogMark
 import com.bioscan.fieldterminal.domain.LogSource
-import com.bioscan.fieldterminal.domain.DayMark
 import com.bioscan.fieldterminal.domain.MarkState
 import com.bioscan.fieldterminal.domain.buildLogDays
 import com.bioscan.fieldterminal.domain.category
 import com.bioscan.fieldterminal.domain.supplementExpectedOn
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
-import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
 import com.bioscan.fieldterminal.ui.components.SubTabChip
+import com.bioscan.fieldterminal.ui.components.Toasts
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
+import com.bioscan.fieldterminal.ui.components.rememberCacheVersion
+import com.bioscan.fieldterminal.ui.screens.status.UnloggedVisitsCard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import kotlinx.coroutines.CancellationException
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Log tab: Step 11's unified read feed plus Step 12's "+" add-entry flow and
 // its edit/delete counterpart. Real data merged from every logged table (see
@@ -100,7 +105,7 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
     var expandedKeys by rememberSaveable { mutableStateOf("") }
     var gapsOnly by rememberSaveable { mutableStateOf(false) }
 
-    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    val cacheVersion = rememberCacheVersion()
     LaunchedEffect(reloadKey, windowDays, cacheVersion) {
         error = null
         try {
@@ -112,7 +117,7 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
                 olderExhausted = loaded.entries.none { it.timestamp.toLocalDate().isBefore(previousStart) }
             }
             feed = loaded
-        } catch (e: kotlinx.coroutines.CancellationException) {
+        } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             error = e.message ?: "Unknown error"
@@ -177,7 +182,7 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
                     )
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
                         // Routine intelligence R5: gym visits with no session recorded (nothing shows when there are none).
-                        item(key = "unlogged-visits") { com.bioscan.fieldterminal.ui.screens.status.UnloggedVisitsCard() }
+                        item(key = "unlogged-visits") { UnloggedVisitsCard() }
                         if (visible.isEmpty()) {
                             item(key = "no-gaps") {
                                 Text(
@@ -237,10 +242,10 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
                 actionEntry = null
                 val key = entry.source to entry.id
                 hidden = hidden + key
-                com.bioscan.fieldterminal.ui.components.Toasts.undoable(
+                Toasts.undoable(
                     "Deleted: ${entry.headline}",
                     commit = {
-                        com.bioscan.fieldterminal.data.AddEntryRepository(SupabaseClientProvider.client).deleteEntry(entry.source, entry.id)
+                        AddEntryRepository(SupabaseClientProvider.client).deleteEntry(entry.source, entry.id)
                         refresh()
                     },
                     onUndo = { hidden = hidden - key },

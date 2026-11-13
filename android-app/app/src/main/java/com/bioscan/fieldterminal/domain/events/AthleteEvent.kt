@@ -1,13 +1,15 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain.events
 
-import kotlinx.serialization.UseSerializers
-import kotlinx.serialization.Serializable
 import com.bioscan.fieldterminal.domain.trail.CoursePoint
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.Duration
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.ZonedDateTime
 import kotlin.math.abs
+import kotlin.math.round
 
 // Events outside the training program (supabase/migrations/20261024_athlete_events.sql): races, long sessions, matches,
 // hiking days and other hard days. The training program only knows the sessions of a block, and the calendar only a
@@ -190,12 +192,12 @@ fun parseHoursMinutes(text: String): Double? {
 
 /** Minutes as "1:45" (hours:minutes), rounded to the minute. */
 fun formatHoursMinutes(minutes: Double): String {
-    val total = kotlin.math.round(minutes).toLong()
+    val total = round(minutes).toLong()
     return "%d:%02d".format(total / 60, total % 60)
 }
 
 /** When an event starts, for ordering: its start time, else the end of its day (it is "on" all day). */
-fun AthleteEvent.effectiveStart(zone: java.time.ZoneId): ZonedDateTime = start?.withZoneSameInstant(zone) ?: date.atTime(23, 59).atZone(zone)
+fun AthleteEvent.effectiveStart(zone: ZoneId): ZonedDateTime = start?.withZoneSameInstant(zone) ?: date.atTime(23, 59).atZone(zone)
 
 /** The soonest open event that has not started yet and falls within [horizonDays]. */
 fun nextUpcomingEvent(events: List<AthleteEvent>, now: ZonedDateTime, horizonDays: Long = 14): AthleteEvent? =

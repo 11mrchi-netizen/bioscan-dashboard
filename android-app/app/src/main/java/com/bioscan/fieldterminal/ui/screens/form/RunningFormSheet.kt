@@ -71,7 +71,7 @@ import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.util.ExternalActivityGuard
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -81,6 +81,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Lab › Tests › RUNNING FORM ANALYSER (docs/running-form/README.md): the filming guide, the runner's choices and past
 // analyses, then a picked clip read on the phone (pose, then the analysis), then the report: the clip's quality, the step
@@ -161,7 +162,7 @@ fun RunningFormSheet(onDismiss: () -> Unit) {
     }
 
     ModalBottomSheet(
-        onDismissRequest = { if (!picking && !com.bioscan.fieldterminal.util.ExternalActivityGuard.active) { job?.cancel(); onDismiss() } },
+        onDismissRequest = { if (!picking && !ExternalActivityGuard.active) { job?.cancel(); onDismiss() } },
         sheetState = sheetState, shape = FT.SheetShape, containerColor = FT.Surface, contentColor = FT.TextPrimary,
     ) {
         Column(

@@ -19,8 +19,8 @@ import com.bioscan.fieldterminal.domain.score.ScoreBand
 import com.bioscan.fieldterminal.domain.score.ScoreScale
 import com.bioscan.fieldterminal.domain.score.ScoreTrend
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Scoring system (docs/scoring-system/02-page-mockups.md §0), drawn as the v1 tick gauge (FTGauge.kt): one lap is 0-100;
 // above 100 a second lap is drawn over the first from 12 o'clock on the same scale, brighter, so 150 is one and a half laps

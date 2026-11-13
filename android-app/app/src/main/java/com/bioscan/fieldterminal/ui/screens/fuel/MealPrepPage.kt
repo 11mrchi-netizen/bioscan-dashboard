@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.fuel
 
-import com.bioscan.fieldterminal.data.catching
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.background
@@ -35,12 +34,15 @@ import com.bioscan.fieldterminal.data.MealPrepWeek
 import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.WeekPlan
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.fuel.BreakfastItem
 import com.bioscan.fieldterminal.domain.fuel.Container
 import com.bioscan.fieldterminal.domain.fuel.FoodOption
 import com.bioscan.fieldterminal.domain.fuel.MAX_PICKS_PER_GROUP
 import com.bioscan.fieldterminal.domain.fuel.MealSlotKind
 import com.bioscan.fieldterminal.domain.fuel.PREP_DAYS
+import com.bioscan.fieldterminal.domain.fuel.Plate
+import com.bioscan.fieldterminal.domain.fuel.Portion
 import com.bioscan.fieldterminal.domain.fuel.PrepPicks
 import com.bioscan.fieldterminal.domain.fuel.PrepSlot
 import com.bioscan.fieldterminal.domain.fuel.Recipe
@@ -69,12 +71,14 @@ import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
+import com.bioscan.fieldterminal.ui.components.rememberCacheVersion
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import kotlinx.coroutines.CancellationException
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Fuel › Prep (fuel planning phase 11): Sunday meal prep in four steps (PICK, RECIPES, WEEK, SHOP & COOK) and the fixed
 // breakfast. The numbers come from domain/fuel/MealPrep.kt, portioned for each day's plan; only the choices and, once
@@ -99,7 +103,7 @@ fun MealPrepPage(overview: NutritionOverview?, modifier: Modifier = Modifier) {
     var loaded by remember { mutableStateOf(false) }
     var attempt by remember { mutableIntStateOf(0) }
 
-    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    val cacheVersion = rememberCacheVersion()
     LaunchedEffect(weekStart, attempt, overview, cacheVersion) {
         error = null
         if (plan == null) loaded = false
@@ -107,7 +111,7 @@ fun MealPrepPage(overview: NutritionOverview?, modifier: Modifier = Modifier) {
             plan = FuelPlanRepository(SupabaseClientProvider.client).loadWeekPlan(context, overview, weekStart)
             week = catching { repo.loadWeek(weekStart) }.getOrNull()
             breakfast = catching { repo.loadBreakfast() }.getOrDefault(emptyList())
-        } catch (e: kotlinx.coroutines.CancellationException) {
+        } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             error = describeLoadFailure(e)
@@ -272,7 +276,7 @@ private fun ShopCookCard(
     context: Context,
     w: MealPrepWeek,
     containers: List<Container>,
-    breakfasts: List<com.bioscan.fieldterminal.domain.fuel.Plate>,
+    breakfasts: List<Plate>,
     foods: Map<String, FoodOption>,
     onCooked: (Boolean) -> Unit,
 ) {
@@ -346,7 +350,7 @@ private fun BreakfastCard(all: List<FoodOption>, saved: List<BreakfastItem>, onS
             val f = foods[i.foodId] ?: return@forEach
             val step = f.serving?.let { it.grams * it.step } ?: f.stepG
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(com.bioscan.fieldterminal.domain.fuel.Portion(f, i.grams).label, style = FTType.BodySmall, color = FT.TextPrimary, modifier = Modifier.weight(1f))
+                Text(Portion(f, i.grams).label, style = FTType.BodySmall, color = FT.TextPrimary, modifier = Modifier.weight(1f))
                 FTButton("−", emphasis = FTButtonEmphasis.Tertiary) {
                     items = items.map { if (it.foodId == i.foodId) it.copy(grams = (it.grams - step).coerceAtLeast(step)) else it }
                 }

@@ -2,24 +2,25 @@ package com.bioscan.fieldterminal.data
 
 import io.ktor.client.plugins.api.createClientPlugin
 import io.ktor.http.HttpMethod
-import java.io.File
-import java.security.MessageDigest
-import java.util.concurrent.ConcurrentHashMap
-import kotlin.coroutines.AbstractCoroutineContextElement
-import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
+import java.io.File
+import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
+import kotlin.coroutines.AbstractCoroutineContextElement
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.coroutineContext
 
 // Performance pass, Stage 2. One person, a few thousand rows: the same wearable_daily / sleep_daily / session lists were
 // fetched again by every screen (wearable_daily by six of them). This is a small process-wide read cache with two rules
@@ -219,15 +220,15 @@ object ReadCache {
     /** A write to [table] (null: a write that names no table) drops every entry that may depend on it. */
     fun invalidateWrite(table: String?) {
         if (table == null) return invalidateAll()
-        writeCounts.computeIfAbsent(table) { java.util.concurrent.atomic.AtomicLong() }.incrementAndGet()
+        writeCounts.computeIfAbsent(table) { AtomicLong() }.incrementAndGet()
         entries.entries.removeIf { (_, e) -> e.tables == null || table in e.tables }
         if (table !in SYNC_TABLES) keyTables.forEach { (k, t) -> if (ANY_TABLE in t || table in t) dirty.add(k) }
     }
 
     // Scoring system rebuild: a screen that keeps its own finished result (TODAY) asks whether anything it reads was
     // written since. The stamp grows with every write to one of [tables] and with every write that names no table.
-    private val writeCounts = ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicLong>()
-    private val unattributedWrites = java.util.concurrent.atomic.AtomicLong()
+    private val writeCounts = ConcurrentHashMap<String, AtomicLong>()
+    private val unattributedWrites = AtomicLong()
 
     fun writeStamp(tables: Set<String>): Long = unattributedWrites.get() + tables.sumOf { writeCounts[it]?.get() ?: 0L }
 

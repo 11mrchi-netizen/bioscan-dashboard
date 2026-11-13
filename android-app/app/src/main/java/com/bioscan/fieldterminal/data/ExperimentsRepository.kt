@@ -1,7 +1,7 @@
 package com.bioscan.fieldterminal.data
 
-import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.domain.ExperimentProtocol
+import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.domain.MdePreviewRow
 import com.bioscan.fieldterminal.domain.PROTOCOL_VERSION_RANDOMISED
 import com.bioscan.fieldterminal.domain.scheduleSpan
@@ -11,6 +11,8 @@ import io.github.jan.supabase.postgrest.query.Columns
 import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.MapSerializer
 import java.time.Instant
 
 // Analysis Layer 3 / Phase 5. Registers supplement N-of-1 experiments and reads their published results.
@@ -120,7 +122,7 @@ class ExperimentsRepository(private val supabase: SupabaseClient) {
     // Every column, so the read keeps working before the phase F migration adds deleted_at; deleted ones are left out here.
     // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun loadExperiments(): List<ExperimentRow> =
-        com.bioscan.fieldterminal.data.ReadCache.get("experiments.all", tables = null, serializer = kotlinx.serialization.builtins.ListSerializer(ExperimentRow.serializer())) { fetchLoadExperiments() }
+        ReadCache.get("experiments.all", tables = null, serializer = ListSerializer(ExperimentRow.serializer())) { fetchLoadExperiments() }
 
     private suspend fun fetchLoadExperiments(): List<ExperimentRow> =
         try {
@@ -135,7 +137,7 @@ class ExperimentsRepository(private val supabase: SupabaseClient) {
 
     // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun loadResults(): Map<String, ExperimentResultRow> =
-        com.bioscan.fieldterminal.data.ReadCache.get("experiments.results", tables = null, serializer = kotlinx.serialization.builtins.MapSerializer(kotlinx.serialization.serializer<String>(), ExperimentResultRow.serializer())) { fetchLoadResults() }
+        ReadCache.get("experiments.results", tables = null, serializer = MapSerializer(kotlinx.serialization.serializer<String>(), ExperimentResultRow.serializer())) { fetchLoadResults() }
 
     private suspend fun fetchLoadResults(): Map<String, ExperimentResultRow> =
         try {

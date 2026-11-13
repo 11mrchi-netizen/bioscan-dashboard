@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.domain
 
+import java.time.Duration
 import java.time.LocalDateTime
 import kotlin.math.log2
 import kotlin.math.pow
@@ -42,7 +43,7 @@ data class CaffeineWindowResult(
 
 private fun residualAt(events: List<CaffeineEvent>, at: LocalDateTime): Double =
     events.sumOf { e ->
-        val h = java.time.Duration.between(e.loggedAt, at).toMinutes() / 60.0
+        val h = Duration.between(e.loggedAt, at).toMinutes() / 60.0
         if (h < 0.0) 0.0 else e.doseMg * 0.5.pow(h / CAFFEINE_HALF_LIFE_H)
     }
 

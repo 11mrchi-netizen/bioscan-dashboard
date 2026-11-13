@@ -12,13 +12,16 @@ import com.bioscan.fieldterminal.domain.pickBestListing
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
+import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.time.Instant
 
 const val DSLD_SOURCE_NAME = "nih_dsld"
 const val SUPPCO_SOURCE_NAME = "suppco"
@@ -183,15 +186,15 @@ class SupplementSourceRepository(private val supabase: SupabaseClient) {
         val latest = supabase.postgrest.from("supplement_source_snapshots")
             .select(columns = Columns.list("id,applied_fields")) {
                 filter { eq("supplement_product_id", productId); eq("supplement_source_id", sourceId) }
-                order("retrieved_at", io.github.jan.supabase.postgrest.query.Order.DESCENDING)
+                order("retrieved_at", Order.DESCENDING)
                 limit(1)
             }
             .decodeSingle<SnapshotAuditRow>()
         val merged = (latest.appliedFields + fields.map { it.name }).distinct()
         supabase.postgrest.from("supplement_source_snapshots").update(
             buildJsonObject {
-                put("applied_fields", buildJsonArray { merged.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } })
-                put("applied_at", java.time.Instant.now().toString())
+                put("applied_fields", buildJsonArray { merged.forEach { add(JsonPrimitive(it)) } })
+                put("applied_at", Instant.now().toString())
             },
         ) { filter { eq("id", latest.id) } }
     }
@@ -228,7 +231,7 @@ class SupplementSourceRepository(private val supabase: SupabaseClient) {
                 supplementSourceId = sourceId,
                 sourceProductId = sourceProductId,
                 barcode = barcode,
-                retrievedAt = retrievedAt ?: java.time.Instant.now().toString(),
+                retrievedAt = retrievedAt ?: Instant.now().toString(),
                 sourceVersion = sourceVersion,
                 payloadHash = payloadHash ?: "",
                 payload = payload ?: JsonArray(emptyList()),

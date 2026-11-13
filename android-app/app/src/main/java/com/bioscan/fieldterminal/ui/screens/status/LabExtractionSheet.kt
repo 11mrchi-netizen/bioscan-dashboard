@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -29,7 +30,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.ExtractedLabMarker
@@ -43,10 +43,10 @@ import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
+import com.bioscan.fieldterminal.util.readFileBytes
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // DAV-85. One uploaded report -> one review list -> the same addLabResult()
 // save path DAV-84 already built (one call per surviving row, all landing on
@@ -81,7 +81,7 @@ fun LabExtractionSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
     var date by remember { mutableStateOf(LocalDate.now()) }
     val rows = remember { mutableStateListOf<EditableMarkerRow>() }
 
-    fun runExtraction(uri: android.net.Uri) {
+    fun runExtraction(uri: Uri) {
         val apiKey = GeminiApiKeyStore.get(context)
         if (apiKey == null) {
             error = "Set a Gemini API key in Setup to enable report extraction."
@@ -92,7 +92,7 @@ fun LabExtractionSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
         scope.launch {
             try {
                 val mimeType = context.contentResolver.getType(uri) ?: "application/pdf"
-                val bytes = com.bioscan.fieldterminal.util.readFileBytes(context, uri)
+                val bytes = readFileBytes(context, uri)
                 val known = labsRepo.knownMarkerNames()
                 val extracted = LabExtractionRepository(apiKey).extract(bytes, mimeType, known)
                 rows.clear()

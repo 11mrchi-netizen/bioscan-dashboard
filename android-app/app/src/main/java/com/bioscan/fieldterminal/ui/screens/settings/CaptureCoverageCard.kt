@@ -21,8 +21,8 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.domain.StreamCoverage
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CancellationException
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Analysis Layer 3 / R2 (2e): days logged per capture stream over the last 28 days.
 @Composable

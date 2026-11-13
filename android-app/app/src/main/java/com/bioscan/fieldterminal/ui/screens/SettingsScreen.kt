@@ -17,13 +17,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.auth.GoogleAuthManager
 import com.bioscan.fieldterminal.ui.components.FTButton
-import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
+import com.bioscan.fieldterminal.ui.components.FTChevron
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Setup's own hub: a flat card dump got too big to scan, so this is now 4
 // buttons into their own pushed sub-screens (ui/screens/settings/), same
@@ -72,6 +73,6 @@ private fun SettingsNavRow(title: String, subtitle: String, onClick: () -> Unit)
             Text(title, style = FTType.RowTitle, color = FT.TextPrimary)
             Text(subtitle, style = FTType.Caption, color = FT.TextSecondary, modifier = Modifier.padding(top = 2.dp))
         }
-        com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextSecondary)
+        FTChevron(tint = FT.TextSecondary)
     }
 }

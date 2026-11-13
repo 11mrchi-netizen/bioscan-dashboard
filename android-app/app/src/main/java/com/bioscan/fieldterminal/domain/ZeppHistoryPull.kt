@@ -2,6 +2,7 @@ package com.bioscan.fieldterminal.domain
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.time.Duration
 import java.time.LocalDate
 import java.time.OffsetDateTime
 
@@ -36,4 +37,4 @@ fun ZeppHistoryPullRow.describe(): String {
 
 /** Seconds since the server last saved progress, or null when unknown. */
 fun ZeppHistoryPullRow.secondsSinceUpdate(now: OffsetDateTime): Long? =
-    updatedAt?.let { runCatching { java.time.Duration.between(OffsetDateTime.parse(it), now).seconds }.getOrNull() }
+    updatedAt?.let { runCatching { Duration.between(OffsetDateTime.parse(it), now).seconds }.getOrNull() }

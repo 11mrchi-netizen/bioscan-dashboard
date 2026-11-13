@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -23,16 +22,17 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementLookupRepository
 import com.bioscan.fieldterminal.data.SupplementsRepository
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.normalizeBarcode
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.util.scanBarcode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private val note = FTType.Caption
 

@@ -6,6 +6,7 @@ import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -23,7 +24,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,9 +37,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.ImportFile
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingProgramRepository
@@ -44,23 +50,25 @@ import com.bioscan.fieldterminal.domain.training.definition.SeModuleDef
 import com.bioscan.fieldterminal.domain.training.definition.StrengthModuleDef
 import com.bioscan.fieldterminal.domain.training.definition.TemplateDef
 import com.bioscan.fieldterminal.domain.training.generate.GeneratedBlock
+import com.bioscan.fieldterminal.domain.training.generate.WeekKind
 import com.bioscan.fieldterminal.domain.training.generate.deriveBlockDomains
 import com.bioscan.fieldterminal.domain.training.generate.isCluster
 import com.bioscan.fieldterminal.domain.training.generate.slotsToChoose
 import com.bioscan.fieldterminal.domain.training.generate.summaryLines
+import com.bioscan.fieldterminal.domain.training.generate.templateModuleKeys
 import com.bioscan.fieldterminal.domain.training.generate.templateVariables
 import com.bioscan.fieldterminal.domain.training.movementKey
 import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTChevron
 import com.bioscan.fieldterminal.ui.components.FTMultiDropdown
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.SubTabChip
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -68,6 +76,7 @@ import java.time.DayOfWeek
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 internal val methodologyLabels = mapOf("tb3" to "TB III", "tb2" to "TB II", "mass" to "MASS", "green" to "GREEN")
 internal fun methodologyOf(key: String) = key.substringBefore('.')
@@ -93,7 +102,7 @@ fun TrainingPlannerScreen(onBack: () -> Unit, onCreated: () -> Unit, preset: Tra
         )
         if (!state.loading) StepBar(state)
         // A fresh scroll for each step: a new step opens at its top.
-        val scroll = remember(state.step) { androidx.compose.foundation.ScrollState(0) }
+        val scroll = remember(state.step) { ScrollState(0) }
         Column(modifier = Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 22.dp)) {
             when {
                 state.loading -> Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = FT.DomainTraining) }
@@ -200,7 +209,7 @@ private fun WhenStep(state: TrainingPlannerState) {
 }
 
 // ---------------- 2 · PROGRAM ----------------
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProgramStep(state: TrainingPlannerState) {
     var library by remember { mutableStateOf(false) }
@@ -259,12 +268,12 @@ private fun FixedModules(state: TrainingPlannerState, p: Program.Fixed) {
 }
 
 /** A sheet with a title, scrolling content and DONE. */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PlannerSheet(title: String, onDone: () -> Unit, content: @Composable () -> Unit) {
-    androidx.compose.material3.ModalBottomSheet(
+    ModalBottomSheet(
         onDismissRequest = onDone,
-        sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         shape = FT.SheetShape, containerColor = FT.Surface, contentColor = FT.TextPrimary,
     ) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
@@ -344,7 +353,7 @@ private fun DetailRow(title: String, summary: String, warn: Boolean = false, onC
             Text(title, color = FT.TextPrimary, style = FTType.RowTitle)
             Text(summary, color = if (warn) FT.Warning else FT.TextSecondary, style = FTType.MonoCaption)
         }
-        com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextSecondary)
+        FTChevron(tint = FT.TextSecondary)
     }
 }
 
@@ -421,7 +430,7 @@ internal fun ModuleOptions(state: TrainingPlannerState, m: StrengthModuleDef) {
 @Composable
 internal fun ExercisesStep(state: TrainingPlannerState) {
     val mods = state.strengthModules
-    val ses = (state.index?.let { idx -> (state.program as? Program.Fixed)?.template?.let { t -> com.bioscan.fieldterminal.domain.training.generate.templateModuleKeys(t, state.variables).mapNotNull { idx.se(it) } } }).orEmpty()
+    val ses = (state.index?.let { idx -> (state.program as? Program.Fixed)?.template?.let { t -> templateModuleKeys(t, state.variables).mapNotNull { idx.se(it) } } }).orEmpty()
     if (mods.isEmpty() && ses.isEmpty()) { Body("No strength work in this program.", muted = true); return }
     mods.forEach { m ->
         FTCard(title = m.title.uppercase(), modifier = Modifier.padding(top = 12.dp)) {
@@ -493,7 +502,7 @@ private fun MaxRow(state: TrainingPlannerState, exercise: String) {
             Text(if (manual != null) "entered here" else resolved?.basedOn ?: "enter a tested or estimated max", color = FT.TextMuted, style = FTType.Caption)
         }
         Box(Modifier.width(110.dp)) {
-            FieldTextField(text, { text = it; it.toDoubleOrNull()?.takeIf { v -> v > 0 }?.let { v -> state.manualMaxes[key] = v } ?: state.manualMaxes.remove(key) }, "kg", keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal)
+            FieldTextField(text, { text = it; it.toDoubleOrNull()?.takeIf { v -> v > 0 }?.let { v -> state.manualMaxes[key] = v } ?: state.manualMaxes.remove(key) }, "kg", keyboardType = KeyboardType.Decimal)
         }
     }
 }
@@ -596,15 +605,15 @@ private fun CompactCalendar(state: TrainingPlannerState, block: GeneratedBlock) 
     val days = (0 until 7).map { start.plusDays(it.toLong()).dayOfWeek }
     Row(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
         Spacer(Modifier.width(34.dp))
-        days.forEach { d -> Text(d.getDisplayName(TextStyle.NARROW, Locale.ENGLISH), style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
+        days.forEach { d -> Text(d.getDisplayName(TextStyle.NARROW, Locale.ENGLISH), style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.Center) }
     }
     val byWeek = block.sessions.groupBy { it.weekIndex }
     val kinds = state.timeline
     (1..block.calendarWeeks).forEach { w ->
         val list = byWeek[w].orEmpty()
         val kind = kinds.getOrNull(w - 1)
-        val deload = list.firstOrNull()?.countsTowardBlock == false || kind == com.bioscan.fieldterminal.domain.training.generate.WeekKind.Deload
-        val test = kind == com.bioscan.fieldterminal.domain.training.generate.WeekKind.Test
+        val deload = list.firstOrNull()?.countsTowardBlock == false || kind == WeekKind.Deload
+        val test = kind == WeekKind.Test
         val weekStart = start.plusWeeks((w - 1).toLong())
         Row(
             Modifier.fillMaxWidth().padding(vertical = 2.dp).ftClickable(enabled = list.isNotEmpty()) { openWeek = w },

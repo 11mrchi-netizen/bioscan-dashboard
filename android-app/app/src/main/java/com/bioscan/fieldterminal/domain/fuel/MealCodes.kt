@@ -1,13 +1,14 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain.fuel
 
-import kotlinx.serialization.UseSerializers
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 // Each meal of the day gets a carbohydrate code (LOW / MEDIUM / HIGH), a gram range and the reason, the way Hexis's
@@ -239,8 +240,8 @@ private fun formatGap(a: ZonedDateTime, b: ZonedDateTime): String {
 
 /** Which coded meal a logged meal at [loggedAt] belongs to: the nearest one within 2 hours, else none. */
 fun mealForLog(meals: List<CodedMeal>, loggedAt: ZonedDateTime): CodedMeal? =
-    meals.minByOrNull { kotlin.math.abs(Duration.between(it.time, loggedAt).toMinutes()) }
-        ?.takeIf { kotlin.math.abs(Duration.between(it.time, loggedAt).toMinutes()) <= 120 }
+    meals.minByOrNull { abs(Duration.between(it.time, loggedAt).toMinutes()) }
+        ?.takeIf { abs(Duration.between(it.time, loggedAt).toMinutes()) <= 120 }
 
 enum class MealAdherence(val label: String) { WITHIN("WITHIN"), UNDER("UNDER"), OVER("OVER"), NOT_LOGGED("NOT LOGGED") }
 

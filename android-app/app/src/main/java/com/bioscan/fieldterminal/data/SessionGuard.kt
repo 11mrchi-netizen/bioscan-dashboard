@@ -6,10 +6,10 @@ import io.github.jan.supabase.auth.status.SessionStatus
 import io.ktor.client.plugins.api.createClientPlugin
 import io.ktor.http.HttpHeaders
 import io.ktor.http.encodedPath
-import java.io.IOException
-import kotlin.time.Clock
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.IOException
+import kotlin.time.Clock
 
 // Why pages came back empty after time in the background. Every table is protected by row-level security, so a request
 // that carries no user token is not refused: it is answered with 200 and an empty list, which a page shows as "no data"

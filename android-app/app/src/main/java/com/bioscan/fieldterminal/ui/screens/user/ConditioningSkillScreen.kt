@@ -7,38 +7,38 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.data.ConditioningEntry
 import com.bioscan.fieldterminal.data.ConditioningHistory
-import com.bioscan.fieldterminal.domain.DataAvailability
-import com.bioscan.fieldterminal.domain.PerformanceTimeframe
-import com.bioscan.fieldterminal.domain.toPerformanceTimeframe
+import com.bioscan.fieldterminal.data.model.TrainingBlockSummaryRow
+import com.bioscan.fieldterminal.domain.DayReduce
 import com.bioscan.fieldterminal.domain.bucketWeekly
+import com.bioscan.fieldterminal.domain.oneADay
 import com.bioscan.fieldterminal.domain.trailingWeeklyAverage
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.FTBar
-import com.bioscan.fieldterminal.ui.components.FTCard
-import com.bioscan.fieldterminal.ui.components.FTDataState
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.components.FTSegment
 import com.bioscan.fieldterminal.ui.components.FTSegmentBar
 import com.bioscan.fieldterminal.ui.components.FTSmallMultiples
 import com.bioscan.fieldterminal.ui.components.FTWeeklyBars
-import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.SmallMultiple
 import com.bioscan.fieldterminal.ui.components.TrendSeries
+import com.bioscan.fieldterminal.ui.screens.detail.DetailScreen
+import com.bioscan.fieldterminal.ui.screens.detail.EmptyLine
+import com.bioscan.fieldterminal.ui.screens.detail.LocalRangeDays
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 @Composable
 fun ConditioningSkillScreen(onBack: () -> Unit) {
-    com.bioscan.fieldterminal.ui.screens.detail.DetailScreen("CONDITIONING", onBack, eyebrow = "PERFORMANCE", domain = FT.Domain.Load) {
+    DetailScreen("CONDITIONING", onBack, eyebrow = "PERFORMANCE", domain = FT.Domain.Load) {
         LoadedContent(load = { UserDataCache.conditioning() }) { ConditioningContent(it) }
     }
 }
@@ -46,7 +46,7 @@ fun ConditioningSkillScreen(onBack: () -> Unit) {
 @Composable
 private fun ConditioningContent(history: ConditioningHistory) {
     val today = remember { LocalDate.now() }
-    val from = today.minusDays(com.bioscan.fieldterminal.ui.screens.detail.LocalRangeDays.current - 1L)
+    val from = today.minusDays(LocalRangeDays.current - 1L)
     val level = remember(history) { conditioningLevelOf(history, today) }
     val inWindow = history.entries.filter { !it.date.isBefore(from) }
 
@@ -61,7 +61,7 @@ private fun ConditioningContent(history: ConditioningHistory) {
     }
 
     if (history.entries.isEmpty()) {
-        com.bioscan.fieldterminal.ui.screens.detail.EmptyLine("No conditioning sessions imported yet.")
+        EmptyLine("No conditioning sessions imported yet.")
         return
     }
 
@@ -83,20 +83,20 @@ private fun ConsistencyCard(history: ConditioningHistory, from: LocalDate, today
 }
 
 @Composable
-private fun HeartRateCard(inWindow: List<com.bioscan.fieldterminal.data.ConditioningEntry>) {
+private fun HeartRateCard(inWindow: List<ConditioningEntry>) {
     com.bioscan.fieldterminal.ui.screens.detail.Section(title = "HEART RATE", info = "Average and peak heart rate for sessions that are linked to a same-day wearable recording. Sessions without a linked recording have no heart-rate data and are not estimated.") {
         val withHr = inWindow.filter { it.avgHr != null }
         val linked = inWindow.count { it.avgHr != null }
         Text("$linked of ${inWindow.size} sessions in this window have linked wearable heart rate.", style = FTType.Caption, color = FT.TextSecondary)
         if (withHr.size < 2) {
-            com.bioscan.fieldterminal.ui.screens.detail.EmptyLine("Needs at least 2 sessions with linked heart rate to draw a trend.")
+            EmptyLine("Needs at least 2 sessions with linked heart rate to draw a trend.")
             return@Section
         }
         DateTrendLine(
             series = listOf(
                 // One point a day: two sessions on one day would draw a vertical zigzag.
-                TrendSeries(com.bioscan.fieldterminal.domain.oneADay(withHr.mapNotNull { e -> e.maxHr?.let { e.date to it } }, com.bioscan.fieldterminal.domain.DayReduce.MAX), FT.TextMuted, "PEAK"),
-                TrendSeries(com.bioscan.fieldterminal.domain.oneADay(withHr.map { it.date to it.avgHr!! }), FT.DomainHeart, "AVG"),
+                TrendSeries(oneADay(withHr.mapNotNull { e -> e.maxHr?.let { e.date to it } }, DayReduce.MAX), FT.TextMuted, "PEAK"),
+                TrendSeries(oneADay(withHr.map { it.date to it.avgHr!! }), FT.DomainHeart, "AVG"),
             ),
             valueFormat = { "%.0f".format(it) },
             unit = "bpm",
@@ -114,12 +114,12 @@ private fun BlocksCard(history: ConditioningHistory) {
     com.bioscan.fieldterminal.ui.screens.detail.Section(title = "BLOCKS", info = "One point per training block (oldest to newest), each on its own scale, from the block metrics view. Early vs late heart rate compares the first and last conditioning sessions of a block; the app does not judge which direction is better.") {
         val blocks = history.blocks.filter { it.conditioningSessions > 0 }.sortedBy { it.startDate }.takeLast(10)
         if (blocks.size < 2) {
-            com.bioscan.fieldterminal.ui.screens.detail.EmptyLine("Needs at least 2 training blocks with conditioning sessions to compare.")
+            EmptyLine("Needs at least 2 training blocks with conditioning sessions to compare.")
             return@Section
         }
-        fun series(pick: (com.bioscan.fieldterminal.data.model.TrainingBlockSummaryRow) -> Double?) =
+        fun series(pick: (TrainingBlockSummaryRow) -> Double?) =
             blocks.mapNotNull { b -> pick(b)?.let { v -> runCatching { LocalDate.parse(b.startDate) }.getOrNull()?.to(v) } }
-        fun latest(pick: (com.bioscan.fieldterminal.data.model.TrainingBlockSummaryRow) -> Double?, fmt: String) =
+        fun latest(pick: (TrainingBlockSummaryRow) -> Double?, fmt: String) =
             blocks.lastOrNull { pick(it) != null }?.let { fmt.format(pick(it)) }
         FTSmallMultiples(
             listOf(
@@ -150,11 +150,11 @@ private fun BlocksCard(history: ConditioningHistory) {
 }
 
 @Composable
-private fun MixCard(inWindow: List<com.bioscan.fieldterminal.data.ConditioningEntry>) {
+private fun MixCard(inWindow: List<ConditioningEntry>) {
     com.bioscan.fieldterminal.ui.screens.detail.Section(title = "MIX", info = "How sessions in this window split by template, and which drills you did most. Counts only; no intensity is inferred from drill names.") {
         val templates = inWindow.groupingBy { it.template?.takeIf { t -> t.isNotBlank() } ?: "Unlabelled" }.eachCount().entries.sortedByDescending { it.value }
         if (templates.isEmpty()) {
-            com.bioscan.fieldterminal.ui.screens.detail.EmptyLine("No sessions in this window.")
+            EmptyLine("No sessions in this window.")
             return@Section
         }
         val shades = listOf(FT.Category.Activity.c500, FT.Category.Activity.c300, FT.Category.Activity.c700, FT.Category.Activity.c900)

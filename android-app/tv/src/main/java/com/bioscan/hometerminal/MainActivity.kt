@@ -40,9 +40,9 @@ import com.bioscan.hometerminal.home.HomeAccess
 import com.bioscan.hometerminal.home.homeSource
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.status.SessionStatus
+import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.Instant
-import kotlinx.coroutines.launch
 
 /**
  * Phase E1's only screen: whether the collector can work (signed in, Google Home access) and what it is reading. The

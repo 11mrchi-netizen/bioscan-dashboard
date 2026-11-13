@@ -13,7 +13,9 @@ import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.Serializable
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
@@ -120,7 +122,7 @@ class WeatherRepository {
         }
     }
 
-    private suspend fun hourly(url: String, lat: Double, lon: Double, start: java.time.LocalDate, end: java.time.LocalDate, zone: java.time.ZoneId): List<HourWeather> {
+    private suspend fun hourly(url: String, lat: Double, lon: Double, start: LocalDate, end: LocalDate, zone: ZoneId): List<HourWeather> {
         val response = client.get(url) {
             url {
                 parameters.append("latitude", lat.toString())

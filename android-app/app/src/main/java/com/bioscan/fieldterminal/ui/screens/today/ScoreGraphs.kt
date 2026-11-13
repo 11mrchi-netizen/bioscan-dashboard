@@ -1,7 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.today
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,19 +12,23 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -36,30 +38,43 @@ import com.bioscan.fieldterminal.domain.score.AnsPoint
 import com.bioscan.fieldterminal.domain.score.Bullet
 import com.bioscan.fieldterminal.domain.score.DomainKey
 import com.bioscan.fieldterminal.domain.score.InputScore
+import com.bioscan.fieldterminal.domain.score.ScoreKeys
 import com.bioscan.fieldterminal.domain.score.ScoreScale
 import com.bioscan.fieldterminal.domain.score.ScoreSpecs
 import com.bioscan.fieldterminal.domain.score.Series
 import com.bioscan.fieldterminal.domain.score.bulletOf
 import com.bioscan.fieldterminal.domain.score.formatInputValue
 import com.bioscan.fieldterminal.domain.score.formatJudgedValue
-import com.bioscan.fieldterminal.domain.score.trendOf
+import com.bioscan.fieldterminal.ui.components.BarLayout
+import com.bioscan.fieldterminal.ui.components.BarReadout
+import com.bioscan.fieldterminal.ui.components.DivergingPoles
+import com.bioscan.fieldterminal.ui.components.FTBarSpec
+import com.bioscan.fieldterminal.ui.components.FTBarsEmpty
+import com.bioscan.fieldterminal.ui.components.FTChevron
+import com.bioscan.fieldterminal.ui.components.FTDivergingScale
+import com.bioscan.fieldterminal.ui.components.FTMetricDot
 import com.bioscan.fieldterminal.ui.components.GaugePalette
+import com.bioscan.fieldterminal.ui.components.Inspect
+import com.bioscan.fieldterminal.ui.components.InspectRow
 import com.bioscan.fieldterminal.ui.components.ScoreRing
-import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.barAlpha
 import com.bioscan.fieldterminal.ui.components.barLayout
 import com.bioscan.fieldterminal.ui.components.drawBar
 import com.bioscan.fieldterminal.ui.components.drawBarStub
 import com.bioscan.fieldterminal.ui.components.drawGoalBand
 import com.bioscan.fieldterminal.ui.components.drawReferenceLine
+import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.smoothedPath
+import com.bioscan.fieldterminal.ui.components.splitAtGaps
+import com.bioscan.fieldterminal.ui.components.trendCurve
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.metricInk
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Scoring system: the small graphs of the score screens (the tour's list, items 1-14). One file, so they share a look:
 // faint glass track, the band colours, labels drawn next to what they name rather than in a legend.
@@ -75,25 +90,25 @@ private fun dayLabel(day: LocalDate): String = "${day.dayOfMonth} ${day.month.na
  */
 @Composable
 fun BandedStrip(points: List<Pair<LocalDate, Double?>>, cap: Double = ScoreScale.MAX, color: Color = FT.Domain.ChargeRadar) {
-    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
-    var pick by androidx.compose.runtime.remember(points) { androidx.compose.runtime.mutableStateOf<Int?>(null) }
+    val measurer = rememberTextMeasurer()
+    var pick by remember(points) { mutableStateOf<Int?>(null) }
     val shown = pick ?: points.indexOfLast { it.second != null }.takeIf { it >= 0 }
     if (points.none { it.second != null }) {
-        com.bioscan.fieldterminal.ui.components.FTBarsEmpty(com.bioscan.fieldterminal.ui.components.FTBarSpec.DetailHeight)
+        FTBarsEmpty(FTBarSpec.DetailHeight)
         return
     }
     Row(Modifier.fillMaxWidth()) {
-        Column(Modifier.width(26.dp).height(com.bioscan.fieldterminal.ui.components.FTBarSpec.DetailHeight), verticalArrangement = Arrangement.SpaceBetween) {
+        Column(Modifier.width(26.dp).height(FTBarSpec.DetailHeight), verticalArrangement = Arrangement.SpaceBetween) {
             Text(cap.roundToInt().toString(), style = FTType.Micro, color = FT.TextMuted)
             Text("0", style = FTType.Micro, color = FT.TextMuted)
         }
-        Canvas(Modifier.weight(1f).height(com.bioscan.fieldterminal.ui.components.FTBarSpec.DetailHeight).then(
-            with(com.bioscan.fieldterminal.ui.components.Inspect) { Modifier.inspect(points) { px, w, isTap ->
-                val i = com.bioscan.fieldterminal.ui.components.BarLayout(w, points.size, 0f).indexAt(px)
+        Canvas(Modifier.weight(1f).height(FTBarSpec.DetailHeight).then(
+            with(Inspect) { Modifier.inspect(points) { px, w, isTap ->
+                val i = BarLayout(w, points.size, 0f).indexAt(px)
                 pick = if (points.getOrNull(i)?.second == null) pick else if (isTap && i == pick) null else i
             } },
         )) {
-            val usable = size.height - com.bioscan.fieldterminal.ui.components.FTBarSpec.TopPad.toPx()
+            val usable = size.height - FTBarSpec.TopPad.toPx()
             fun y(v: Double) = size.height - (min(v, cap) / cap).toFloat() * usable
             drawGoalBand(y(min(100.0, cap)), y(ScoreScale.NORMAL_FROM), color)
             val layout = barLayout(points.size)
@@ -106,8 +121,8 @@ fun BandedStrip(points: List<Pair<LocalDate, Double?>>, cap: Double = ScoreScale
                 val (d, v) = points[i]
                 if (v == null) return@let
                 val cx = layout.center(i)
-                com.bioscan.fieldterminal.ui.components.Inspect.run {
-                    drawOverlay(measurer, cx, listOf(Offset(cx, y(v))), dayLabel(d), listOf(com.bioscan.fieldterminal.ui.components.InspectRow(null, v.roundToInt().toString(), color)))
+                Inspect.run {
+                    drawOverlay(measurer, cx, listOf(Offset(cx, y(v))), dayLabel(d), listOf(InspectRow(null, v.roundToInt().toString(), color)))
                 }
             }
         }
@@ -119,7 +134,7 @@ fun BandedStrip(points: List<Pair<LocalDate, Double?>>, cap: Double = ScoreScale
     }
     shown?.let { i ->
         val (d, v) = points[i]
-        if (v != null) com.bioscan.fieldterminal.ui.components.BarReadout("${v.roundToInt()} · ${dayLabel(d)}", "30-day avg · ${points.mapNotNull { it.second }.average().roundToInt()}", color)
+        if (v != null) BarReadout("${v.roundToInt()} · ${dayLabel(d)}", "30-day avg · ${points.mapNotNull { it.second }.average().roundToInt()}", color)
     }
 }
 
@@ -137,7 +152,7 @@ fun BulletRow(input: InputScore, points: Double?, onClick: () -> Unit) {
     ) {
         val ink = metricInk(input.spec.key)
         Row(Modifier.width(96.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            com.bioscan.fieldterminal.ui.components.FTMetricDot(ink, size = 7.dp)
+            FTMetricDot(ink, size = 7.dp)
             Text(input.spec.label, style = FTType.BodySmall, color = FT.TextPrimary, maxLines = 2)
         }
         if (bullet != null) BulletBar(bullet, ink, Modifier.weight(1f)) else Box(Modifier.weight(1f))
@@ -147,7 +162,7 @@ fun BulletRow(input: InputScore, points: Double?, onClick: () -> Unit) {
                 color = when { points >= 1 -> FT.EmeraldHighlight; points <= -1 -> FT.Critical; else -> FT.TextMuted },
                 modifier = Modifier.width(30.dp), textAlign = TextAlign.End)
         }
-        com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted)
+        FTChevron(tint = FT.TextMuted)
     }
 }
 
@@ -272,10 +287,10 @@ fun GroupRings(groups: List<Pair<String, Double?>>, palette: GaugePalette = Gaug
 @Composable
 fun TsbGauge(tsb: Series, day: LocalDate) {
     val today = tsb[day]
-    com.bioscan.fieldterminal.ui.components.FTDivergingScale(
+    FTDivergingScale(
         value = today,
         d = 30.0,
-        poles = com.bioscan.fieldterminal.ui.components.DivergingPoles.Form,
+        poles = DivergingPoles.Form,
         label = "FORM (TSB) · TODAY",
         normalBand = ScoreSpecs.TSB_BAND_LO.coerceAtLeast(-30.0) to ScoreSpecs.TSB_BAND_HI,
         negativeWord = "fatigued",
@@ -299,10 +314,10 @@ fun TsbLine(tsb: Series, day: LocalDate, days: Int = 30) {
         Canvas(Modifier.weight(1f).height(110.dp)) {
             fun y(v: Double) = (size.height * (1 - (v - lo) / (hi - lo))).toFloat()
             fun x(i: Int) = size.width * i / (days - 1).coerceAtLeast(1)
-            drawRect(metricInk(com.bioscan.fieldterminal.domain.score.ScoreKeys.TSB).copy(alpha = 0.10f), Offset(0f, y(ScoreSpecs.TSB_BAND_HI)), Size(size.width, y(ScoreSpecs.TSB_BAND_LO) - y(ScoreSpecs.TSB_BAND_HI)))
+            drawRect(metricInk(ScoreKeys.TSB).copy(alpha = 0.10f), Offset(0f, y(ScoreSpecs.TSB_BAND_HI)), Size(size.width, y(ScoreSpecs.TSB_BAND_LO) - y(ScoreSpecs.TSB_BAND_HI)))
             drawLine(FT.TextMuted.copy(alpha = 0.5f), Offset(0f, y(0.0)), Offset(size.width, y(0.0)), strokeWidth = 1f)
-            val path = com.bioscan.fieldterminal.ui.components.smoothedPath(points.mapIndexedNotNull { i, (_, v) -> v?.let { Offset(x(i), y(it)) } })
-            drawPath(path, metricInk(com.bioscan.fieldterminal.domain.score.ScoreKeys.TSB), style = Stroke(width = 3f))
+            val path = smoothedPath(points.mapIndexedNotNull { i, (_, v) -> v?.let { Offset(x(i), y(it)) } })
+            drawPath(path, metricInk(ScoreKeys.TSB), style = Stroke(width = 3f))
             points.lastOrNull()?.second?.let { drawCircle(FT.TextPrimary, 6f, Offset(x(days - 1), y(it))) }
         }
     }
@@ -374,7 +389,7 @@ fun SlotSparkline(slots: List<Double?>, modifier: Modifier = Modifier, color: Co
         }
         for (r in runs) {
             if (r.size == 1) drawCircle(color, 2.5f, r[0])
-            else drawPath(com.bioscan.fieldterminal.ui.components.smoothedPath(r), color, style = Stroke(width = 2.5f, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+            else drawPath(smoothedPath(r), color, style = Stroke(width = 2.5f, cap = StrokeCap.Round))
         }
         val last = slots.indexOfLast { it != null }
         drawCircle(FT.TextPrimary, 3.5f, at(last, slots[last]!!))
@@ -399,8 +414,8 @@ fun MetricChart(series: Series, day: LocalDate, key: String, band: Pair<Double, 
     val lo = values.min()
     val hi = values.max().let { if (it - lo < 1e-9) lo + 1 else it }
     // The 7-day trend (a local linear fit, ChartPaths.kt), broken where readings stop for three weeks; readings are the dots.
-    val trendRuns = com.bioscan.fieldterminal.ui.components.splitAtGaps(points, { it.first.toDouble() }, 21.0).map { run ->
-        com.bioscan.fieldterminal.ui.components.trendCurve(run.map { it.first.toDouble() }, run.map { it.second }, 7 / 1.6)
+    val trendRuns = splitAtGaps(points, { it.first.toDouble() }, 21.0).map { run ->
+        trendCurve(run.map { it.first.toDouble() }, run.map { it.second }, 7 / 1.6)
     }
     Row(Modifier.fillMaxWidth()) {
         Box(Modifier.width(52.dp).height(140.dp)) {
@@ -424,8 +439,8 @@ fun MetricChart(series: Series, day: LocalDate, key: String, band: Pair<Double, 
             points.forEach { (i, v) -> if (i != 59) drawCircle(FT.TextSecondary.copy(alpha = 0.55f), radius = 3f, center = Offset(x(i), y(v))) }
             for (run in trendRuns) {
                 if (run.size < 2) continue
-                val mean = com.bioscan.fieldterminal.ui.components.smoothedPath(run.map { (d, v) -> Offset((size.width * d / 59.0).toFloat(), y(v)) })
-                drawPath(mean, metricInk(key), style = Stroke(width = 3.5f, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+                val mean = smoothedPath(run.map { (d, v) -> Offset((size.width * d / 59.0).toFloat(), y(v)) })
+                drawPath(mean, metricInk(key), style = Stroke(width = 3.5f, cap = StrokeCap.Round, join = StrokeJoin.Round))
             }
             points.firstOrNull { it.first == 59 }?.let { (i, v) -> drawCircle(FT.TextPrimary, radius = 7f, center = Offset(x(i), y(v))) }
         }

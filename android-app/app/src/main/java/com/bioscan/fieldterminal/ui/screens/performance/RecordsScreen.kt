@@ -1,13 +1,9 @@
 package com.bioscan.fieldterminal.ui.screens.performance
 
-import com.bioscan.fieldterminal.ui.components.LoadingOrError
-import com.bioscan.fieldterminal.ui.components.rememberGuarded
-import com.bioscan.fieldterminal.ui.components.LoadGuard
-import com.bioscan.fieldterminal.data.catching
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -15,7 +11,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -34,17 +29,22 @@ import com.bioscan.fieldterminal.domain.gainWords
 import com.bioscan.fieldterminal.domain.recordHistories
 import com.bioscan.fieldterminal.domain.recordPace
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
+import com.bioscan.fieldterminal.ui.components.FTChevron
+import com.bioscan.fieldterminal.ui.components.FTMotion
+import com.bioscan.fieldterminal.ui.components.LoadGuard
+import com.bioscan.fieldterminal.ui.components.LoadingOrError
 import com.bioscan.fieldterminal.ui.components.StatTileSpec
 import com.bioscan.fieldterminal.ui.components.TileGrid
 import com.bioscan.fieldterminal.ui.components.TrendSeries
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.rememberGuarded
 import com.bioscan.fieldterminal.ui.screens.detail.DetailScreen
-import com.bioscan.fieldterminal.ui.screens.detail.EmptyLine
 import com.bioscan.fieldterminal.ui.screens.detail.Section
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // ME › PERFORMANCE › RECORDS (docs/performance/records.md): the fastest 1K to 100K inside any run, the longest run, the
 // longest trail run and the biggest climb. Each record opens its progress: a step line of the record over time, then
@@ -107,7 +107,7 @@ fun RecordsScreen(onBack: () -> Unit, onOpenSession: (Long) -> Unit) {
 internal fun RecordRow(r: RecordHistory, expanded: Boolean, today: LocalDate, onToggle: () -> Unit, onOpenSession: (Long) -> Unit) {
     val cur = r.current
     // Expanding a record: the row grows over 180 ms (FTMotion; snaps with reduced motion).
-    Column(Modifier.fillMaxWidth().animateContentSize(com.bioscan.fieldterminal.ui.components.FTMotion.tweenBase())) {
+    Column(Modifier.fillMaxWidth().animateContentSize(FTMotion.tweenBase())) {
         Row(
             Modifier.fillMaxWidth().heightIn(min = 48.dp).ftClickable(role = Role.Button, onClickLabel = "Open ${r.key.label}", enabled = cur != null) { onToggle() }.padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -121,7 +121,7 @@ internal fun RecordRow(r: RecordHistory, expanded: Boolean, today: LocalDate, on
                 )
             }
             Text(cur?.let { formatRecordValue(r.key, it.value) } ?: "—", style = FTType.MetricMedium, color = if (cur != null) ink(r.key) else FT.TextMuted)
-            if (cur != null) com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextSecondary, expanded = expanded)
+            if (cur != null) FTChevron(tint = FT.TextSecondary, expanded = expanded)
         }
         if (expanded && cur != null) RecordProgress(r, today, onOpenSession)
     }
@@ -165,7 +165,7 @@ private fun RecordProgress(r: RecordHistory, today: LocalDate, onOpenSession: (L
                 Text(s.date.format(DAY), style = FTType.Telemetry, color = FT.TextSecondary, modifier = Modifier.weight(1f))
                 Text(improvementWords(r.key, s), style = FTType.Caption, color = FT.TextMuted)
                 Text(formatRecordValue(r.key, s.value), style = FTType.Body, color = FT.TextPrimary)
-                if (s.sessionId != null) com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted)
+                if (s.sessionId != null) FTChevron(tint = FT.TextMuted)
             }
         }
     }
@@ -174,7 +174,7 @@ private fun RecordProgress(r: RecordHistory, today: LocalDate, onOpenSession: (L
 private fun improvementWords(key: RecordKey, s: RecordSet): String {
     val p = s.previousValue ?: return "first"
     val gain = if (key.higherBetter) s.value - p else p - s.value
-    val days = s.previousDate?.let { java.time.temporal.ChronoUnit.DAYS.between(it, s.date) }
+    val days = s.previousDate?.let { ChronoUnit.DAYS.between(it, s.date) }
     return gainWords(key, gain) + (days?.let { " after $it d" } ?: "")
 }
 

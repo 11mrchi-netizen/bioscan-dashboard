@@ -1,5 +1,9 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.ZeppHistoryPullRow
+import com.bioscan.fieldterminal.domain.training.movementKey
+import com.bioscan.fieldterminal.domain.training.parsePlannedLifts
+import com.bioscan.fieldterminal.domain.training.warmupSets
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.postgrest.postgrest
@@ -12,11 +16,7 @@ import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import com.bioscan.fieldterminal.domain.training.movementKey
-import com.bioscan.fieldterminal.domain.training.parsePlannedLifts
-import com.bioscan.fieldterminal.domain.training.warmupSets
 import kotlinx.serialization.json.Json
-import com.bioscan.fieldterminal.domain.ZeppHistoryPullRow
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -28,6 +28,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
+import java.time.Instant
 import java.time.LocalDate
 
 // Zepp integration plan (docs/zepp-integration/). First real client-side call
@@ -202,7 +203,7 @@ class ZeppRepository(private val supabase: SupabaseClient) {
         }
         if (!response.status.isSuccess()) return "Zepp push failed: HTTP ${response.status.value}"
         val answer = Json.parseToJsonElement(response.bodyAsText()).jsonObject
-        val now = java.time.Instant.now().toString()
+        val now = Instant.now().toString()
         for (c in answer["created"]?.jsonArray.orEmpty()) {
             val key = c.jsonObject["key"]!!.jsonPrimitive.content.toLong()
             table.update({

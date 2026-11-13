@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.components
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -32,13 +31,14 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AgentReply
 import com.bioscan.fieldterminal.data.AgentRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.functionErrorMessage
 import com.bioscan.fieldterminal.domain.WhyContext
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.util.UUID
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Personal health agent, phase 1 (docs/personal-health-agent): WHY? in a card's title bar opens a sheet with the
 // assistant's explanation of that card. The reply was checked on the server against the data it read (numbers, words,

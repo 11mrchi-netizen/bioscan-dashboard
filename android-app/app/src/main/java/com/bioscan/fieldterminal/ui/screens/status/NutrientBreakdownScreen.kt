@@ -29,9 +29,9 @@ import com.bioscan.fieldterminal.domain.NutrientCategory
 import com.bioscan.fieldterminal.domain.NutrientInfo
 import com.bioscan.fieldterminal.domain.nutrientDisplayName
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.components.drawZonedTrack
 import com.bioscan.fieldterminal.ui.components.drawZonedValue
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.components.zoneEdges
 import com.bioscan.fieldterminal.ui.components.zonedFraction
 import com.bioscan.fieldterminal.ui.screens.detail.Chip
@@ -40,8 +40,8 @@ import com.bioscan.fieldterminal.ui.screens.detail.EmptyLine
 import com.bioscan.fieldterminal.ui.screens.detail.Loading
 import com.bioscan.fieldterminal.ui.screens.detail.Section
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private enum class TimeRange(val label: String, val days: Int) {
     Today("1D", 1),

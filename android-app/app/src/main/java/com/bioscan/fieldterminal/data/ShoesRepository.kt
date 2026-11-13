@@ -8,9 +8,12 @@ import android.util.Base64
 import com.bioscan.fieldterminal.domain.Shoe
 import com.bioscan.fieldterminal.domain.ShoeRun
 import com.bioscan.fieldterminal.domain.WallClock
+import com.bioscan.fieldterminal.domain.isTrailRun
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
+import io.github.jan.supabase.postgrest.query.Order
+import io.github.jan.supabase.postgrest.query.filter.FilterOperator
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -20,6 +23,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.io.ByteArrayOutputStream
+import java.time.Instant
 import java.time.LocalDate
 
 // Shoes (domain/Shoes.kt): the shoe list, the runs with their Zepp shoe code (zepp_workout_detail.gear_id) and the
@@ -79,7 +83,7 @@ data class ShoeDraft(
 class ShoesRepository(private val supabase: SupabaseClient) {
 
     suspend fun loadShoes(): List<Shoe> = ReadCache.get("shoes.list", tables = setOf("shoes"), serializer = ListSerializer(Shoe.serializer())) {
-        supabase.postgrest.from("shoes").select { order("created_at", io.github.jan.supabase.postgrest.query.Order.ASCENDING) }
+        supabase.postgrest.from("shoes").select { order("created_at", Order.ASCENDING) }
             .decodeList<ShoeRow>().map { it.toShoe() }
     }
 
@@ -89,10 +93,10 @@ class ShoesRepository(private val supabase: SupabaseClient) {
     ) {
         val sessions = supabase.postgrest.from("exercise_sessions")
             .select(columns = Columns.list("id,start_time,distance_km,type,shoe_id,details")) {
-                filter { or { eq("type", "run"); filterNot("shoe_id", io.github.jan.supabase.postgrest.query.filter.FilterOperator.IS, "null") } }
+                filter { or { eq("type", "run"); filterNot("shoe_id", FilterOperator.IS, "null") } }
             }.decodeList<ShoeSessionRow>()
         val gear = supabase.postgrest.from("zepp_workout_detail")
-            .select(columns = Columns.list("exercise_session_id,gear_id,sport_type")) { filter { filterNot("exercise_session_id", io.github.jan.supabase.postgrest.query.filter.FilterOperator.IS, "null") } }
+            .select(columns = Columns.list("exercise_session_id,gear_id,sport_type")) { filter { filterNot("exercise_session_id", FilterOperator.IS, "null") } }
             .decodeList<ShoeGearRow>().filter { it.sessionId != null }.associateBy { it.sessionId!! }
         sessions.mapNotNull { s ->
             val date = WallClock.date(s.startTime) ?: return@mapNotNull null
@@ -100,7 +104,7 @@ class ShoesRepository(private val supabase: SupabaseClient) {
             val routeType = runCatching { s.details?.get("routeType")?.jsonPrimitive?.content }.getOrNull()
             ShoeRun(
                 sessionId = s.id, date = date, distanceKm = s.distanceKm ?: 0.0,
-                trail = com.bioscan.fieldterminal.domain.isTrailRun(routeType, g?.sportType),
+                trail = isTrailRun(routeType, g?.sportType),
                 gearId = g?.gearId?.takeIf { it.isNotBlank() }, chosenShoeId = s.shoeId, zeppSportType = g?.sportType,
             )
         }
@@ -117,7 +121,7 @@ class ShoesRepository(private val supabase: SupabaseClient) {
             if (d.retiredOn == null) put("retired_on", JsonNull) else put("retired_on", d.retiredOn.toString())
             if (d.notes.isNullOrBlank()) put("notes", JsonNull) else put("notes", d.notes.trim())
             if (d.photoJpeg == null) put("photo_jpeg", JsonNull) else put("photo_jpeg", d.photoJpeg)
-            put("updated_at", java.time.Instant.now().toString())
+            put("updated_at", Instant.now().toString())
         }
         d.zeppGearId?.takeIf { it.isNotBlank() }?.let { releaseCode(it.trim(), keep = id) }
         if (id == null) supabase.postgrest.from("shoes").insert(body)

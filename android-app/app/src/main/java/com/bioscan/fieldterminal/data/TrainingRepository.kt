@@ -1,21 +1,23 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.data
 
-import kotlinx.serialization.UseSerializers
-import kotlinx.serialization.Serializable
 import com.bioscan.fieldterminal.data.model.ExerciseSessionRow
 import com.bioscan.fieldterminal.data.model.Vo2MaxRow
+import com.bioscan.fieldterminal.domain.DayReduce
 import com.bioscan.fieldterminal.domain.averagePaceMinPerKmSince
+import com.bioscan.fieldterminal.domain.dedupeRunSessions
 import com.bioscan.fieldterminal.domain.lactateThresholdPaceMinPerKmSeries
 import com.bioscan.fieldterminal.domain.latestNonNullVo2Max
 import com.bioscan.fieldterminal.domain.longestRunKm
-import com.bioscan.fieldterminal.domain.dedupeRunSessions
+import com.bioscan.fieldterminal.domain.oneADay
 import com.bioscan.fieldterminal.domain.sumDistanceKmSince
 import com.bioscan.fieldterminal.domain.vo2MaxSeries
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.temporal.ChronoUnit
@@ -120,16 +122,16 @@ class TrainingRepository(private val supabase: SupabaseClient) {
         // jsonb.
         val lactateRows = loadZeppWorkoutSummaries(supabase)
         // One value a day (a day with two qualifying runs keeps the later estimate; rows come oldest first).
-        val lactateThresholdPaceSecPerKmSeries = com.bioscan.fieldterminal.domain.oneADay(lactateRows.mapNotNull { row ->
+        val lactateThresholdPaceSecPerKmSeries = oneADay(lactateRows.mapNotNull { row ->
             row.summary?.lactateThresholdPaceSecPerKm?.let { pace ->
                 OffsetDateTime.parse(row.startTime).toLocalDate() to pace
             }
-        }, com.bioscan.fieldterminal.domain.DayReduce.LAST)
+        }, DayReduce.LAST)
         val lactateThresholdPaceSeries = lactateThresholdPaceMinPerKmSeries(lactateThresholdPaceSecPerKmSeries)
-        val lactateThresholdHrSeries = com.bioscan.fieldterminal.domain.oneADay(lactateRows.mapNotNull { row ->
+        val lactateThresholdHrSeries = oneADay(lactateRows.mapNotNull { row ->
             row.summary?.lactateThresholdHrBpm?.let { hr -> OffsetDateTime.parse(row.startTime).toLocalDate() to hr }
-        }, com.bioscan.fieldterminal.domain.DayReduce.LAST)
-        val efficiencyRuns = com.bioscan.fieldterminal.domain.oneADay(lactateRows.mapNotNull { row ->
+        }, DayReduce.LAST)
+        val efficiencyRuns = oneADay(lactateRows.mapNotNull { row ->
             row.summary?.efficiencyFactor?.let { OffsetDateTime.parse(row.startTime).toLocalDate() to it }
         })
         val latestRunDynamics = lactateRows.lastOrNull { it.summary?.gapMinPerKm != null }?.summary

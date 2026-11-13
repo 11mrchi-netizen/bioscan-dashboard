@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.training
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,9 +16,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.data.AthleteEventsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingCyclesRepository
 import com.bioscan.fieldterminal.data.TrainingProgramRepository
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.GeneratedBlockRow
 import com.bioscan.fieldterminal.data.model.TrainingBlockSummaryRow
 import com.bioscan.fieldterminal.data.model.UpcomingSessionRow
@@ -35,10 +36,10 @@ import com.bioscan.fieldterminal.ui.components.parallel
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.screens.TrainingBlockFormSheet
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // DAV-345. The PLAN tab: start a block, see the generated blocks and what is coming up.
 // UX review F8: a failed load shows COULDN'T LOAD + RETRY instead of reading as "nothing planned", and DELETE asks first
@@ -73,7 +74,7 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {})
                 { history = cyclesRepo.loadBlockSummaries() },
                 {
                     eventDays = catching {
-                        com.bioscan.fieldterminal.data.AthleteEventsRepository(SupabaseClientProvider.client).loadUpcoming(LocalDate.now(), days = 120)
+                        AthleteEventsRepository(SupabaseClientProvider.client).loadUpcoming(LocalDate.now(), days = 120)
                             .associate { it.date to it.name }
                     }.getOrDefault(emptyMap())
                 },

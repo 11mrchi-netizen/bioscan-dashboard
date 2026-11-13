@@ -11,7 +11,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.jsonPrimitive
 
-
 class NutritionCronometerLookupException(message: String) : Exception(message)
 
 @Serializable

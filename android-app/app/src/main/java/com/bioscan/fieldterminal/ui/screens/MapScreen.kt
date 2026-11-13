@@ -1,6 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens
 
 import android.app.Activity
+import android.app.PendingIntent
 import android.content.Intent
 import android.graphics.drawable.ShapeDrawable
 import android.graphics.drawable.shapes.OvalShape
@@ -10,7 +11,6 @@ import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -36,15 +37,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.draw.clipToBounds
-import com.bioscan.fieldterminal.ui.components.fitTo
 import com.bioscan.fieldterminal.auth.GoogleAuthorizationManager
 import com.bioscan.fieldterminal.data.AddEntryRepository
 import com.bioscan.fieldterminal.data.GeocodingRepository
@@ -71,26 +69,28 @@ import com.bioscan.fieldterminal.domain.weatherCodeLabel
 import com.bioscan.fieldterminal.domain.weatherCodeSymbol
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTIcon
+import com.bioscan.fieldterminal.ui.components.FTIconSize
+import com.bioscan.fieldterminal.ui.components.FTIcons
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.fitTo
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.stableMapView
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.google.android.gms.common.api.ApiException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.XYTileSource
-import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Shared text styles for this screen's own chrome (sheet titles, compact
 // action/status labels) -- DAV-108 follow-up migration off FieldTextStyles'
@@ -111,7 +111,7 @@ private val sheetActionLabelStyle = FTType.LabelCaps
 // Phase M3, not built here.
 private sealed interface MapState {
     data object CheckingAccess : MapState
-    data class NeedsConsent(val pendingIntent: android.app.PendingIntent) : MapState
+    data class NeedsConsent(val pendingIntent: PendingIntent) : MapState
     data class Error(val message: String) : MapState
     data class Ready(val pins: List<MapPin>, val droppedCount: Int, val accessToken: String) : MapState
 }
@@ -372,7 +372,7 @@ private fun MultiPinMapView(
         modifier = modifier.clipToBounds(),
         onRelease = { it.onDetach() },
         factory = { ctx ->
-            com.bioscan.fieldterminal.ui.components.stableMapView(ctx).apply {
+            stableMapView(ctx).apply {
                 setTileSource(
                     XYTileSource(
                         "CartoDarkMatter",
@@ -720,7 +720,7 @@ private fun WeatherRow(state: WeatherUiState, onClick: () -> Unit) {
                 Text("%.0f°".format(state.weather.temperatureC), style = sheetActionLabelStyle, color = FT.TextPrimary)
             }
             WeatherUiState.Loading -> Text("···", style = sheetActionLabelStyle, color = FT.TextSecondary)
-            is WeatherUiState.Failed -> com.bioscan.fieldterminal.ui.components.FTIcon(com.bioscan.fieldterminal.ui.components.FTIcons.Warning, "Weather unavailable", tint = FT.Critical, size = com.bioscan.fieldterminal.ui.components.FTIconSize.Inline)
+            is WeatherUiState.Failed -> FTIcon(FTIcons.Warning, "Weather unavailable", tint = FT.Critical, size = FTIconSize.Inline)
             WeatherUiState.Idle -> Text("VIEW", style = sheetActionLabelStyle, color = FT.DomainMap)
         }
     }

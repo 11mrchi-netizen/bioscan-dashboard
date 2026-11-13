@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import com.bioscan.fieldterminal.data.catching
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -9,6 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -34,18 +35,20 @@ import androidx.core.content.ContextCompat
 import com.bioscan.fieldterminal.data.ScaleReadingRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.bluetoothReady
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.scaleReadings
 import com.bioscan.fieldterminal.domain.BodyComposition
 import com.bioscan.fieldterminal.domain.ScaleReading
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
+import com.bioscan.fieldterminal.ui.components.InfoHelpButton
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.util.ExternalActivityGuard
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Weigh in on the body scale and log it here, without the OKOK app: the scale advertises weight and impedance over BLE
 // (domain/ScaleBroadcast.kt). Step on barefoot and wait for the scale to finish; the first finished reading is shown for
@@ -140,12 +143,12 @@ fun ScaleWeighInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                     val p = preview
                     val split = p?.split
                     if (split != null) {
-                        androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 "Body fat %.1f %%  ·  Fat-free %.1f kg  ·  Water %.1f L".format(split.bodyFatPct, split.fatFreeKg, p.totalBodyWaterL ?: 0.0),
                                 style = FTType.BodySmall, color = FT.TextPrimary, modifier = Modifier.weight(1f),
                             )
-                            com.bioscan.fieldterminal.ui.components.InfoHelpButton(title = "BODY COMPOSITION",
+                            InfoHelpButton(title = "BODY COMPOSITION",
                                 body = "Estimates from impedance: trust the trend over a single reading. Weigh at the same time, ideally fasted.")
                         }
                         p.skeletalMuscleKg?.let { Text("Skeletal muscle ~%.1f kg".format(it), style = FTType.Caption, color = FT.TextSecondary) }

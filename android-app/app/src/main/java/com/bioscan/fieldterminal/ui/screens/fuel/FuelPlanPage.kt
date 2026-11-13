@@ -28,26 +28,35 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.FuelPlanRepository
+import com.bioscan.fieldterminal.data.FuelSettingsStore
 import com.bioscan.fieldterminal.data.HorizonDay
 import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TodayFuelResult
 import com.bioscan.fieldterminal.domain.fuel.PlanSource
 import com.bioscan.fieldterminal.domain.fuel.formatGPerKg
+import com.bioscan.fieldterminal.ui.components.BarLayout
+import com.bioscan.fieldterminal.ui.components.FTBarSpec
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
-import com.bioscan.fieldterminal.ui.components.describeLoadFailure
-import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.FTIcon
+import com.bioscan.fieldterminal.ui.components.FTIconSize
+import com.bioscan.fieldterminal.ui.components.FTIcons
 import com.bioscan.fieldterminal.ui.components.NutrientColor
+import com.bioscan.fieldterminal.ui.components.barAlpha
+import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.drawBar
+import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.rememberCacheVersion
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import kotlinx.coroutines.CancellationException
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Fuel › Plan (docs/fuel-planning/README.md, phase 10): today's full plan, the next ten days as a strip of carbohydrate
 // per kilogram against each day's band, and one row per day with its carbohydrate, protein, fat and energy and the day
@@ -75,12 +84,12 @@ fun FuelPlanPage(
     var error by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
     var settingsOpen by remember { mutableStateOf(false) }
-    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    val cacheVersion = rememberCacheVersion()
     LaunchedEffect(attempt, overview, cacheVersion) {
         error = null
         try {
             result = FuelPlanRepository(SupabaseClientProvider.client).loadToday(context, overview)
-        } catch (e: kotlinx.coroutines.CancellationException) {
+        } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             error = describeLoadFailure(e)
@@ -151,7 +160,7 @@ private fun CarbStrip(days: List<HorizonDay>) {
                     .pointerInput(days) { detectHorizontalDragGestures { c, _ -> selected = indexAt(c.position.x, size.width.toFloat(), days.size) } },
             ) {
                 val slot = size.width / days.size
-                val layout = com.bioscan.fieldterminal.ui.components.BarLayout(size.width, days.size, com.bioscan.fieldterminal.ui.components.FTBarSpec.gapFor(days.size).toPx())
+                val layout = BarLayout(size.width, days.size, FTBarSpec.gapFor(days.size).toPx())
                 val barW = layout.barWidth * 0.6f
                 val bandW = layout.barWidth
                 fun y(v: Double) = size.height - (v / top).toFloat() * size.height
@@ -165,7 +174,7 @@ private fun CarbStrip(days: List<HorizonDay>) {
                         Size(bandW, y(band.lowGPerKg) - y(band.highGPerKg)), CornerRadius(3.dp.toPx()),
                     )
                     val v = h.plan.carbGPerKg
-                    drawBar(NutrientColor.Carbs, cx - barW / 2, y(v), barW, alpha = com.bioscan.fieldterminal.ui.components.barAlpha(i, selected), cap = i == shown)
+                    drawBar(NutrientColor.Carbs, cx - barW / 2, y(v), barW, alpha = barAlpha(i, selected), cap = i == shown)
                 }
             }
             Row(Modifier.fillMaxWidth().padding(top = 2.dp)) {
@@ -205,7 +214,7 @@ private fun DayRow(d: HorizonDay, open: Boolean, onToggle: () -> Unit) {
                 main?.let { "${it.title.uppercase()} · ${it.durationMin.roundToInt()} MIN" } ?: "REST",
                 style = FTType.LabelCaps, color = FT.TextPrimary, modifier = Modifier.weight(1f), maxLines = 1,
             )
-            com.bioscan.fieldterminal.ui.components.FTIcon(if (open) com.bioscan.fieldterminal.ui.components.FTIcons.Minus else com.bioscan.fieldterminal.ui.components.FTIcons.Plus, null, tint = FT.TextSecondary, size = com.bioscan.fieldterminal.ui.components.FTIconSize.Inline)
+            FTIcon(if (open) FTIcons.Minus else FTIcons.Plus, null, tint = FT.TextSecondary, size = FTIconSize.Inline)
         }
         Text(
             listOfNotNull(
@@ -240,7 +249,7 @@ private fun DayRow(d: HorizonDay, open: Boolean, onToggle: () -> Unit) {
                 val key = scheduleKey(item) ?: return@forEach
                 FuelScheduleCard(
                     kind = key.first, refKey = key.second, durationMin = item.durationMin.roundToInt(),
-                    toleratedGPerHour = com.bioscan.fieldterminal.data.FuelSettingsStore.get(context).toleratedGPerHour,
+                    toleratedGPerHour = FuelSettingsStore.get(context).toleratedGPerHour,
                     seed = { FuelPlanRepository(SupabaseClientProvider.client).seedSchedule(context, item) },
                 )
             }

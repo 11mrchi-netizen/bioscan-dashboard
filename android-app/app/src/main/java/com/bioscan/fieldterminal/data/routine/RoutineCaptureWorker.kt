@@ -1,6 +1,7 @@
 package com.bioscan.fieldterminal.data.routine
 
 import android.content.Context
+import android.util.Log
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -11,6 +12,8 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import kotlinx.coroutines.CancellationException
+import java.time.Instant
 import java.util.concurrent.TimeUnit
 
 // Routine intelligence R1 + R2: the hourly heartbeat of both streams.
@@ -53,7 +56,7 @@ class RoutineCaptureWorker(context: Context, params: WorkerParameters) : Corouti
             val repair = RoutineSettingsStore.getLong(ctx, RoutineSettingsStore.KEY_TRIPS_REPAIRED) == 0L
             val tripsOk = visits && stage("trips") {
                 if (repair) {
-                    places.refreshTrips(writeFrom = java.time.Instant.now().minusSeconds(REPAIR_DAYS * 86_400))
+                    places.refreshTrips(writeFrom = Instant.now().minusSeconds(REPAIR_DAYS * 86_400))
                     places.recomputeCommuteFlags()
                 } else {
                     places.refreshTrips()
@@ -72,7 +75,7 @@ class RoutineCaptureWorker(context: Context, params: WorkerParameters) : Corouti
         val phoneDue = now - RoutineSettingsStore.getLong(ctx, RoutineSettingsStore.KEY_LAST_PHONE_RUN) >= PHONE_INTERVAL_MS
         if (phoneDue && RoutineSettingsStore.isActive(ctx, RoutineStream.PHONE_USAGE)) {
             val result = PhoneUsageRepository(SupabaseClientProvider.client).syncRecentDays(PhoneUsageCollector(ctx))
-            android.util.Log.d("RoutineCaptureWorker", "phone use: $result")
+            Log.d("RoutineCaptureWorker", "phone use: $result")
             if (result is PhoneUsageSyncResult.Success) {
                 RoutineSettingsStore.putLong(ctx, RoutineSettingsStore.KEY_LAST_PHONE_RUN, now)
             } else {
@@ -86,10 +89,10 @@ class RoutineCaptureWorker(context: Context, params: WorkerParameters) : Corouti
     private suspend fun stage(name: String, block: suspend () -> Unit): Boolean = try {
         block()
         true
-    } catch (e: kotlinx.coroutines.CancellationException) {
+    } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        android.util.Log.w("RoutineCaptureWorker", "$name: ${e.message}")
+        Log.w("RoutineCaptureWorker", "$name: ${e.message}")
         false
     }
 

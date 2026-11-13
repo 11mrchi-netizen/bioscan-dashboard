@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.shoes
 
-import com.bioscan.fieldterminal.data.catching
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -49,12 +48,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.bioscan.fieldterminal.data.PersonalRecordsRepository
 import com.bioscan.fieldterminal.data.ShoeDraft
 import com.bioscan.fieldterminal.data.ShoesRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.shoePhotoBitmap
 import com.bioscan.fieldterminal.data.shoePhotoFrom
 import com.bioscan.fieldterminal.domain.RecordEvent
+import com.bioscan.fieldterminal.domain.RecordKey
+import com.bioscan.fieldterminal.domain.RecordKind
 import com.bioscan.fieldterminal.domain.Shoe
 import com.bioscan.fieldterminal.domain.ShoeAssignment
 import com.bioscan.fieldterminal.domain.ShoeRecord
@@ -64,6 +67,7 @@ import com.bioscan.fieldterminal.domain.ShoeUse
 import com.bioscan.fieldterminal.domain.ShoeWear
 import com.bioscan.fieldterminal.domain.UnknownGear
 import com.bioscan.fieldterminal.domain.assignShoe
+import com.bioscan.fieldterminal.domain.formatRecordTime
 import com.bioscan.fieldterminal.domain.levels.formatPace
 import com.bioscan.fieldterminal.domain.shoe
 import com.bioscan.fieldterminal.domain.shoeStats
@@ -71,6 +75,7 @@ import com.bioscan.fieldterminal.domain.unknownGear
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTChevron
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.StatTileSpec
 import com.bioscan.fieldterminal.ui.components.TileGrid
@@ -78,12 +83,14 @@ import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.screens.TextChipRow
+import com.bioscan.fieldterminal.ui.screens.detail.EmptyLine
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.util.PendingCameraCapture
 import com.bioscan.fieldterminal.util.createCameraCaptureUri
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Shoes (docs/zepp-integration/03-stress-days-and-shoes.md, domain/Shoes.kt). Setup › TRAINING SETUP › SHOES lists the
 // shoes and the Zepp codes no shoe has yet (each matched with a tap); a run's SUMMARY shows its shoes (an unknown code
@@ -104,18 +111,18 @@ suspend fun loadShoesData(): ShoesData {
     val runs = repo.loadRuns()
     // The personal records (v_personal_records): each time one moved, past its first. The last of each still stands.
     val records = catching {
-        val sets = com.bioscan.fieldterminal.data.PersonalRecordsRepository(SupabaseClientProvider.client).loadSets()
+        val sets = PersonalRecordsRepository(SupabaseClientProvider.client).loadSets()
         val lastOf = sets.groupBy { it.key }.mapValues { (_, v) -> v.maxBy { it.date } }
         sets.mapNotNull { s ->
-            val key = com.bioscan.fieldterminal.domain.RecordKey.of(s.key) ?: return@mapNotNull null
+            val key = RecordKey.of(s.key) ?: return@mapNotNull null
             val prev = s.previousValue ?: return@mapNotNull null
             val sid = s.sessionId ?: return@mapNotNull null
             val unit = when (key.kind) {
-                com.bioscan.fieldterminal.domain.RecordKind.TIME -> "time"
-                com.bioscan.fieldterminal.domain.RecordKind.KM -> "km"
-                com.bioscan.fieldterminal.domain.RecordKind.METRES -> "m"
+                RecordKind.TIME -> "time"
+                RecordKind.KM -> "km"
+                RecordKind.METRES -> "m"
             }
-            RecordEvent(if (key.kind == com.bioscan.fieldterminal.domain.RecordKind.TIME) "Fastest ${key.label}" else key.label, sid, s.date, s.value, unit, prev, lastOf[s.key] === s)
+            RecordEvent(if (key.kind == RecordKind.TIME) "Fastest ${key.label}" else key.label, sid, s.date, s.value, unit, prev, lastOf[s.key] === s)
         }
     }.getOrDefault(emptyList())
     return ShoesData(shoes, runs, records)
@@ -133,7 +140,7 @@ private fun recordValue(r: ShoeRecord): String = when (r.unit) {
     "km" -> "${km(r.value)} km"
     "m" -> "${r.value.roundToInt()} m"
     "min/km" -> "${formatPace(r.value)} /km"
-    "time" -> com.bioscan.fieldterminal.domain.formatRecordTime(r.value)
+    "time" -> formatRecordTime(r.value)
     else -> "%.1f %s".format(r.value, r.unit)
 }
 
@@ -141,7 +148,7 @@ private fun recordPrevious(r: ShoeRecord): String = when (r.unit) {
     "km" -> "${km(r.previous)} km"
     "m" -> "${r.previous.roundToInt()} m"
     "min/km" -> formatPace(r.previous)
-    "time" -> com.bioscan.fieldterminal.domain.formatRecordTime(r.previous)
+    "time" -> formatRecordTime(r.previous)
     else -> "%.1f".format(r.previous)
 }
 
@@ -271,7 +278,7 @@ private fun ShoeRow(stats: ShoeStats, onClick: () -> Unit) {
             )
             if (!s.retired) WearBar(stats)
         }
-        com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextSecondary)
+        FTChevron(tint = FT.TextSecondary)
     }
 }
 
@@ -320,7 +327,7 @@ fun ShoeFormSheet(req: ShoeFormRequest, onDismiss: () -> Unit, onSaved: () -> Un
         if (p != null) photo = p else error = "That photo couldn't be read."
     }
     val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        com.bioscan.fieldterminal.util.PendingCameraCapture.clear(context)
+        PendingCameraCapture.clear(context)
         if (ok) takeFrom(pendingUri)
     }
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -517,7 +524,7 @@ fun ShoeScreen(shoeId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit) 
         val d = data
         if (d == null) return@DetailScreen
         if (shoe == null) {
-            com.bioscan.fieldterminal.ui.screens.detail.EmptyLine("These shoes are gone.")
+            EmptyLine("These shoes are gone.")
             return@DetailScreen
         }
         val st = remember(d, shoe) { d.stats(shoe) }
@@ -560,7 +567,7 @@ fun ShoeScreen(shoeId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit) 
             info = "A run in these shoes that set one of your personal records (ME › PERFORMANCE › RECORDS): the fastest 1K to 100K " +
                 "inside a run, the longest run, the longest trail run or the biggest climb.",
         ) {
-            if (st.records.isEmpty()) com.bioscan.fieldterminal.ui.screens.detail.EmptyLine("No records set in these shoes yet.")
+            if (st.records.isEmpty()) EmptyLine("No records set in these shoes yet.")
             st.records.forEach { r ->
                 Row(
                     Modifier.fillMaxWidth().ftClickable { onOpenSession(r.sessionId) }.padding(vertical = 6.dp),
@@ -574,13 +581,13 @@ fun ShoeScreen(shoeId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit) 
                         )
                     }
                     Text(recordValue(r), style = FTType.MetricMedium, color = FT.TextPrimary)
-                    com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextSecondary)
+                    FTChevron(tint = FT.TextSecondary)
                 }
             }
         }
 
         FTCard(title = "RUNS") {
-            if (st.runs.isEmpty()) com.bioscan.fieldterminal.ui.screens.detail.EmptyLine("No runs in these shoes yet.")
+            if (st.runs.isEmpty()) EmptyLine("No runs in these shoes yet.")
             st.runs.take(30).forEach { r ->
                 Row(
                     Modifier.fillMaxWidth().ftClickable { onOpenSession(r.sessionId) }.padding(vertical = 6.dp),
@@ -589,7 +596,7 @@ fun ShoeScreen(shoeId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit) 
                     Text(r.date.format(DAY), style = FTType.Body, color = FT.TextPrimary, modifier = Modifier.weight(1f))
                     if (r.trail) Text("TRAIL", style = FTType.Micro, color = FT.TextMuted)
                     Text("${km(r.distanceKm)} km", style = FTType.Body, color = FT.TextSecondary)
-                    com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextSecondary)
+                    FTChevron(tint = FT.TextSecondary)
                 }
             }
             if (st.runs.size > 30) Text("and ${st.runs.size - 30} earlier runs", style = FTType.Caption, color = FT.TextMuted)

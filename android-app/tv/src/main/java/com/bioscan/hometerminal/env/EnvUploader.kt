@@ -4,11 +4,11 @@ import android.content.Context
 import com.bioscan.hometerminal.data.Supabase
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
-import java.io.File
-import java.time.Instant
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
+import java.io.File
+import java.time.Instant
 
 @Serializable
 private data class SensorRow(

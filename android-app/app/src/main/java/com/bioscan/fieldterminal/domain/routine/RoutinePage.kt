@@ -6,6 +6,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
+import kotlin.math.abs
 import kotlin.math.sqrt
 
 // ME › ROUTINE (docs/routine-intelligence/README.md, "ME › ROUTINE"): the long view of the routine. Pure.
@@ -176,7 +177,7 @@ fun compareWindows(line: DailyLine, through: LocalDate, days: Int = 28, minDays:
 
 /** "up from 24 min", "down from 2 h 10", "about the same as 7 h 05" (within 5 % or [sameWithin] of the unit). */
 fun changeWords(c: WindowChange, format: (Double) -> String, sameWithin: Double = 1.0): String = when {
-    kotlin.math.abs(c.change) < sameWithin || (c.relative != null && kotlin.math.abs(c.relative!!) < 0.05) -> "about the same as ${format(c.before)}"
+    abs(c.change) < sameWithin || (c.relative != null && abs(c.relative!!) < 0.05) -> "about the same as ${format(c.before)}"
     c.change > 0 -> "up from ${format(c.before)}"
     else -> "down from ${format(c.before)}"
 }

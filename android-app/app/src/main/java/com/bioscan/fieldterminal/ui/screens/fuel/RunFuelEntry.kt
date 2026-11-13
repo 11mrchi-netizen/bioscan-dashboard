@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.fuel
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -8,6 +7,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -19,15 +19,16 @@ import com.bioscan.fieldterminal.data.FuelDebriefRepository
 import com.bioscan.fieldterminal.data.FuelingRepository
 import com.bioscan.fieldterminal.data.FuelingSessionRow
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.screens.EnduranceFuelForm
 import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Add entry > Run fuel (docs/race-fuel-rework/plan.md): pick the activity, then the debrief against the schedule made for it.
 // Logging one intake at a time is still there, as the second choice, for something taken that no schedule covered.
@@ -65,7 +66,7 @@ internal fun RunFuelEntry(onSaved: () -> Unit) {
                 Text("ACTIVITY", color = FT.TextMuted, style = FTType.LabelCaps)
                 val labels = sessions!!.associateBy({ label(it) }, { it })
                 TextChipRow(labels.keys.toList(), picked?.let { label(it) }, perRow = 1) { chosen -> if (chosen != null) picked = labels[chosen] }
-                target?.let { t -> androidx.compose.runtime.key(t.sessionId) { FuelDebriefContent(t, onSaved) } }
+                target?.let { t -> key(t.sessionId) { FuelDebriefContent(t, onSaved) } }
                 FTButton("LOG ONE INTAKE INSTEAD", emphasis = FTButtonEmphasis.Tertiary, modifier = Modifier.fillMaxWidth()) { single = true }
             }
         }

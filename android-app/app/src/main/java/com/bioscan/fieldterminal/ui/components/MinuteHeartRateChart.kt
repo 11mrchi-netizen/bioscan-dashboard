@@ -30,6 +30,7 @@ import com.bioscan.fieldterminal.data.model.HrPoint
 import com.bioscan.fieldterminal.domain.minuteOfDayLabel
 import com.bioscan.fieldterminal.domain.minuteSegments
 import com.bioscan.fieldterminal.ui.theme.FTType
+import kotlin.math.abs
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // One day of minute heart rate on a fixed 00:00-24:00 axis (chart rules, ChartRules.kt): a labelled bpm axis, the line
@@ -74,7 +75,7 @@ fun MinuteHeartRateChart(
                 .height(chartHeight)
                 .chartInspect(Pair(points, gutter)) { x, width, isTap ->
                     val minute = ((x - gutter) / (width - gutter) * DAY_MINUTES).toInt()
-                    val nearest = points.minBy { kotlin.math.abs(it.offsetMinutes - minute) }
+                    val nearest = points.minBy { abs(it.offsetMinutes - minute) }
                     selected = if (isTap && selected == nearest) null else nearest
                 },
         ) {

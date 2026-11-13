@@ -3,6 +3,7 @@ package com.bioscan.fieldterminal.ui.screens.today
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,10 +12,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -22,30 +27,42 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.Alignment
-import com.bioscan.fieldterminal.domain.score.ScoreKeys
-import com.bioscan.fieldterminal.domain.score.sparkline
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.ScoresView
+import com.bioscan.fieldterminal.domain.readMetric
 import com.bioscan.fieldterminal.domain.score.BowelTiming
 import com.bioscan.fieldterminal.domain.score.DomainKey
+import com.bioscan.fieldterminal.domain.score.ScoreKeys
 import com.bioscan.fieldterminal.domain.score.StoolLane
 import com.bioscan.fieldterminal.domain.score.StoolPattern
 import com.bioscan.fieldterminal.domain.score.bowelTiming
 import com.bioscan.fieldterminal.domain.score.bowelTimingHeadline
+import com.bioscan.fieldterminal.domain.score.sparkSlots
 import com.bioscan.fieldterminal.domain.score.stoolPattern
 import com.bioscan.fieldterminal.domain.score.stoolPatternHeadline
+import com.bioscan.fieldterminal.domain.stress.StressDay
+import com.bioscan.fieldterminal.domain.stress.StressRhythmResult
+import com.bioscan.fieldterminal.domain.stress.StressZone
 import com.bioscan.fieldterminal.domain.stress.analyzeStressDay
+import com.bioscan.fieldterminal.domain.stress.minutesByZone
+import com.bioscan.fieldterminal.domain.stress.stressSlots
+import com.bioscan.fieldterminal.ui.components.FTChevron
+import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.screens.detail.HistorySpec
+import com.bioscan.fieldterminal.ui.screens.detail.MetricHistoryOverlay
+import com.bioscan.fieldterminal.ui.screens.detail.positionGlyph
+import com.bioscan.fieldterminal.ui.screens.detail.positionWords
 import com.bioscan.fieldterminal.ui.screens.status.HypnogramCard
 import com.bioscan.fieldterminal.ui.screens.status.PhysiologicalStressCard
-import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.metricInk
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Scoring system (docs/scoring-system/02-page-mockups.md §3-§4): THE FULL PICTURE of a domain. Each is a one-line tile on
 // the domain's overlay that opens its own level 3 overlay: views that explain the score but aren't scored themselves.
@@ -143,7 +160,7 @@ fun StoolHypnogram(pattern: StoolPattern, zone: ZoneId = ZoneId.systemDefault())
         }
         Canvas(modifier = Modifier.weight(1f).fillMaxHeight()) {
             val laneH = size.height / lanes.size
-            fun x(at: java.time.Instant) = size.width * Duration.between(start, at).toMinutes() / spanMin
+            fun x(at: Instant) = size.width * Duration.between(start, at).toMinutes() / spanMin
             fun yMid(lane: StoolLane) = lanes.indexOf(lane) * laneH + laneH / 2
             // Lane guides and day separators.
             lanes.indices.forEach { i -> drawLine(FT.GlassTrack, Offset(0f, (i + 1) * laneH), Offset(size.width, (i + 1) * laneH), strokeWidth = 1f) }
@@ -220,20 +237,20 @@ fun BowelTimingChart(timing: BowelTiming) {
  */
 @Composable
 fun StressCurve(
-    day: com.bioscan.fieldterminal.domain.stress.StressDay,
-    result: com.bioscan.fieldterminal.domain.stress.StressRhythmResult,
-    exercise: List<Pair<java.time.Instant, java.time.Instant>>,
+    day: StressDay,
+    result: StressRhythmResult,
+    exercise: List<Pair<Instant, Instant>>,
     zone: ZoneId = ZoneId.systemDefault(),
 ) {
     val start = day.date.atTime(6, 0).atZone(zone).toInstant()
     val end = day.date.plusDays(1).atStartOfDay(zone).toInstant()
     val span = Duration.between(start, end).toMinutes().toFloat()
-    val inExercise = { t: java.time.Instant -> exercise.any { (a, b) -> !t.isBefore(a) && !t.isAfter(b) } }
+    val inExercise = { t: Instant -> exercise.any { (a, b) -> !t.isBefore(a) && !t.isAfter(b) } }
     val samples = day.samples.filter { !it.timestamp.isBefore(start) && it.timestamp.isBefore(end) }.sortedBy { it.timestamp }
     val peak = samples.filterNot { inExercise(it.timestamp) }.maxByOrNull { it.value }
-    androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().height(150.dp)) {
+    Box(Modifier.fillMaxWidth().height(150.dp)) {
         Canvas(Modifier.fillMaxWidth().height(150.dp)) {
-            fun x(t: java.time.Instant) = size.width * Duration.between(start, t).toMinutes() / span
+            fun x(t: Instant) = size.width * Duration.between(start, t).toMinutes() / span
             fun y(v: Double) = (size.height * (1 - v / 100.0)).toFloat()
             // Stress levels as faint bands (Zepp's relaxed / normal / medium / high cut-offs).
             for ((lo, hi, a) in listOf(Triple(0.0, 25.0, 0.0f), Triple(60.0, 80.0, 0.06f), Triple(80.0, 100.0, 0.10f))) {
@@ -288,17 +305,17 @@ fun StressCurve(
 fun PictureThumb(view: ScoresView, picture: FullPicture) {
     val about = view.day.minusDays(1)
     when (picture) {
-        FullPicture.LAST_NIGHT -> SlotSparkline(com.bioscan.fieldterminal.domain.score.sparkSlots(view.series[ScoreKeys.SLEEP_HOURS], view.day, 7), color = metricInk(ScoreKeys.SLEEP_HOURS))
-        FullPicture.SLEEP_CHARTS -> SlotSparkline(com.bioscan.fieldterminal.domain.score.sparkSlots(view.series[ScoreKeys.SLEEP_HOURS], view.day, 30), color = metricInk(ScoreKeys.SLEEP_HOURS))
-        FullPicture.CARDIO_CHARTS -> SlotSparkline(com.bioscan.fieldterminal.domain.score.sparkSlots(view.series[ScoreKeys.HRV], view.day, 30), color = metricInk(ScoreKeys.HRV))
-        FullPicture.SEXUAL_HEALTH -> SlotSparkline(com.bioscan.fieldterminal.domain.score.sparkSlots(view.series[ScoreKeys.MORNING_ERECTION], view.day, 30), color = metricInk(ScoreKeys.MORNING_ERECTION))
-        FullPicture.LOAD_CHARTS -> SlotSparkline(com.bioscan.fieldterminal.domain.score.sparkSlots(view.series[ScoreKeys.TSB], view.day, 30), color = metricInk(ScoreKeys.TSB))
+        FullPicture.LAST_NIGHT -> SlotSparkline(sparkSlots(view.series[ScoreKeys.SLEEP_HOURS], view.day, 7), color = metricInk(ScoreKeys.SLEEP_HOURS))
+        FullPicture.SLEEP_CHARTS -> SlotSparkline(sparkSlots(view.series[ScoreKeys.SLEEP_HOURS], view.day, 30), color = metricInk(ScoreKeys.SLEEP_HOURS))
+        FullPicture.CARDIO_CHARTS -> SlotSparkline(sparkSlots(view.series[ScoreKeys.HRV], view.day, 30), color = metricInk(ScoreKeys.HRV))
+        FullPicture.SEXUAL_HEALTH -> SlotSparkline(sparkSlots(view.series[ScoreKeys.MORNING_ERECTION], view.day, 30), color = metricInk(ScoreKeys.MORNING_ERECTION))
+        FullPicture.LOAD_CHARTS -> SlotSparkline(sparkSlots(view.series[ScoreKeys.TSB], view.day, 30), color = metricInk(ScoreKeys.TSB))
         FullPicture.INJURY -> Unit
         FullPicture.DIGESTION -> MiniStool(view.stoolWindow())
-        FullPicture.NUTRITION_CHARTS -> SlotSparkline(com.bioscan.fieldterminal.domain.score.sparkSlots(view.series[ScoreKeys.ENERGY_RATIO], view.day, 30), color = metricInk(ScoreKeys.ENERGY_RATIO))
-        FullPicture.HYDRATION_CHARTS -> SlotSparkline(com.bioscan.fieldterminal.domain.score.sparkSlots(view.series[ScoreKeys.WATER_RATIO], view.day, 30), color = metricInk(ScoreKeys.WATER_RATIO))
+        FullPicture.NUTRITION_CHARTS -> SlotSparkline(sparkSlots(view.series[ScoreKeys.ENERGY_RATIO], view.day, 30), color = metricInk(ScoreKeys.ENERGY_RATIO))
+        FullPicture.HYDRATION_CHARTS -> SlotSparkline(sparkSlots(view.series[ScoreKeys.WATER_RATIO], view.day, 30), color = metricInk(ScoreKeys.WATER_RATIO))
         FullPicture.STRESS_DAY -> Sparkline(view.stressDays.firstOrNull { it.date == about }?.samples?.sortedBy { it.timestamp }?.map { it.value.toDouble() }.orEmpty(), color = FT.Info)
-        FullPicture.WELLBEING_CHARTS -> SlotSparkline(com.bioscan.fieldterminal.domain.score.sparkSlots(view.series[ScoreKeys.STRESSED_SHARE], view.day, 30), color = metricInk(ScoreKeys.STRESSED_SHARE))
+        FullPicture.WELLBEING_CHARTS -> SlotSparkline(sparkSlots(view.series[ScoreKeys.STRESSED_SHARE], view.day, 30), color = metricInk(ScoreKeys.STRESSED_SHARE))
     }
 }
 
@@ -340,44 +357,44 @@ private fun NightTile(
     color: Color,
     modifier: Modifier,
 ) {
-    val reading = com.bioscan.fieldterminal.domain.readMetric(series, day, minSd = minSd, maxAgeDays = 0)
-    var open by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    val shape = androidx.compose.foundation.shape.RoundedCornerShape(FT.RadiusModule)
-    if (open) com.bioscan.fieldterminal.ui.screens.detail.MetricHistoryOverlay(
-        com.bioscan.fieldterminal.ui.screens.detail.HistorySpec(label.lowercase().replaceFirstChar { it.uppercase() }, series, unit, format, color, minSd = minSd),
+    val reading = readMetric(series, day, minSd = minSd, maxAgeDays = 0)
+    var open by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(FT.RadiusModule)
+    if (open) MetricHistoryOverlay(
+        HistorySpec(label.lowercase().replaceFirstChar { it.uppercase() }, series, unit, format, color, minSd = minSd),
         day, onBack = { open = false },
     ) { open = false }
     Column(
         modifier.background(FT.Glass, shape)
-            .ftClickable(shape = shape, role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "Open $label") { open = true }
+            .ftClickable(shape = shape, role = Role.Button, onClickLabel = "Open $label") { open = true }
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(label, style = FTType.LabelCaps, color = FT.TextMuted, modifier = Modifier.weight(1f))
-            com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted)
+            FTChevron(tint = FT.TextMuted)
         }
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(reading.latest?.let(format) ?: "—", style = FTType.MetricMedium, color = FT.TextPrimary)
             Text(unit, style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(bottom = 4.dp))
         }
         Text(
-            com.bioscan.fieldterminal.ui.screens.detail.positionGlyph(reading.position) + " " +
-                com.bioscan.fieldterminal.ui.screens.detail.positionWords(reading.position) +
+            positionGlyph(reading.position) + " " +
+                positionWords(reading.position) +
                 (reading.normal?.let { " (${format(it.first)}–${format(it.second)})" } ?: ""),
             style = FTType.Caption, color = FT.TextSecondary,
         )
-        SlotSparkline(com.bioscan.fieldterminal.domain.score.sparkSlots(series, day, 14), color = color)
+        SlotSparkline(sparkSlots(series, day, 14), color = color)
     }
 }
 
 // ---- Stress through the day: the last seven days by zone ----
 
-private fun stressZoneColor(z: com.bioscan.fieldterminal.domain.stress.StressZone): Color = when (z) {
-    com.bioscan.fieldterminal.domain.stress.StressZone.HIGH -> FT.Zone.StressHigh
-    com.bioscan.fieldterminal.domain.stress.StressZone.MEDIUM -> FT.Zone.StressModerate
-    com.bioscan.fieldterminal.domain.stress.StressZone.NORMAL -> FT.Metric.Circadian
-    com.bioscan.fieldterminal.domain.stress.StressZone.RELAXED -> FT.Zone.StressCalm
+private fun stressZoneColor(z: StressZone): Color = when (z) {
+    StressZone.HIGH -> FT.Zone.StressHigh
+    StressZone.MEDIUM -> FT.Zone.StressModerate
+    StressZone.NORMAL -> FT.Metric.Circadian
+    StressZone.RELAXED -> FT.Zone.StressCalm
 }
 
 /**
@@ -388,10 +405,10 @@ private fun stressZoneColor(z: com.bioscan.fieldterminal.domain.stress.StressZon
 @Composable
 private fun StressWeek(view: ScoresView, zone: ZoneId = ZoneId.systemDefault()) {
     val about = view.day.minusDays(1)
-    val lanes = com.bioscan.fieldterminal.domain.stress.StressZone.DRAWN
+    val lanes = StressZone.DRAWN
     val days = (6 downTo 0).map { about.minusDays(it.toLong()) }
     val slotsByDay = days.associateWith { d ->
-        view.stressDays.firstOrNull { it.date == d }?.let { com.bioscan.fieldterminal.domain.stress.stressSlots(it, zone) }.orEmpty()
+        view.stressDays.firstOrNull { it.date == d }?.let { stressSlots(it, zone) }.orEmpty()
     }
     if (slotsByDay.values.all { it.isEmpty() }) {
         Text("No stress readings in the last seven days.", style = FTType.BodySmall, color = FT.TextMuted)
@@ -429,13 +446,13 @@ private fun StressWeek(view: ScoresView, zone: ZoneId = ZoneId.systemDefault()) 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             for (z in lanes) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    androidx.compose.foundation.layout.Box(Modifier.width(10.dp).height(4.dp).background(stressZoneColor(z)))
+                    Box(Modifier.width(10.dp).height(4.dp).background(stressZoneColor(z)))
                     Text(z.label.lowercase(), style = FTType.Micro, color = FT.TextSecondary)
                 }
             }
         }
         val week = slotsByDay.values.flatten()
-        val mins = com.bioscan.fieldterminal.domain.stress.minutesByZone(week)
+        val mins = minutesByZone(week)
         val total = mins.values.sum().coerceAtLeast(1)
         Text(
             "Across the week: " + lanes.joinToString(" · ") { "${(mins.getValue(it) * 100 / total)} % ${it.label.lowercase()}" },

@@ -1,21 +1,20 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.data
 
-import kotlinx.serialization.UseSerializers
 import com.bioscan.fieldterminal.data.model.ExerciseSessionRow
 import com.bioscan.fieldterminal.domain.LiftSet
-import com.bioscan.fieldterminal.domain.bestLifts
-import com.bioscan.fieldterminal.domain.aging.GripReading
-import com.bioscan.fieldterminal.domain.aging.latestGrip
-import com.bioscan.fieldterminal.domain.analysis.ComparisonResult
-import com.bioscan.fieldterminal.domain.analysis.ComparisonState
+import com.bioscan.fieldterminal.domain.SleepNight
 import com.bioscan.fieldterminal.domain.aging.DatedValue
+import com.bioscan.fieldterminal.domain.aging.GripReading
 import com.bioscan.fieldterminal.domain.aging.HealthspanInputs
 import com.bioscan.fieldterminal.domain.aging.HealthspanSummary
 import com.bioscan.fieldterminal.domain.aging.LabObservation
 import com.bioscan.fieldterminal.domain.aging.healthspanSummary
+import com.bioscan.fieldterminal.domain.aging.latestGrip
 import com.bioscan.fieldterminal.domain.aging.latestLab
-import com.bioscan.fieldterminal.domain.SleepNight
+import com.bioscan.fieldterminal.domain.analysis.ComparisonResult
+import com.bioscan.fieldterminal.domain.analysis.ComparisonState
+import com.bioscan.fieldterminal.domain.bestLifts
 import com.bioscan.fieldterminal.domain.comparison.PopulationContext
 import com.bioscan.fieldterminal.domain.comparison.comparePopulation
 import com.bioscan.fieldterminal.domain.comparison.resolveArtifact
@@ -27,9 +26,11 @@ import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
+import kotlin.math.floor
 
 @Serializable
 private data class HsDrawRow(val id: Long, @SerialName("draw_date") val drawDate: String)
@@ -125,7 +126,7 @@ class HealthspanRepository(private val supabase: SupabaseClient) {
         val stepsMedian = steps.takeIf { it.isNotEmpty() }?.let { if (it.size % 2 == 1) it[it.size / 2] else (it[it.size / 2 - 1] + it[it.size / 2]) / 2.0 }
         val stepsBand = stepsMedian?.let {
             // The bands are whole steps (9,999 then 10,000): an even-day median of 9,999.5 would fall between them.
-            comparePopulation("steps", kotlin.math.floor(it), PopulationContext(age, sex, null), benchmarks.loadArtifacts("steps")).bandLabel
+            comparePopulation("steps", floor(it), PopulationContext(age, sex, null), benchmarks.loadArtifacts("steps")).bandLabel
         }
 
         // Strength: best estimated 1RM per lift over about six months, the latest body weight, the latest logged grip.

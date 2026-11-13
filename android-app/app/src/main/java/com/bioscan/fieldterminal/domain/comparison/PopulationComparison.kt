@@ -7,6 +7,9 @@ import com.bioscan.fieldterminal.domain.analysis.ComparisonType
 import com.bioscan.fieldterminal.domain.analysis.Directionality
 import com.bioscan.fieldterminal.domain.analysis.InputCompleteness
 import com.bioscan.fieldterminal.domain.analysis.Provenance
+import kotlin.math.abs
+import kotlin.math.exp
+import kotlin.math.sqrt
 
 // DAV-196 (docs/analysis-layer-2/25-population-benchmark-engine.md). Reads a
 // versioned benchmark artifact (DAV-193 -- a published quantile table or
@@ -123,10 +126,10 @@ fun extendedPercentile(current: Double, quantiles: Map<Int, Double>): Double? {
 
 // Standard normal CDF, Phi(z) = (1 + erf(z / sqrt 2)) / 2, with Abramowitz & Stegun 7.1.26 for erf (error under 1.5e-7).
 internal fun normalCdf(z: Double): Double {
-    val x = kotlin.math.abs(z) / kotlin.math.sqrt(2.0)
+    val x = abs(z) / sqrt(2.0)
     val t = 1.0 / (1.0 + 0.3275911 * x)
     val poly = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))))
-    val erf = 1.0 - poly * kotlin.math.exp(-x * x)
+    val erf = 1.0 - poly * exp(-x * x)
     return if (z >= 0) 0.5 * (1.0 + erf) else 0.5 * (1.0 - erf)
 }
 

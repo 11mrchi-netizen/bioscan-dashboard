@@ -1,7 +1,7 @@
 package com.bioscan.fieldterminal.data.routine
 
-import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.ReadCache
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.WallClock
 import com.bioscan.fieldterminal.domain.routine.ActivityCategory
 import com.bioscan.fieldterminal.domain.routine.ActivityKind

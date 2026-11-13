@@ -1,40 +1,52 @@
 package com.bioscan.fieldterminal.ui.screens
 
-import com.bioscan.fieldterminal.ui.components.LoadingOrError
-import com.bioscan.fieldterminal.ui.components.rememberGuarded
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.padding
-import androidx.compose.runtime.setValue
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.ExerciseSessionRow
 import com.bioscan.fieldterminal.data.model.Vo2MaxRow
+import com.bioscan.fieldterminal.domain.WallClock
 import com.bioscan.fieldterminal.domain.aging.FactorStatus
 import com.bioscan.fieldterminal.domain.aging.HealthspanFactor
 import com.bioscan.fieldterminal.domain.aging.HealthspanFactorId
+import com.bioscan.fieldterminal.domain.healthspanStateWord
 import com.bioscan.fieldterminal.domain.vo2MaxSeries
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
+import com.bioscan.fieldterminal.ui.components.FTChartNote
+import com.bioscan.fieldterminal.ui.components.FTLatestReading
 import com.bioscan.fieldterminal.ui.components.FTRange
+import com.bioscan.fieldterminal.ui.components.FTRangeSelector
+import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.LoadingOrError
+import com.bioscan.fieldterminal.ui.components.TrendSeries
+import com.bioscan.fieldterminal.ui.components.rememberGuarded
+import com.bioscan.fieldterminal.ui.components.rememberRange
 import com.bioscan.fieldterminal.ui.screens.today.FullScreenOverlay
 import com.bioscan.fieldterminal.ui.screens.today.OverlaySection
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
+import io.github.jan.supabase.postgrest.query.filter.FilterOperator
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.time.LocalDate
-import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
+import kotlin.math.abs
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // ME › Healthspan: tapping a factor opens this page -- the score and what it rests on, then the trend of each metric
 // that feeds it, so the number is never a dead end. The series are read straight from the same sources the score uses
@@ -69,7 +81,7 @@ suspend fun loadHealthspanFactorMetrics(supabase: SupabaseClient, factorId: Heal
             val vo2 = run {
                 // The newest 800 days (an ascending query with a limit read the oldest ones).
                 supabase.postgrest.from("wearable_daily").select(Columns.list("date,vo2max")) {
-                    filter { filterNot("vo2max", io.github.jan.supabase.postgrest.query.filter.FilterOperator.IS, "null") }
+                    filter { filterNot("vo2max", FilterOperator.IS, "null") }
                     order("date", Order.DESCENDING); limit(800)
                 }.decodeList<Vo2MaxRow>().sortedBy { it.date }
             }
@@ -123,7 +135,7 @@ suspend fun loadHealthspanFactorMetrics(supabase: SupabaseClient, factorId: Heal
                     .decodeList<GripLogRow>()
             }
             fun perDay(hand: String?) = rows.filter { it.hand == hand }
-                .mapNotNull { r -> com.bioscan.fieldterminal.domain.WallClock.date(r.occurredAt)?.let { it to r.kg } }
+                .mapNotNull { r -> WallClock.date(r.occurredAt)?.let { it to r.kg } }
                 .groupBy({ it.first }, { it.second }).mapValues { it.value.max() }.toList().sortedBy { it.first }
             val right = perDay("right")
             val left = perDay("left")
@@ -162,7 +174,7 @@ private suspend fun liftOneRepMaxSeries(supabase: SupabaseClient): List<FactorMe
     }
     data class SetE(val lift: String, val day: LocalDate, val oneRm: Double)
     val sets = rows.flatMap { s ->
-        val day = com.bioscan.fieldterminal.domain.WallClock.date(s.startTime) ?: return@flatMap emptyList<SetE>()
+        val day = WallClock.date(s.startTime) ?: return@flatMap emptyList<SetE>()
         s.details.exercises.orEmpty().flatMap { ex ->
             ex.sets.filter { it.reps in 1..12 && it.weightKg > 0 }.map { SetE(ex.name, day, it.weightKg * (1 + it.reps / 30.0)) }
         }
@@ -181,8 +193,8 @@ private suspend fun liftOneRepMaxSeries(supabase: SupabaseClient): List<FactorMe
 
 private fun rangeWords(r: FTRange) = when (r) { FTRange.D28 -> "28 days"; FTRange.D90 -> "90 days"; FTRange.Y1 -> "the year"; FTRange.ALL -> "all of it" }
 
-private fun fmt(v: Double): String = if (kotlin.math.abs(v) >= 100) "%.0f".format(v) else "%.1f".format(v)
-private val DAY = java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy")
+private fun fmt(v: Double): String = if (abs(v) >= 100) "%.0f".format(v) else "%.1f".format(v)
+private val DAY = DateTimeFormatter.ofPattern("d MMM yyyy")
 
 /**
  * The page a Healthspan factor opens: its score and basis, then each metric that feeds it over the range picked at the
@@ -193,13 +205,13 @@ private val DAY = java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy")
 fun HealthspanFactorOverlay(factor: HealthspanFactor, onClose: () -> Unit) {
     val (metrics, guard) = rememberGuarded(factor.id) { loadHealthspanFactorMetrics(SupabaseClientProvider.client, factor.id) }
     val labBased = factor.id == HealthspanFactorId.METABOLIC || factor.id == HealthspanFactorId.GLYCAEMIC
-    var range by com.bioscan.fieldterminal.ui.components.rememberRange("factor:${factor.id}", if (labBased) FTRange.ALL else FTRange.D28)
-    val today = androidx.compose.runtime.remember { LocalDate.now() }
+    var range by rememberRange("factor:${factor.id}", if (labBased) FTRange.ALL else FTRange.D28)
+    val today = remember { LocalDate.now() }
     FullScreenOverlay(title = factor.id.label.uppercase(), onClose = onClose) {
-        com.bioscan.fieldterminal.ui.components.FTRangeSelector(range, { range = it })
-        androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) {
+        FTRangeSelector(range, { range = it })
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(factor.score?.let { "$it / 100" } ?: "—", style = FTType.MetricMedium, color = if (factor.score != null) FT.TextPrimary else FT.TextMuted)
-            com.bioscan.fieldterminal.ui.components.FTStatePill(com.bioscan.fieldterminal.domain.healthspanStateWord(factor.status))
+            FTStatePill(healthspanStateWord(factor.status))
         }
         factor.reading?.let { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
         factor.basis?.let { Text("Scored against ${it.label}.", style = FTType.Caption, color = FT.TextMuted) }
@@ -224,7 +236,7 @@ internal fun FactorMetricSection(fm: FactorMetric, range: FTRange, today: LocalD
     val shown = clip(fm.points)
     val latest = fm.points.maxByOrNull { it.first }
     OverlaySection(fm.label) {
-        latest?.let { (d, v) -> com.bioscan.fieldterminal.ui.components.FTLatestReading(fmt(v), fm.unit, d, ink = fm.color) }
+        latest?.let { (d, v) -> FTLatestReading(fmt(v), fm.unit, d, ink = fm.color) }
         if (shown.size >= 2) {
             Text(
                 "${rangeWords(range)}: average ${fmt(shown.map { it.second }.average())}, " +
@@ -234,21 +246,21 @@ internal fun FactorMetricSection(fm: FactorMetric, range: FTRange, today: LocalD
         }
         val lines = (fm.lines ?: listOf(FactorLine(fm.label, fm.color, fm.points))).map { it.copy(points = clip(it.points)) }.filter { it.points.isNotEmpty() }
         if (lines.isEmpty()) {
-            com.bioscan.fieldterminal.ui.components.FTChartNote("No readings in this range. The latest is above.")
+            FTChartNote("No readings in this range. The latest is above.")
         } else {
             val count = lines.sumOf { it.points.size }
             if (!fm.daily && count < 3) {
-                com.bioscan.fieldterminal.ui.components.FTChartNote("Only $count reading${if (count == 1) "" else "s"} in this range: shown as dots, not a trend.")
+                FTChartNote("Only $count reading${if (count == 1) "" else "s"} in this range: shown as dots, not a trend.")
             }
             DateTrendLine(
                 // A daily series is a line broken where days are missing. An occasional one (labs, grip, lifts) is its
                 // readings as dots, joined by a straight segment only where two are within 60 days, so months between
                 // two blood draws never read as a measured curve.
                 series = lines.flatMap { l ->
-                    if (fm.daily) listOf(com.bioscan.fieldterminal.ui.components.TrendSeries(l.points, l.color, label = l.label, dashed = l.label == "LEFT", maxGapDays = 3))
+                    if (fm.daily) listOf(TrendSeries(l.points, l.color, label = l.label, dashed = l.label == "LEFT", maxGapDays = 3))
                     else listOf(
-                        com.bioscan.fieldterminal.ui.components.TrendSeries(l.points, l.color, label = l.label, dashed = l.label == "LEFT", maxGapDays = 60, smooth = false, straight = true),
-                        com.bioscan.fieldterminal.ui.components.TrendSeries(l.points, l.color, dotsOnly = true),
+                        TrendSeries(l.points, l.color, label = l.label, dashed = l.label == "LEFT", maxGapDays = 60, smooth = false, straight = true),
+                        TrendSeries(l.points, l.color, dotsOnly = true),
                     )
                 },
                 valueFormat = ::fmt,

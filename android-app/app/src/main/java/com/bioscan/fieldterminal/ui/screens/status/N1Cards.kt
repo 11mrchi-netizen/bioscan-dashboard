@@ -29,27 +29,23 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.ExperimentResultRow
 import com.bioscan.fieldterminal.data.ExperimentRow
-import com.bioscan.fieldterminal.data.model.TypicalityResultRow
-import com.bioscan.fieldterminal.domain.MetricState
 import com.bioscan.fieldterminal.domain.ScoreRule
 import com.bioscan.fieldterminal.domain.ScorecardResult
+import com.bioscan.fieldterminal.domain.ScorecardRules
 import com.bioscan.fieldterminal.domain.ScorecardVerdict
-import com.bioscan.fieldterminal.domain.StateWord
-import com.bioscan.fieldterminal.domain.TypicalityView
-import com.bioscan.fieldterminal.domain.WhyContext
 import com.bioscan.fieldterminal.domain.fourWordLabel
 import com.bioscan.fieldterminal.domain.scheduleSpan
 import com.bioscan.fieldterminal.domain.scorecardWord
 import com.bioscan.fieldterminal.domain.todayAssignment
 import com.bioscan.fieldterminal.ui.components.FTCard
-import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.FTChevron
 import com.bioscan.fieldterminal.ui.components.InfoDialog
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // App restructure, fix 6: Lab › N=1's cards, graphs first. Each first view is a title, one line of rows and the n; the
 // explanations sit behind the card's "?" or a tap on a row.
@@ -99,7 +95,7 @@ fun N1ExperimentsCard(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(e.name, style = FTType.Label, color = FT.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     Text(word, style = FTType.Micro, color = if (word.startsWith("CLEAR")) FT.TextPrimary else FT.TextSecondary)
-                    com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted, expanded = open == e.id)
+                    FTChevron(tint = FT.TextMuted, expanded = open == e.id)
                 }
                 progress?.let { f ->
                     Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(FT.GlassBorder)) {
@@ -189,7 +185,7 @@ private fun keepsWord(r: ScorecardResult?): String = when (r?.verdict) {
 @Composable
 private fun DifferenceRow(r: ScorecardResult) {
     val d = r.difference ?: return Box(Modifier.height(22.dp))
-    val negligible = if (r.rule == ScoreRule.BRIER) com.bioscan.fieldterminal.domain.ScorecardRules.NEGLIGIBLE_BRIER else com.bioscan.fieldterminal.domain.ScorecardRules.NEGLIGIBLE_LOG
+    val negligible = if (r.rule == ScoreRule.BRIER) ScorecardRules.NEGLIGIBLE_BRIER else ScorecardRules.NEGLIGIBLE_LOG
     val scale = maxOf(negligible * 5, abs(r.lo ?: d), abs(r.hi ?: d), abs(d)) * 1.1
     Canvas(Modifier.fillMaxWidth().height(22.dp).semantics { contentDescription = "${scorecardWord(r.verdict)}, difference %+.3f".format(d) }) {
         val mid = size.width / 2f

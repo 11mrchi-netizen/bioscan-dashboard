@@ -27,13 +27,13 @@ import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.screens.status.FuelingExperimentSheet
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private val KINDS = listOf("gel", "drink_mix", "chew", "bar", "homemade", "other")
 private val STATUSES = listOf("consumed", "partial", "planned", "skipped")

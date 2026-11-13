@@ -1,6 +1,7 @@
 @file:kotlinx.serialization.UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain
 
+import com.bioscan.fieldterminal.data.model.SupplementRow
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.math.BigDecimal
@@ -315,7 +316,7 @@ fun RegimenSpec.legacyColumns(today: LocalDate): LegacyColumns = LegacyColumns(
 )
 
 /** A roster row's spec. */
-fun com.bioscan.fieldterminal.data.model.SupplementRow.spec(): RegimenSpec = regimenSpec(
+fun SupplementRow.spec(): RegimenSpec = regimenSpec(
     timeOfDay = timeOfDay, everyNDays = everyNDays, dose = dose, kind = kind, form = form, route = route,
     doseAmount = doseAmount, doseUnit = doseUnit, slots = slots, schedule = schedule, doseSteps = doseSteps,
     startDate = startDate, endDate = endDate,

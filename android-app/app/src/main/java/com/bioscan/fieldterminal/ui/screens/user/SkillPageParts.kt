@@ -1,20 +1,13 @@
 package com.bioscan.fieldterminal.ui.screens.user
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -24,20 +17,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.DataAvailability
-import com.bioscan.fieldterminal.domain.PerformanceTimeframe
 import com.bioscan.fieldterminal.domain.levels.SkillLevel
-import com.bioscan.fieldterminal.domain.preparePerformanceTrendData
-import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.FTBar
-import com.bioscan.fieldterminal.ui.components.FTCard
-import com.bioscan.fieldterminal.ui.components.FTDataChip
 import com.bioscan.fieldterminal.ui.components.FTDataState
-import com.bioscan.fieldterminal.ui.components.TileHeader
-import com.bioscan.fieldterminal.ui.components.TrendSeries
+import com.bioscan.fieldterminal.ui.components.SkeletonSections
+import com.bioscan.fieldterminal.ui.components.rememberCacheVersion
+import com.bioscan.fieldterminal.ui.screens.detail.EmptyLine
+import com.bioscan.fieldterminal.ui.screens.detail.Section
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import java.time.LocalDate
 
 // Shared scaffolding for the three skill pages (Running / Strength / Conditioning): header, scrolling column,
 // async loading from UserDataCache, the level hero, section labels and the common trend chart.
@@ -46,14 +36,14 @@ import java.time.LocalDate
 @Composable
 fun <T : Any> LoadedContent(load: suspend () -> T, content: @Composable (T) -> Unit) {
     // Keyed on the cache version: when a background refresh brings newer data, the content loads again (from memory).
-    val version = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    val version = rememberCacheVersion()
     val state: State<Result<T>?> = produceState<Result<T>?>(initialValue = null, version) {
         val result = catching { load() }
         if (result.isSuccess || value == null) value = result
     }
     val result = state.value
     if (result == null) {
-        com.bioscan.fieldterminal.ui.components.SkeletonSections()
+        SkeletonSections()
         return
     }
     val value = result.getOrNull()
@@ -63,10 +53,10 @@ fun <T : Any> LoadedContent(load: suspend () -> T, content: @Composable (T) -> U
 
 @Composable
 fun SkillHeroCard(skill: Skill, level: SkillLevel, info: String, extra: @Composable ColumnScope.() -> Unit = {}) {
-    com.bioscan.fieldterminal.ui.screens.detail.Section("${skill.title} LEVEL", info = info) {
+    Section("${skill.title} LEVEL", info = info) {
         val position = level.position
         if (position == null) {
-            com.bioscan.fieldterminal.ui.screens.detail.EmptyLine(level.reason ?: "Not enough data yet.")
+            EmptyLine(level.reason ?: "Not enough data yet.")
         } else {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(level.label, style = FTType.MetricMedium, color = FT.TextPrimary)

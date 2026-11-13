@@ -1,18 +1,9 @@
 package com.bioscan.fieldterminal.ui.screens.detail
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -22,7 +13,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
 import com.bioscan.fieldterminal.data.HydrationAccountingRepository
@@ -34,7 +29,9 @@ import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TodaySweat
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.StoolAnalysisRow
+import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.data.todaySweatRate
 import com.bioscan.fieldterminal.domain.CaffeineEvent
 import com.bioscan.fieldterminal.domain.DailyNutrition
@@ -59,18 +56,21 @@ import com.bioscan.fieldterminal.domain.score.bowelTiming
 import com.bioscan.fieldterminal.domain.score.bowelTimingHeadline
 import com.bioscan.fieldterminal.domain.score.stoolPattern
 import com.bioscan.fieldterminal.domain.score.stoolPatternHeadline
+import com.bioscan.fieldterminal.ui.components.DivergingPoles
+import com.bioscan.fieldterminal.ui.components.FTDivergingScale
 import com.bioscan.fieldterminal.ui.components.NutrientColor
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
-import com.bioscan.fieldterminal.data.softLoad
+import com.bioscan.fieldterminal.ui.screens.status.GLUCOSE_INFO
+import com.bioscan.fieldterminal.ui.screens.status.GlucoseSpikingRows
 import com.bioscan.fieldterminal.ui.screens.today.BowelTimingChart
 import com.bioscan.fieldterminal.ui.screens.today.StoolHypnogram
 import com.bioscan.fieldterminal.ui.screens.today.laneColor
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 /** Day columns up to 60 days, weekly means beyond, oldest first; each column the values [pick] returns. */
 internal fun <T> dayColumns(rows: List<Pair<LocalDate, T>>, today: LocalDate, days: Int, pick: (T) -> List<Double>): List<Pair<String, List<Double>>> {
@@ -144,8 +144,8 @@ fun NutritionScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit) {
                 val week = balance.filterKeys { it > today.minusDays(7) }.values
                 // charts-bars-and-scales.md §3: a bipolar value on a zero-centred ±500 kcal axis, deficit left, surplus right.
                 val avg = week.takeIf { it.isNotEmpty() }?.average()
-                com.bioscan.fieldterminal.ui.components.FTDivergingScale(
-                    value = avg, d = 500.0, poles = com.bioscan.fieldterminal.ui.components.DivergingPoles.EnergyBalance,
+                FTDivergingScale(
+                    value = avg, d = 500.0, poles = DivergingPoles.EnergyBalance,
                     label = "IN − OUT · 7-DAY", valueText = avg?.let { "${Fmt.signed(it)} kcal" },
                     deadZone = 50.0, negativeWord = "deficit", positiveWord = "surplus",
                     description = avg?.let { "Energy balance ${Fmt.signed(it)} kcal a day, ${if (it < 0) "deficit" else "surplus"}" } ?: "Energy balance, no data",
@@ -196,8 +196,8 @@ fun NutritionScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit) {
             )
         }
 
-        Section("GLUCOSE SPIKING · ESTIMATE", info = com.bioscan.fieldterminal.ui.screens.status.GLUCOSE_INFO, trailing = "TODAY") {
-            com.bioscan.fieldterminal.ui.screens.status.GlucoseSpikingRows(o.todaysMeals)
+        Section("GLUCOSE SPIKING · ESTIMATE", info = GLUCOSE_INFO, trailing = "TODAY") {
+            GlucoseSpikingRows(o.todaysMeals)
         }
 
         val lowest by produceState<List<Pair<String, Double>>?>(null, days) {

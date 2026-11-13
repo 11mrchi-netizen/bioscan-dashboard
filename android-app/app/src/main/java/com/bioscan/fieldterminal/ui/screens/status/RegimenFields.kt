@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -29,14 +28,13 @@ import com.bioscan.fieldterminal.data.RegimenDraft
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementChangeRow
 import com.bioscan.fieldterminal.data.SupplementsRepository
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.CycleJson
 import com.bioscan.fieldterminal.domain.DoseStepJson
 import com.bioscan.fieldterminal.domain.DoseStepsJson
 import com.bioscan.fieldterminal.domain.FORM_RULES
-import com.bioscan.fieldterminal.domain.Splitting
-import com.bioscan.fieldterminal.domain.formRule
-import com.bioscan.fieldterminal.domain.routeFor
+import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.domain.REGIMEN_ROUTES
 import com.bioscan.fieldterminal.domain.REGIMEN_SLOTS
 import com.bioscan.fieldterminal.domain.REGIMEN_UNITS
@@ -44,19 +42,24 @@ import com.bioscan.fieldterminal.domain.RegimenKind
 import com.bioscan.fieldterminal.domain.RegimenSpec
 import com.bioscan.fieldterminal.domain.ScheduleJson
 import com.bioscan.fieldterminal.domain.ScheduleType
+import com.bioscan.fieldterminal.domain.Splitting
+import com.bioscan.fieldterminal.domain.doseTextOn
+import com.bioscan.fieldterminal.domain.formRule
 import com.bioscan.fieldterminal.domain.formatAmount
 import com.bioscan.fieldterminal.domain.regimenSpec
+import com.bioscan.fieldterminal.domain.routeFor
 import com.bioscan.fieldterminal.domain.scheduleWords
 import com.bioscan.fieldterminal.domain.spec
 import com.bioscan.fieldterminal.domain.words
-import com.bioscan.fieldterminal.domain.doseTextOn
+import com.bioscan.fieldterminal.ui.components.FTIconButton
+import com.bioscan.fieldterminal.ui.components.FTIconSize
+import com.bioscan.fieldterminal.ui.components.FTIcons
+import com.bioscan.fieldterminal.ui.components.FTSwitch
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
@@ -65,6 +68,7 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // The regimen form's fields (domain/Regimen.kt): what it is, one dose as a number and a unit, how it is taken, the times
 // of day, how often, an optional on/off cycle and optional planned dose steps. SupplementFormSheet holds the name, the
@@ -293,7 +297,7 @@ fun RegimenFields(state: RegimenEditorState) {
                         }
                         Spacer(Modifier.weight(1f))
                         if (state.steps.size > 1) {
-                            com.bioscan.fieldterminal.ui.components.FTIconButton(com.bioscan.fieldterminal.ui.components.FTIcons.Close, "Remove this step", { state.steps.removeAt(i) }, size = com.bioscan.fieldterminal.ui.components.FTIconSize.Row)
+                            FTIconButton(FTIcons.Close, "Remove this step", { state.steps.removeAt(i) }, size = FTIconSize.Row)
                         }
                     }
                 }
@@ -332,7 +336,7 @@ private fun changeDay(ts: String): String = runCatching {
 /** A snapshot (supplement_snapshot() in the migration) read back as a spec, for the words. */
 internal fun snapshotSpec(o: JsonObject): RegimenSpec {
     fun str(k: String) = (o[k] as? JsonPrimitive)?.takeIf { it.isString }?.content
-    val json = com.bioscan.fieldterminal.domain.LenientJson
+    val json = LenientJson
     return regimenSpec(
         timeOfDay = str("time_of_day") ?: "morning",
         everyNDays = (o["every_n_days"] as? JsonPrimitive)?.intOrNull,
@@ -382,7 +386,7 @@ private fun Switch(text: String, on: Boolean, onChange: (Boolean) -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(text, style = FTType.BodySmall, color = FT.TextPrimary, modifier = Modifier.weight(1f))
-        com.bioscan.fieldterminal.ui.components.FTSwitch(checked = on, onCheckedChange = null)
+        FTSwitch(checked = on, onCheckedChange = null)
     }
 }
 

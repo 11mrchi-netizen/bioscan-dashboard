@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -51,7 +52,7 @@ fun SkeletonSections(count: Int = 3) {
 
 @Composable
 private fun Bar(width: Float, height: Dp) {
-    androidx.compose.foundation.layout.Box(
+    Box(
         Modifier.fillMaxWidth(width).height(height).background(FT.GlassTrack, RoundedCornerShape(6.dp)),
     )
 }

@@ -12,22 +12,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.draw.clipToBounds
 import com.bioscan.fieldterminal.domain.KmMarker
 import com.bioscan.fieldterminal.domain.RoutePoint
 import com.bioscan.fieldterminal.domain.routeKmMarkers
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.XYTileSource
-import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Phase G5. Same osmdroid + CARTO Dark Matter setup as MapScreen.kt's
 // OsmMapView (Step 14 follow-up), kept as its own small component rather

@@ -1,8 +1,8 @@
 package com.bioscan.fieldterminal.data
 
-import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.domain.CaffeineWindowResult
 import com.bioscan.fieldterminal.domain.HydrationIntelligenceResult
+import com.bioscan.fieldterminal.domain.LenientJson
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.statement.bodyAsText

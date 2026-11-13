@@ -1,10 +1,10 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class)
 package com.bioscan.fieldterminal.data
 
-import kotlinx.serialization.UseSerializers
 import com.bioscan.fieldterminal.data.model.ExerciseSessionRow
 import com.bioscan.fieldterminal.data.model.TrainingBlockSummaryRow
 import com.bioscan.fieldterminal.data.model.Vo2MaxRow
+import com.bioscan.fieldterminal.domain.DayReduce
 import com.bioscan.fieldterminal.domain.HeartRateZone
 import com.bioscan.fieldterminal.domain.LoggedSet
 import com.bioscan.fieldterminal.domain.RunCategory
@@ -17,22 +17,23 @@ import com.bioscan.fieldterminal.domain.hasPlausiblePace
 import com.bioscan.fieldterminal.domain.initialZoneMethod
 import com.bioscan.fieldterminal.domain.lactateThresholdPaceMinPerKmSeries
 import com.bioscan.fieldterminal.domain.latestNonNullVo2Max
+import com.bioscan.fieldterminal.domain.oneADay
 import com.bioscan.fieldterminal.domain.vo2MaxSeries
 import com.bioscan.fieldterminal.domain.zoneBounds
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
-import java.time.LocalDate
-import java.time.OffsetDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import java.time.LocalDate
+import java.time.OffsetDateTime
 
 // Full-history loaders for the User tab's skill pages (Running / Strength / Conditioning). Unlike
 // TrainingRepository.loadOverview (newest 200 sessions of every type, built for the Status tile's current
@@ -212,8 +213,8 @@ class SkillHistoryRepository(private val supabase: SupabaseClient) {
         // Zepp's lactate-threshold estimates come from every workout's summary.
         val zepp = loadZeppWorkoutSummaries(supabase)
         // Zepp re-estimates on each qualifying run: a day with two keeps the later estimate (the summaries come oldest first).
-        val ltPace = com.bioscan.fieldterminal.domain.oneADay(zepp.mapNotNull { z -> z.summary?.lactateThresholdPaceSecPerKm?.let { OffsetDateTime.parse(z.startTime).toLocalDate() to it } }, com.bioscan.fieldterminal.domain.DayReduce.LAST)
-        val ltHr = com.bioscan.fieldterminal.domain.oneADay(zepp.mapNotNull { z -> z.summary?.lactateThresholdHrBpm?.let { OffsetDateTime.parse(z.startTime).toLocalDate() to it } }, com.bioscan.fieldterminal.domain.DayReduce.LAST)
+        val ltPace = oneADay(zepp.mapNotNull { z -> z.summary?.lactateThresholdPaceSecPerKm?.let { OffsetDateTime.parse(z.startTime).toLocalDate() to it } }, DayReduce.LAST)
+        val ltHr = oneADay(zepp.mapNotNull { z -> z.summary?.lactateThresholdHrBpm?.let { OffsetDateTime.parse(z.startTime).toLocalDate() to it } }, DayReduce.LAST)
 
         return RunningHistory(
             runs = runs,

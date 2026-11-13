@@ -3,6 +3,7 @@ package com.bioscan.fieldterminal.data.routine
 import android.content.Context
 import com.bioscan.fieldterminal.data.GeocodingRepository
 import com.bioscan.fieldterminal.data.MapSettingsStore
+import com.bioscan.fieldterminal.data.ReadCache
 import com.bioscan.fieldterminal.data.WeatherRepository
 import com.bioscan.fieldterminal.data.keysetPagesDescending
 import com.bioscan.fieldterminal.data.softLoad
@@ -11,32 +12,34 @@ import com.bioscan.fieldterminal.domain.routine.Fix
 import com.bioscan.fieldterminal.domain.routine.Place
 import com.bioscan.fieldterminal.domain.routine.PlaceCategory
 import com.bioscan.fieldterminal.domain.routine.PlaceRowLike
-import com.bioscan.fieldterminal.domain.routine.VisitAtPlace
-import com.bioscan.fieldterminal.domain.routine.claimForManualPlace
 import com.bioscan.fieldterminal.domain.routine.PlaceVisitTime
-import com.bioscan.fieldterminal.domain.routine.PlacedPoint
 import com.bioscan.fieldterminal.domain.routine.Stay
+import com.bioscan.fieldterminal.domain.routine.TimelineVisit
 import com.bioscan.fieldterminal.domain.routine.TransitionEvent
 import com.bioscan.fieldterminal.domain.routine.Trip
 import com.bioscan.fieldterminal.domain.routine.TripLeg
 import com.bioscan.fieldterminal.domain.routine.TripVisit
+import com.bioscan.fieldterminal.domain.routine.VisitAtPlace
 import com.bioscan.fieldterminal.domain.routine.assignStaysToPlaces
 import com.bioscan.fieldterminal.domain.routine.categoryFromOsm
+import com.bioscan.fieldterminal.domain.routine.claimForManualPlace
 import com.bioscan.fieldterminal.domain.routine.commuteFlagChanges
 import com.bioscan.fieldterminal.domain.routine.hourlyPlaceVector
 import com.bioscan.fieldterminal.domain.routine.isCommute
 import com.bioscan.fieldterminal.domain.routine.mobilityDay
 import com.bioscan.fieldterminal.domain.routine.suggestWorkPlace
 import com.bioscan.fieldterminal.domain.routine.tripsBetween
-import com.bioscan.fieldterminal.domain.routine.visitsForNewPlace
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
+import io.github.jan.supabase.postgrest.query.filter.FilterOperator
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import java.time.Instant
 import java.time.LocalDate
+import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.util.UUID
 
@@ -58,7 +61,7 @@ data class PlaceRow(
 ) : PlaceRowLike {
     fun toPlace() = Place(
         id, lat, lon, radiusM, label, PlaceCategory.of(category),
-        stopSince?.let { runCatching { java.time.OffsetDateTime.parse(it).toInstant().toEpochMilli() }.getOrNull() },
+        stopSince?.let { runCatching { OffsetDateTime.parse(it).toInstant().toEpochMilli() }.getOrNull() },
     )
     val isStop: Boolean get() = stopSince != null
 }
@@ -104,7 +107,7 @@ private data class DayFixRow(
 
 // One day of what was recorded, for the day map.
 data class DayRecord(
-    val visits: List<com.bioscan.fieldterminal.domain.routine.TimelineVisit>,
+    val visits: List<TimelineVisit>,
     val trips: List<Trip>,
     val storedCommute: Set<Long>,
     val fixes: List<DayFix>,
@@ -211,7 +214,7 @@ class PlacesRepository(private val supabase: SupabaseClient) {
     // only: what writes (stays, trips, mobility, commute flags, added places) reads fetchLoadPlaces, because a cold worker
     // would otherwise get the disk copy, which can predate a label changed elsewhere and undo it.
     suspend fun loadPlaces(): List<PlaceRow> =
-        com.bioscan.fieldterminal.data.ReadCache.get("routine.places", tables = null, serializer = kotlinx.serialization.builtins.ListSerializer(PlaceRow.serializer())) { fetchLoadPlaces() }
+        ReadCache.get("routine.places", tables = null, serializer = ListSerializer(PlaceRow.serializer())) { fetchLoadPlaces() }
 
     private suspend fun fetchLoadPlaces(): List<PlaceRow> =
         supabase.postgrest.from("places")
@@ -350,7 +353,7 @@ class PlacesRepository(private val supabase: SupabaseClient) {
     suspend fun lookUpSuggestions(max: Int = 3) {
         val pending = supabase.postgrest.from("places")
             .select(columns = Columns.list("id,lat,lon")) {
-                filter { filter("osm_checked_at", io.github.jan.supabase.postgrest.query.filter.FilterOperator.IS, "null") }
+                filter { filter("osm_checked_at", FilterOperator.IS, "null") }
                 limit(max.toLong())
             }
             .decodeList<PlaceRow>()
@@ -479,7 +482,7 @@ class PlacesRepository(private val supabase: SupabaseClient) {
             .mapNotNull { v ->
                 val s = ms(v.startAt) ?: return@mapNotNull null
                 val e = ms(v.endAt) ?: return@mapNotNull null
-                com.bioscan.fieldterminal.domain.routine.TimelineVisit(s, e, v.lat, v.lon, v.placeId)
+                TimelineVisit(s, e, v.lat, v.lon, v.placeId)
             }
         val tripRows = supabase.postgrest.from("trips")
             .select(columns = Columns.list("start_at,end_at,from_place_id,to_place_id,distance_km,legs,active_min,is_commute")) {

@@ -6,6 +6,7 @@ import com.bioscan.fieldterminal.domain.fuel.FuelBlock
 import com.bioscan.fieldterminal.domain.fuel.FuelReviewOutcome
 import com.bioscan.fieldterminal.domain.fuel.FuelSymptom
 import com.bioscan.fieldterminal.domain.fuel.Intensity
+import com.bioscan.fieldterminal.domain.fuel.PlannedItem
 import com.bioscan.fieldterminal.domain.fuel.SweatTest
 import com.bioscan.fieldterminal.domain.fuel.debriefKeyPrefix
 import com.bioscan.fieldterminal.domain.fuel.debriefRows
@@ -16,6 +17,7 @@ import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.time.LocalDate
+import java.time.OffsetDateTime
 
 // The debrief after a race or long run (docs/race-fuel-rework/plan.md): what of the schedule was taken, any discomfort, how the
 // person felt. It writes one fueling_intake_log row per intake (the single-counting ledger every other fuel entry uses), the
@@ -126,7 +128,7 @@ class FuelDebriefRepository(private val supabase: SupabaseClient) {
     }
 
     /** A recording as the plan page shows it (domain/fuel/PlannedDay.kt), for its debrief. */
-    suspend fun targetForRecording(item: com.bioscan.fieldterminal.domain.fuel.PlannedItem, date: LocalDate): DebriefTarget? {
+    suspend fun targetForRecording(item: PlannedItem, date: LocalDate): DebriefTarget? {
         val sid = item.sessionId ?: return null
         return DebriefTarget(
             sid, item.eventId, item.title, date, item.type, item.durationMin,
@@ -146,7 +148,7 @@ class FuelDebriefRepository(private val supabase: SupabaseClient) {
                 .decodeList<SessionLinkRow>().firstOrNull()
         }.getOrNull()
         // Session starts are logged times: their digits are local (domain/WallClock.kt).
-        val date = runCatching { java.time.OffsetDateTime.parse(s.startTime).toLocalDate() }.getOrDefault(LocalDate.now())
+        val date = runCatching { OffsetDateTime.parse(s.startTime).toLocalDate() }.getOrDefault(LocalDate.now())
         val planRef = planRefFor(s.id, date)
         val eventId = event?.id ?: planRef?.takeIf { it.startsWith("event:") }?.removePrefix("event:")?.toLongOrNull()
         val title = event?.name ?: links.linkFor(s.id)?.planTitle ?: s.type.replaceFirstChar { it.uppercase() }

@@ -1,16 +1,16 @@
 package com.bioscan.fieldterminal.ui.screens
 
-import com.bioscan.fieldterminal.data.catching
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,10 +21,13 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,118 +36,144 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.Hyphens
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.bioscan.fieldterminal.data.AddEntryRepository
-import com.bioscan.fieldterminal.data.ExerciseLibraryRepository
+import com.bioscan.fieldterminal.data.BarcodeLookupFood
 import com.bioscan.fieldterminal.data.CronometerEnrichment
 import com.bioscan.fieldterminal.data.CronometerItemInput
+import com.bioscan.fieldterminal.data.ExerciseLibraryRepository
+import com.bioscan.fieldterminal.data.InjectablesRepository
+import com.bioscan.fieldterminal.data.MealItemSource
 import com.bioscan.fieldterminal.data.NutritionBarcodeLookupRepository
 import com.bioscan.fieldterminal.data.NutritionCronometerLookupRepository
-import com.bioscan.fieldterminal.data.BarcodeLookupFood
-import com.bioscan.fieldterminal.data.withMicronutrients
 import com.bioscan.fieldterminal.data.NutritionImageEstimateRepository
 import com.bioscan.fieldterminal.data.NutritionMealEstimate
 import com.bioscan.fieldterminal.data.NutritionMealSaveRepository
 import com.bioscan.fieldterminal.data.NutritionRepository
-import com.bioscan.fieldterminal.data.NutritionTextEstimateRepository
-import com.bioscan.fieldterminal.data.functionErrorMessage
-import java.time.LocalTime
-import com.bioscan.fieldterminal.data.MealItemSource
+import com.bioscan.fieldterminal.data.PeopleRepository
+import com.bioscan.fieldterminal.data.PhotoAnswer
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementsRepository
+import com.bioscan.fieldterminal.data.catching
+import com.bioscan.fieldterminal.data.functionErrorMessage
 import com.bioscan.fieldterminal.data.model.ExerciseLibraryMatch
 import com.bioscan.fieldterminal.data.model.ExerciseSessionDetails
+import com.bioscan.fieldterminal.data.model.FoodRow
 import com.bioscan.fieldterminal.data.model.FullExerciseSessionRow
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
-import com.bioscan.fieldterminal.data.model.StrengthExerciseDto
-import com.bioscan.fieldterminal.data.model.StrengthSetDto
+import com.bioscan.fieldterminal.data.model.LogGripRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
 import com.bioscan.fieldterminal.data.model.LogOstrcRow
 import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
+import com.bioscan.fieldterminal.data.model.LogSleepDetailRow
+import com.bioscan.fieldterminal.data.model.LogStoolRow
+import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
+import com.bioscan.fieldterminal.data.model.LogWellbeingRow
+import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.data.model.NewPersonRow
 import com.bioscan.fieldterminal.data.model.PersonRow
 import com.bioscan.fieldterminal.data.model.SexualActivityInstance
-import com.bioscan.fieldterminal.data.PeopleRepository
-import com.bioscan.fieldterminal.data.model.LogSleepDetailRow
-import com.bioscan.fieldterminal.data.model.MealRow
-import com.bioscan.fieldterminal.data.model.LogGripRow
-import com.bioscan.fieldterminal.data.model.LogStoolRow
-import com.bioscan.fieldterminal.data.model.LogWellbeingRow
-import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
+import com.bioscan.fieldterminal.data.model.StrengthExerciseDto
+import com.bioscan.fieldterminal.data.model.StrengthSetDto
 import com.bioscan.fieldterminal.data.model.SupplementRow
-import com.bioscan.fieldterminal.domain.SUPPLEMENT_QTY_STEP
-import com.bioscan.fieldterminal.domain.formatSupplementQty
+import com.bioscan.fieldterminal.data.softLoad
+import com.bioscan.fieldterminal.data.withMicronutrients
 import com.bioscan.fieldterminal.domain.AddEntryChoice
-import com.bioscan.fieldterminal.domain.editedDetails
 import com.bioscan.fieldterminal.domain.AddEntryGroup
 import com.bioscan.fieldterminal.domain.AddEntryStart
 import com.bioscan.fieldterminal.domain.AddEntryTarget
-
 import com.bioscan.fieldterminal.domain.AddEntryType
-import com.bioscan.fieldterminal.domain.ethanolGrams
-import com.bioscan.fieldterminal.domain.isDueOn
-import com.bioscan.fieldterminal.domain.REGIMEN_SLOTS
-import com.bioscan.fieldterminal.domain.doseTextOn
-import com.bioscan.fieldterminal.domain.amountOn
-import com.bioscan.fieldterminal.domain.nextDueAfter
-import com.bioscan.fieldterminal.domain.scheduleWords
-import com.bioscan.fieldterminal.domain.stateWords
-import com.bioscan.fieldterminal.domain.spec
-import com.bioscan.fieldterminal.domain.injectable
-import com.bioscan.fieldterminal.domain.supplementNextDueDate
 import com.bioscan.fieldterminal.domain.FuelSubType
-import com.bioscan.fieldterminal.domain.formatRecentChoices
-import com.bioscan.fieldterminal.domain.parseRecentChoices
-import com.bioscan.fieldterminal.domain.recordRecentChoice
-import com.bioscan.fieldterminal.domain.target
 import com.bioscan.fieldterminal.domain.LogEntry
 import com.bioscan.fieldterminal.domain.LogSource
+import com.bioscan.fieldterminal.domain.REGIMEN_SLOTS
+import com.bioscan.fieldterminal.domain.SUPPLEMENT_QTY_STEP
+import com.bioscan.fieldterminal.domain.amountOn
+import com.bioscan.fieldterminal.domain.doseStep
+import com.bioscan.fieldterminal.domain.doseTextOn
+import com.bioscan.fieldterminal.domain.editedDetails
+import com.bioscan.fieldterminal.domain.formatRecentChoices
+import com.bioscan.fieldterminal.domain.formatSupplementQty
+import com.bioscan.fieldterminal.domain.fuel.mealSlotOf
+import com.bioscan.fieldterminal.domain.injectable
+import com.bioscan.fieldterminal.domain.isDueOn
 import com.bioscan.fieldterminal.domain.logEntryWhen
+import com.bioscan.fieldterminal.domain.nextDueAfter
+import com.bioscan.fieldterminal.domain.nextSite
+import com.bioscan.fieldterminal.domain.normalizeBarcode
+import com.bioscan.fieldterminal.domain.parseRecentChoices
+import com.bioscan.fieldterminal.domain.recordRecentChoice
+import com.bioscan.fieldterminal.domain.scheduleWords
+import com.bioscan.fieldterminal.domain.score.StoolLane
+import com.bioscan.fieldterminal.domain.sitesFor
+import com.bioscan.fieldterminal.domain.spec
+import com.bioscan.fieldterminal.domain.stateWords
+import com.bioscan.fieldterminal.domain.target
+import com.bioscan.fieldterminal.domain.unitsWords
+import com.bioscan.fieldterminal.ui.components.AddEntryStartSaver
+import com.bioscan.fieldterminal.ui.components.AddEntryTargetSaver
 import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.DateTimeField
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
-import com.bioscan.fieldterminal.ui.components.FTConfirmDestructive
+import com.bioscan.fieldterminal.ui.components.FTIcon
+import com.bioscan.fieldterminal.ui.components.FTIconSize
+import com.bioscan.fieldterminal.ui.components.FTIcons
+import com.bioscan.fieldterminal.ui.components.FTRatingSlider
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.Toasts
+import com.bioscan.fieldterminal.ui.components.UriListSaver
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
-import com.bioscan.fieldterminal.ui.components.launchSafe
-import com.bioscan.fieldterminal.data.softLoad
+import com.bioscan.fieldterminal.ui.screens.events.EventFormSheet
+import com.bioscan.fieldterminal.ui.screens.events.SweatTestSheet
+import com.bioscan.fieldterminal.ui.screens.fuel.RunFuelEntry
+import com.bioscan.fieldterminal.ui.screens.health.HealthCheckInSheet
+import com.bioscan.fieldterminal.ui.screens.health.IllnessSheet
+import com.bioscan.fieldterminal.ui.screens.health.SymptomCheckSheet
+import com.bioscan.fieldterminal.ui.screens.status.BodyCheckInSheet
+import com.bioscan.fieldterminal.ui.screens.status.ScaleWeighInSheet
+import com.bioscan.fieldterminal.ui.screens.today.laneColor
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.domain.normalizeBarcode
+import com.bioscan.fieldterminal.util.ExternalActivityGuard
+import com.bioscan.fieldterminal.util.PendingCameraCapture
 import com.bioscan.fieldterminal.util.createCameraCaptureUri
-import com.bioscan.fieldterminal.util.scanBarcode
 import com.bioscan.fieldterminal.util.readAndCompressImage
+import com.bioscan.fieldterminal.util.scanBarcode
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.ZoneId
+import java.time.LocalTime
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Shared text styles for this sheet's own chrome (sheet titles, action/
 // confirm labels) -- DAV-108 follow-up migration off FieldTextStyles'
@@ -172,12 +201,12 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
         },
     ) }
     // Cleared on back, so picking FUEL again from the picker opens on FOOD as usual.
-    var fuelStart by rememberSaveable(stateSaver = com.bioscan.fieldterminal.ui.components.AddEntryStartSaver) { mutableStateOf<AddEntryStart?>(start as? AddEntryStart.Fuel) }
+    var fuelStart by rememberSaveable(stateSaver = AddEntryStartSaver) { mutableStateOf<AddEntryStart?>(start as? AddEntryStart.Fuel) }
     // UX review P3: the last three choices are one tap away in a RECENT row (was a single LAST button).
-    val addPrefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("ft_ui", android.content.Context.MODE_PRIVATE)
+    val addPrefs = LocalContext.current.getSharedPreferences("ft_ui", Context.MODE_PRIVATE)
     var recent by remember { mutableStateOf(parseRecentChoices(addPrefs.getString("recent_add_choices", null))) }
     // Injury and illness have their own form sheets (shared with Training › Injury); picking one swaps this sheet for it.
-    var healthForm by rememberSaveable(stateSaver = com.bioscan.fieldterminal.ui.components.AddEntryTargetSaver) { mutableStateOf<AddEntryTarget?>(null) }
+    var healthForm by rememberSaveable(stateSaver = AddEntryTargetSaver) { mutableStateOf<AddEntryTarget?>(null) }
     // A symptom check's symptoms and signals, carried into the illness it is tracked as.
     var illnessPrefill by remember { mutableStateOf<Pair<Set<String>, List<Long>>>(emptySet<String>() to emptyList()) }
     // Analysis Layer 3 / R2: "say it" (LogAgentForm) and its hand-off of a food proposal to the normal food form.
@@ -205,22 +234,22 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
     }
 
     when (healthForm) {
-        AddEntryTarget.HealthCheckIn -> com.bioscan.fieldterminal.ui.screens.health.HealthCheckInSheet(onDismiss = onDismiss, onSaved = onSaved)
-        AddEntryTarget.IllnessForm -> com.bioscan.fieldterminal.ui.screens.health.IllnessSheet(
+        AddEntryTarget.HealthCheckIn -> HealthCheckInSheet(onDismiss = onDismiss, onSaved = onSaved)
+        AddEntryTarget.IllnessForm -> IllnessSheet(
             onDismiss = onDismiss, onSaved = onSaved, prefillSymptoms = illnessPrefill.first, adoptSignalIds = illnessPrefill.second,
         )
         // TRACK AS ILLNESS / INJURY from here goes on to the matching sheet in place of this one.
-        AddEntryTarget.SymptomCheck -> com.bioscan.fieldterminal.ui.screens.health.SymptomCheckSheet(
+        AddEntryTarget.SymptomCheck -> SymptomCheckSheet(
             onDismiss = onDismiss, onSaved = onSaved,
             onTrackIllness = { symptoms, signals -> illnessPrefill = symptoms to signals; healthForm = AddEntryTarget.IllnessForm },
             onTrackInjury = { healthForm = AddEntryTarget.HealthCheckIn },
         )
-        AddEntryTarget.BodyCheckIn -> com.bioscan.fieldterminal.ui.screens.status.BodyCheckInSheet(onDismiss = onDismiss, onSaved = onSaved)
-        AddEntryTarget.EventForm -> com.bioscan.fieldterminal.ui.screens.events.EventFormSheet(onDismiss = onDismiss, onSaved = { onSaved() })
-        AddEntryTarget.SweatTest -> com.bioscan.fieldterminal.ui.screens.events.SweatTestSheet(onDismiss = onDismiss, onSaved = onSaved)
-        AddEntryTarget.ScaleWeighIn -> com.bioscan.fieldterminal.ui.screens.status.ScaleWeighInSheet(onDismiss = onDismiss, onSaved = onSaved)
+        AddEntryTarget.BodyCheckIn -> BodyCheckInSheet(onDismiss = onDismiss, onSaved = onSaved)
+        AddEntryTarget.EventForm -> EventFormSheet(onDismiss = onDismiss, onSaved = { onSaved() })
+        AddEntryTarget.SweatTest -> SweatTestSheet(onDismiss = onDismiss, onSaved = onSaved)
+        AddEntryTarget.ScaleWeighIn -> ScaleWeighInSheet(onDismiss = onDismiss, onSaved = onSaved)
         else -> ModalBottomSheet(
-            onDismissRequest = { if (!externalActivityActive.value && !com.bioscan.fieldterminal.util.ExternalActivityGuard.active) onDismiss() },
+            onDismissRequest = { if (!externalActivityActive.value && !ExternalActivityGuard.active) onDismiss() },
             sheetState = sheetState,
             shape = FT.SheetShape,
             containerColor = FT.Surface,
@@ -235,7 +264,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
                 val type = selectedType
                 // System back inside a form goes back to the picker, as BACK does, instead of closing the sheet and
                 // dropping what was typed.
-                androidx.activity.compose.BackHandler(enabled = sayIt || type != null) {
+                BackHandler(enabled = sayIt || type != null) {
                     if (sayIt) sayIt = false else { selectedType = null; foodPrefill = null; fuelStart = null }
                 }
                 if (sayIt) {
@@ -264,7 +293,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
                     // scope; the page refreshes when it lands. A rejected write says so with RETRY, which runs the same
                     // write again (the values are already in it), so nothing typed is lost.
                     val onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit = { write ->
-                        com.bioscan.fieldterminal.ui.components.Toasts.optimistic(
+                        Toasts.optimistic(
                             apply = onDismiss,
                             save = {
                                 write(repo)
@@ -376,7 +405,7 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
             LogSource.Supplement -> repo.fetchSupplementTaken(entry.id)
             LogSource.Sleep -> null // no edit form; EntrySheet never offers EDIT for this
             }
-        } catch (e: kotlinx.coroutines.CancellationException) {
+        } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             saveError = "Couldn't load this entry (${describeLoadFailure(e)})"
@@ -408,7 +437,7 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                         write(repo)
                         saving = false
                         onSaved()
-                    } catch (e: kotlinx.coroutines.CancellationException) {
+                    } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
                         saving = false
@@ -446,7 +475,7 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                 )
                 is LogEncounterRow -> EncounterForm(
                     saving,
-                    initialDateTime = row.occurredAt?.let { parseIsoToLocalDateTime(it) } ?: LocalDateTime.of(LocalDate.parse(row.date), java.time.LocalTime.of(21, 0)),
+                    initialDateTime = row.occurredAt?.let { parseIsoToLocalDateTime(it) } ?: LocalDateTime.of(LocalDate.parse(row.date), LocalTime.of(21, 0)),
                     initialType = row.encounterType ?: "",
                     initialLocationType = row.locationType ?: "",
                     initialDurationMin = row.durationMin,
@@ -622,12 +651,12 @@ private fun formatSleepTime(iso: String): String =
 // fixes it without touching any of the naive readers.
 private fun parseIsoToLocalDateTime(iso: String): LocalDateTime =
     try {
-        java.time.OffsetDateTime.parse(iso).toLocalDateTime()
+        OffsetDateTime.parse(iso).toLocalDateTime()
     } catch (e: Exception) {
         LocalDateTime.parse(iso)
     }
 
-private fun LocalDateTime.toIsoWithOffset(): String = this.atOffset(java.time.ZoneOffset.UTC).toString()
+private fun LocalDateTime.toIsoWithOffset(): String = this.atOffset(ZoneOffset.UTC).toString()
 
 @Composable
 private fun SheetBackHeader(label: String, onBack: () -> Unit) {
@@ -671,7 +700,7 @@ private fun ChoiceTile(choice: AddEntryChoice, modifier: Modifier = Modifier, on
     ) {
         Box(Modifier.size(8.dp).clip(CircleShape).background(choiceColor(choice)))
         // Hyphenated, so a long word at a large font size breaks as "Encoun-ter", not "Encounte / r".
-        Text(choice.label, style = FTType.ButtonLabel.copy(hyphens = androidx.compose.ui.text.style.Hyphens.Auto), color = FT.TextPrimary, maxLines = 2)
+        Text(choice.label, style = FTType.ButtonLabel.copy(hyphens = Hyphens.Auto), color = FT.TextPrimary, maxLines = 2)
     }
 }
 
@@ -707,7 +736,7 @@ private fun SaveButton(saving: Boolean, enabled: Boolean, onClick: () -> Unit) {
 
 @Composable
 private fun QtyRow(qty: Double, step: Double = SUPPLEMENT_QTY_STEP, words: ((Double) -> String?)? = null, onChange: (Double) -> Unit) {
-    val shape = androidx.compose.foundation.shape.RoundedCornerShape(FT.RadiusSmall)
+    val shape = RoundedCornerShape(FT.RadiusSmall)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -734,7 +763,7 @@ private fun QtyRow(qty: Double, step: Double = SUPPLEMENT_QTY_STEP, words: ((Dou
             if (delta < 0) Text(
                 if (qty > 0.0) (words?.invoke(qty) ?: formatSupplementQty(qty)) else "NOT TAKEN",
                 style = FTType.Telemetry, color = if (qty > 0.0) FT.TextPrimary else FT.Warning,
-                maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.width(112.dp),
+                maxLines = 1, textAlign = TextAlign.Center, modifier = Modifier.width(112.dp),
             )
         }
     }
@@ -748,7 +777,7 @@ private fun FuelForm(
     saving: Boolean,
     onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit,
     onCanonicalSaved: () -> Unit,
-    externalActivityActive: androidx.compose.runtime.MutableState<Boolean>? = null,
+    externalActivityActive: MutableState<Boolean>? = null,
     foodPrefill: Pair<String, LocalDateTime>? = null,
     initialSubType: FuelSubType = FuelSubType.Food,
     supplementBundle: String? = null,
@@ -789,7 +818,7 @@ private fun FuelForm(
                 externalActivityActive = externalActivityActive,
             )
             FuelSubType.Supplements -> SupplementsForm(saving, preselectBundle = supplementBundle, onSave = { takenAt, items, source, quantities, sites -> onSubmit { it.addSupplementsTaken(takenAt, items, source, quantities, sites) } })
-            FuelSubType.Endurance -> com.bioscan.fieldterminal.ui.screens.fuel.RunFuelEntry(onSaved = onCanonicalSaved)
+            FuelSubType.Endurance -> RunFuelEntry(onSaved = onCanonicalSaved)
         }
     }
 }
@@ -827,7 +856,7 @@ private fun FoodForm(
     // This is the same "the whole sheet is done" signal AddEntrySheet's own
     // onSaved already is, just reachable from inside this nested form.
     onCanonicalSaved: () -> Unit = {},
-    externalActivityActive: androidx.compose.runtime.MutableState<Boolean>? = null,
+    externalActivityActive: MutableState<Boolean>? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -851,19 +880,19 @@ private fun FoodForm(
     // here before a single ESTIMATE tap -- was "first photo taken/picked
     // auto-runs estimate," now a real batch since the whole point is letting
     // Gemini see everything on the plate at once.
-    var pendingPhotos by rememberSaveable(stateSaver = com.bioscan.fieldterminal.ui.components.UriListSaver) { mutableStateOf<List<Uri>>(emptyList()) }
+    var pendingPhotos by rememberSaveable(stateSaver = UriListSaver) { mutableStateOf<List<Uri>>(emptyList()) }
     // A photo taken just before the app was killed, whose result never arrived (util/ImageUtils.kt PendingCameraCapture).
     var strandedPhoto by remember { mutableStateOf<Uri?>(null) }
     LaunchedEffect(Unit) {
-        val stranded = com.bioscan.fieldterminal.util.PendingCameraCapture.stranded(context)
+        val stranded = PendingCameraCapture.stranded(context)
         if (stranded != null && stranded !in pendingPhotos) strandedPhoto = stranded
     }
     // Photo logging v3: what the person says the meal is (it wins over the photo), the weighed food, and the photos and
     // answers of the last estimate, so a tapped answer or a correction reruns it on the same photos.
     var photoNote by rememberSaveable { mutableStateOf("") }
     var photoWeight by rememberSaveable { mutableStateOf("") }
-    var estimatedPhotos by rememberSaveable(stateSaver = com.bioscan.fieldterminal.ui.components.UriListSaver) { mutableStateOf<List<Uri>>(emptyList()) }
-    var photoAnswers by remember { mutableStateOf<List<com.bioscan.fieldterminal.data.PhotoAnswer>>(emptyList()) }
+    var estimatedPhotos by rememberSaveable(stateSaver = UriListSaver) { mutableStateOf<List<Uri>>(emptyList()) }
+    var photoAnswers by remember { mutableStateOf<List<PhotoAnswer>>(emptyList()) }
     var mealEstimate by remember { mutableStateOf<NutritionMealEstimate?>(null) }
     var mealEstimateId by remember { mutableStateOf<Long?>(null) }
     var cronometerEnrichment by remember { mutableStateOf<CronometerEnrichment?>(null) }
@@ -886,7 +915,7 @@ private fun FoodForm(
 
     // [answers] and a corrected [note] rerun the estimate on the same photos (from the confirm sheet); the photo's own
     // foods then go to the database lookup as they are, at the grams the photo showed.
-    fun runImageEstimate(uris: List<Uri>, answers: List<com.bioscan.fieldterminal.data.PhotoAnswer> = emptyList()) {
+    fun runImageEstimate(uris: List<Uri>, answers: List<PhotoAnswer> = emptyList()) {
         if (uris.isEmpty()) return
         estimating = true
         estimationError = null
@@ -973,7 +1002,7 @@ private fun FoodForm(
             val product = lookup.enrichItems(listOf(CronometerItemInput(foodDesc, catalogFoodId = food.id)))
             val micros = try {
                 lookup.enrichItems(listOf(CronometerItemInput(food.name, quantityG = product.items.firstOrNull()?.quantityG)))
-            } catch (e: kotlinx.coroutines.CancellationException) {
+            } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
                 null
@@ -992,7 +1021,7 @@ private fun FoodForm(
                 confidence = enrichResult.confidence,
             )
             mealEstimateId = null
-        } catch (e: kotlinx.coroutines.CancellationException) {
+        } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
             reviewSeedItems = listOf(
@@ -1001,7 +1030,7 @@ private fun FoodForm(
                     isBeverage = food.beverageClass != null,
                     foodConfidence = 1.0,
                     source = MealItemSource.Barcode,
-                    preMatchedFood = com.bioscan.fieldterminal.data.model.FoodRow(
+                    preMatchedFood = FoodRow(
                         id = food.id,
                         foodSourceId = 0,
                         name = food.name,
@@ -1046,7 +1075,7 @@ private fun FoodForm(
 
     val takePictureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         externalActivityActive?.value = false
-        com.bioscan.fieldterminal.util.PendingCameraCapture.clear(context)
+        PendingCameraCapture.clear(context)
         if (success) pendingCameraUri?.let {
             if (photoForLabel) labelPhotos = labelPhotos + it
             else if (it !in pendingPhotos) pendingPhotos = pendingPhotos + it
@@ -1093,7 +1122,7 @@ private fun FoodForm(
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         DateTimeField("WHEN", dateTime, { dateTime = it })
-        MealSlotChips(dateTime, com.bioscan.fieldterminal.domain.fuel.mealSlotOf(mealSlot), { mealSlot = it.name.lowercase() }, editingMealId)
+        MealSlotChips(dateTime, mealSlotOf(mealSlot), { mealSlot = it.name.lowercase() }, editingMealId)
         Column { FormLabel("DESCRIPTION"); FieldTextField(description, { description = it }, "e.g. Chicken rice bowl") }
 
         // DAV-168: this section now talks to the server-side Gemini/barcode
@@ -1116,14 +1145,14 @@ private fun FoodForm(
             strandedPhoto?.let { photo ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 10.dp)) {
                     Text("PHOTO JUST TAKEN", style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.weight(1f))
-                    com.bioscan.fieldterminal.ui.components.FTButton("USE IT", emphasis = com.bioscan.fieldterminal.ui.components.FTButtonEmphasis.Secondary) {
+                    FTButton("USE IT", emphasis = FTButtonEmphasis.Secondary) {
                         pendingPhotos = pendingPhotos + photo
                         strandedPhoto = null
-                        com.bioscan.fieldterminal.util.PendingCameraCapture.clear(context)
+                        PendingCameraCapture.clear(context)
                     }
-                    com.bioscan.fieldterminal.ui.components.FTButton("DISCARD", emphasis = com.bioscan.fieldterminal.ui.components.FTButtonEmphasis.Tertiary) {
+                    FTButton("DISCARD", emphasis = FTButtonEmphasis.Tertiary) {
                         strandedPhoto = null
-                        com.bioscan.fieldterminal.util.PendingCameraCapture.clear(context)
+                        PendingCameraCapture.clear(context)
                     }
                 }
             }
@@ -1404,7 +1433,7 @@ private fun SupplementsForm(
     var dateTime by remember { mutableStateOf(initialDateTime) }
     var supplements by remember { mutableStateOf<List<SupplementRow>?>(null) }
     // Injectables: each injected dose's site, defaulting to the one rested longest (domain/Injectables.kt).
-    var siteHistory by remember { mutableStateOf<Map<Long, List<Pair<String, java.time.Instant>>>>(emptyMap()) }
+    var siteHistory by remember { mutableStateOf<Map<Long, List<Pair<String, Instant>>>>(emptyMap()) }
     var sites by remember { mutableStateOf<Map<Long, String>>(emptyMap()) }
     var checkedBundles by remember { mutableStateOf(setOfNotNull(preselectBundle)) }
     var checkedAsNeeded by remember { mutableStateOf(setOf<Long>()) }
@@ -1425,14 +1454,14 @@ private fun SupplementsForm(
             takesToday = takes.takesToday
             val injectableIds = active.filter { it.spec().injectable }.map { it.id }
             if (injectableIds.isNotEmpty()) {
-                siteHistory = catching { com.bioscan.fieldterminal.data.InjectablesRepository(SupabaseClientProvider.client).siteHistory(injectableIds) }
+                siteHistory = catching { InjectablesRepository(SupabaseClientProvider.client).siteHistory(injectableIds) }
                     .getOrDefault(emptyMap())
             }
-        } catch (e: kotlinx.coroutines.CancellationException) {
+        } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             // Offline: show an empty list instead of crashing the sheet.
-            android.util.Log.w("AddEntry", "supplement list load failed", e)
+            Log.w("AddEntry", "supplement list load failed", e)
             if (supplements == null) supplements = emptyList()
         }
     }
@@ -1453,8 +1482,8 @@ private fun SupplementsForm(
     val groups = REGIMEN_SLOTS.associateWith { slot -> dueList.filter { slot in specs.getValue(it.id).slots } }.filterValues { it.isNotEmpty() }
     fun doseOf(s: SupplementRow) = specs[s.id]?.doseTextOn(today) ?: s.dose
     // The form decides the step: a whole capsule, half a scored tablet, a quarter of a measured dose (domain/RegimenForms.kt).
-    fun stepOf(s: SupplementRow) = com.bioscan.fieldterminal.domain.doseStep(s.form, s.scored, specs[s.id]?.amountOn(today))
-    fun wordsOf(s: SupplementRow, q: Double) = specs[s.id]?.let { com.bioscan.fieldterminal.domain.unitsWords(q, it.amountOn(today), it.unit) }
+    fun stepOf(s: SupplementRow) = doseStep(s.form, s.scored, specs[s.id]?.amountOn(today))
+    fun wordsOf(s: SupplementRow, q: Double) = specs[s.id]?.let { unitsWords(q, it.amountOn(today), it.unit) }
 
     // DAV-156: each selected item carries its roster dose string along so
     // addSupplementsTaken can parse a real per-supplement dose default --
@@ -1575,13 +1604,13 @@ private fun SupplementsForm(
             specs[id]?.takeIf { it.injectable }?.let { Triple(id, name, it) }
         }
         val chosenSites = injected.associate { (id, _, spec) ->
-            id to (sites[id] ?: com.bioscan.fieldterminal.domain.nextSite(com.bioscan.fieldterminal.domain.sitesFor(spec), siteHistory[id].orEmpty())?.key)
+            id to (sites[id] ?: nextSite(sitesFor(spec), siteHistory[id].orEmpty())?.key)
         }.filterValues { it != null }.mapValues { it.value!! }
         if (injected.isNotEmpty()) {
             FormLabel("INJECTION SITE")
             injected.forEach { (id, name, spec) ->
-                val options = com.bioscan.fieldterminal.domain.sitesFor(spec)
-                val suggested = com.bioscan.fieldterminal.domain.nextSite(options, siteHistory[id].orEmpty())
+                val options = sitesFor(spec)
+                val suggested = nextSite(options, siteHistory[id].orEmpty())
                 val units = list.firstOrNull { it.id == id }?.syringeUnits?.let { " · ${com.bioscan.fieldterminal.domain.formatAmount(it)} units as prescribed" } ?: ""
                 Text("$name$units · suggested: ${suggested?.label ?: "—"} (rested longest)", style = FTType.Caption, color = FT.TextSecondary)
                 TextChipRow(options.map { it.label }, options.firstOrNull { it.key == chosenSites[id] }?.label, perRow = 2) { picked ->
@@ -1674,7 +1703,7 @@ private fun CheckboxGlyph(checked: Boolean) {
         contentAlignment = Alignment.Center,
     ) {
         if (checked) {
-            com.bioscan.fieldterminal.ui.components.FTIcon(com.bioscan.fieldterminal.ui.components.FTIcons.Check, null, tint = FT.Base, size = com.bioscan.fieldterminal.ui.components.FTIconSize.Inline)
+            FTIcon(FTIcons.Check, null, tint = FT.Base, size = FTIconSize.Inline)
         }
     }
 }
@@ -1799,7 +1828,7 @@ private fun StoolForm(
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         DateTimeField("WHEN", dateTime, { dateTime = it })
         BristolSlider(bristolType) { bristolType = it }
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("DISCOMFORT", discomfort.toIntOrNull(), 0..10, FT.Metric.StoolLoose, { discomfort = it?.toString() ?: "" }, lowWord = "none", highWord = "severe", reversed = true)
+        FTRatingSlider("DISCOMFORT", discomfort.toIntOrNull(), 0..10, FT.Metric.StoolLoose, { discomfort = it?.toString() ?: "" }, lowWord = "none", highWord = "severe", reversed = true)
         // The sense of complete evacuation; optional (tap the chosen one again to clear it).
         Column {
             FormLabel("DOES IT FEEL EMPTY?")
@@ -1975,7 +2004,7 @@ private fun SexualActivityInstanceEditor(
         }
         TextChipRow(YES_NO_OPTIONS, if (instance.orgasm) "Yes" else "No") { instance.orgasm = it == "Yes" }
         if (instance.orgasm) {
-            com.bioscan.fieldterminal.ui.components.FTRatingSlider("ORGASM INTENSITY", instance.orgasmIntensity.toIntOrNull(), 0..10, FT.Metric.Arousal, { instance.orgasmIntensity = it?.toString() ?: "" }, lowWord = "faint", highWord = "intense")
+            FTRatingSlider("ORGASM INTENSITY", instance.orgasmIntensity.toIntOrNull(), 0..10, FT.Metric.Arousal, { instance.orgasmIntensity = it?.toString() ?: "" }, lowWord = "faint", highWord = "intense")
         }
         if (isMasturbation) {
             Column { FormLabel("WATCHED PORN"); TextChipRow(YES_NO_OPTIONS, instance.watchedPorn?.let { if (it) "Yes" else "No" }) { instance.watchedPorn = it?.let { s -> s == "Yes" } } }
@@ -2200,12 +2229,12 @@ private fun WellnessForm(
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         DateField("DATE", date, { date = it })
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("ENERGY", energy.toIntOrNull(), 0..10, FT.Metric.Energy, { energy = it?.toString() ?: "" }, lowWord = "drained", highWord = "full")
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("MOOD", mood.toIntOrNull(), 0..10, FT.Metric.Mood, { mood = it?.toString() ?: "" }, lowWord = "low", highWord = "great")
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("STRESS", stress.toIntOrNull(), 0..10, FT.Metric.Stress, { stress = it?.toString() ?: "" }, lowWord = "calm", highWord = "very stressed", reversed = true)
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("SORENESS", soreness.toIntOrNull(), 0..10, FT.Metric.Soreness, { soreness = it?.toString() ?: "" }, lowWord = "none", highWord = "very sore", reversed = true)
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("MORNING WOOD", morningWood.toIntOrNull(), 0..10, FT.Metric.Arousal, { morningWood = it?.toString() ?: "" }, lowWord = "none", highWord = "full")
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("AROUSAL LEVEL", arousalLevel.toIntOrNull(), 0..10, FT.Metric.Arousal, { arousalLevel = it?.toString() ?: "" }, lowWord = "none", highWord = "very high")
+        FTRatingSlider("ENERGY", energy.toIntOrNull(), 0..10, FT.Metric.Energy, { energy = it?.toString() ?: "" }, lowWord = "drained", highWord = "full")
+        FTRatingSlider("MOOD", mood.toIntOrNull(), 0..10, FT.Metric.Mood, { mood = it?.toString() ?: "" }, lowWord = "low", highWord = "great")
+        FTRatingSlider("STRESS", stress.toIntOrNull(), 0..10, FT.Metric.Stress, { stress = it?.toString() ?: "" }, lowWord = "calm", highWord = "very stressed", reversed = true)
+        FTRatingSlider("SORENESS", soreness.toIntOrNull(), 0..10, FT.Metric.Soreness, { soreness = it?.toString() ?: "" }, lowWord = "none", highWord = "very sore", reversed = true)
+        FTRatingSlider("MORNING WOOD", morningWood.toIntOrNull(), 0..10, FT.Metric.Arousal, { morningWood = it?.toString() ?: "" }, lowWord = "none", highWord = "full")
+        FTRatingSlider("AROUSAL LEVEL", arousalLevel.toIntOrNull(), 0..10, FT.Metric.Arousal, { arousalLevel = it?.toString() ?: "" }, lowWord = "none", highWord = "very high")
         val valid = listOf(energy, mood, stress, soreness, morningWood, arousalLevel).any { it.isNotBlank() }
         SaveButton(saving, valid) {
             onSave(date.toString(), energy.toIntOrNull(), mood.toIntOrNull(), stress.toIntOrNull(), soreness.toIntOrNull(), morningWood.toIntOrNull(), arousalLevel.toIntOrNull())
@@ -2267,7 +2296,7 @@ private fun ExerciseDetailsForm(
             }
         }
 
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("RPE (EFFORT)", rpe.toIntOrNull(), 0..10, FT.Metric.Rpe, { rpe = it?.toString() ?: "" }, lowWord = "rest", highWord = "max")
+        FTRatingSlider("RPE (EFFORT)", rpe.toIntOrNull(), 0..10, FT.Metric.Rpe, { rpe = it?.toString() ?: "" }, lowWord = "rest", highWord = "max")
         Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Anything else worth noting", singleLine = false) }
         SaveButton(saving, true) {
             // Changing the exercises makes them the person's own, so no Zepp sync overwrites them; saving only RPE or
@@ -2302,7 +2331,7 @@ internal fun TextChipRow(options: List<String>, selected: String?, perRow: Int =
                             .semantics { this.selected = isSelected }
                             .border(FT.BorderWidth, if (isSelected) Color.Transparent else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
                             .background(if (isSelected) FT.PlatinumSolid else FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
-                            .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall), role = androidx.compose.ui.semantics.Role.RadioButton, onClickLabel = option) { onSelect(if (isSelected) null else option) }
+                            .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall), role = Role.RadioButton, onClickLabel = option) { onSelect(if (isSelected) null else option) }
                             .padding(vertical = 10.dp, horizontal = 2.dp),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -2522,8 +2551,8 @@ val BRISTOL_WORDS = listOf(
  */
 @Composable
 fun BristolSlider(value: Int?, onChange: (Int) -> Unit) {
-    val lanes = com.bioscan.fieldterminal.domain.score.StoolLane.DRAWN.reversed()
-    com.bioscan.fieldterminal.ui.components.FTRatingSlider(
+    val lanes = StoolLane.DRAWN.reversed()
+    FTRatingSlider(
         label = "STOOL FORM (BRISTOL)",
         value = value,
         range = 1..7,
@@ -2531,7 +2560,7 @@ fun BristolSlider(value: Int?, onChange: (Int) -> Unit) {
         onChange = { v -> v?.let(onChange) },
         optional = false,
         valueText = { t -> "${BRISTOL_WORDS[t - 1]} · ${com.bioscan.fieldterminal.domain.score.StoolLane.of(t)?.label?.lowercase() ?: ""}" },
-        stepColor = { t -> com.bioscan.fieldterminal.domain.score.StoolLane.of(t)?.let { com.bioscan.fieldterminal.ui.screens.today.laneColor(it) } ?: FT.TextMuted },
+        stepColor = { t -> StoolLane.of(t)?.let { laneColor(it) } ?: FT.TextMuted },
         scale = lanes.map { it.types to it.label },
     )
 }

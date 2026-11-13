@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.user
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -9,6 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.bioscan.fieldterminal.data.BodyCheckinRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.BodyCheckinRecord
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.components.TrendCard

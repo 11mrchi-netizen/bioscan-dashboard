@@ -2,6 +2,7 @@ package com.bioscan.fieldterminal.domain.form
 
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -53,7 +54,7 @@ private fun meaningfulChange(key: String): Double = when (key) {
 }
 
 /** "Last time 12° (6 Oct)", with "about the same" when the change is within the analyser's error; null without a previous value. */
-fun sinceLastTime(key: String, now: Double, previous: Map<String, MetricSummary>?, previousOn: java.time.LocalDate?): String? {
+fun sinceLastTime(key: String, now: Double, previous: Map<String, MetricSummary>?, previousOn: LocalDate?): String? {
     val before = previous?.get(key)?.median ?: return null
     val day = previousOn?.format(DateTimeFormatter.ofPattern("d MMM")) ?: "last time"
     val same = abs(now - before) < meaningfulChange(key)

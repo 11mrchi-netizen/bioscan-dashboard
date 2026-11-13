@@ -1,5 +1,15 @@
 package com.bioscan.fieldterminal.domain.health
 
+import com.bioscan.fieldterminal.data.model.HealthObservationInsert
+import com.bioscan.fieldterminal.data.model.HealthSignalInsert
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.util.UUID
+
 // The symptom check (docs/health-concerns/README.md, "Illness, infections and the symptom check"): a short, fixed
 // questionnaire for the small things (a headache, a stuffed nose, an ache) that is not an injury or an illness to follow.
 // Deterministic: where it is, what it is, how strong, since when and which way it is going, then the area's questions.
@@ -310,25 +320,25 @@ fun assess(a: CheckAnswers): CheckOutcome {
 fun buildSymptomCheck(
     a: CheckAnswers,
     outcome: CheckOutcome,
-    now: java.time.ZonedDateTime,
-    newId: () -> String = { java.util.UUID.randomUUID().toString() },
+    now: ZonedDateTime,
+    newId: () -> String = { UUID.randomUUID().toString() },
 ): CheckInPlan {
     val date = checkInDate(now)
     val id = newId()
-    val assessment = kotlinx.serialization.json.buildJsonObject {
-        put("version", kotlinx.serialization.json.JsonPrimitive(1))
-        put("area", kotlinx.serialization.json.JsonPrimitive(a.area.name.lowercase()))
-        put("intensity", kotlinx.serialization.json.JsonPrimitive(a.intensity.name.lowercase()))
-        put("since", kotlinx.serialization.json.JsonPrimitive(a.since.name.lowercase()))
-        put("course", kotlinx.serialization.json.JsonPrimitive(a.course.name.lowercase()))
-        put("answers", kotlinx.serialization.json.JsonObject(a.answers.mapValues { kotlinx.serialization.json.JsonPrimitive(it.value) }))
-        put("level", kotlinx.serialization.json.JsonPrimitive(outcome.level.name.lowercase()))
-        put("flags", kotlinx.serialization.json.JsonArray(outcome.flags.map { kotlinx.serialization.json.JsonPrimitive(it.text) }))
-        put("patterns", kotlinx.serialization.json.JsonArray(outcome.patterns.map { kotlinx.serialization.json.JsonPrimitive(it.pattern.id) }))
-        outcome.track?.let { put("track", kotlinx.serialization.json.JsonPrimitive(it.name.lowercase())) }
+    val assessment = buildJsonObject {
+        put("version", JsonPrimitive(1))
+        put("area", JsonPrimitive(a.area.name.lowercase()))
+        put("intensity", JsonPrimitive(a.intensity.name.lowercase()))
+        put("since", JsonPrimitive(a.since.name.lowercase()))
+        put("course", JsonPrimitive(a.course.name.lowercase()))
+        put("answers", JsonObject(a.answers.mapValues { JsonPrimitive(it.value) }))
+        put("level", JsonPrimitive(outcome.level.name.lowercase()))
+        put("flags", JsonArray(outcome.flags.map { JsonPrimitive(it.text) }))
+        put("patterns", JsonArray(outcome.patterns.map { JsonPrimitive(it.pattern.id) }))
+        outcome.track?.let { put("track", JsonPrimitive(it.name.lowercase())) }
     }
-    val obs = com.bioscan.fieldterminal.data.model.HealthObservationInsert(
-        id = id, observedAt = now.toOffsetDateTime().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME),
+    val obs = HealthObservationInsert(
+        id = id, observedAt = now.toOffsetDateTime().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),
         localDate = date.toString(), utcOffsetMin = now.offset.totalSeconds / 60, concernId = null, scope = "check",
         symptomFree = false, recall = "now", assessment = assessment,
     )
@@ -338,9 +348,9 @@ fun buildSymptomCheck(
         a.side?.let { put("side", it) }
     }
     val signals = a.symptoms.map { s ->
-        com.bioscan.fieldterminal.data.model.HealthSignalInsert(
+        HealthSignalInsert(
             observationId = id, symptom = s, severity = a.intensity.severity,
-            details = kotlinx.serialization.json.JsonObject(details.mapValues { kotlinx.serialization.json.JsonPrimitive(it.value) }),
+            details = JsonObject(details.mapValues { JsonPrimitive(it.value) }),
         )
     }
     return CheckInPlan(emptyList(), listOf(obs), signals)

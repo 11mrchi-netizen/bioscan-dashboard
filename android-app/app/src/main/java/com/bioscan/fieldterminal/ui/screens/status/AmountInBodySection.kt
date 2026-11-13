@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,17 +21,20 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementsRepository
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.LoggedDose
+import com.bioscan.fieldterminal.domain.WallClock
+import com.bioscan.fieldterminal.domain.activeIngredient
 import com.bioscan.fieldterminal.domain.amountCurve
 import com.bioscan.fieldterminal.domain.curveWindowDays
 import com.bioscan.fieldterminal.domain.formatAmount
 import com.bioscan.fieldterminal.domain.halfLifeWords
-import com.bioscan.fieldterminal.domain.activeIngredient
 import com.bioscan.fieldterminal.domain.spec
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // The estimated amount in the body from the logged doses and the label's half-life (domain/AmountInBody.kt), over about
 // five half-lives, with the amount now and the range over the last week. Labelled as an outline, never as a blood level.
@@ -60,7 +62,7 @@ fun AmountInBodySection(supplementId: Long, halfLifeHours: Double, ingredientNam
             val since = from.minus(Duration.ofMinutes((halfLifeHours * 600).toLong()))
             val doses = repo.loadDoses(supplementId, since).mapNotNull { r ->
                 // taken_at is a logged wall-clock time (domain/WallClock.kt): its real instant is the digits in this zone.
-                val at = com.bioscan.fieldterminal.domain.WallClock.instant(r.takenAt, java.time.ZoneId.systemDefault()) ?: return@mapNotNull null
+                val at = WallClock.instant(r.takenAt, ZoneId.systemDefault()) ?: return@mapNotNull null
                 // How many doses this log was: from the servings it used, else from its count in the dose's unit.
                 val doseCount = spec.amount
                 val qty = r.servingCount?.let { it / row.servingsPerDose }

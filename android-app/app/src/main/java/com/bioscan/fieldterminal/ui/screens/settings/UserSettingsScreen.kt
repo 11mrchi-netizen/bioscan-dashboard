@@ -1,15 +1,13 @@
 package com.bioscan.fieldterminal.ui.screens.settings
 
+import android.util.Log
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -17,32 +15,33 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.UserProfileRepository
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTChoiceChip
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
-import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.nav.UserTab
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Setup > User: opens on Profile, then Nutrition Goals.
 @Composable
 fun UserSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
-    var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(UserTab.Profile) }
+    var tab by rememberSaveable { mutableStateOf(UserTab.Profile) }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
         TileHeader(onBack = onBack, title = "PROFILE & GOALS", subtitle = "PROFILE · NUTRITION GOALS · DATA CAPTURE")
@@ -83,11 +82,11 @@ private fun ProfileCard(scope: CoroutineScope) {
             selectedSex = profile?.sex
             heightInput = profile?.heightCm?.let { "%.0f".format(it) } ?: ""
             athleteMode = profile?.athleteMode ?: false
-        } catch (e: kotlinx.coroutines.CancellationException) {
+        } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             // Offline: leave the form empty; saving later surfaces its own error.
-            android.util.Log.w("UserSettings", "profile load failed", e)
+            Log.w("UserSettings", "profile load failed", e)
         }
     }
 
@@ -134,7 +133,7 @@ private fun ProfileCard(scope: CoroutineScope) {
             }
         }
         FTButton(label = if (profileSaving) "SAVING…" else "SAVE PROFILE", emphasis = FTButtonEmphasis.Primary) {
-            val dob = dobInput.trim().ifBlank { null }?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
+            val dob = dobInput.trim().ifBlank { null }?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
             val height = heightInput.trim().replace(',', '.').ifBlank { null }?.toDoubleOrNull()
             val heightInvalid = heightInput.isNotBlank() && (height == null || height !in 100.0..230.0)
             if ((dobInput.isNotBlank() && dob == null) || heightInvalid) {
@@ -145,7 +144,7 @@ private fun ProfileCard(scope: CoroutineScope) {
                     profileSaving = true
                     userProfileRepository.saveProfile(dob, selectedSex, height, athleteMode)
                     profileSaving = false
-                    profileSavedAt = java.time.LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+                    profileSavedAt = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
                 }
             }
         }
@@ -166,4 +165,4 @@ private fun ProfileCard(scope: CoroutineScope) {
 // null (matches AddEntrySheet.kt's TextChipRow, an optional field, not a
 // forced either/or).
 @Composable
-private fun SexChip(label: String, selected: Boolean, onClick: () -> Unit) = com.bioscan.fieldterminal.ui.components.FTChoiceChip(label.uppercase(), selected, onClick)
+private fun SexChip(label: String, selected: Boolean, onClick: () -> Unit) = FTChoiceChip(label.uppercase(), selected, onClick)

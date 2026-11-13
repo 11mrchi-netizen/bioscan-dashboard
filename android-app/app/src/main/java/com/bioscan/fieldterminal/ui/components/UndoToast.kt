@@ -1,7 +1,8 @@
 package com.bioscan.fieldterminal.ui.components
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -24,8 +25,8 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -33,6 +34,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // One toast at a time above the dock, for two things:
 //   * UNDO: a delete is held for [UNDO_WINDOW_MS] before it reaches the server. UNDO cancels it; the screen already
@@ -117,7 +119,7 @@ object Toasts {
 fun ToastHost(modifier: Modifier = Modifier) {
     val toast by Toasts.current.collectAsState()
     Box(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), contentAlignment = Alignment.BottomCenter) {
-        AnimatedVisibility(toast != null, enter = if (FTMotion.reduced) androidx.compose.animation.EnterTransition.None else fadeIn(FTMotion.tweenBase()) + slideInVertically(FTMotion.tweenBase()) { it / 2 }, exit = if (FTMotion.reduced) androidx.compose.animation.ExitTransition.None else fadeOut(FTMotion.tweenFast()) + slideOutVertically(FTMotion.tweenFast()) { it / 2 }) {
+        AnimatedVisibility(toast != null, enter = if (FTMotion.reduced) EnterTransition.None else fadeIn(FTMotion.tweenBase()) + slideInVertically(FTMotion.tweenBase()) { it / 2 }, exit = if (FTMotion.reduced) ExitTransition.None else fadeOut(FTMotion.tweenFast()) + slideOutVertically(FTMotion.tweenFast()) { it / 2 }) {
             val t = toast ?: return@AnimatedVisibility
             val shape = RoundedCornerShape(FT.RadiusModule)
             Row(

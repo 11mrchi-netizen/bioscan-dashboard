@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.InjectablesRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.VialRow
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.RegimenSpec
 import com.bioscan.fieldterminal.domain.Vial
 import com.bioscan.fieldterminal.domain.daysToDiscard
@@ -30,14 +30,14 @@ import com.bioscan.fieldterminal.domain.siteLabel
 import com.bioscan.fieldterminal.domain.sitesFor
 import com.bioscan.fieldterminal.domain.vialState
 import com.bioscan.fieldterminal.ui.components.FieldTextField
-import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // An injectable's sites and vial (domain/Injectables.kt): the last sites used with the one rested longest, and the open
 // vial's concentration, doses left and discard date, with the prescribed syringe units cross-checked against the mix.

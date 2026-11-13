@@ -3,44 +3,46 @@ package com.bioscan.fieldterminal.ui.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import com.bioscan.fieldterminal.domain.helpText
-import com.bioscan.fieldterminal.domain.summary
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.domain.ChartPresentation
+import com.bioscan.fieldterminal.data.MetricRegistryStore
 import com.bioscan.fieldterminal.domain.Confidence
 import com.bioscan.fieldterminal.domain.ConfidenceLevel
 import com.bioscan.fieldterminal.domain.DataAvailability
 import com.bioscan.fieldterminal.domain.DisplayValue
-import com.bioscan.fieldterminal.domain.MetricPresentation
 import com.bioscan.fieldterminal.domain.MetricState
 import com.bioscan.fieldterminal.domain.PersonalRange
 import com.bioscan.fieldterminal.domain.Provenance
 import com.bioscan.fieldterminal.domain.RangeComparison
 import com.bioscan.fieldterminal.domain.RangeKind
 import com.bioscan.fieldterminal.domain.StateWord
-import com.bioscan.fieldterminal.domain.TrendState
+import com.bioscan.fieldterminal.domain.WhyContext
+import com.bioscan.fieldterminal.domain.helpText
+import com.bioscan.fieldterminal.domain.summary
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
@@ -76,7 +78,7 @@ fun FTStatePill(word: StateWord, modifier: Modifier = Modifier, onClick: (() -> 
             .clip(shape)
             .border(FT.BorderWidth, treatment.color.copy(alpha = 0.65f), shape)
             .background(treatment.color.copy(alpha = 0.12f), shape)
-            .then(if (onClick != null) Modifier.ftClickable(shape = shape, role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "Explain", onClick = onClick) else Modifier)
+            .then(if (onClick != null) Modifier.ftClickable(shape = shape, role = Role.Button, onClickLabel = "Explain", onClick = onClick) else Modifier)
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -180,19 +182,19 @@ fun FTRangeIndicator(range: PersonalRange, modifier: Modifier = Modifier, curren
         } else Canvas(modifier = Modifier.fillMaxWidth().height(28.dp).padding(top = 6.dp)) {
             val y = size.height / 2f
             val stroke = 8.dp.toPx()
-            drawLine(FT.GlassTrack, androidx.compose.ui.geometry.Offset(0f, y), androidx.compose.ui.geometry.Offset(size.width, y), strokeWidth = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            drawLine(FT.GlassTrack, Offset(0f, y), Offset(size.width, y), strokeWidth = stroke, cap = StrokeCap.Round)
             drawLine(
                 bandColor,
-                androidx.compose.ui.geometry.Offset(fraction(minimum) * size.width, y),
-                androidx.compose.ui.geometry.Offset(fraction(maximum) * size.width, y),
+                Offset(fraction(minimum) * size.width, y),
+                Offset(fraction(maximum) * size.width, y),
                 strokeWidth = stroke,
-                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                cap = StrokeCap.Round,
             )
             range.baseline?.let {
-                drawCircle(FT.TextSecondary, radius = 4.dp.toPx(), center = androidx.compose.ui.geometry.Offset(fraction(it) * size.width, y), style = Stroke(2.dp.toPx()))
+                drawCircle(FT.TextSecondary, radius = 4.dp.toPx(), center = Offset(fraction(it) * size.width, y), style = Stroke(2.dp.toPx()))
             }
             range.current?.let {
-                drawCircle(currentColor, radius = 5.dp.toPx(), center = androidx.compose.ui.geometry.Offset(fraction(it) * size.width, y))
+                drawCircle(currentColor, radius = 5.dp.toPx(), center = Offset(fraction(it) * size.width, y))
             }
         }
         Text(
@@ -241,20 +243,20 @@ fun FTCard(
     // A line about this reading for the card's "?" (Today's recovery: how its votes fell), after the explanation.
     helpExtra: String? = null,
     // Personal health agent, phase 1: what the card shows, for WHY? in the title bar (the assistant explains the card).
-    why: com.bioscan.fieldterminal.domain.WhyContext? = null,
+    why: WhyContext? = null,
     // A short note at the end of the title row (a count, a date); [trailingChevron] marks a card whose [onClick] opens more.
     trailing: String? = null,
     trailingChevron: Boolean = false,
-    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
 ) {
     val shape = RoundedCornerShape(
         when (emphasis) { FTCardEmphasis.Hero -> FT.RadiusCardLarge; FTCardEmphasis.Supporting -> FT.RadiusCard; FTCardEmphasis.Compact -> FT.RadiusModule },
     )
     val pad = if (emphasis == FTCardEmphasis.Compact) 14.dp else 16.dp
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     // remembered: the help text is a pure function of the key, so it is built once, not on every recomposition of the card
-    val registryEntry = androidx.compose.runtime.remember(methodology) {
-        methodology?.let { key -> com.bioscan.fieldterminal.data.MetricRegistryStore.get(context, key) }
+    val registryEntry = remember(methodology) {
+        methodology?.let { key -> MetricRegistryStore.get(context, key) }
     }
     // The dialog opens on the card's own short text (or, without one, the registry's opening sentences); the details and
     // the registry's full methodology, limits and references are one tap further.

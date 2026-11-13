@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.settings
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -26,14 +25,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.routine.MobilityDailyRow
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.routine.LocationCollector
+import com.bioscan.fieldterminal.data.routine.MobilityDailyRow
 import com.bioscan.fieldterminal.data.routine.PlaceRow
 import com.bioscan.fieldterminal.data.routine.PlacesRepository
 import com.bioscan.fieldterminal.data.routine.TripRow
+import com.bioscan.fieldterminal.data.routine.parseTimestamp
 import com.bioscan.fieldterminal.domain.routine.DEFAULT_PLACE_RADIUS_M
 import com.bioscan.fieldterminal.domain.routine.MANUAL_PLACE_RADII_M
 import com.bioscan.fieldterminal.domain.routine.PlaceCategory
+import com.bioscan.fieldterminal.domain.routine.homeWorkProblem
 import com.bioscan.fieldterminal.domain.routine.parseCoordinates
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
@@ -43,6 +45,8 @@ import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.theme.FTType
+import kotlinx.coroutines.CancellationException
+import java.util.Locale
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Routine intelligence R3 (docs/routine-intelligence/01-research-and-plan.md, section 10): name the places the phone has
@@ -84,7 +88,7 @@ fun PlacesCard(showDay: Boolean = true) {
             "the visits already recorded inside its circle.",
     ) {
         error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
-        com.bioscan.fieldterminal.domain.routine.homeWorkProblem(places.map { it.toPlace() }, places.firstOrNull { it.source == "home_setting" }?.id)
+        homeWorkProblem(places.map { it.toPlace() }, places.firstOrNull { it.source == "home_setting" }?.id)
             ?.let { Text("$it Tap a place below to label it, or use Lab › ROUTINE › OPEN DAY MAP to see where each one is.", style = FTType.BodySmall, color = FT.Warning) }
 
         if (showDay) {
@@ -107,7 +111,7 @@ fun PlacesCard(showDay: Boolean = true) {
                     scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { adding = false; reload++ }) {
                         repo.addPlace(label, category, lat, lon, radius)
                         // Commute flags follow the new place's category on the trips the worker rebuilds (the last 48 h).
-                        catching { repo.refreshTrips() }.onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+                        catching { repo.refreshTrips() }.onFailure { if (it is CancellationException) throw it }
                     }
                 },
             )
@@ -177,8 +181,8 @@ private fun MobilitySummary(m: MobilityDailyRow) {
 private fun CommuteRow(label: String, trips: List<TripRow>) {
     if (trips.isEmpty()) return
     val minutes = trips.mapNotNull { t ->
-        val s = com.bioscan.fieldterminal.data.routine.parseTimestamp(t.startAt)
-        val e = com.bioscan.fieldterminal.data.routine.parseTimestamp(t.endAt)
+        val s = parseTimestamp(t.startAt)
+        val e = parseTimestamp(t.endAt)
         if (s == null || e == null) null else (e.toEpochMilli() - s.toEpochMilli()) / 60_000.0
     }.sorted()
     if (minutes.isEmpty()) return
@@ -291,7 +295,7 @@ private fun AddPlaceEditor(
                 if (fix == null) {
                     note = "No location: grant precise location in Data capture, or paste coordinates."
                 } else {
-                    coords = "%.6f, %.6f".format(java.util.Locale.ROOT, fix.latitude, fix.longitude)
+                    coords = "%.6f, %.6f".format(Locale.ROOT, fix.latitude, fix.longitude)
                     note = "Here, to about %.0f m.".format(fix.accuracy)
                 }
             }

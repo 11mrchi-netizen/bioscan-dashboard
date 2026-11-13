@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.fuel
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,7 +22,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.FuelScheduleRepository
@@ -31,6 +29,7 @@ import com.bioscan.fieldterminal.data.FuelingProduct
 import com.bioscan.fieldterminal.data.FuelingRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementFuelOption
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.fuel.FuelBlock
 import com.bioscan.fieldterminal.domain.fuel.FuelForm
 import com.bioscan.fieldterminal.domain.fuel.expandSchedule
@@ -45,12 +44,12 @@ import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.util.UUID
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // The pre-race fuel schedule (docs/race-fuel-rework/plan.md): what to take, in which form, how much and how often, for a race
 // or a long run. Seeded from the planner or started empty, edited block by block, saved as you go. Water and water with

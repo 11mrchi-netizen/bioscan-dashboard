@@ -1,12 +1,12 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.Vo2MaxRow
 import com.bioscan.fieldterminal.domain.ActivitySession
 import com.bioscan.fieldterminal.domain.BodyCheckinRecord
@@ -23,13 +23,13 @@ import com.bioscan.fieldterminal.ui.screens.detail.LocalRangeDays
 import com.bioscan.fieldterminal.ui.screens.detail.Section
 import com.bioscan.fieldterminal.ui.screens.detail.TrendChart
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private const val FITNESS_AGE_INFO =
     "A fitness comparison in years, not a biological age: the age at which a typical person (resting heart rate 65, " +

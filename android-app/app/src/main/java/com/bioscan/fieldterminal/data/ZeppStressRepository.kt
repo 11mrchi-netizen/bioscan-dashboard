@@ -2,14 +2,15 @@ package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.domain.stress.PhysiologicalStressReading
-import com.bioscan.fieldterminal.domain.stress.stressDaysByLocalDate
 import com.bioscan.fieldterminal.domain.stress.StressDay
+import com.bioscan.fieldterminal.domain.stress.stressDaysByLocalDate
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import java.time.Instant
 import java.time.ZoneId
 
@@ -40,7 +41,7 @@ private data class ZeppStressSamplePoint(val time: Long, val value: Int)
 class ZeppStressRepository(private val supabase: SupabaseClient) {
     private val json = LenientJson
 
-    suspend fun loadStressDays(limit: Int = 60): List<StressDay> = ReadCache.get("zepp.stress.v2.$limit", tables = setOf("zepp_raw_extracts"), serializer = kotlinx.serialization.builtins.ListSerializer(com.bioscan.fieldterminal.domain.stress.StressDay.serializer())) { fetchStressDays(limit) }
+    suspend fun loadStressDays(limit: Int = 60): List<StressDay> = ReadCache.get("zepp.stress.v2.$limit", tables = setOf("zepp_raw_extracts"), serializer = ListSerializer(StressDay.serializer())) { fetchStressDays(limit) }
 
     private suspend fun fetchStressDays(limit: Int): List<StressDay> {
         val rows = supabase.postgrest.from("zepp_raw_extracts")

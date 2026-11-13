@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.domain
 
+import com.bioscan.fieldterminal.domain.aging.FactorStatus
 import com.bioscan.fieldterminal.domain.analysis.Directionality
 
 // Analysis review A1 (design/ANALYTICAL_PRESENTATION_CONTRACT.md, "State words" amendment). An evaluation's semantic
@@ -81,10 +82,10 @@ fun gateStateWord(state: EvalState): StateWord = when (state) {
 
 // A Healthspan factor (domain/aging): the factor's own verdict, in the shared state language, so the radar, the
 // factor list and the factor page say it the same way. No new thresholds: the status is the scorer's.
-fun healthspanStateWord(status: com.bioscan.fieldterminal.domain.aging.FactorStatus): StateWord = when (status) {
-    com.bioscan.fieldterminal.domain.aging.FactorStatus.FAVORABLE -> StateWord(MetricState.Optimal, "FAVORABLE")
-    com.bioscan.fieldterminal.domain.aging.FactorStatus.NEUTRAL -> StateWord(MetricState.Neutral, "NEUTRAL")
-    com.bioscan.fieldterminal.domain.aging.FactorStatus.OPPORTUNITY -> StateWord(MetricState.Warning, "OPPORTUNITY")
-    com.bioscan.fieldterminal.domain.aging.FactorStatus.UNASSESSED -> StateWord(MetricState.Unavailable, "NOT ASSESSED")
+fun healthspanStateWord(status: FactorStatus): StateWord = when (status) {
+    FactorStatus.FAVORABLE -> StateWord(MetricState.Optimal, "FAVORABLE")
+    FactorStatus.NEUTRAL -> StateWord(MetricState.Neutral, "NEUTRAL")
+    FactorStatus.OPPORTUNITY -> StateWord(MetricState.Warning, "OPPORTUNITY")
+    FactorStatus.UNASSESSED -> StateWord(MetricState.Unavailable, "NOT ASSESSED")
 }
 

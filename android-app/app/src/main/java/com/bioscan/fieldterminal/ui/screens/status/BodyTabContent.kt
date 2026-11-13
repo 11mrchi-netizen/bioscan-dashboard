@@ -1,11 +1,12 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -20,8 +21,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.BodyCheckinRepository
@@ -29,38 +33,46 @@ import com.bioscan.fieldterminal.data.ScaleCompositionPoint
 import com.bioscan.fieldterminal.data.ScaleReadingRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.UserProfileRepository
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
 import com.bioscan.fieldterminal.data.model.UserProfileRow
 import com.bioscan.fieldterminal.domain.BodyCheckinRecord
 import com.bioscan.fieldterminal.domain.BodyComposition
 import com.bioscan.fieldterminal.domain.MusclePotential
 import com.bioscan.fieldterminal.domain.PotentialMethod
-import com.bioscan.fieldterminal.domain.latestFrame
+import com.bioscan.fieldterminal.domain.RegimenMarker
 import com.bioscan.fieldterminal.domain.evaluateWeightTrend
 import com.bioscan.fieldterminal.domain.jacksonPollockBodyFat
+import com.bioscan.fieldterminal.domain.latestFrame
 import com.bioscan.fieldterminal.domain.musclePotential
 import com.bioscan.fieldterminal.domain.navyBodyFat
 import com.bioscan.fieldterminal.domain.rollingBodyFat
 import com.bioscan.fieldterminal.domain.score.Series
 import com.bioscan.fieldterminal.domain.trendStateWord
 import com.bioscan.fieldterminal.domain.weightChangeSplit
+import com.bioscan.fieldterminal.ui.components.FTChip
+import com.bioscan.fieldterminal.ui.components.FTChipRow
+import com.bioscan.fieldterminal.ui.components.TrendSeries
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.components.rememberRange
 import com.bioscan.fieldterminal.ui.screens.detail.ChartRange
-import com.bioscan.fieldterminal.ui.screens.detail.Chip
 import com.bioscan.fieldterminal.ui.screens.detail.EmptyLine
 import com.bioscan.fieldterminal.ui.screens.detail.Fmt
 import com.bioscan.fieldterminal.ui.screens.detail.Loading
 import com.bioscan.fieldterminal.ui.screens.detail.LocalRangeDays
+import com.bioscan.fieldterminal.ui.screens.detail.LocalRegimenMarkers
 import com.bioscan.fieldterminal.ui.screens.detail.MetricPanel
 import com.bioscan.fieldterminal.ui.screens.detail.MetricTiles
 import com.bioscan.fieldterminal.ui.screens.detail.Section
 import com.bioscan.fieldterminal.ui.screens.detail.StatTiles
 import com.bioscan.fieldterminal.ui.screens.detail.TileSpec
+import com.bioscan.fieldterminal.ui.screens.detail.loadRegimenMarkers
+import com.bioscan.fieldterminal.ui.screens.detail.shortDate
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // ME › BODY, in the detail pages' look (map request): weight trend, body fat trend, the monthly measurements on the body
 // map, then what the scale's impedance gives beyond weight as tiles that open their trend, and muscle potential as a ring.
@@ -114,17 +126,17 @@ fun BodyTabContent() {
         scaleSeries = catching { ScaleReadingRepository(SupabaseClientProvider.client).loadCompositionSeries() }.getOrElse { scaleSeries }
     }
 
-    var range by com.bioscan.fieldterminal.ui.components.rememberRange("me:body", ChartRange.M3)
+    var range by rememberRange("me:body", ChartRange.M3)
     var showRegimen by rememberSaveable { mutableStateOf(true) }
-    var markers by remember { mutableStateOf(emptyList<com.bioscan.fieldterminal.domain.RegimenMarker>()) }
-    LaunchedEffect(Unit) { markers = catching { com.bioscan.fieldterminal.ui.screens.detail.loadRegimenMarkers() }.getOrDefault(emptyList()) }
+    var markers by remember { mutableStateOf(emptyList<RegimenMarker>()) }
+    LaunchedEffect(Unit) { markers = catching { loadRegimenMarkers() }.getOrDefault(emptyList()) }
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        com.bioscan.fieldterminal.ui.components.FTChipRow(
+        FTChipRow(
             ChartRange.entries, range, { it.label }, { range = it },
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+            contentPadding = PaddingValues(0.dp),
             trailing = if (markers.isEmpty()) null else ({
-                androidx.compose.foundation.layout.Spacer(Modifier.padding(start = 6.dp))
-                com.bioscan.fieldterminal.ui.components.FTChip("REGIMEN", showRegimen, { showRegimen = !showRegimen }, role = androidx.compose.ui.semantics.Role.Switch)
+                Spacer(Modifier.padding(start = 6.dp))
+                FTChip("REGIMEN", showRegimen, { showRegimen = !showRegimen }, role = Role.Switch)
             }),
         )
         val b = bodyMetrics
@@ -133,7 +145,7 @@ fun BodyTabContent() {
             return@Column
         }
         CompositionLocalProvider(LocalRangeDays provides range.days,
-            com.bioscan.fieldterminal.ui.screens.detail.LocalRegimenMarkers provides if (showRegimen) markers else emptyList()) {
+            LocalRegimenMarkers provides if (showRegimen) markers else emptyList()) {
             BodyPage(b, checkins, profile?.heightCm ?: heightCm, profile, scaleSeries)
         }
     }
@@ -170,9 +182,9 @@ private fun BodyPage(
     // Each method as its own line, one hue each, so they read apart (map request). DEXA has no source yet.
     val bodyFatOverlay = remember(scaleFat, tape, folds) {
         listOf(
-            com.bioscan.fieldterminal.ui.components.TrendSeries(scaleFat, FT.Metric.BodyFat, label = "SCALE", maxGapDays = 400),
-            com.bioscan.fieldterminal.ui.components.TrendSeries(tape, FT.Metric.BodyFatTape, label = "TAPE", maxGapDays = 400),
-            com.bioscan.fieldterminal.ui.components.TrendSeries(folds, FT.Metric.BodyFatCaliper, label = "CALIPER", maxGapDays = 400),
+            TrendSeries(scaleFat, FT.Metric.BodyFat, label = "SCALE", maxGapDays = 400),
+            TrendSeries(tape, FT.Metric.BodyFatTape, label = "TAPE", maxGapDays = 400),
+            TrendSeries(folds, FT.Metric.BodyFatCaliper, label = "CALIPER", maxGapDays = 400),
         ).filter { it.points.isNotEmpty() }
     }
     MetricPanel("BODY FAT", blended, "%", Fmt.one, info = BODY_FAT_INFO, minSd = 0.5, color = FT.DomainFuel, today = today,
@@ -263,8 +275,8 @@ private fun MusclePotentialSection(p: MusclePotential?, askFrame: Boolean, missi
                 Canvas(Modifier.size(112.dp)) {
                     val stroke = 10.dp.toPx()
                     val inset = stroke / 2
-                    val arcSize = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke)
-                    val topLeft = androidx.compose.ui.geometry.Offset(inset, inset)
+                    val arcSize = Size(size.width - stroke, size.height - stroke)
+                    val topLeft = Offset(inset, inset)
                     drawArc(track, -90f, 360f, false, topLeft, arcSize, style = Stroke(stroke))
                     drawArc(fill, -90f, (360 * p.fraction).toFloat(), false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
                 }
@@ -294,4 +306,4 @@ private fun MusclePotentialSection(p: MusclePotential?, askFrame: Boolean, missi
     }
 }
 
-private fun shortDay(d: LocalDate): String = com.bioscan.fieldterminal.ui.screens.detail.shortDate(d)
+private fun shortDay(d: LocalDate): String = shortDate(d)

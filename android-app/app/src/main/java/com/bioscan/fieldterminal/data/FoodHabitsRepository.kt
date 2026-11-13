@@ -1,11 +1,14 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.WallClock
 import com.bioscan.fieldterminal.domain.fuel.CatalogueFood
 import com.bioscan.fieldterminal.domain.fuel.FoodOption
 import com.bioscan.fieldterminal.domain.fuel.LoggedFood
 import com.bioscan.fieldterminal.domain.fuel.MealSlotKind
 import com.bioscan.fieldterminal.domain.fuel.MealTimes
+import com.bioscan.fieldterminal.domain.fuel.OWN_FOOD_MIN_USES
 import com.bioscan.fieldterminal.domain.fuel.STAPLE_FOODS
+import com.bioscan.fieldterminal.domain.fuel.mealSlotOf
 import com.bioscan.fieldterminal.domain.fuel.ownFoods
 import com.bioscan.fieldterminal.domain.fuel.slotForTime
 import com.bioscan.fieldterminal.domain.fuel.staplesWithUses
@@ -73,9 +76,9 @@ class FoodHabitsRepository(private val supabase: SupabaseClient) {
         val logged = mutableListOf<LoggedFood>()
         for (m in meals) {
             // Meal times are logged times: the local wall clock with a zero offset (domain/WallClock.kt).
-            val at = com.bioscan.fieldterminal.domain.WallClock.zoned(m.loggedAt, zone) ?: continue
+            val at = WallClock.zoned(m.loggedAt, zone) ?: continue
             // The meal's own label first; unlabelled meals are placed by time.
-            val slot = com.bioscan.fieldterminal.domain.fuel.mealSlotOf(m.mealSlot) ?: slotForTime(at.toLocalTime(), times)
+            val slot = mealSlotOf(m.mealSlot) ?: slotForTime(at.toLocalTime(), times)
             // One text per meal, so a staple counts once per meal however many items name it.
             descriptions += slot to (listOfNotNull(m.description) + m.items.mapNotNull { it.description }).joinToString(" · ")
             m.items.forEach { i ->
@@ -86,7 +89,7 @@ class FoodHabitsRepository(private val supabase: SupabaseClient) {
             }
         }
         val staples = staplesWithUses(descriptions)
-        val ids = logged.groupBy { it.foodId }.filter { it.value.size >= com.bioscan.fieldterminal.domain.fuel.OWN_FOOD_MIN_USES }.keys
+        val ids = logged.groupBy { it.foodId }.filter { it.value.size >= OWN_FOOD_MIN_USES }.keys
         if (ids.isEmpty()) return staples
         val names = supabase.postgrest.from("foods").select(Columns.list("id,name")) { filter { isIn("id", ids.toList()) } }.decodeList<CatalogueRow>()
         val nutrients = supabase.postgrest.from("food_nutrients")

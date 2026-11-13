@@ -7,6 +7,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import kotlin.math.abs
+import kotlin.math.ln
 
 // Scoring system: CHARGE and the five domain scores for one morning (docs/scoring-system/README.md).
 //
@@ -132,7 +133,7 @@ fun ansStateOf(series: Map<String, Series>, day: LocalDate, threshold: Double = 
         val v = series[key]?.get(day) ?: return null
         if (log && v <= 0) return null
         val (med, sd) = baselineOf(series[key].orEmpty(), day, 60, 14, log, minSd) ?: return null
-        return ((if (log) kotlin.math.ln(v) else v) - med) / sd
+        return ((if (log) ln(v) else v) - med) / sd
     }
     val hrv = zOf(ScoreKeys.HRV, log = true, minSd = 0.03) ?: return null
     val rhr = zOf(ScoreKeys.RHR, log = false, minSd = 1.0) ?: return null

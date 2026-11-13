@@ -1,10 +1,10 @@
 package com.bioscan.hometerminal.env
 
-import java.io.File
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.io.File
 
 /** A reading waiting to be uploaded. [atMs] is epoch milliseconds (a real instant); [room] the sensor's room then. */
 @Serializable

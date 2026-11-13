@@ -1,15 +1,13 @@
 package com.bioscan.fieldterminal.ui.screens.detail
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,13 +15,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,47 +34,69 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
-import com.bioscan.fieldterminal.ui.components.InspectRow
-import com.bioscan.fieldterminal.ui.components.chartInspect
-import com.bioscan.fieldterminal.ui.components.drawInspectOverlay
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.SupplementsRepository
+import com.bioscan.fieldterminal.data.catching
+import com.bioscan.fieldterminal.domain.DayRange
+import com.bioscan.fieldterminal.domain.MetricReading
+import com.bioscan.fieldterminal.domain.RegimenMarker
+import com.bioscan.fieldterminal.domain.readMetric
+import com.bioscan.fieldterminal.domain.regimenMarkers
+import com.bioscan.fieldterminal.domain.score.InputDirection
+import com.bioscan.fieldterminal.domain.score.Series
+import com.bioscan.fieldterminal.ui.components.BarLayout
+import com.bioscan.fieldterminal.ui.components.BarYAxis
+import com.bioscan.fieldterminal.ui.components.DateTrendLine
+import com.bioscan.fieldterminal.ui.components.FTBarSpec
+import com.bioscan.fieldterminal.ui.components.FTCardEmphasis
+import com.bioscan.fieldterminal.ui.components.FTChevron
+import com.bioscan.fieldterminal.ui.components.FTChip
+import com.bioscan.fieldterminal.ui.components.FTChipRow
+import com.bioscan.fieldterminal.ui.components.FTIconButton
+import com.bioscan.fieldterminal.ui.components.FTIcons
+import com.bioscan.fieldterminal.ui.components.FTLegend
+import com.bioscan.fieldterminal.ui.components.FTMetricDot
+import com.bioscan.fieldterminal.ui.components.InspectRow
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
+import com.bioscan.fieldterminal.ui.components.LoadGuard
+import com.bioscan.fieldterminal.ui.components.SkeletonSections
+import com.bioscan.fieldterminal.ui.components.TrendSeries
+import com.bioscan.fieldterminal.ui.components.barAlpha
+import com.bioscan.fieldterminal.ui.components.barLayout
+import com.bioscan.fieldterminal.ui.components.chartInspect
+import com.bioscan.fieldterminal.ui.components.drawBarStub
+import com.bioscan.fieldterminal.ui.components.drawInspectOverlay
+import com.bioscan.fieldterminal.ui.components.drawRangeCapsule
+import com.bioscan.fieldterminal.ui.components.drawStackedBar
+import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.ftDomainWash
+import com.bioscan.fieldterminal.ui.components.ftGlass
+import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
 import com.bioscan.fieldterminal.ui.components.localTrendAt
+import com.bioscan.fieldterminal.ui.components.rememberRange
 import com.bioscan.fieldterminal.ui.components.smoothedPath
 import com.bioscan.fieldterminal.ui.components.splitAtGaps
 import com.bioscan.fieldterminal.ui.components.trendCurve
-import com.bioscan.fieldterminal.domain.DayRange
-import com.bioscan.fieldterminal.domain.MetricReading
-import com.bioscan.fieldterminal.domain.readMetric
-import com.bioscan.fieldterminal.domain.score.InputDirection
-import com.bioscan.fieldterminal.domain.score.Series
-import com.bioscan.fieldterminal.ui.components.LoadGuard
-import com.bioscan.fieldterminal.ui.components.LoadErrorCard
-import com.bioscan.fieldterminal.ui.components.ftClickable
-import com.bioscan.fieldterminal.ui.components.BarLayout
-import com.bioscan.fieldterminal.ui.components.FTBarSpec
-import com.bioscan.fieldterminal.ui.components.barAlpha
-import com.bioscan.fieldterminal.ui.components.barLayout
-import com.bioscan.fieldterminal.ui.components.drawBarStub
-import com.bioscan.fieldterminal.ui.components.drawRangeCapsule
-import com.bioscan.fieldterminal.ui.components.drawStackedBar
-import com.bioscan.fieldterminal.ui.components.ftDomainWash
-import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
-import com.bioscan.fieldterminal.ui.components.ftGlass
 import com.bioscan.fieldterminal.ui.screens.today.FullScreenOverlay
-import com.bioscan.fieldterminal.ui.screens.today.Sparkline
+import com.bioscan.fieldterminal.ui.screens.today.SlotSparkline
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // The detail pages' shared kit (Sleep, Cardio, Load, Nutrition...), in the look of the score overlays: a plain page with
 // a back arrow, glass sections with a caps title, the number first and its chart under it, and every explanation one tap
@@ -89,7 +109,7 @@ enum class ChartRange(val days: Int, val label: String) { M1(28, "28D"), M3(90, 
 val LocalRangeDays = compositionLocalOf { ChartRange.M3.days }
 
 /** Regimen changes (domain/Regimen.kt) every TrendChart on the page draws as dashed lines; empty to hide them. */
-val LocalRegimenMarkers = compositionLocalOf { emptyList<com.bioscan.fieldterminal.domain.RegimenMarker>() }
+val LocalRegimenMarkers = compositionLocalOf { emptyList<RegimenMarker>() }
 
 @Composable
 fun DetailScreen(
@@ -103,26 +123,26 @@ fun DetailScreen(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     // Kept per page across navigation (RangeMemory): the page opens again on the window it was last read in.
-    var range by com.bioscan.fieldterminal.ui.components.rememberRange("detail:$title", defaultRange)
+    var range by rememberRange("detail:$title", defaultRange)
     // Regimen changes on the charts: loaded once per page (the roster history is cached), shown unless switched off.
     var showRegimen by rememberSaveable { mutableStateOf(true) }
-    var markers by remember { mutableStateOf(emptyList<com.bioscan.fieldterminal.domain.RegimenMarker>()) }
-    androidx.compose.runtime.LaunchedEffect(Unit) {
+    var markers by remember { mutableStateOf(emptyList<RegimenMarker>()) }
+    LaunchedEffect(Unit) {
         markers = catching { loadRegimenMarkers() }.getOrDefault(emptyList())
     }
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).then(if (domain != null) Modifier.ftDomainWash(domain) else Modifier.ftPlatinumWash())) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            com.bioscan.fieldterminal.ui.components.FTIconButton(com.bioscan.fieldterminal.ui.components.FTIcons.Back, "Back", onBack)
+            FTIconButton(FTIcons.Back, "Back", onBack)
             Text(title, style = FTType.LabelCaps, color = FT.TextPrimary, modifier = Modifier.weight(1f).padding(start = 4.dp))
             if (eyebrow != null) Text(eyebrow, style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(end = 12.dp))
         }
         if (ranged) {
-            com.bioscan.fieldterminal.ui.components.FTChipRow(
+            FTChipRow(
                 ChartRange.entries, range, { it.label }, { range = it },
                 trailing = if (markers.isEmpty()) null else ({
                     // A toggle, not a range: set apart by a gap.
-                    androidx.compose.foundation.layout.Spacer(Modifier.width(6.dp))
-                    com.bioscan.fieldterminal.ui.components.FTChip("REGIMEN", showRegimen, { showRegimen = !showRegimen }, role = Role.Switch)
+                    Spacer(Modifier.width(6.dp))
+                    FTChip("REGIMEN", showRegimen, { showRegimen = !showRegimen }, role = Role.Switch)
                 }),
             )
         }
@@ -138,7 +158,7 @@ fun DetailScreen(
 
 // `.ft-chip`: a mono pill; the selected one is platinum with dark ink.
 @Composable
-fun Chip(label: String, selected: Boolean, onClick: () -> Unit) = com.bioscan.fieldterminal.ui.components.FTChip(label, selected, onClick)
+fun Chip(label: String, selected: Boolean, onClick: () -> Unit) = FTChip(label, selected, onClick)
 
 /**
  * A page's analytical card: since the polish pass an FTCard (Supporting by default, [emphasis] for a page's lead card),
@@ -150,7 +170,7 @@ fun Section(
     title: String,
     info: String? = null,
     trailing: String? = null,
-    emphasis: com.bioscan.fieldterminal.ui.components.FTCardEmphasis = com.bioscan.fieldterminal.ui.components.FTCardEmphasis.Supporting,
+    emphasis: FTCardEmphasis = FTCardEmphasis.Supporting,
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -180,14 +200,14 @@ fun LinkRow(title: String, subtitle: String? = null, onClick: () -> Unit) {
             Text(title, style = FTType.RowTitle, color = FT.TextPrimary)
             if (subtitle != null) Text(subtitle, style = FTType.Caption, color = FT.TextMuted)
         }
-        com.bioscan.fieldterminal.ui.components.FTChevron()
+        FTChevron()
     }
 }
 
 @Composable
 fun Loading(guard: LoadGuard) {
     // A page-shaped placeholder instead of a spinner (ui/components/Skeleton.kt).
-    if (guard.error != null) LoadErrorCard(guard) else com.bioscan.fieldterminal.ui.components.SkeletonSections()
+    if (guard.error != null) LoadErrorCard(guard) else SkeletonSections()
 }
 
 @Composable
@@ -260,14 +280,14 @@ fun MetricPanel(
     today: LocalDate = LocalDate.now(),
     // When set, the chart shows these series each in their own colour (with a legend) instead of the single trend line;
     // the headline still reads the main [series]. Used for body fat measured several ways (scale, tape, caliper).
-    overlay: List<com.bioscan.fieldterminal.ui.components.TrendSeries>? = null,
+    overlay: List<TrendSeries>? = null,
     extra: @Composable ColumnScope.() -> Unit = {},
 ) {
     val reading = remember(series, today) { readMetric(series, today, log = log, minSd = minSd) }
     Section(title, info = info) {
         Headline(reading, format, unit, today, betterHigher)
         if (overlay != null) {
-            com.bioscan.fieldterminal.ui.components.DateTrendLine(series = overlay, legend = true, valueFormat = format)
+            DateTrendLine(series = overlay, legend = true, valueFormat = format)
         } else {
             TrendChart(series, today, LocalRangeDays.current, reading.normal, format, color, target = target, targetLabel = targetLabel)
         }
@@ -305,8 +325,8 @@ fun MetricRow(
         }
         Text(reading.latest?.let { "${format(it)} $unit".trim() } ?: "—", style = FTType.Telemetry, color = FT.TextPrimary)
         Text(positionGlyph(reading.position), style = FTType.Telemetry, color = FT.TextSecondary)
-        com.bioscan.fieldterminal.ui.screens.today.SlotSparkline(spark, color = color)
-        com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted)
+        SlotSparkline(spark, color = color)
+        FTChevron(tint = FT.TextMuted)
     }
     if (open) MetricHistoryOverlay(HistorySpec(label, series, unit, format, color, log, minSd, betterHigher, info), today) { open = false }
 }
@@ -352,7 +372,7 @@ private fun MetricTile(t: TileSpec, today: LocalDate, modifier: Modifier) {
             Text(t.unit, style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(bottom = 4.dp))
         }
         Text("${positionGlyph(reading.position)} ${positionWords(reading.position)}", style = FTType.Caption, color = FT.TextMuted)
-        com.bioscan.fieldterminal.ui.screens.today.SlotSparkline(spark, color = t.color)
+        SlotSparkline(spark, color = t.color)
     }
     if (open) MetricHistoryOverlay(HistorySpec(t.label, t.series, t.unit, t.format, t.color, minSd = t.minSd, betterHigher = t.betterHigher, info = t.info), today) { open = false }
 }
@@ -380,9 +400,9 @@ fun StatTileGrid(tiles: List<Stat>, today: LocalDate = LocalDate.now()) {
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            t.history?.let { com.bioscan.fieldterminal.ui.components.FTMetricDot(it.color, Modifier.padding(end = 6.dp), size = 6.dp) }
+                            t.history?.let { FTMetricDot(it.color, Modifier.padding(end = 6.dp), size = 6.dp) }
                             Text(t.label, style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
-                            if (t.history != null) com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted)
+                            if (t.history != null) FTChevron(tint = FT.TextMuted)
                         }
                         Text(t.value, style = FTType.MetricMedium, color = FT.TextPrimary)
                         if (t.sub != null) Text(t.sub, style = FTType.Caption, color = FT.TextMuted)
@@ -418,7 +438,7 @@ data class HistorySpec(
 @Composable
 fun MetricHistoryOverlay(spec: HistorySpec, today: LocalDate = LocalDate.now(), onBack: (() -> Unit)? = null, onClose: () -> Unit) {
     val first = remember(spec.series) { spec.series.keys.minOrNull() }
-    val allDays = first?.let { java.time.temporal.ChronoUnit.DAYS.between(it, today).toInt() + 1 }?.coerceAtLeast(30) ?: 365
+    val allDays = first?.let { ChronoUnit.DAYS.between(it, today).toInt() + 1 }?.coerceAtLeast(30) ?: 365
     var days by rememberSaveable { mutableStateOf(ChartRange.M3.days) }
     val reading = remember(spec.series, today) { readMetric(spec.series, today, log = spec.log, minSd = spec.minSd) }
     FullScreenOverlay(title = spec.label.uppercase(), onClose = onClose, onBack = onBack) {
@@ -452,7 +472,7 @@ fun MetricHistoryOverlay(spec: HistorySpec, today: LocalDate = LocalDate.now(), 
 }
 
 @Composable
-fun Legend(items: List<Pair<String, Color>>) = com.bioscan.fieldterminal.ui.components.FTLegend(items)
+fun Legend(items: List<Pair<String, Color>>) = FTLegend(items)
 
 /** One date format for every chart and label (ChartDates): "14 Aug". */
 fun shortDate(d: LocalDate): String = com.bioscan.fieldterminal.ui.components.ChartDates.short(d)
@@ -520,7 +540,7 @@ fun TrendChart(
                     modifier = Modifier.align(Alignment.TopStart).padding(top = top.dp.coerceAtLeast(0.dp)))
             }
         }
-        val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+        val measurer = rememberTextMeasurer()
         var pick by rememberPick(Triple(series, day, days))
         val byIndex = remember(points) { points.toMap() }
         val meanByIndex = remember(mean) { mean.toMap() }
@@ -545,13 +565,13 @@ fun TrendChart(
                 if (run.size < 2) continue
                 drawPath(
                     smoothedPath(run.map { (d, v) -> Offset(xf(d), y(v)) }), color,
-                    style = Stroke(width = 3.5f, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round),
+                    style = Stroke(width = 3.5f, cap = StrokeCap.Round, join = StrokeJoin.Round),
                 )
             }
             points.last().let { (i, v) -> drawCircle(FT.EmeraldHighlight, radius = 6f, center = Offset(x(i), y(v))) }
             val dash = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))
             for (mk in inWindow) {
-                val i = java.time.temporal.ChronoUnit.DAYS.between(from, mk.date).toInt()
+                val i = ChronoUnit.DAYS.between(from, mk.date).toInt()
                 drawLine(FT.Warning.copy(alpha = 0.8f), Offset(x(i), 0f), Offset(x(i), size.height), strokeWidth = 1.5f, pathEffect = dash)
                 drawCircle(FT.Warning, radius = 4f, center = Offset(x(i), 4f))
             }
@@ -591,17 +611,17 @@ fun TrendChart(
 internal fun nearestIndex(x: Float, width: Float, days: Int, has: List<Int>): Int? {
     if (has.isEmpty()) return null
     val raw = (x / width.coerceAtLeast(1f) * (days - 1).coerceAtLeast(1)).roundToInt()
-    return has.minByOrNull { kotlin.math.abs(it - raw) }
+    return has.minByOrNull { abs(it - raw) }
 }
 
 /** Touch handling shared by the kit's charts: a drag moves the cursor, releasing keeps it, a tap on it clears it. */
 @Composable
-internal fun rememberPick(key: Any?): androidx.compose.runtime.MutableState<Int?> = remember(key) { mutableStateOf<Int?>(null) }
+internal fun rememberPick(key: Any?): MutableState<Int?> = remember(key) { mutableStateOf<Int?>(null) }
 
 /** All regimen changes as chart markers, from the roster history (cached). */
-internal suspend fun loadRegimenMarkers(): List<com.bioscan.fieldterminal.domain.RegimenMarker> =
-    com.bioscan.fieldterminal.domain.regimenMarkers(
-        com.bioscan.fieldterminal.data.SupplementsRepository(com.bioscan.fieldterminal.data.SupabaseClientProvider.client).loadRegimenChanges(),
+internal suspend fun loadRegimenMarkers(): List<RegimenMarker> =
+    regimenMarkers(
+        SupplementsRepository(SupabaseClientProvider.client).loadRegimenChanges(),
     )
 
 /** Several lines on one axis (fitness and fatigue), told apart by colour and dash, labelled in a legend. */
@@ -623,7 +643,7 @@ fun MultiLineChart(lines: List<ChartLine>, day: LocalDate, days: Int, format: (D
             Text(format((hi + lo) / 2), style = FTType.Micro, color = FT.TextMuted)
             Text(format(lo), style = FTType.Micro, color = FT.TextMuted)
         }
-        val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+        val measurer = rememberTextMeasurer()
         var pick by rememberPick(Triple(lines, day, days))
         val withValue = remember(lines, day, days) { (0 until days).filter { i -> lines.any { it.series[from.plusDays(i.toLong())] != null } } }
         Canvas(Modifier.weight(1f).height(height.dp).chartInspect(Triple(lines, day, days)) { px, w, isTap ->
@@ -635,8 +655,8 @@ fun MultiLineChart(lines: List<ChartLine>, day: LocalDate, days: Int, format: (D
             if (zeroLine) drawLine(FT.TextMuted, Offset(0f, y(0.0)), Offset(size.width, y(0.0)), strokeWidth = 1f)
             for (l in lines) {
                 val pts = (0 until days).mapNotNull { i -> l.series[from.plusDays(i.toLong())]?.let { Offset(x(i), y(it)) } }
-                drawPath(smoothedPath(pts), l.color, style = Stroke(width = 2.5f, cap = androidx.compose.ui.graphics.StrokeCap.Round,
-                    join = androidx.compose.ui.graphics.StrokeJoin.Round, pathEffect = if (l.dashed) PathEffect.dashPathEffect(floatArrayOf(10f, 8f)) else null))
+                drawPath(smoothedPath(pts), l.color, style = Stroke(width = 2.5f, cap = StrokeCap.Round,
+                    join = StrokeJoin.Round, pathEffect = if (l.dashed) PathEffect.dashPathEffect(floatArrayOf(10f, 8f)) else null))
             }
             pick?.let { i ->
                 val d = from.plusDays(i.toLong())
@@ -680,16 +700,16 @@ fun StackedBars(
     if (rangeName != null) {
         val pick = selected
         val (name, parts) = if (pick == null) rangeName to labels.indices.map { i -> columns.sumOf { it.second.getOrElse(i) { 0.0 } } } else columns[pick]
-        val line = androidx.compose.ui.text.buildAnnotatedString {
+        val line = buildAnnotatedString {
             if (pick == null) {
-                withStyle(androidx.compose.ui.text.SpanStyle(color = FT.TextPrimary)) { append("TOTAL ${format(parts.sum())} $unit") }
+                withStyle(SpanStyle(color = FT.TextPrimary)) { append("TOTAL ${format(parts.sum())} $unit") }
             } else {
-                withStyle(androidx.compose.ui.text.SpanStyle(color = FT.TextPrimary)) { append(name.uppercase() + if (lastPartial && pick == columns.lastIndex) " (SO FAR)" else "") }
+                withStyle(SpanStyle(color = FT.TextPrimary)) { append(name.uppercase() + if (lastPartial && pick == columns.lastIndex) " (SO FAR)" else "") }
                 append(" · total ${format(parts.sum())} $unit")
             }
             labels.indices.filter { parts.getOrElse(it) { 0.0 } > 0.0 }.forEach { i ->
                 append("   ")
-                withStyle(androidx.compose.ui.text.SpanStyle(color = colors.getOrElse(i) { FT.TextSecondary })) {
+                withStyle(SpanStyle(color = colors.getOrElse(i) { FT.TextSecondary })) {
                     append("${labels[i]} ${format(parts[i])}")
                 }
             }
@@ -705,7 +725,7 @@ fun StackedBars(
     }
     val top = columns.maxOf { it.second.sum() }.coerceAtLeast(1e-9)
     Row(Modifier.fillMaxWidth()) {
-        com.bioscan.fieldterminal.ui.components.BarYAxis(top, format, height.dp)
+        BarYAxis(top, format, height.dp)
         Canvas(
             Modifier.weight(1f).height(height.dp).chartInspect(columns) { px, w, isTap ->
                 val i = ((px / w) * columns.size).toInt().coerceIn(0, columns.lastIndex)
@@ -746,19 +766,19 @@ fun RangeBars(ranges: List<Pair<LocalDate, DayRange>>, day: LocalDate, days: Int
             Text(hi.roundToInt().toString(), style = FTType.Micro, color = FT.TextMuted)
             Text(lo.roundToInt().toString(), style = FTType.Micro, color = FT.TextMuted)
         }
-        val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+        val measurer = rememberTextMeasurer()
         var pick by rememberPick(Triple(shown, day, days))
-        val byIndex = remember(shown) { shown.associate { java.time.temporal.ChronoUnit.DAYS.between(from, it.first).toInt() to it } }
+        val byIndex = remember(shown) { shown.associate { ChronoUnit.DAYS.between(from, it.first).toInt() to it } }
         Canvas(Modifier.weight(1f).height(120.dp).chartInspect(Triple(shown, day, days)) { px, w, isTap ->
             val i = nearestIndex(px, w, days, byIndex.keys.sorted())
             pick = if (isTap && i == pick) null else i
         }) {
-            fun x(d: LocalDate) = size.width * java.time.temporal.ChronoUnit.DAYS.between(from, d) / (days - 1).coerceAtLeast(1).toFloat()
+            fun x(d: LocalDate) = size.width * ChronoUnit.DAYS.between(from, d) / (days - 1).coerceAtLeast(1).toFloat()
             fun y(v: Double) = (size.height * (1 - (v - lo) / (hi - lo))).toFloat()
             val w = BarLayout(size.width, days, FTBarSpec.gapFor(days).toPx()).barWidth.coerceIn(3.dp.toPx(), 10.dp.toPx())
             // §1.10 range bars: a capsule from the day's low to its high; the selected (or today's) at full strength.
             for ((d, r) in shown) {
-                val i = java.time.temporal.ChronoUnit.DAYS.between(from, d).toInt()
+                val i = ChronoUnit.DAYS.between(from, d).toInt()
                 drawRangeCapsule(color, x(d), w, y(r.high), y(r.low), alpha = if (pick == null) (if (d == day) 1f else 0.85f) else barAlpha(i, pick))
             }
             pick?.let { i ->

@@ -1,8 +1,5 @@
 package com.bioscan.fieldterminal.domain
 
-import com.bioscan.fieldterminal.data.model.ExerciseLibraryRow
-import com.bioscan.fieldterminal.data.model.StrengthExerciseDto
-
 // DAV-56 (Analysis Layer 2, milestone 2) -- the capstone of the multimodal
 // load engine, combining DAV-57 (strength) and DAV-58 (endurance) into one
 // per-session structure across cardiovascular/muscular/mechanical/

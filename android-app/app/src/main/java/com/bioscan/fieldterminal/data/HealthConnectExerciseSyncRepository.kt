@@ -2,11 +2,9 @@ package com.bioscan.fieldterminal.data
 
 import android.content.Context
 import android.util.Log
+import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.DistanceRecord
-import com.bioscan.fieldterminal.domain.DistanceInterval
-import com.bioscan.fieldterminal.domain.workoutDistanceMeters
-import com.bioscan.fieldterminal.domain.sessionAvgSpeedKmh
 import androidx.health.connect.client.records.ElevationGainedRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
@@ -14,6 +12,9 @@ import androidx.health.connect.client.records.PowerRecord
 import androidx.health.connect.client.records.SpeedRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import com.bioscan.fieldterminal.data.model.NewExerciseSessionRow
+import com.bioscan.fieldterminal.domain.DistanceInterval
+import com.bioscan.fieldterminal.domain.sessionAvgSpeedKmh
+import com.bioscan.fieldterminal.domain.workoutDistanceMeters
 import com.bioscan.fieldterminal.healthconnect.HealthConnectManager
 import com.bioscan.fieldterminal.healthconnect.mapHealthConnectExerciseType
 import com.bioscan.fieldterminal.healthconnect.readAllRecords
@@ -74,7 +75,7 @@ class HealthConnectExerciseSyncRepository(
     }
 
     private suspend fun buildRow(
-        client: androidx.health.connect.client.HealthConnectClient,
+        client: HealthConnectClient,
         session: ExerciseSessionRecord,
     ): NewExerciseSessionRow {
         val start = session.startTime

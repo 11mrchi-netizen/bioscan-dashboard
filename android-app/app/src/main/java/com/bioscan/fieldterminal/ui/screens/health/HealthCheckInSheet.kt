@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.health
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,6 +26,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.HealthConcernsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.ConcernOverviewDto
 import com.bioscan.fieldterminal.data.model.HealthConcernRow
 import com.bioscan.fieldterminal.data.model.RecentSessionRow
@@ -48,17 +48,18 @@ import com.bioscan.fieldterminal.domain.health.shortDate
 import com.bioscan.fieldterminal.ui.components.BodyMap
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
+import com.bioscan.fieldterminal.ui.components.FTRatingSlider
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Health concerns (plan §5.1): the quick check-in. A normal day is one tap (NOTHING); a day with an active concern is a
 // tap per concern (GONE / BETTER / SAME / WORSE, severity prefilled with the last one); something new goes through the
@@ -166,7 +167,7 @@ fun HealthCheckInSheet(
                     }
                     if (a != null && a.change != ConcernChange.Gone) {
                         Text("SEVERITY 0-10", style = FTType.Micro, color = FT.TextMuted)
-                        com.bioscan.fieldterminal.ui.components.FTRatingSlider("SEVERITY", a.severity, 0..10, FT.Metric.Soreness, { v -> answers[c.id] = a.copy(severity = v) }, lowWord = "none", highWord = "worst", reversed = true)
+                        FTRatingSlider("SEVERITY", a.severity, 0..10, FT.Metric.Soreness, { v -> answers[c.id] = a.copy(severity = v) }, lowWord = "none", highWord = "worst", reversed = true)
                         Text("TRAINING", style = FTType.Micro, color = FT.TextMuted)
                         TextChipRow(IMPACT_LABELS, a.impact?.let { IMPACT_LABELS[it] }, perRow = 2) { picked -> answers[c.id] = a.copy(impact = picked?.let { IMPACT_LABELS.indexOf(it) }) }
                     }
@@ -258,7 +259,7 @@ private fun NewProblemStep(
     TextChipRow(symptomOptions.map { it.label }, symptomOptions.firstOrNull { it.code == symptom }?.label, perRow = 3) { picked ->
         symptom = symptomOptions.firstOrNull { it.label == picked }?.code
     }
-    com.bioscan.fieldterminal.ui.components.FTRatingSlider("SEVERITY", severity, 0..10, FT.Metric.Soreness, { severity = it }, lowWord = "none", highWord = "worst", reversed = true)
+    FTRatingSlider("SEVERITY", severity, 0..10, FT.Metric.Soreness, { severity = it }, lowWord = "none", highWord = "worst", reversed = true)
     Text("TRAINING", style = FTType.Micro, color = FT.TextMuted)
     TextChipRow(IMPACT_LABELS, impact?.let { IMPACT_LABELS[it] }, perRow = 2) { picked -> impact = picked?.let { IMPACT_LABELS.indexOf(it) } }
 

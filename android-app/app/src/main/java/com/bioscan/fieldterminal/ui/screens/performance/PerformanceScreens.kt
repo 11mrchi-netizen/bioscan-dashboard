@@ -1,61 +1,80 @@
 package com.bioscan.fieldterminal.ui.screens.performance
 
-import com.bioscan.fieldterminal.ui.components.LoadingOrError
-import com.bioscan.fieldterminal.ui.components.rememberGuarded
-import com.bioscan.fieldterminal.ui.components.LoadGuard
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AnalysisRepository
+import com.bioscan.fieldterminal.data.RunningHistory
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.TrainingCyclesRepository
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.Sport
 import com.bioscan.fieldterminal.domain.SportKind
 import com.bioscan.fieldterminal.domain.SportSession
 import com.bioscan.fieldterminal.domain.SportSummary
+import com.bioscan.fieldterminal.domain.TrainingCycle
+import com.bioscan.fieldterminal.domain.levels.formatPace
 import com.bioscan.fieldterminal.domain.sportOf
-import com.bioscan.fieldterminal.domain.summarizeSports
+import com.bioscan.fieldterminal.domain.summarizeSportsIn
+import com.bioscan.fieldterminal.domain.weekStarts
+import com.bioscan.fieldterminal.ui.components.BarLayout
+import com.bioscan.fieldterminal.ui.components.FTBarSpec
+import com.bioscan.fieldterminal.ui.components.FTChevron
+import com.bioscan.fieldterminal.ui.components.FTChip
+import com.bioscan.fieldterminal.ui.components.FTChipRow
+import com.bioscan.fieldterminal.ui.components.FTIcon
+import com.bioscan.fieldterminal.ui.components.FTIconSize
+import com.bioscan.fieldterminal.ui.components.FTIcons
+import com.bioscan.fieldterminal.ui.components.LoadGuard
+import com.bioscan.fieldterminal.ui.components.LoadingOrError
+import com.bioscan.fieldterminal.ui.components.drawBar
+import com.bioscan.fieldterminal.ui.components.drawBarStub
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.rememberGuarded
+import com.bioscan.fieldterminal.ui.components.rememberRange
 import com.bioscan.fieldterminal.ui.screens.detail.DetailScreen
 import com.bioscan.fieldterminal.ui.screens.detail.EmptyLine
 import com.bioscan.fieldterminal.ui.screens.detail.Fmt
 import com.bioscan.fieldterminal.ui.screens.detail.LocalRangeDays
+import com.bioscan.fieldterminal.ui.screens.detail.MetricPanel
 import com.bioscan.fieldterminal.ui.screens.detail.MetricRow
 import com.bioscan.fieldterminal.ui.screens.detail.Section
 import com.bioscan.fieldterminal.ui.screens.detail.StackedBars
 import com.bioscan.fieldterminal.ui.screens.detail.StatTiles
 import com.bioscan.fieldterminal.ui.screens.detail.shortDate
-import com.bioscan.fieldterminal.ui.components.drawBar
-import com.bioscan.fieldterminal.ui.components.drawBarStub
+import com.bioscan.fieldterminal.ui.screens.user.UserDataCache
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
-import com.bioscan.fieldterminal.domain.levels.formatPace
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private val SPORT_COLORS = listOf(FT.Category.Activity.c500, FT.Emerald, FT.Info, FT.Analysis, FT.Category.Arousal.c300, FT.Warning, FT.TextSecondary)
 
@@ -81,10 +100,10 @@ private fun weeksWindow(weeks: Int, chip: String, today: LocalDate): PerfWindow 
     return PerfWindow("w$weeks", chip, if (weeks == 52) "the last year" else "the last $weeks weeks", monday.minusWeeks((weeks - 1).toLong()), today)
 }
 
-private fun blockName(c: com.bioscan.fieldterminal.domain.TrainingCycle): String =
+private fun blockName(c: TrainingCycle): String =
     c.tbTemplate?.takeIf { it.isNotBlank() }?.substringBefore(" (") ?: "Block"
 
-private fun blockWindow(c: com.bioscan.fieldterminal.domain.TrainingCycle, today: LocalDate): PerfWindow {
+private fun blockWindow(c: TrainingCycle, today: LocalDate): PerfWindow {
     val end = listOfNotNull(c.endDate, today).min()
     return PerfWindow("b${c.id}", blockName(c).uppercase(), "${blockName(c)} · ${shortDate(c.startDate)} – ${shortDate(end)}", c.startDate, end)
 }
@@ -94,20 +113,20 @@ private fun blockWindow(c: com.bioscan.fieldterminal.domain.TrainingCycle, today
  * hours by week in it, VO2max and lactate threshold over it, then a tile per sport (the three main ones first, then any
  * other activity you record, newest first) with its sessions, hours and weekly bars in the window.
  */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun PerformanceHub(onOpenSport: (Sport) -> Unit, onOpenRecords: () -> Unit = {}) {
     val (sessions, sessionsGuard) = rememberSportSessions()
     val today = remember { LocalDate.now() }
-    val cycles by produceState<List<com.bioscan.fieldterminal.domain.TrainingCycle>>(emptyList()) {
-        value = catching { com.bioscan.fieldterminal.data.TrainingCyclesRepository(SupabaseClientProvider.client).loadCycles() }.getOrDefault(emptyList())
+    val cycles by produceState<List<TrainingCycle>>(emptyList()) {
+        value = catching { TrainingCyclesRepository(SupabaseClientProvider.client).loadCycles() }.getOrDefault(emptyList())
             .filter { !it.startDate.isAfter(today) }.sortedByDescending { it.startDate }
     }
-    val running by produceState<com.bioscan.fieldterminal.data.RunningHistory?>(null) {
-        value = catching { com.bioscan.fieldterminal.ui.screens.user.UserDataCache.running() }.getOrNull()
+    val running by produceState<RunningHistory?>(null) {
+        value = catching { UserDataCache.running() }.getOrNull()
     }
     // Kept across navigation (RangeMemory): back from a sport's page, the hub is still on the window it was read in.
-    var key by com.bioscan.fieldterminal.ui.components.rememberRange("performance", "w13")
+    var key by rememberRange("performance", "w13")
     var picking by remember { mutableStateOf(false) }
     val window = remember(key, cycles) {
         WEEK_CHOICES.firstOrNull { "w${it.first}" == key }?.let { weeksWindow(it.first, it.second, today) }
@@ -116,20 +135,20 @@ fun PerformanceHub(onOpenSport: (Sport) -> Unit, onOpenRecords: () -> Unit = {})
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        com.bioscan.fieldterminal.ui.components.FTChipRow(
+        FTChipRow(
             WEEK_CHOICES, WEEK_CHOICES.firstOrNull { key == "w${it.first}" }, { it.second }, { key = "w${it.first}" },
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+            contentPadding = PaddingValues(0.dp),
             trailing = if (cycles.isEmpty()) null else ({
                 val onBlock = key.startsWith("b")
-                com.bioscan.fieldterminal.ui.components.FTChip(if (onBlock) window.chip else "BLOCK", onBlock, { picking = true }, role = androidx.compose.ui.semantics.Role.Button, menu = true)
+                FTChip(if (onBlock) window.chip else "BLOCK", onBlock, { picking = true }, role = Role.Button, menu = true)
             }),
         )
         if (sessions == null) {
             LoadingOrError(sessionsGuard, "Loading your sports…")
             return@Column
         }
-        val weeks = remember(window) { com.bioscan.fieldterminal.domain.weekStarts(window.from, window.to) }
-        val sports = remember(sessions, window) { com.bioscan.fieldterminal.domain.summarizeSportsIn(sessions, window.from, window.to, weeks) }
+        val weeks = remember(window) { weekStarts(window.from, window.to) }
+        val sports = remember(sessions, window) { summarizeSportsIn(sessions, window.from, window.to, weeks) }
         if (sports.isEmpty()) {
             EmptyLine("No sessions recorded yet. Workouts from your watch and logged sessions show up here, one tile per sport.")
             return@Column
@@ -145,10 +164,10 @@ fun PerformanceHub(onOpenSport: (Sport) -> Unit, onOpenRecords: () -> Unit = {})
             )
         }
 
-        androidx.compose.runtime.CompositionLocalProvider(com.bioscan.fieldterminal.ui.screens.detail.LocalRangeDays provides window.days) {
+        CompositionLocalProvider(LocalRangeDays provides window.days) {
             val r = running
             if (r != null && r.vo2MaxSeries.isNotEmpty()) {
-                com.bioscan.fieldterminal.ui.screens.detail.MetricPanel(
+                MetricPanel(
                     "VO2MAX", r.vo2MaxSeries.toMap(), "ml/kg/min", Fmt.one, minSd = 0.5, betterHigher = true, color = FT.Metric.Vo2max, today = window.to,
                     info = "Your watch's estimate of maximal oxygen uptake, from Health Connect. A slow-moving wearable estimate, not a lab test: read months, not days.",
                 )
@@ -157,7 +176,7 @@ fun PerformanceHub(onOpenSport: (Sport) -> Unit, onOpenRecords: () -> Unit = {})
                 val pace = r.ltPaceSeries.toMap()
                 val hr = r.ltHrSeries.toMap()
                 val main = pace.ifEmpty { hr }
-                com.bioscan.fieldterminal.ui.screens.detail.MetricPanel(
+                MetricPanel(
                     "LACTATE THRESHOLD", main, if (pace.isNotEmpty()) "/km" else "bpm", if (pace.isNotEmpty()) ::formatPace else Fmt.int,
                     minSd = if (pace.isNotEmpty()) 0.05 else 1.0, betterHigher = pace.isEmpty(), color = if (pace.isNotEmpty()) FT.Metric.Pace else FT.Metric.HeartRate,
                     today = window.to,
@@ -177,13 +196,13 @@ fun PerformanceHub(onOpenSport: (Sport) -> Unit, onOpenRecords: () -> Unit = {})
     }
 
     if (picking) {
-        androidx.compose.material3.ModalBottomSheet(
-            onDismissRequest = { picking = false }, sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        ModalBottomSheet(
+            onDismissRequest = { picking = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             shape = FT.SheetShape, containerColor = FT.Surface, contentColor = FT.TextPrimary,
         ) {
             Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("TRAINING BLOCK", style = FTType.SectionTitle, color = FT.TextPrimary)
-                androidx.compose.foundation.lazy.LazyColumn {
+                LazyColumn {
                     items(cycles.size) { i ->
                         val c = cycles[i]
                         val on = key == "b${c.id}"
@@ -199,7 +218,7 @@ fun PerformanceHub(onOpenSport: (Sport) -> Unit, onOpenRecords: () -> Unit = {})
                                     style = FTType.Caption, color = FT.TextSecondary,
                                 )
                             }
-                            if (on) com.bioscan.fieldterminal.ui.components.FTIcon(com.bioscan.fieldterminal.ui.components.FTIcons.Check, null, tint = FT.PlatinumSolid, size = com.bioscan.fieldterminal.ui.components.FTIconSize.Inline)
+                            if (on) FTIcon(FTIcons.Check, null, tint = FT.PlatinumSolid, size = FTIconSize.Inline)
                         }
                     }
                 }
@@ -229,15 +248,15 @@ private fun SportTile(summary: SportSummary, color: Color, window: PerfWindow, o
         }
         Canvas(Modifier.width(84.dp).height(28.dp)) {
             val top = summary.weeklyHours.maxOrNull()?.takeIf { it > 0 } ?: 1.0
-            val layout = com.bioscan.fieldterminal.ui.components.BarLayout(size.width, summary.weeklyHours.size, (if (summary.weeklyHours.size > 16) 1 else 3).dp.toPx())
+            val layout = BarLayout(size.width, summary.weeklyHours.size, (if (summary.weeklyHours.size > 16) 1 else 3).dp.toPx())
             summary.weeklyHours.forEachIndexed { i, h ->
                 val bh = (h / top).toFloat() * (size.height - 2.dp.toPx())
                 val soFar = window.to == LocalDate.now() && i == summary.weeklyHours.lastIndex
-                if (h > 0) drawBar(color, layout.left(i), size.height - bh, layout.barWidth, alpha = if (soFar) com.bioscan.fieldterminal.ui.components.FTBarSpec.PROJECTED_ALPHA else 1f, cap = i == summary.weeklyHours.lastIndex)
+                if (h > 0) drawBar(color, layout.left(i), size.height - bh, layout.barWidth, alpha = if (soFar) FTBarSpec.PROJECTED_ALPHA else 1f, cap = i == summary.weeklyHours.lastIndex)
                 else drawBarStub(layout.left(i), layout.barWidth)
             }
         }
-        com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted)
+        FTChevron(tint = FT.TextMuted)
     }
 }
 
@@ -259,7 +278,7 @@ fun RecentSessions(sportKey: String, onOpenSession: (Long) -> Unit, count: Int =
                         .joinToString(" · "),
                     style = FTType.Body, color = FT.TextPrimary, modifier = Modifier.weight(1f),
                 )
-                com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted)
+                FTChevron(tint = FT.TextMuted)
             }
         }
     }

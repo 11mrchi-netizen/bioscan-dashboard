@@ -4,8 +4,10 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import com.bioscan.fieldterminal.data.MetricRegistryStore
+import com.bioscan.fieldterminal.data.ReadCache
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.NotificationKind
+import com.bioscan.fieldterminal.data.routine.RoutineTimerStore
 import com.bioscan.fieldterminal.util.Perf
 
 // Performance pass, Stage 3. Everything that used to run on the main thread before the first frame (building the Supabase
@@ -16,7 +18,7 @@ class FieldTerminalApp : Application() {
     override fun onCreate() {
         super.onCreate()
         // Pages open from the last data they showed (kept on disk) while fresh data loads (data/ReadCache.kt).
-        com.bioscan.fieldterminal.data.ReadCache.init(filesDir)
+        ReadCache.init(filesDir)
         Perf.enabled = BuildConfig.DEBUG // logcat tag "perf"; see util/Perf.kt
         Thread({
             Perf.timed("startup.warm") {
@@ -45,7 +47,7 @@ class FieldTerminalApp : Application() {
             Triple(NotificationKind.FUEL_EVENT, "Race week fuelling", NotificationManager.IMPORTANCE_HIGH),
             Triple(NotificationKind.PRACTICE_DUE, "Practices", NotificationManager.IMPORTANCE_DEFAULT),
             // The running routine timer: silent, it only carries STOP.
-            Triple(com.bioscan.fieldterminal.data.routine.RoutineTimerStore.CHANNEL, "Routine timer", NotificationManager.IMPORTANCE_LOW),
+            Triple(RoutineTimerStore.CHANNEL, "Routine timer", NotificationManager.IMPORTANCE_LOW),
         ).forEach { (id, name, importance) ->
             nm.createNotificationChannel(NotificationChannel(id, name, importance))
         }

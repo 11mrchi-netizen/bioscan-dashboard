@@ -6,32 +6,34 @@ import com.bioscan.fieldterminal.data.model.ExerciseSessionDetails
 import com.bioscan.fieldterminal.data.model.ExistingHydrationRow
 import com.bioscan.fieldterminal.data.model.FullExerciseSessionRow
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
+import com.bioscan.fieldterminal.data.model.LogGripRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
-import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
 import com.bioscan.fieldterminal.data.model.LogOstrcRow
+import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
+import com.bioscan.fieldterminal.data.model.LogSleepDetailRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
+import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import com.bioscan.fieldterminal.data.model.NewEncounterRow
+import com.bioscan.fieldterminal.data.model.NewGripRow
 import com.bioscan.fieldterminal.data.model.NewHydrationRow
-import com.bioscan.fieldterminal.data.model.NewSexualActivityRow
 import com.bioscan.fieldterminal.data.model.NewMealRow
-import com.bioscan.fieldterminal.data.model.SexualActivityInstance
 import com.bioscan.fieldterminal.data.model.NewNoteRow
 import com.bioscan.fieldterminal.data.model.NewOstrcRow
-import com.bioscan.fieldterminal.data.model.LogSleepDetailRow
-import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
+import com.bioscan.fieldterminal.data.model.NewRecoverySessionRow
+import com.bioscan.fieldterminal.data.model.NewSexualActivityRow
 import com.bioscan.fieldterminal.data.model.NewStoolRow
 import com.bioscan.fieldterminal.data.model.NewSupplementLogRow
-import com.bioscan.fieldterminal.data.model.LogGripRow
-import com.bioscan.fieldterminal.data.model.NewGripRow
-import com.bioscan.fieldterminal.data.model.NewRecoverySessionRow
 import com.bioscan.fieldterminal.data.model.NewWellbeingRow
 import com.bioscan.fieldterminal.data.model.NutrientIntakeRow
+import com.bioscan.fieldterminal.data.model.SexualActivityInstance
 import com.bioscan.fieldterminal.data.model.SupplementLogEditRow
 import com.bioscan.fieldterminal.data.model.SupplementNutrientRow
 import com.bioscan.fieldterminal.domain.LogSource
+import com.bioscan.fieldterminal.domain.fuel.MealSlotKind
+import com.bioscan.fieldterminal.domain.fuel.mealSlotOf
 import com.bioscan.fieldterminal.domain.nutrientContribution
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
@@ -41,6 +43,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.time.LocalDate
+import java.time.ZoneOffset
 
 // Step 12 (Phase D) + the 2026-09-15 follow-up pass: the "+" add-entry
 // flow's writes. Every add*/update* now takes its date/timestamp as an
@@ -57,13 +61,13 @@ import kotlinx.serialization.json.put
 class AddEntryRepository(private val supabase: SupabaseClient) {
 
     /** The meal labels already used on [date] (logged times are local digits with a zero offset), except [exceptId]. */
-    suspend fun mealSlotsOn(date: java.time.LocalDate, exceptId: Long? = null): Set<com.bioscan.fieldterminal.domain.fuel.MealSlotKind> =
+    suspend fun mealSlotsOn(date: LocalDate, exceptId: Long? = null): Set<MealSlotKind> =
         supabase.postgrest.from("meals").select(Columns.list("id,meal_slot")) {
             filter {
-                gte("logged_at", date.atStartOfDay().atOffset(java.time.ZoneOffset.UTC).toString())
-                lt("logged_at", date.plusDays(1).atStartOfDay().atOffset(java.time.ZoneOffset.UTC).toString())
+                gte("logged_at", date.atStartOfDay().atOffset(ZoneOffset.UTC).toString())
+                lt("logged_at", date.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC).toString())
             }
-        }.decodeList<MealSlotRow>().filter { it.id != exceptId }.mapNotNull { com.bioscan.fieldterminal.domain.fuel.mealSlotOf(it.mealSlot) }.toSet()
+        }.decodeList<MealSlotRow>().filter { it.id != exceptId }.mapNotNull { mealSlotOf(it.mealSlot) }.toSet()
 
     suspend fun addFood(
         loggedAt: String,

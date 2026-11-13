@@ -10,11 +10,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.bioscan.fieldterminal.ui.theme.FieldTerminalTheme
 import com.bioscan.fieldterminal.ui.theme.FTType
+import com.bioscan.fieldterminal.ui.theme.FieldTerminalTheme
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Phase G1: Health Connect requires an activity answering

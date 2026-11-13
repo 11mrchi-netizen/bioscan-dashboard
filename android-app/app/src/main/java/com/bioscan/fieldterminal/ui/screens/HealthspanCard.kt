@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,7 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.domain.DisplayValue
 import com.bioscan.fieldterminal.domain.aging.FactorStatus
@@ -25,16 +24,18 @@ import com.bioscan.fieldterminal.domain.aging.HEALTHSPAN_MIN_ASSESSED
 import com.bioscan.fieldterminal.domain.aging.HealthspanFactor
 import com.bioscan.fieldterminal.domain.aging.HealthspanFactorId
 import com.bioscan.fieldterminal.domain.aging.HealthspanSummary
+import com.bioscan.fieldterminal.domain.aging.SCORE_FAVORABLE
+import com.bioscan.fieldterminal.domain.aging.SCORE_NEUTRAL
+import com.bioscan.fieldterminal.domain.healthspanStateWord
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTChevron
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.FTRadarChart
+import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.RadarAxis
 import com.bioscan.fieldterminal.ui.components.RadarRing
-import com.bioscan.fieldterminal.ui.components.FTChevron
-import com.bioscan.fieldterminal.ui.components.FTStatePill
-import com.bioscan.fieldterminal.ui.components.stateTreatment
-import com.bioscan.fieldterminal.domain.healthspanStateWord
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.stateTreatment
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
@@ -88,7 +89,7 @@ fun HealthspanCard(summary: HealthspanSummary?, failed: Boolean = false, onOpenA
             },
             selectedIndex = null,
             onSelect = { i -> summary.factors.getOrNull(i)?.let(open) },
-            markedRings = listOf(RadarRing(com.bioscan.fieldterminal.domain.aging.SCORE_FAVORABLE.toDouble(), "${com.bioscan.fieldterminal.domain.aging.SCORE_FAVORABLE}"), RadarRing(com.bioscan.fieldterminal.domain.aging.SCORE_NEUTRAL.toDouble(), "${com.bioscan.fieldterminal.domain.aging.SCORE_NEUTRAL}")),
+            markedRings = listOf(RadarRing(SCORE_FAVORABLE.toDouble(), "${com.bioscan.fieldterminal.domain.aging.SCORE_FAVORABLE}"), RadarRing(SCORE_NEUTRAL.toDouble(), "${com.bioscan.fieldterminal.domain.aging.SCORE_NEUTRAL}")),
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -119,7 +120,7 @@ private fun FactorRow(f: HealthspanFactor, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .ftClickable(onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall), role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "Open ${f.id.label}")
+            .ftClickable(onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall), role = Role.Button, onClickLabel = "Open ${f.id.label}")
             .padding(vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
     ) {

@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.DebriefTarget
 import com.bioscan.fieldterminal.data.FuelDebriefRepository
 import com.bioscan.fieldterminal.data.FuelPlanRepository
+import com.bioscan.fieldterminal.data.FuelSettingsStore
 import com.bioscan.fieldterminal.data.SessionPlanLinksRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.planKey
@@ -39,11 +40,12 @@ import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Fuel › Plan's MATCHED SESSIONS (domain/fuel/SessionMatching.kt): each recording of the last days with the plan the app
 // took it for and how sure it is. One to check says so and asks RIGHT / CHANGE; any other opens the same choice: a plan
@@ -125,7 +127,7 @@ private fun MatchSheet(day: PlannedDay, item: PlannedItem, recent: List<PlannedD
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     // The day's plans first, then the day before and after (a long run moved by a day).
-    val options = recent.filter { kotlin.math.abs(it.date.toEpochDay() - day.date.toEpochDay()) <= 1 }
+    val options = recent.filter { abs(it.date.toEpochDay() - day.date.toEpochDay()) <= 1 }
         .sortedBy { if (it.date == day.date) 0 else 1 }
         .flatMap { d -> d.plans.map { d.date to it } }
     fun save(planRef: String?, title: String?, date: LocalDate?) {
@@ -209,7 +211,7 @@ fun LongSessionFuelCard(recent: List<PlannedDay>, today: LocalDate, modifier: Mo
             androidx.compose.runtime.key(key) {
                 FuelScheduleCard(
                     kind = key.first, refKey = key.second, durationMin = item.durationMin.roundToInt(),
-                    toleratedGPerHour = com.bioscan.fieldterminal.data.FuelSettingsStore.get(context).toleratedGPerHour,
+                    toleratedGPerHour = FuelSettingsStore.get(context).toleratedGPerHour,
                     seed = { FuelPlanRepository(SupabaseClientProvider.client).seedSchedule(context, item) },
                 )
             }

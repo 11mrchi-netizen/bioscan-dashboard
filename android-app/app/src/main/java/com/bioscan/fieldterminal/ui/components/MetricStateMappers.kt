@@ -4,7 +4,6 @@ import com.bioscan.fieldterminal.domain.BloodworkTrendState
 import com.bioscan.fieldterminal.domain.Confidence
 import com.bioscan.fieldterminal.domain.ConfidenceLevel
 import com.bioscan.fieldterminal.domain.MetricState
-import com.bioscan.fieldterminal.domain.comparison.PercentileBand
 
 // The one place threshold -> presentation-state decisions live (Analytical
 // Presentation Contract, 2026-10 amendment). Each mapping is deterministic and

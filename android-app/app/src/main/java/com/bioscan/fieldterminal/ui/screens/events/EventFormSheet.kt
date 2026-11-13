@@ -20,11 +20,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import com.bioscan.fieldterminal.ui.components.CourseSaver
-import com.bioscan.fieldterminal.ui.components.NullableEventSaver
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -39,23 +39,25 @@ import com.bioscan.fieldterminal.domain.events.AthleteEvent
 import com.bioscan.fieldterminal.domain.events.EventKind
 import com.bioscan.fieldterminal.domain.events.EventPriority
 import com.bioscan.fieldterminal.domain.events.EventSport
+import com.bioscan.fieldterminal.domain.events.EventStatus
 import com.bioscan.fieldterminal.domain.events.formatHoursMinutes
 import com.bioscan.fieldterminal.domain.events.parseHoursMinutes
 import com.bioscan.fieldterminal.domain.events.validateEvent
 import com.bioscan.fieldterminal.domain.trail.CoursePoint
 import com.bioscan.fieldterminal.domain.trail.courseProfileFromGpx
+import com.bioscan.fieldterminal.ui.components.CourseSaver
 import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTConfirmDestructive
 import com.bioscan.fieldterminal.ui.components.FTDropdown
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.NullableEventSaver
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.TimeField
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.util.ExternalActivityGuard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -63,11 +65,12 @@ import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Add or edit an event (domain/events/AthleteEvent.kt): what it is, when, how long it should take, the course (a GPX file
 // picked from the phone, kept as a compact profile) and the aid stations. Fuel and hydration plans are built from this.
 
-private val StationsSaver = androidx.compose.runtime.saveable.listSaver<androidx.compose.runtime.snapshots.SnapshotStateList<AidStationDraft>, String>(
+private val StationsSaver = listSaver<SnapshotStateList<AidStationDraft>, String>(
     save = { list -> list.map { listOf(it.name, it.km, it.cutoff, it.water.toString(), it.food.toString(), it.dropBag.toString()).joinToString("\u001F") } },
     restore = { saved ->
         mutableStateListOf<AidStationDraft>().apply {
@@ -144,7 +147,7 @@ fun EventFormSheet(
             priority = priority,
             date = date,
             start = if (hasStart) date.atTime(startTime).atZone(zone) else null,
-            status = initial?.status ?: com.bioscan.fieldterminal.domain.events.EventStatus.PLANNED,
+            status = initial?.status ?: EventStatus.PLANNED,
             targetTimeMin = parseHoursMinutes(target),
             expectedDurationMin = parseHoursMinutes(expected),
             distanceKm = distance.replace(',', '.').toDoubleOrNull(),

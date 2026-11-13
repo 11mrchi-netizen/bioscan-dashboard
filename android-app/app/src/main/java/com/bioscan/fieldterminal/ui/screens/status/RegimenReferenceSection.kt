@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,16 +20,17 @@ import com.bioscan.fieldterminal.data.ReferenceSearchDto
 import com.bioscan.fieldterminal.data.RegimenReferenceRepository
 import com.bioscan.fieldterminal.data.RegimenReferenceRow
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.LABEL_SECTION_TITLES
 import com.bioscan.fieldterminal.domain.LabelMention
 import com.bioscan.fieldterminal.domain.halfLifeWords
 import com.bioscan.fieldterminal.domain.labelMentions
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.launch
 import java.time.OffsetDateTime
 import java.time.ZoneId
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Reference card for a medication, hormone or peptide (docs/regimen/README.md, phase 1b): looked up only when asked, from
 // RxNorm and the FDA label (openFDA), or PubMed when there is no label. The card shows its source, when it was fetched and

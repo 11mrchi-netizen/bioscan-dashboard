@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.components
 
+import android.graphics.Bitmap
 import android.provider.Settings
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -14,11 +15,13 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.ImageBitmap
@@ -36,14 +39,18 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.floor
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.random.Random
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Score scenes (owner's request, Nov 2026): the top of each big-score page (CHARGE and the five domains) gets a light
 // scene behind the ring, in the page's own hue, that follows the score.
@@ -64,7 +71,7 @@ private const val STRENGTH = 0.50f
 
 /** The scene behind a score's header. [score] 0-100, null when there is none yet. Size it to the header. */
 @Composable
-fun ScoreSceneBackdrop(scene: ScoreScene, score: Double?, modifier: Modifier = Modifier, ringCenterY: androidx.compose.ui.unit.Dp? = null) {
+fun ScoreSceneBackdrop(scene: ScoreScene, score: Double?, modifier: Modifier = Modifier, ringCenterY: Dp? = null) {
     val context = LocalContext.current
     val still = remember(score) {
         score == null || FTMotion.reduced || runCatching { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) }.getOrDefault(1f) == 0f
@@ -82,7 +89,7 @@ fun ScoreSceneBackdrop(scene: ScoreScene, score: Double?, modifier: Modifier = M
                 val w = size.width.toInt().coerceAtLeast(1)
                 val h = size.height.toInt().coerceAtLeast(1)
                 val stillLayer = ImageBitmap(w, h)
-                CanvasDrawScope().draw(this, layoutDirection, androidx.compose.ui.graphics.Canvas(stillLayer), size) {
+                CanvasDrawScope().draw(this, layoutDirection, Canvas(stillLayer), size) {
                     when (scene) {
                         ScoreScene.SLEEP -> sleepStill(t)
                         ScoreScene.RECOVERY -> lakeStill(t)
@@ -162,7 +169,7 @@ private fun DrawScope.skyGradient(vararg stops: Pair<Float, Color>) = drawRect(B
 private val grainTexture: ImageBitmap by lazy {
     val n = 128
     val r = Random(99)
-    val bmp = android.graphics.Bitmap.createBitmap(n, n, android.graphics.Bitmap.Config.ARGB_8888)
+    val bmp = Bitmap.createBitmap(n, n, Bitmap.Config.ARGB_8888)
     for (y in 0 until n) for (x in 0 until n) {
         val a = (r.nextFloat() * r.nextFloat() * 40).toInt()
         bmp.setPixel(x, y, android.graphics.Color.argb(a, 255, 255, 255))
@@ -317,13 +324,13 @@ private fun DrawScope.lakeMoving(t: Float, phase: Float) {
 /** Ridged noise, 0..1: sharp crests and soft valleys, like a mountain line. */
 private fun Noise.ridged(x: Float, octaves: Int = 6): Float {
     var amp = 1f; var freq = 1f; var sum = 0f; var norm = 0f
-    repeat(octaves) { o -> sum += amp * (1f - kotlin.math.abs(at(x * freq + o * 9.1f) * 2f - 1f)); norm += amp; amp *= 0.5f; freq *= 2.1f }
+    repeat(octaves) { o -> sum += amp * (1f - abs(at(x * freq + o * 9.1f) * 2f - 1f)); norm += amp; amp *= 0.5f; freq *= 2.1f }
     return ((sum / norm - 0.35f) / 0.5f).coerceIn(0f, 1f)
 }
 
 private fun frontRidge(n: Noise, w: Float, h: Float): (Float) -> Float = { x ->
     val f = x / w
-    val peak = kotlin.math.exp(-((f - 0.88f) / 0.20f).pow(2))
+    val peak = exp(-((f - 0.88f) / 0.20f).pow(2))
     h * 0.97f - h * (0.06f + 0.46f * peak) - h * 0.12f * n.ridged(f * 4f + 3f) * (0.4f + 0.6f * peak)
 }
 
@@ -398,7 +405,7 @@ private fun DrawScope.hiker(foot: Offset, ahead: Offset, phase: Float, color: Co
     // body, leaning into the climb
     drawLine(color, hip, shoulder, 2.4f * u, cap = StrokeCap.Round)
     // the pack on the back
-    drawRoundRect(color, Offset(hip.x - 3.4f * u, shoulder.y + 0.2f * u), Size(3.0f * u, 5.2f * u), androidx.compose.ui.geometry.CornerRadius(1.2f * u))
+    drawRoundRect(color, Offset(hip.x - 3.4f * u, shoulder.y + 0.2f * u), Size(3.0f * u, 5.2f * u), CornerRadius(1.2f * u))
     // the head
     drawCircle(color, 1.9f * u, head)
     // the arm and pole, planted ahead
@@ -440,7 +447,7 @@ private fun DrawScope.wheat(base: Offset, h: Float, lean: Float, ear: Float, ste
     val dir = (tip - ctrl).let { it / it.getDistance() }
     val side = Offset(-dir.y, dir.x)
     val grains = 7
-    val angle = Math.toDegrees(kotlin.math.atan2(dir.y.toDouble(), dir.x.toDouble())).toFloat() + 90f
+    val angle = Math.toDegrees(atan2(dir.y.toDouble(), dir.x.toDouble())).toFloat() + 90f
     for (g in 0 until grains) {
         val along = tip + dir * (g * 2.6f * scale * density)
         val s = if (g % 2 == 0) 1f else -1f

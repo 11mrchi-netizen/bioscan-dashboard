@@ -1,12 +1,14 @@
 package com.bioscan.fieldterminal.ui.screens.settings
 
-import com.bioscan.fieldterminal.data.catching
+import android.content.Context
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -16,20 +18,23 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.PermissionController
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
 import com.bioscan.fieldterminal.data.HealthConnectSyncResult
+import com.bioscan.fieldterminal.data.HealthConnectWriteBackResult
 import com.bioscan.fieldterminal.data.MapSettingsStore
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.ZeppRepository
 import com.bioscan.fieldterminal.data.ZeppSyncStateRow
+import com.bioscan.fieldterminal.data.catching
+import com.bioscan.fieldterminal.domain.ZeppHistoryPullRow
 import com.bioscan.fieldterminal.domain.describe
 import com.bioscan.fieldterminal.healthconnect.HealthConnectManager
 import com.bioscan.fieldterminal.healthconnect.HealthConnectSyncStatus
@@ -37,6 +42,7 @@ import com.bioscan.fieldterminal.ui.components.ClearChip
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTChevron
 import com.bioscan.fieldterminal.ui.components.FTConfirmDestructive
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.SubTabRow
@@ -45,16 +51,18 @@ import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.nav.ConnectedServicesTab
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Setup > Connected Services: AI Nutrition Estimation, Map, Health Connect, Zepp.
 @Composable
 fun ConnectedServicesScreen(scope: CoroutineScope, onBack: () -> Unit) {
-    var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(ConnectedServicesTab.AiNutrition) }
+    var tab by rememberSaveable { mutableStateOf(ConnectedServicesTab.AiNutrition) }
     val context = LocalContext.current
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
@@ -75,7 +83,7 @@ fun ConnectedServicesScreen(scope: CoroutineScope, onBack: () -> Unit) {
 }
 
 @Composable
-private fun AiNutritionCard(context: android.content.Context) {
+private fun AiNutritionCard(context: Context) {
     var apiKeyInput by remember { mutableStateOf("") }
     var keySaved by remember { mutableStateOf(GeminiApiKeyStore.get(context) != null) }
 
@@ -115,7 +123,7 @@ private fun AiNutritionCard(context: android.content.Context) {
 }
 
 @Composable
-private fun MapCard(context: android.content.Context) {
+private fun MapCard(context: Context) {
     var cartoKeyInput by remember { mutableStateOf("") }
     var cartoKeySaved by remember { mutableStateOf(MapSettingsStore.getCartoKey(context) != null) }
     val savedHome = remember { mutableStateOf(MapSettingsStore.getHome(context)) }
@@ -211,7 +219,7 @@ private fun MapCard(context: android.content.Context) {
 }
 
 @Composable
-private fun HealthConnectCard(context: android.content.Context) {
+private fun HealthConnectCard(context: Context) {
     val hcAvailable = remember { HealthConnectManager.isAvailable(context) }
     var hcChecked by remember { mutableStateOf(false) }
     var hcGranted by remember { mutableStateOf(false) }
@@ -268,19 +276,19 @@ private fun HealthConnectCard(context: android.content.Context) {
                     ?.atZone(ZoneId.systemDefault())
                     ?.format(DateTimeFormatter.ofPattern("HH:mm"))
                 val wbText = when (wbResult) {
-                    is com.bioscan.fieldterminal.data.HealthConnectWriteBackResult.Success ->
+                    is HealthConnectWriteBackResult.Success ->
                         "Write-back $wbAt — ${wbResult.mealsWritten} meals, ${wbResult.hydrationDaysWritten} hydration days."
-                    is com.bioscan.fieldterminal.data.HealthConnectWriteBackResult.Failed ->
+                    is HealthConnectWriteBackResult.Failed ->
                         "Write-back failed: ${wbResult.message}"
-                    com.bioscan.fieldterminal.data.HealthConnectWriteBackResult.NotGranted ->
+                    HealthConnectWriteBackResult.NotGranted ->
                         "Write-back skipped — permissions not granted."
-                    com.bioscan.fieldterminal.data.HealthConnectWriteBackResult.Unavailable ->
+                    HealthConnectWriteBackResult.Unavailable ->
                         "Write-back skipped — Health Connect unavailable."
                 }
                 Text(
                     text = wbText,
                     style = FTType.Caption,
-                    color = if (wbResult is com.bioscan.fieldterminal.data.HealthConnectWriteBackResult.Success) FT.TextSecondary else FT.Warning,
+                    color = if (wbResult is HealthConnectWriteBackResult.Success) FT.TextSecondary else FT.Warning,
                 )
             }
         }
@@ -298,10 +306,10 @@ private fun ZeppCard(scope: CoroutineScope) {
         // Offline must not crash the settings page: an unreadable status just stays "not loaded".
         try {
             zeppStatus = zeppRepository.getSyncStatus()
-        } catch (e: kotlinx.coroutines.CancellationException) {
+        } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            android.util.Log.w("ConnectedServices", "zepp status load failed", e)
+            Log.w("ConnectedServices", "zepp status load failed", e)
         }
         zeppStatusLoaded = true
     }
@@ -345,13 +353,13 @@ private fun ZeppCard(scope: CoroutineScope) {
         }
         // The whole Zepp history (workouts, daily band data, stress), pulled on the server back to where the account
         // starts (domain/ZeppHistoryPull.kt); the app starts or resumes it and shows its row, re-read every few seconds.
-        var historyPull by remember { mutableStateOf<com.bioscan.fieldterminal.domain.ZeppHistoryPullRow?>(null) }
+        var historyPull by remember { mutableStateOf<ZeppHistoryPullRow?>(null) }
         var historyBusy by remember { mutableStateOf(false) }
         var historyError by remember { mutableStateOf<String?>(null) }
         LaunchedEffect(Unit) {
             while (true) {
                 catching { zeppRepository.loadHistoryPull() }.onSuccess { historyPull = it }
-                kotlinx.coroutines.delay(10_000)
+                delay(10_000)
             }
         }
         Text(
@@ -405,7 +413,7 @@ private fun ZeppCard(scope: CoroutineScope) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("DIAGNOSTICS", style = FTType.LabelCaps, color = FT.TextMuted, modifier = Modifier.weight(1f))
-            com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted, expanded = showDiagnostics)
+            FTChevron(tint = FT.TextMuted, expanded = showDiagnostics)
         }
         if (showDiagnostics) {
             Text(

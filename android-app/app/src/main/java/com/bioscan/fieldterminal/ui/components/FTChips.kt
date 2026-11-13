@@ -23,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -35,8 +36,10 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.ui.theme.FTType
+import java.time.LocalDate
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Polish brief, filters and selectors: one chip. `.ft-chip` (design/tokens): a mono caps pill, the selected one platinum
@@ -95,7 +98,7 @@ fun <T> FTChipRow(
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp),
-    spacing: androidx.compose.ui.unit.Dp = 6.dp,
+    spacing: Dp = 6.dp,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     val scroll = rememberScrollState()
@@ -134,7 +137,7 @@ fun <T> FTChipRow(
 }
 
 /** Fades the start or end of a horizontally scrolling row when there is more content that way. */
-fun Modifier.edgeFades(scroll: ScrollState, width: androidx.compose.ui.unit.Dp = 24.dp): Modifier = this
+fun Modifier.edgeFades(scroll: ScrollState, width: Dp = 24.dp): Modifier = this
     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
     .drawWithContent {
         drawContent()
@@ -145,7 +148,7 @@ fun Modifier.edgeFades(scroll: ScrollState, width: androidx.compose.ui.unit.Dp =
         if (scroll.value < scroll.maxValue) {
             drawRect(
                 Brush.horizontalGradient(listOf(Color.Black, Color.Transparent), startX = size.width - w, endX = size.width),
-                topLeft = androidx.compose.ui.geometry.Offset(size.width - w, 0f), size = size.copy(width = w), blendMode = BlendMode.DstIn,
+                topLeft = Offset(size.width - w, 0f), size = size.copy(width = w), blendMode = BlendMode.DstIn,
             )
         }
     }
@@ -155,7 +158,7 @@ fun Modifier.edgeFades(scroll: ScrollState, width: androidx.compose.ui.unit.Dp =
 enum class FTRange(val label: String, val days: Long?) {
     D28("28D", 28), D90("90D", 90), Y1("1Y", 365), ALL("ALL", null);
 
-    fun start(asOf: java.time.LocalDate): java.time.LocalDate? = days?.let { asOf.minusDays(it - 1) }
+    fun start(asOf: LocalDate): LocalDate? = days?.let { asOf.minusDays(it - 1) }
 }
 
 // A range picked on a page is kept when the page is left and opened again (in this process): the same chart opens on

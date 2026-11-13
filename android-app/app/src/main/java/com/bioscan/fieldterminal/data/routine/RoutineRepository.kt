@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data.routine
 
+import com.bioscan.fieldterminal.data.ReadCache
 import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.domain.routine.BikeDock
 import com.bioscan.fieldterminal.domain.routine.MetroHop
@@ -15,8 +16,10 @@ import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import io.ktor.client.statement.bodyAsText
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import java.time.Instant
 import java.time.LocalDate
 
@@ -65,7 +68,7 @@ class RoutineRepository(private val supabase: SupabaseClient) {
 
     // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun mobilitySince(from: LocalDate): List<MobilityDailyRow> =
-        com.bioscan.fieldterminal.data.ReadCache.get("routine.mobility.$from", tables = null, serializer = kotlinx.serialization.builtins.ListSerializer(MobilityDailyRow.serializer())) { fetchMobilitySince(from) }
+        ReadCache.get("routine.mobility.$from", tables = null, serializer = ListSerializer(MobilityDailyRow.serializer())) { fetchMobilitySince(from) }
 
     private suspend fun fetchMobilitySince(from: LocalDate): List<MobilityDailyRow> =
         supabase.postgrest.from("mobility_daily")
@@ -77,7 +80,7 @@ class RoutineRepository(private val supabase: SupabaseClient) {
 
     // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun phoneSince(from: LocalDate): List<PhoneDaySlice> =
-        com.bioscan.fieldterminal.data.ReadCache.get("routine.phone.$from", tables = null, serializer = kotlinx.serialization.builtins.ListSerializer(PhoneDaySlice.serializer())) { fetchPhoneSince(from) }
+        ReadCache.get("routine.phone.$from", tables = null, serializer = ListSerializer(PhoneDaySlice.serializer())) { fetchPhoneSince(from) }
 
     private suspend fun fetchPhoneSince(from: LocalDate): List<PhoneDaySlice> =
         supabase.postgrest.from("phone_usage_daily")
@@ -91,7 +94,7 @@ class RoutineRepository(private val supabase: SupabaseClient) {
     // Minutes and launches per app over the days since [from], most used first.
     // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun appsSince(from: LocalDate, top: Int = 5): List<AppWeekTotal> =
-        com.bioscan.fieldterminal.data.ReadCache.get("routine.apps.$from.$top", tables = null, serializer = kotlinx.serialization.builtins.ListSerializer(AppWeekTotal.serializer())) { fetchAppsSince(from, top) }
+        ReadCache.get("routine.apps.$from.$top", tables = null, serializer = ListSerializer(AppWeekTotal.serializer())) { fetchAppsSince(from, top) }
 
     private suspend fun fetchAppsSince(from: LocalDate, top: Int = 5): List<AppWeekTotal> =
         supabase.postgrest.from("phone_app_usage_daily")
@@ -135,7 +138,7 @@ class RoutineRepository(private val supabase: SupabaseClient) {
 
     // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun commutesSince(since: Instant): List<Trip> =
-        com.bioscan.fieldterminal.data.ReadCache.get("routine.commutes.${since.epochSecond / 86_400}", tables = null, serializer = kotlinx.serialization.builtins.ListSerializer(Trip.serializer())) { fetchCommutesSince(since) }
+        ReadCache.get("routine.commutes.${since.epochSecond / 86_400}", tables = null, serializer = ListSerializer(Trip.serializer())) { fetchCommutesSince(since) }
 
     private suspend fun fetchCommutesSince(since: Instant): List<Trip> =
         supabase.postgrest.from("trips")
@@ -168,7 +171,7 @@ class RoutineRepository(private val supabase: SupabaseClient) {
                 ),
             )
         }
-    } catch (e: kotlinx.coroutines.CancellationException) {
+    } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         // supabase-kt throws on a non-2xx answer; the function's 503 means TDX is not set up yet.

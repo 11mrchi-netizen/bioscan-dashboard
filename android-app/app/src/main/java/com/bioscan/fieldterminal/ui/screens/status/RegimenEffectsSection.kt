@@ -1,23 +1,22 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Text
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import com.bioscan.fieldterminal.ui.components.InfoHelpButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementsRepository
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.ChangeReading
 import com.bioscan.fieldterminal.domain.EFFECT_MIN_READINGS
 import com.bioscan.fieldterminal.domain.EFFECT_SETTLE_DAYS
@@ -26,11 +25,12 @@ import com.bioscan.fieldterminal.domain.changeReadingWords
 import com.bioscan.fieldterminal.domain.changeReadings
 import com.bioscan.fieldterminal.domain.nearbyChanges
 import com.bioscan.fieldterminal.domain.shortItemName
+import com.bioscan.fieldterminal.ui.components.InfoHelpButton
 import com.bioscan.fieldterminal.ui.screens.today.TodayStore
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // "Since you changed it" (domain/RegimenEffects.kt): this item's most recent start, restart or dose change that is old
 // enough to compare, the metrics that moved clearly in the weeks after it, the other changes made around the same time,

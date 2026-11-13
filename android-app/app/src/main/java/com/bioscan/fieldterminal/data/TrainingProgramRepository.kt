@@ -1,7 +1,8 @@
 package com.bioscan.fieldterminal.data
 
-import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.data.model.AthleteMaxRow
+import com.bioscan.fieldterminal.data.model.BlockNameRow
+import com.bioscan.fieldterminal.data.model.GeneratedBlockRow
 import com.bioscan.fieldterminal.data.model.IdRow
 import com.bioscan.fieldterminal.data.model.LoggedStrengthSessionRow
 import com.bioscan.fieldterminal.data.model.NewAthleteMaxRow
@@ -9,13 +10,12 @@ import com.bioscan.fieldterminal.data.model.NewBlockDomainRow
 import com.bioscan.fieldterminal.data.model.NewPlannedSessionRow
 import com.bioscan.fieldterminal.data.model.NewTrainingBlockRow
 import com.bioscan.fieldterminal.data.model.NewTrainingDefinitionRow
-import com.bioscan.fieldterminal.data.model.BlockNameRow
-import com.bioscan.fieldterminal.data.model.GeneratedBlockRow
 import com.bioscan.fieldterminal.data.model.PlannedForSessionRow
 import com.bioscan.fieldterminal.data.model.TrainingDefinitionRow
-import com.bioscan.fieldterminal.data.model.UpcomingSessionRow
 import com.bioscan.fieldterminal.data.model.TrainingSettingsRow
+import com.bioscan.fieldterminal.data.model.UpcomingSessionRow
 import com.bioscan.fieldterminal.data.model.ZoneMethodRow
+import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.domain.ZoneMethod
 import com.bioscan.fieldterminal.domain.training.DatedSet
 import com.bioscan.fieldterminal.domain.training.RecordedMax
@@ -41,17 +41,17 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
 
@@ -114,7 +114,7 @@ class TrainingProgramRepository(private val supabase: SupabaseClient) {
 
     // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun loadGeneratedBlocks(): List<GeneratedBlockRow> =
-        ReadCache.get("program.blocks", tables = setOf("training_blocks", "planned_sessions"), serializer = kotlinx.serialization.builtins.ListSerializer(GeneratedBlockRow.serializer())) { fetchLoadGeneratedBlocks() }
+        ReadCache.get("program.blocks", tables = setOf("training_blocks", "planned_sessions"), serializer = ListSerializer(GeneratedBlockRow.serializer())) { fetchLoadGeneratedBlocks() }
 
     private suspend fun fetchLoadGeneratedBlocks(): List<GeneratedBlockRow> =
         supabase.postgrest.from("training_blocks")
@@ -125,7 +125,7 @@ class TrainingProgramRepository(private val supabase: SupabaseClient) {
 
     // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun loadUpcoming(from: LocalDate, limit: Int = 14): List<UpcomingSessionRow> =
-        ReadCache.get("program.upcoming.$from.$limit", tables = setOf("planned_sessions", "training_blocks"), serializer = kotlinx.serialization.builtins.ListSerializer(UpcomingSessionRow.serializer())) { fetchLoadUpcoming(from, limit) }
+        ReadCache.get("program.upcoming.$from.$limit", tables = setOf("planned_sessions", "training_blocks"), serializer = ListSerializer(UpcomingSessionRow.serializer())) { fetchLoadUpcoming(from, limit) }
 
     private suspend fun fetchLoadUpcoming(from: LocalDate, limit: Int = 14): List<UpcomingSessionRow> =
         supabase.postgrest.from("planned_sessions")
@@ -142,13 +142,13 @@ class TrainingProgramRepository(private val supabase: SupabaseClient) {
 
     suspend fun saveSettings(s: TrainingSettingsRow) {
         supabase.postgrest.from("training_settings").upsert(buildJsonObject {
-            put("plates_kg", buildJsonArray { s.platesKg.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } })
+            put("plates_kg", buildJsonArray { s.platesKg.forEach { add(JsonPrimitive(it)) } })
             put("default_start_time", s.defaultStartTime)
             put("default_duration_min", s.defaultDurationMin)
             put("second_start_time", s.secondStartTime)
             put("second_duration_min", s.secondDurationMin)
             put("weighted_percent_base", s.weightedPercentBase)
-            put("updated_at", java.time.Instant.now().toString())
+            put("updated_at", Instant.now().toString())
         }) { onConflict = "user_id" }
     }
 
@@ -165,7 +165,7 @@ class TrainingProgramRepository(private val supabase: SupabaseClient) {
     suspend fun saveZoneMethod(method: ZoneMethod) {
         supabase.postgrest.from("training_settings").upsert(buildJsonObject {
             put("hr_zone_method", method.key)
-            put("updated_at", java.time.Instant.now().toString())
+            put("updated_at", Instant.now().toString())
         }) { onConflict = "user_id" }
     }
 
@@ -188,7 +188,7 @@ class TrainingProgramRepository(private val supabase: SupabaseClient) {
             set("exercise_session_id", sessionId)
             set("match_status", "manual")
             set("status", "confirmed")
-            set("confirmed_at", java.time.Instant.now().toString())
+            set("confirmed_at", Instant.now().toString())
         }) { filter { eq("id", plannedId) } }
     }
 

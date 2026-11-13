@@ -1,39 +1,40 @@
 package com.bioscan.fieldterminal.data
 
-import kotlinx.coroutines.async
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import com.bioscan.fieldterminal.data.model.ExerciseSessionRow
 import com.bioscan.fieldterminal.data.model.HealthEventRow
-import com.bioscan.fieldterminal.domain.SLEEP_HOURS_RANGE
-import com.bioscan.fieldterminal.domain.baselineStateWord
-import com.bioscan.fieldterminal.domain.comparison.METRIC_DIRECTIONALITY
-import com.bioscan.fieldterminal.domain.dedupeRunSessions
-import java.time.Instant
-import java.time.LocalTime
-import java.time.OffsetDateTime
-import java.time.temporal.ChronoUnit
-import com.bioscan.fieldterminal.data.model.SleepDailyRow
-import com.bioscan.fieldterminal.data.model.WearableDailyRow
 import com.bioscan.fieldterminal.domain.HealthFlag
 import com.bioscan.fieldterminal.domain.MetricState
-import com.bioscan.fieldterminal.domain.worstOf
 import com.bioscan.fieldterminal.domain.MorningReadout
-import com.bioscan.fieldterminal.domain.morningReadout
+import com.bioscan.fieldterminal.domain.SLEEP_HOURS_RANGE
 import com.bioscan.fieldterminal.domain.SupplementsToday
+import com.bioscan.fieldterminal.domain.baselineStateWord
+import com.bioscan.fieldterminal.domain.comparison.METRIC_DIRECTIONALITY
 import com.bioscan.fieldterminal.domain.computeHydrationIntelligence
-import com.bioscan.fieldterminal.domain.pickHealthFlag
-import com.bioscan.fieldterminal.domain.supplementsToday
+import com.bioscan.fieldterminal.domain.dedupeRunSessions
 import com.bioscan.fieldterminal.domain.evaluateHrv
 import com.bioscan.fieldterminal.domain.evaluateRhr
 import com.bioscan.fieldterminal.domain.evaluateSleepDuration
 import com.bioscan.fieldterminal.domain.evaluateTrainingLoad
+import com.bioscan.fieldterminal.domain.health.isConcernOpen
 import com.bioscan.fieldterminal.domain.isHealthEventOpen
+import com.bioscan.fieldterminal.domain.morningReadout
+import com.bioscan.fieldterminal.domain.pickHealthFlag
+import com.bioscan.fieldterminal.domain.supplementsToday
 import com.bioscan.fieldterminal.domain.trainingLoadStateWord
+import com.bioscan.fieldterminal.domain.worstOf
+import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
+import java.time.OffsetDateTime
+import java.time.temporal.ChronoUnit
 
 data class StatusOverview(
     val latestHrv: Double?,
@@ -95,13 +96,13 @@ data class FuelToday(
 // No user_id filter anywhere here -- RLS already scopes every query to the
 // signed-in user, same as the web dashboard relies on (see ROADMAP.md
 // Foundation section).
-class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClient) {
+class StatusRepository(private val supabase: SupabaseClient) {
 
     // Perf pass: this used to be nine requests one after another, fetching wearable_daily (with the heavy hr_timeseries
     // column) and exercise_sessions twice. Now every independent read starts at once on a background thread, the 60-row
     // HRV and latest-sleep views are slices of the 200-row lists the tiles use anyway (so ReadCache shares them), and
     // the numbers are computed exactly as before from the same rows.
-    suspend fun loadOverview(): StatusOverview = kotlinx.coroutines.coroutineScope {
+    suspend fun loadOverview(): StatusOverview = coroutineScope {
         val analysis = AnalysisRepository(supabase)
         val today = LocalDate.now()
 
@@ -149,7 +150,7 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
         )
         // The legacy tables are read only until the concerns engine has published (their rows were copied in as concerns).
         val overview = concernsD.await()
-        val openConcerns = overview?.concerns?.filter { !it.archived && com.bioscan.fieldterminal.domain.health.isConcernOpen(it.state) }
+        val openConcerns = overview?.concerns?.filter { !it.archived && isConcernOpen(it.state) }
         val concernFlags = openConcerns?.map { c ->
             // The region code in words ("right lateral thigh") so the figure's pin lands on it; the title otherwise.
             val where = c.regions.firstOrNull()?.let { r -> listOfNotNull(r.side, r.code.replace('_', ' ')).joinToString(" ") }
@@ -210,7 +211,7 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
 
     // The FUEL and LABS previews, read in parallel with loadOverview(). Same sources and math as the tiles themselves:
     // NutritionRepository's today totals, the Fuel tile's exercise-demand rule, the reminder's supplements-due rule.
-    suspend fun loadTodayPreviews(home: Pair<Double, Double>? = null): TodayPreviews = kotlinx.coroutines.coroutineScope {
+    suspend fun loadTodayPreviews(home: Pair<Double, Double>? = null): TodayPreviews = coroutineScope {
         val analysis = AnalysisRepository(supabase)
         val today = LocalDate.now()
         val fuelD = async(Dispatchers.Default) {

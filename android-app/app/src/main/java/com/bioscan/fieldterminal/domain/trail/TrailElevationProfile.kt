@@ -2,6 +2,7 @@ package com.bioscan.fieldterminal.domain.trail
 
 import com.bioscan.fieldterminal.domain.RoutePoint
 import com.bioscan.fieldterminal.domain.TimePoint
+import kotlin.math.abs
 
 // Live check found Session Detail's TRAIL card had no route-shape
 // visualization at all (RouteMiniMap is a flat 2D map, TrailCard was text
@@ -47,9 +48,9 @@ private fun nearestValue(series: List<TimePoint>, offsetSeconds: Long): Double? 
         if (series[mid].offsetSeconds < offsetSeconds) lo = mid + 1 else hi = mid
     }
     val nearest = listOfNotNull(series.getOrNull(lo), series.getOrNull(lo - 1))
-        .minByOrNull { kotlin.math.abs(it.offsetSeconds - offsetSeconds) }
+        .minByOrNull { abs(it.offsetSeconds - offsetSeconds) }
         ?: return null
-    return if (kotlin.math.abs(nearest.offsetSeconds - offsetSeconds) <= OVERLAY_MATCH_TOLERANCE_SECONDS) nearest.value else null
+    return if (abs(nearest.offsetSeconds - offsetSeconds) <= OVERLAY_MATCH_TOLERANCE_SECONDS) nearest.value else null
 }
 
 fun elevationProfileWithOverlays(

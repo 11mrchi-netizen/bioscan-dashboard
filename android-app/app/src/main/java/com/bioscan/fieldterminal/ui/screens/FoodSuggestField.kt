@@ -23,10 +23,10 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Type a food, pick it from suggestions: the user's remembered choice, the app's own catalog (barcode products, scanned
 // labels) and Cronometer, merged server-side. `initial` shows before anything is typed (e.g. an item's alternatives).

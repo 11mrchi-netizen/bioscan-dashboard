@@ -1,7 +1,6 @@
 package com.bioscan.fieldterminal.domain.fuel
 
 import java.time.LocalDate
-import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt

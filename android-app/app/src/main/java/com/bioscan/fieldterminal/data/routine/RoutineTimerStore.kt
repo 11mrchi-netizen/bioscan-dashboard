@@ -1,6 +1,7 @@
 package com.bioscan.fieldterminal.data.routine
 
 import android.Manifest
+import android.R
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
@@ -8,6 +9,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.bioscan.fieldterminal.data.NotificationActionReceiver
+import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.NotificationKind
 import com.bioscan.fieldterminal.domain.routine.LogSource
 import com.bioscan.fieldterminal.domain.routine.LogStatus
@@ -50,7 +52,7 @@ object RoutineTimerStore {
         val t = current(context) ?: return null
         val minutes = blockMinutes(t.start, now)?.coerceAtMost(1440.0)
         if (minutes != null && minutes >= 1) {
-            PracticesRepository(com.bioscan.fieldterminal.data.SupabaseClientProvider.client).saveLog(
+            PracticesRepository(SupabaseClientProvider.client).saveLog(
                 NewLog(t.activityId, dayOfBlock(t.start), t.start, now, minutes, LogStatus.DONE, LogSource.TIMER, null, t.clientKey),
             )
         }
@@ -72,7 +74,7 @@ object RoutineTimerStore {
         if (ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         val since = t.start.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
         val n = NotificationCompat.Builder(context, CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_menu_recent_history)
+            .setSmallIcon(R.drawable.ic_menu_recent_history)
             .setContentTitle(t.name)
             .setContentText("Timing since %02d:%02d".format(t.start.hour, t.start.minute))
             .setWhen(since).setUsesChronometer(true).setShowWhen(true)

@@ -25,8 +25,8 @@ import com.bioscan.fieldterminal.ui.components.FTConfirmDestructive
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CancellationException
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Personal health agent, phase 1 (docs/personal-health-agent): the assistant's switch and what it may read, in the same
 // per-stream style as the routine capture card. Off by default. Routine and location data have no switch: they are

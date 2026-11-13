@@ -1,12 +1,13 @@
 package com.bioscan.fieldterminal.ui.components
 
-import kotlinx.coroutines.flow.collectLatest
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -15,10 +16,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.data.NoSessionException
+import com.bioscan.fieldterminal.data.ReadCache
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import java.io.IOException
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Performance pass, Stage 1 (error recovery). An exception that escapes a LaunchedEffect takes the whole app down, so an
 // offline phone or a timed-out request used to crash the app or leave a spinner forever. Every screen load goes through
@@ -65,10 +75,10 @@ class LoadGuard {
 fun rememberLoadGuard(refreshOnUpdates: Boolean = true): LoadGuard {
     val guard = remember { LoadGuard() }
     if (refreshOnUpdates) {
-        androidx.compose.runtime.LaunchedEffect(guard) {
+        LaunchedEffect(guard) {
             // A burst of refreshes landing together (a page reads several tables) reloads once.
-            com.bioscan.fieldterminal.data.ReadCache.updates.collectLatest {
-                kotlinx.coroutines.delay(300)
+            ReadCache.updates.collectLatest {
+                delay(300)
                 guard.retry()
             }
         }
@@ -87,7 +97,7 @@ fun rememberLoadGuard(refreshOnUpdates: Boolean = true): LoadGuard {
 fun <T : Any> rememberGuarded(vararg keys: Any?, load: suspend () -> T): Pair<T?, LoadGuard> {
     val guard = rememberLoadGuard()
     var value by remember { mutableStateOf<T?>(null) }
-    androidx.compose.runtime.LaunchedEffect(guard.attempt, *keys) { guard.run { value = load() } }
+    LaunchedEffect(guard.attempt, *keys) { guard.run { value = load() } }
     return value to guard
 }
 
@@ -100,10 +110,10 @@ fun LoadingOrError(guard: LoadGuard, loading: String) {
 /** A number that grows each time a background refresh brings different data: a key for loads outside a LoadGuard. */
 @Composable
 fun rememberCacheVersion(): Int {
-    var version by remember { androidx.compose.runtime.mutableIntStateOf(0) }
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        com.bioscan.fieldterminal.data.ReadCache.updates.collectLatest {
-            kotlinx.coroutines.delay(300)
+    var version by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        ReadCache.updates.collectLatest {
+            delay(300)
             version++
         }
     }
@@ -114,9 +124,9 @@ fun rememberCacheVersion(): Int {
 fun describeLoadFailure(e: Throwable): String {
     var t: Throwable? = e
     while (t != null) {
-        if (t is com.bioscan.fieldterminal.data.NoSessionException) return t.message.orEmpty()
+        if (t is NoSessionException) return t.message.orEmpty()
         val name = t.javaClass.name
-        if (t is java.io.IOException || name.contains("Timeout") || name.contains("UnknownHost") || name.contains("Connect")) {
+        if (t is IOException || name.contains("Timeout") || name.contains("UnknownHost") || name.contains("Connect")) {
             return "No connection to the server (offline or timed out). Your data is safe."
         }
         t = t.cause
@@ -136,23 +146,23 @@ fun LoadErrorCard(guard: LoadGuard, modifier: Modifier = Modifier, onRetry: () -
 
 // Runs independent loads at the same time, off the main thread (JSON decoding of a few hundred rows is not free on the UI
 // thread). The first failure cancels the siblings and propagates to the enclosing guard.run { }.
-suspend fun parallel(vararg blocks: suspend () -> Unit) = kotlinx.coroutines.coroutineScope {
-    blocks.forEach { b -> launch(kotlinx.coroutines.Dispatchers.Default) { b() } }
+suspend fun parallel(vararg blocks: suspend () -> Unit) = coroutineScope {
+    blocks.forEach { b -> launch(Dispatchers.Default) { b() } }
 }
 
 // scope.launch { network call } crashes the app when the call throws (offline, timeout). launchSafe logs the failure,
 // reports it through onError, and always runs onDone, so a busy flag set at the start of a click handler cannot stay stuck.
-fun kotlinx.coroutines.CoroutineScope.launchSafe(
+fun CoroutineScope.launchSafe(
     onError: (Throwable) -> Unit = {},
     onDone: () -> Unit = {},
-    block: suspend kotlinx.coroutines.CoroutineScope.() -> Unit,
-): kotlinx.coroutines.Job = launch {
+    block: suspend CoroutineScope.() -> Unit,
+): Job = launch {
     try {
         block()
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        android.util.Log.w("launchSafe", "background action failed: ${e.message}", e)
+        Log.w("launchSafe", "background action failed: ${e.message}", e)
         onError(e)
     } finally {
         onDone()

@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.fuel
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -14,12 +13,13 @@ import com.bioscan.fieldterminal.data.FuelPlanRepository
 import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.PeriodizationView
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.fuel.CPI_MIN_DAYS
 import com.bioscan.fieldterminal.domain.fuel.periodizationWords
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Fuel › Nutrition: how well the last weeks' logged carbohydrate followed the training (the Carbohydrate Periodization
 // Index) and how the meal codes were kept (domain/fuel/Periodization.kt).

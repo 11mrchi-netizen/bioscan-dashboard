@@ -1,12 +1,9 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import com.bioscan.fieldterminal.data.catching
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.produceState
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.PlannedOutcomeRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
@@ -15,21 +12,13 @@ import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.domain.CompositeHistory
 import com.bioscan.fieldterminal.domain.CompositeScorecards
 import com.bioscan.fieldterminal.domain.LoadSpans
-import com.bioscan.fieldterminal.domain.MetricState
 import com.bioscan.fieldterminal.domain.ScorecardResult
-import com.bioscan.fieldterminal.domain.ScorecardVerdict
 import com.bioscan.fieldterminal.domain.SeriesBreakStarts
-import com.bioscan.fieldterminal.domain.StateWord
 import com.bioscan.fieldterminal.domain.compositeInputs
 import com.bioscan.fieldterminal.domain.history
 import com.bioscan.fieldterminal.domain.plannedDoneByDay
 import com.bioscan.fieldterminal.domain.readyForScorecard
-import com.bioscan.fieldterminal.domain.scorecardWord
 import com.bioscan.fieldterminal.domain.scorecards
-import com.bioscan.fieldterminal.ui.components.FTCard
-import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.LocalDate

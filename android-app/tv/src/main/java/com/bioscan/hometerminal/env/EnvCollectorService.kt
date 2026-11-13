@@ -12,8 +12,6 @@ import android.util.Log
 import com.bioscan.hometerminal.R
 import com.bioscan.hometerminal.home.HomeAccess
 import com.bioscan.hometerminal.home.homeSource
-import java.time.Instant
-import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -24,6 +22,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.launch
+import java.time.Instant
+import kotlin.coroutines.cancellation.CancellationException
 
 private const val TAG = "EnvCollector"
 

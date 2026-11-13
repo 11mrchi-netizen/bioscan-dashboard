@@ -7,8 +7,8 @@ import com.bioscan.fieldterminal.data.model.EventEvidenceRow
 import com.bioscan.fieldterminal.data.model.EventRatingPatch
 import com.bioscan.fieldterminal.data.model.EventRow
 import com.bioscan.fieldterminal.data.model.ExpectationRow
-import com.bioscan.fieldterminal.data.model.NewEpisodicIntervention
 import com.bioscan.fieldterminal.data.model.NewDraw
+import com.bioscan.fieldterminal.data.model.NewEpisodicIntervention
 import com.bioscan.fieldterminal.data.model.NewEvent
 import com.bioscan.fieldterminal.data.model.NewExpectation
 import com.bioscan.fieldterminal.data.model.NewTrackedOutcome

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import android.util.Log
 import kotlinx.coroutines.CancellationException
 
 // A load that may fail without failing its caller. Kotlin's runCatching is wrong around suspend work: it also catches
@@ -23,7 +24,7 @@ suspend inline fun <T> softLoad(block: () -> T): T? = catching(block).getOrNull(
 @PublishedApi
 internal fun logSwallowed(e: Exception) {
     // android.util.Log is absent in plain JVM unit tests.
-    runCatching { android.util.Log.w("softLoad", "a load failed and was skipped: ${e.message}", e) }
+    runCatching { Log.w("softLoad", "a load failed and was skipped: ${e.message}", e) }
 }
 
 // Keyset pagination over a key that is unique and ordered descending (a daily table's date): each page asks for rows

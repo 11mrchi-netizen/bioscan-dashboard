@@ -3,9 +3,9 @@ package com.bioscan.fieldterminal.domain.score
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
-
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
+import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.roundToInt
@@ -165,7 +165,7 @@ fun bodySignals(series: Map<String, Series>, morning: LocalDate): List<BodySigna
     } else {
         val d = x - med
         val unit = if (s.key == ScoreKeys.RHR) " bpm" else "/min"
-        val shown = if (s.key == ScoreKeys.RHR) d.roundToInt().toString() else "%.1f".format(kotlin.math.abs(d))
+        val shown = if (s.key == ScoreKeys.RHR) d.roundToInt().toString() else "%.1f".format(abs(d))
         "${s.label} ${if (d >= 0) "+" else "−"}${shown.removePrefix("-")}$unit"
     }
     BodySignal(s.key, s.label, z, words)

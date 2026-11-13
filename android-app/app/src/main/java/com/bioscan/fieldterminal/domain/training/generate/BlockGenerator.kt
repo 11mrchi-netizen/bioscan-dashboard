@@ -1,17 +1,18 @@
 package com.bioscan.fieldterminal.domain.training.generate
 
+import com.bioscan.fieldterminal.domain.training.Missing
 import com.bioscan.fieldterminal.domain.training.PrescriptionItem
 import com.bioscan.fieldterminal.domain.training.ResolveContext
 import com.bioscan.fieldterminal.domain.training.ResolvedLoad
-import com.bioscan.fieldterminal.domain.training.Missing
 import com.bioscan.fieldterminal.domain.training.definition.Cell
+import com.bioscan.fieldterminal.domain.training.definition.CompositionDef
 import com.bioscan.fieldterminal.domain.training.definition.ConditioningProtocolDef
 import com.bioscan.fieldterminal.domain.training.definition.ConditioningSessionDef
-import com.bioscan.fieldterminal.domain.training.definition.CompositionDef
 import com.bioscan.fieldterminal.domain.training.definition.Definition
 import com.bioscan.fieldterminal.domain.training.definition.ItemDto
 import com.bioscan.fieldterminal.domain.training.definition.NumRange
 import com.bioscan.fieldterminal.domain.training.definition.SeModuleDef
+import com.bioscan.fieldterminal.domain.training.definition.SlotDef
 import com.bioscan.fieldterminal.domain.training.definition.StrengthModuleDef
 import com.bioscan.fieldterminal.domain.training.definition.TemplateDef
 import com.bioscan.fieldterminal.domain.training.lbToKg
@@ -24,6 +25,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.doubleOrNull
 import java.time.DayOfWeek
 import java.time.LocalDate
+import kotlin.math.floor
 
 // DAV-345. Deterministic block generation (architecture 3.3): expand a fixed-grid template
 // or a composed strength + conditioning block into dated sessions with resolved loads.
@@ -194,7 +196,7 @@ private class Gen(
 
 // A slot that holds several exercises: a declared cluster, or any slot of a strength-endurance
 // module (SE trains a circuit of several movements, so one-per-slot would force a single exercise).
-fun isCluster(m: StrengthModuleDef, slot: com.bioscan.fieldterminal.domain.training.definition.SlotDef) = slot.pick != null || m.domain == "strength_endurance"
+fun isCluster(m: StrengthModuleDef, slot: SlotDef) = slot.pick != null || m.domain == "strength_endurance"
 
 private fun pickVariant(m: StrengthModuleDef, choice: ModuleChoice) =
     m.variants.firstOrNull { it.key == choice.variant } ?: m.variants.first()
@@ -395,8 +397,8 @@ private fun addConditioning(
         rotation[s.kind] = i + 1
         val key = list.getOrNull(i % list.size.coerceAtLeast(1))
         val share = if (s.kind == "lic" && licBudget != null && licCount > 0) {
-            val full = maxOf(minSession, kotlin.math.floor(licBudget.min / licCount / 5) * 5)
-            NumRange.of(if (normal) full else maxOf(minSession, kotlin.math.floor(full / 2 / 5) * 5))
+            val full = maxOf(minSession, floor(licBudget.min / licCount / 5) * 5)
+            NumRange.of(if (normal) full else maxOf(minSession, floor(full / 2 / 5) * 5))
         } else null
         val minutes = s.minutes ?: share
         val def = key?.let { g.idx.session(it) }

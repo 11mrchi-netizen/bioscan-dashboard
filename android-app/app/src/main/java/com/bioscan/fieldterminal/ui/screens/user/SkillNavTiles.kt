@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.domain.levels.SkillLevel
 import com.bioscan.fieldterminal.ui.components.FTBar
+import com.bioscan.fieldterminal.ui.components.FTChevron
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -60,7 +61,7 @@ private fun SkillTile(skill: Skill, level: SkillLevel?, onClick: () -> Unit, mod
     ) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(skill.title, style = FTType.Label, color = color, maxLines = 1, modifier = Modifier.weight(1f))
-            com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted)
+            FTChevron(tint = FT.TextMuted)
         }
         when {
             level == null -> Text("…", style = FTType.RowTitle, color = FT.TextMuted)

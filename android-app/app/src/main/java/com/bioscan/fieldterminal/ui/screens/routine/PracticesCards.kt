@@ -1,7 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.routine
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -13,7 +11,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -29,7 +26,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -47,7 +43,6 @@ import com.bioscan.fieldterminal.domain.routine.PracticeToday
 import com.bioscan.fieldterminal.domain.routine.RoutineActivity
 import com.bioscan.fieldterminal.domain.routine.RoutineLog
 import com.bioscan.fieldterminal.domain.routine.TimeLine
-import com.bioscan.fieldterminal.domain.routine.TimeSource
 import com.bioscan.fieldterminal.domain.routine.adherence
 import com.bioscan.fieldterminal.domain.routine.blockMinutes
 import com.bioscan.fieldterminal.domain.routine.inferredTime
@@ -59,14 +54,16 @@ import com.bioscan.fieldterminal.domain.routine.weekTime
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTChoiceChip
 import com.bioscan.fieldterminal.ui.components.FTSwitch
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
+import com.bioscan.fieldterminal.ui.components.rememberCacheVersion
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import kotlinx.coroutines.delay
 import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalDate
@@ -75,6 +72,7 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Routine R7 on Lab › ROUTINE (domain/routine/Practices.kt):
 //   PRACTICES       today's practices with DONE / START / SKIP, how each has been kept over 28 days, ADD A PRACTICE;
@@ -106,7 +104,7 @@ fun RoutineTimeSection(modifier: Modifier = Modifier) {
     var editing by remember { mutableStateOf<RoutineActivity?>(null) }
     var newKind by remember { mutableStateOf<ActivityKind?>(null) }
     var logging by remember { mutableStateOf<Pair<RoutineLog?, Long?>?>(null) }
-    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    val cacheVersion = rememberCacheVersion()
 
     LaunchedEffect(reload, cacheVersion) {
         scope.launchSafe(onError = { error = describeLoadFailure(it) }) {
@@ -256,7 +254,7 @@ private fun TimeCard(
             "closed, with STOP in its notification), or add a block afterwards. Time after midnight counts for the evening before.",
     ) {
         var tick by remember { mutableIntStateOf(0) }
-        LaunchedEffect(timer) { while (timer != null) { kotlinx.coroutines.delay(30_000); tick++ } }
+        LaunchedEffect(timer) { while (timer != null) { delay(30_000); tick++ } }
         if (timer != null) {
             val min = remember(tick, timer) { Duration.between(timer.start, LocalDateTime.now()).toMinutes().toDouble() }
             Text("${timer.name.uppercase()} · SINCE ${timer.start.format(HM)}", style = FTType.LabelCaps, color = FT.TextPrimary)
@@ -327,7 +325,7 @@ private fun WeekTimeCard(lines: List<TimeLine>) {
 }
 
 @Composable
-private fun Chip(text: String, on: Boolean, onClick: () -> Unit) = com.bioscan.fieldterminal.ui.components.FTChoiceChip(text, on, onClick)
+private fun Chip(text: String, on: Boolean, onClick: () -> Unit) = FTChoiceChip(text, on, onClick)
 
 @Composable
 private fun Label(text: String) = Text(text, color = FT.TextMuted, style = FTType.LabelCaps, modifier = Modifier.padding(bottom = 6.dp))

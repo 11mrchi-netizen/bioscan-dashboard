@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -30,11 +29,13 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.BodyCheckinDraft
 import com.bioscan.fieldterminal.data.BodyCheckinRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.BodyCheckinRecord
 import com.bioscan.fieldterminal.domain.BodyMeasurement
 import com.bioscan.fieldterminal.domain.BodySlot
 import com.bioscan.fieldterminal.domain.MeasureMethod
 import com.bioscan.fieldterminal.domain.activeSlots
+import com.bioscan.fieldterminal.domain.latestFrame
 import com.bioscan.fieldterminal.domain.maxReadings
 import com.bioscan.fieldterminal.domain.median
 import com.bioscan.fieldterminal.domain.minReadings
@@ -50,9 +51,9 @@ import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.LocalDateTime
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // The monthly body check-in (domain/BodyCheckin.kt, docs/body-checkin/README.md), one step per screen so it can be done with a
 // tape in one hand: the conditions, grip, the tape sites from the neck down, then the skinfolds in rounds. Each site
@@ -87,7 +88,7 @@ fun BodyCheckInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
         knownHeight = catching { repo.latestHeightCm() }.getOrNull()
         // Last time's caliper, unless the person already typed one.
         if (caliper.isEmpty()) caliper = history.lastOrNull()?.caliper.orEmpty()
-        frame = com.bioscan.fieldterminal.domain.latestFrame(history) == null
+        frame = latestFrame(history) == null
     }
     val last = history.lastOrNull()
 

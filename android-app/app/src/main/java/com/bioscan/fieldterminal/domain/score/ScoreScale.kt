@@ -2,6 +2,8 @@ package com.bioscan.fieldterminal.domain.score
 
 import com.bioscan.fieldterminal.domain.comparison.inverseNormalCdf
 import com.bioscan.fieldterminal.domain.comparison.normalCdf
+import kotlin.math.abs
+import kotlin.math.max
 
 // Scoring system (docs/scoring-system/README.md): the one 0-150 scale every score in the app is shown on.
 //
@@ -101,9 +103,9 @@ object ScoreScale {
         if (value in lo..hi) return rank
         val sorted = history.sorted()
         val med = if (sorted.size % 2 == 1) sorted[sorted.size / 2] else (sorted[sorted.size / 2 - 1] + sorted[sorted.size / 2]) / 2
-        val dev = sorted.map { kotlin.math.abs(it - med) }.sorted()
+        val dev = sorted.map { abs(it - med) }.sorted()
         val mad = if (dev.size % 2 == 1) dev[dev.size / 2] else (dev[dev.size / 2 - 1] + dev[dev.size / 2]) / 2
-        val sd = kotlin.math.max(1.4826 * mad, 1e-6)
+        val sd = max(1.4826 * mad, 1e-6)
         val parametric = fromZ((value - med) / sd, upside)
         val record = fromPercentile(rankPercentile(if (value > hi) hi else lo, history), upside)
         return parametric.coerceIn(minOf(record, rank), maxOf(record, rank))

@@ -1,7 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens
 
-import com.bioscan.fieldterminal.data.catching
-import com.bioscan.fieldterminal.domain.movingMinutes
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -20,52 +18,60 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.contracts.ExerciseRouteRequestContract
+import com.bioscan.fieldterminal.data.ExerciseLibraryRepository
 import com.bioscan.fieldterminal.data.MapSettingsStore
+import com.bioscan.fieldterminal.data.PlannedMatch
 import com.bioscan.fieldterminal.data.SessionDetailRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.TrainingProgramRepository
+import com.bioscan.fieldterminal.data.ZeppMovementScores
 import com.bioscan.fieldterminal.data.ZeppStrengthData
 import com.bioscan.fieldterminal.data.ZeppWorkoutSummary
-import com.bioscan.fieldterminal.data.ExerciseLibraryRepository
+import com.bioscan.fieldterminal.data.ZoneAnchorSeries
+import com.bioscan.fieldterminal.data.ZoneAnchorsRepository
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.ExerciseLibraryRow
 import com.bioscan.fieldterminal.data.model.ExerciseSessionDetailRow
 import com.bioscan.fieldterminal.data.model.StrengthExerciseDto
+import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.data.toRoutePoints
 import com.bioscan.fieldterminal.domain.DisplayValue
+import com.bioscan.fieldterminal.domain.MovementPattern
 import com.bioscan.fieldterminal.domain.RouteAvailability
 import com.bioscan.fieldterminal.domain.RoutePoint
+import com.bioscan.fieldterminal.domain.RunDynamicsMarks
 import com.bioscan.fieldterminal.domain.SessionDetail
 import com.bioscan.fieldterminal.domain.SessionSplit
 import com.bioscan.fieldterminal.domain.TimePoint
+import com.bioscan.fieldterminal.domain.ZoneMethod
 import com.bioscan.fieldterminal.domain.bestEstimatedOneRepMax
 import com.bioscan.fieldterminal.domain.classifyMovementPattern
+import com.bioscan.fieldterminal.domain.computeKmSplits
+import com.bioscan.fieldterminal.domain.findRun
 import com.bioscan.fieldterminal.domain.heartRateZoneBreakdown
 import com.bioscan.fieldterminal.domain.heartRateZoneFor
-import com.bioscan.fieldterminal.domain.ZoneMethod
 import com.bioscan.fieldterminal.domain.initialZoneMethod
-import com.bioscan.fieldterminal.domain.zoneBounds
-import com.bioscan.fieldterminal.data.ZoneAnchorSeries
-import com.bioscan.fieldterminal.data.ZoneAnchorsRepository
-import com.bioscan.fieldterminal.ui.components.HeartRateZoneMethodSwitch
-import com.bioscan.fieldterminal.ui.components.SessionZoneInputs
-import com.bioscan.fieldterminal.domain.MovementPattern
+import com.bioscan.fieldterminal.domain.mergePreferZepp
+import com.bioscan.fieldterminal.domain.movingMinutes
+import com.bioscan.fieldterminal.domain.paceSeries
 import com.bioscan.fieldterminal.domain.resolveExercise
+import com.bioscan.fieldterminal.domain.runDynamicsMarks
 import com.bioscan.fieldterminal.domain.sessionAverageRir
 import com.bioscan.fieldterminal.domain.sessionAverageRpe
+import com.bioscan.fieldterminal.domain.sessionAvgSpeedKmh
 import com.bioscan.fieldterminal.domain.sessionRegionalLoad
 import com.bioscan.fieldterminal.domain.sessionVolumeLoad
-import com.bioscan.fieldterminal.domain.computeKmSplits
-import com.bioscan.fieldterminal.domain.mergePreferZepp
 import com.bioscan.fieldterminal.domain.trail.computeTrailSessionState
+import com.bioscan.fieldterminal.domain.zoneBounds
 import com.bioscan.fieldterminal.domain.zoneLoads
 import com.bioscan.fieldterminal.ui.components.BodyHeatMap
 import com.bioscan.fieldterminal.ui.components.FTButton
@@ -73,15 +79,18 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.HeartRateZoneDonutChart
+import com.bioscan.fieldterminal.ui.components.HeartRateZoneMethodSwitch
 import com.bioscan.fieldterminal.ui.components.InfoHelpButton
 import com.bioscan.fieldterminal.ui.components.LineChart
 import com.bioscan.fieldterminal.ui.components.MinMaxAverageBar
+import com.bioscan.fieldterminal.ui.components.MovementRadarChart
 import com.bioscan.fieldterminal.ui.components.RouteMiniMap
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
+import com.bioscan.fieldterminal.ui.components.SessionZoneInputs
+import com.bioscan.fieldterminal.ui.components.SkeletonSections
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.heartRateZoneColor
-import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.ui.screens.session.EF_SESSION_HELP
 import com.bioscan.fieldterminal.ui.screens.session.GAP_HELP
 import com.bioscan.fieldterminal.ui.screens.session.GROUND_CONTACT_HELP
@@ -95,13 +104,17 @@ import com.bioscan.fieldterminal.ui.screens.session.STRIDE_LENGTH_HELP
 import com.bioscan.fieldterminal.ui.screens.session.VERTICAL_RATIO_HELP
 import com.bioscan.fieldterminal.ui.screens.session.formatDuration
 import com.bioscan.fieldterminal.ui.screens.session.formatSplitPace
+import com.bioscan.fieldterminal.ui.screens.training.PlannedSessionCard
+import com.bioscan.fieldterminal.ui.screens.user.UserDataCache
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Phase G4/G5. The app's first pushed detail route (see ui/nav/
 // FieldTerminalNavHost.kt) -- reached from a Log tab Exercise entry's
@@ -132,9 +145,9 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit, onOpenShoe: (Long) 
     var zeppStrengthData by remember { mutableStateOf<ZeppStrengthData?>(null) }
     var zoneSeries by remember { mutableStateOf<ZoneAnchorSeries?>(null) }
     var zoneDefault by remember { mutableStateOf(ZoneMethod.AUTO) }
-    var planned by remember { mutableStateOf<com.bioscan.fieldterminal.data.PlannedMatch?>(null) }
-    var runMarks by remember { mutableStateOf<com.bioscan.fieldterminal.domain.RunDynamicsMarks?>(null) }
-    val sessionScope = androidx.compose.runtime.rememberCoroutineScope()
+    var planned by remember { mutableStateOf<PlannedMatch?>(null) }
+    var runMarks by remember { mutableStateOf<RunDynamicsMarks?>(null) }
+    val sessionScope = rememberCoroutineScope()
 
     var exerciseLibrary by remember { mutableStateOf<List<ExerciseLibraryRow>>(emptyList()) }
 
@@ -170,19 +183,19 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit, onOpenShoe: (Long) 
         // Heart-rate zones: the anchor series (maximum, resting, threshold) and the person's default method, loaded once
         // per screen open; the anchors are taken as of this session's date below.
         zoneSeries = softLoad { ZoneAnchorsRepository(SupabaseClientProvider.client).load() }
-        zoneDefault = softLoad { com.bioscan.fieldterminal.data.TrainingProgramRepository(SupabaseClientProvider.client).loadZoneMethod() } ?: ZoneMethod.AUTO
+        zoneDefault = softLoad { TrainingProgramRepository(SupabaseClientProvider.client).loadZoneMethod() } ?: ZoneMethod.AUTO
         // A run's RUN DYNAMICS marks against usual, from the per-run history the Running page reads (cached there).
         if (row?.type == "run") {
             runMarks = softLoad {
-                val rows = com.bioscan.fieldterminal.ui.screens.user.UserDataCache.running().historyRows()
-                com.bioscan.fieldterminal.domain.findRun(rows, row.id, OffsetDateTime.parse(row.startTime).toLocalDate(), row.distanceKm)
-                    ?.let { com.bioscan.fieldterminal.domain.runDynamicsMarks(it, rows) }
+                val rows = UserDataCache.running().historyRows()
+                findRun(rows, row.id, OffsetDateTime.parse(row.startTime).toLocalDate(), row.distanceKm)
+                    ?.let { runDynamicsMarks(it, rows) }
             }
         }
         // What the training block planned for this workout, if anything (DAV-346).
         if (row != null) {
             planned = catching {
-                com.bioscan.fieldterminal.data.TrainingProgramRepository(SupabaseClientProvider.client)
+                TrainingProgramRepository(SupabaseClientProvider.client)
                     .loadPlannedFor(sessionId, OffsetDateTime.parse(row.startTime).toLocalDate(), row.type == "strength")
             }.getOrNull()
         }
@@ -281,7 +294,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit, onOpenShoe: (Long) 
         )
 
         when {
-            loadingHeader -> com.bioscan.fieldterminal.ui.components.SkeletonSections()
+            loadingHeader -> SkeletonSections()
             header == null -> Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
                 Text(headerError ?: "Session not found.", style = FTType.BodySmall, color = FT.TextSecondary)
             }
@@ -318,9 +331,9 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit, onOpenShoe: (Long) 
                     // editable via the Log tab's edit sheet) never rendered
                     // anywhere in the app.
                     planned?.let { pm ->
-                        com.bioscan.fieldterminal.ui.screens.training.PlannedSessionCard(pm, h.details.exercises.orEmpty(), h.durationMin) {
+                        PlannedSessionCard(pm, h.details.exercises.orEmpty(), h.durationMin) {
                             sessionScope.launch {
-                                catching { com.bioscan.fieldterminal.data.TrainingProgramRepository(SupabaseClientProvider.client).linkPlanned(pm.row.id, sessionId) }
+                                catching { TrainingProgramRepository(SupabaseClientProvider.client).linkPlanned(pm.row.id, sessionId) }
                                     .onSuccess { planned = pm.copy(linked = true) }
                             }
                         }
@@ -483,7 +496,7 @@ private enum class ChartColorMode(val label: String) { Line("LINE"), Zones("ZONE
 
 @Composable
 private fun PerformanceChartSection(d: SessionDetail, zones: SessionZoneInputs?) {
-    val pace = remember(d.speedKmh) { com.bioscan.fieldterminal.domain.paceSeries(d.speedKmh) }
+    val pace = remember(d.speedKmh) { paceSeries(d.speedKmh) }
     val seriesBySignal = mapOf(
         PerfSignal.HR to d.heartRate,
         PerfSignal.PACE to pace,
@@ -680,7 +693,7 @@ private fun MovementEvaluationCard(strengthData: ZeppStrengthData) {
             style = FTType.Caption,
             color = FT.TextSecondary,
         )
-        com.bioscan.fieldterminal.ui.components.MovementRadarChart(
+        MovementRadarChart(
             scores = avg,
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         )
@@ -807,7 +820,7 @@ private fun StrengthCard(
 }
 
 @Composable
-private fun SetMovementScoreRow(scores: com.bioscan.fieldterminal.data.ZeppMovementScores) {
+private fun SetMovementScoreRow(scores: ZeppMovementScores) {
     val items = listOf(
         "Stab" to scores.stability,
         "Cons" to scores.consistency,
@@ -855,7 +868,7 @@ private fun SummaryCard(
     val avgHr = header.avgHr
         ?: detail?.heartRate?.takeIf { it.isNotEmpty() }?.let { s -> s.map { it.value }.average() }
     val avgPaceMinPerKm = (
-        com.bioscan.fieldterminal.domain.sessionAvgSpeedKmh(
+        sessionAvgSpeedKmh(
             header.type, header.avgSpeedKmh, header.distanceKm, header.durationMin,
             detail?.movingMinutes(),
         )

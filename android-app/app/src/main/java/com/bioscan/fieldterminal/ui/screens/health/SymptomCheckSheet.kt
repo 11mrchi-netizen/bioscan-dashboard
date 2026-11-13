@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.health
 
-import com.bioscan.fieldterminal.data.catching
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.HealthConcernsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.WhyContext
 import com.bioscan.fieldterminal.domain.health.CheckAnswers
 import com.bioscan.fieldterminal.domain.health.CheckArea
@@ -42,6 +42,7 @@ import com.bioscan.fieldterminal.domain.health.CheckOutcome
 import com.bioscan.fieldterminal.domain.health.CheckSince
 import com.bioscan.fieldterminal.domain.health.EMERGENCY_NUMBER
 import com.bioscan.fieldterminal.domain.health.FlagLevel
+import com.bioscan.fieldterminal.domain.health.HealthVocab
 import com.bioscan.fieldterminal.domain.health.RegionShape
 import com.bioscan.fieldterminal.domain.health.TrackAs
 import com.bioscan.fieldterminal.domain.health.assess
@@ -55,8 +56,8 @@ import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.ZonedDateTime
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Health › SYMPTOM CHECK (domain/health/SymptomCheck.kt): for the small things, apart from injuries and illnesses.
 // 1 what and where (muscles and joints can name the spot on the body map); 2 how strong, since when, which way it is
@@ -167,7 +168,7 @@ fun SymptomCheckSheet(onDismiss: () -> Unit, onSaved: () -> Unit, onTrackIllness
     }
 }
 
-private fun com.bioscan.fieldterminal.domain.health.HealthVocab.symptomLabel(code: String): String = symptom(code)?.label ?: code.removePrefix("sym.")
+private fun HealthVocab.symptomLabel(code: String): String = symptom(code)?.label ?: code.removePrefix("sym.")
 
 @Composable
 private fun Outcome(o: CheckOutcome, area: CheckArea, symptoms: Set<String>, label: (String) -> String) {

@@ -1,11 +1,11 @@
 package com.bioscan.fieldterminal.data
 
-import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.data.model.CalendarEventRow
 import com.bioscan.fieldterminal.data.model.NewPlannedRouteRow
 import com.bioscan.fieldterminal.data.model.PlannedRouteFailureUpdate
 import com.bioscan.fieldterminal.data.model.PlannedRouteFreshUpdate
 import com.bioscan.fieldterminal.data.model.PlannedRouteRow
+import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.domain.trail.SEGMENTATION_MODEL_VERSION
 import com.bioscan.fieldterminal.domain.trail.TRACKPOINT_MODEL_VERSION
 import com.bioscan.fieldterminal.domain.trail.computePlannedRoutePreview

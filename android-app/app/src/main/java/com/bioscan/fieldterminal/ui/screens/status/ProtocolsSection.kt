@@ -38,9 +38,9 @@ import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Lab › N=1: protocols, the bundles of interventions around one objective ("sleep optimisation: strips + magnesium +
 // caffeine cut-off"). Starting from one of the seeded templates is optional; the template is descriptive, never a rule.

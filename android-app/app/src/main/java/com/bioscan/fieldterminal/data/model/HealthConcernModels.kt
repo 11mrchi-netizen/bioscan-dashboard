@@ -72,9 +72,9 @@ data class HealthObservationInsert(
     val supersedes: String? = null,
     @EncodeDefault val retracted: Boolean = false,
     /** A symptom check's answers and what it concluded (domain/health/SymptomCheck.kt); null on any other check-in. */
-    val assessment: kotlinx.serialization.json.JsonObject? = null,
+    val assessment: JsonObject? = null,
     /** Description only: {"medication": "...", "saw_clinician": true, "test": "covid", "test_result": "positive"}. */
-    val care: kotlinx.serialization.json.JsonObject? = null,
+    val care: JsonObject? = null,
 )
 
 @OptIn(ExperimentalSerializationApi::class)

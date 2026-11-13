@@ -32,6 +32,7 @@ import com.bioscan.fieldterminal.data.NutritionGoals
 import com.bioscan.fieldterminal.data.NutritionGoalsStore
 import com.bioscan.fieldterminal.data.NutritionTargetsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.domain.ActivityLevel
 import com.bioscan.fieldterminal.domain.EnergyBalance
 import com.bioscan.fieldterminal.domain.EnergyBalanceKind
@@ -51,11 +52,10 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.MACRO_COLORS
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
-import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Setup › Profile & goals › Nutrition goals (domain/NutritionTargets.kt). Calories, protein and fat are entered, carbs
 // are what the calories leave, so the goal always adds up; the card shows each macro's share of the calories and reads

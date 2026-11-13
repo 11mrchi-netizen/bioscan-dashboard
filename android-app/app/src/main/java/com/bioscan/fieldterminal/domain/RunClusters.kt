@@ -3,6 +3,7 @@ package com.bioscan.fieldterminal.domain
 import com.bioscan.fieldterminal.data.model.ExerciseSessionRow
 import java.time.Duration
 import java.time.OffsetDateTime
+import kotlin.math.abs
 
 // Ids of the rows that are the same physical run as [r]: every other run row whose start is within five minutes
 // (Duration.toMinutes truncates, so up to 5 min 59 s counts) of r's start, followed by r itself. The Zepp sport code hangs
@@ -11,7 +12,7 @@ fun runClusterIds(sessions: List<ExerciseSessionRow>, r: ExerciseSessionRow): Li
     (
         sessions.filter { s ->
             s.type == "run" && s.id != r.id &&
-                kotlin.math.abs(Duration.between(OffsetDateTime.parse(s.startTime), OffsetDateTime.parse(r.startTime)).toMinutes()) <= 5
+                abs(Duration.between(OffsetDateTime.parse(s.startTime), OffsetDateTime.parse(r.startTime)).toMinutes()) <= 5
         } + r
         ).map { it.id }
 
@@ -37,7 +38,7 @@ fun runClusterIdsBatch(sessions: List<ExerciseSessionRow>, targets: List<Exercis
         var i = lo
         while (i < runs.size && epochs[i] <= e + 361) {
             val c = runs[i]
-            if (c.row.id != r.id && kotlin.math.abs(Duration.between(c.at, rAt).toMinutes()) <= 5) hits += c
+            if (c.row.id != r.id && abs(Duration.between(c.at, rAt).toMinutes()) <= 5) hits += c
             i++
         }
         hits.sortedBy { it.index }.map { it.row.id } + r.id

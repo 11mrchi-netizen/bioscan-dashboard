@@ -1,12 +1,13 @@
 package com.bioscan.fieldterminal.ui.components
 
+import android.content.Context
 import android.provider.Settings
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -15,10 +16,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.ReadOnlyComposable
-import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalContext
 
 // Polish brief, motion (contract section 12; tokens.css --ft-motion-*). Three durations and one easing for the whole
 // app: 120 ms for small state changes (a chip, a press released), 180 ms for a tab or sub-tab switch, an expanding row
@@ -35,7 +32,7 @@ object FTMotion {
         private set
 
     /** Read the system's animation setting (called once from the activity; tests can force it). */
-    fun init(context: android.content.Context) {
+    fun init(context: Context) {
         reduced = runCatching {
             Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
         }.getOrDefault(false)

@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,12 +24,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AgingProfileOverview
 import com.bioscan.fieldterminal.data.AgingProfileRepository
+import com.bioscan.fieldterminal.data.BodyCheckinRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.UserProfileRepository
+import com.bioscan.fieldterminal.data.catching
+import com.bioscan.fieldterminal.data.model.UserProfileRow
+import com.bioscan.fieldterminal.domain.BodyCheckinRecord
 import com.bioscan.fieldterminal.domain.DataAvailability
-import com.bioscan.fieldterminal.domain.aging.BiologicalAgeResult
 import com.bioscan.fieldterminal.domain.DisplayValue
+import com.bioscan.fieldterminal.domain.aging.BiologicalAgeResult
 import com.bioscan.fieldterminal.ui.components.DotPlot
-import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTDataState
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
@@ -39,10 +42,13 @@ import com.bioscan.fieldterminal.ui.components.InfoHelpButton
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.ageAccelerationState
+import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.screens.status.FitnessAgeSection
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // DAV-232 (09A Aging Profile, Phase 1). Overview / Dimensions / History /
 // Explainability, per DAV-232's own structure -- scoped to PhenoAge +
@@ -56,11 +62,11 @@ fun AgingProfileScreen(onBack: () -> Unit) {
         guard.run { overview = AgingProfileRepository(SupabaseClientProvider.client).loadOverview() }
     }
     // For the folded-in Fitness Age (HUNT model): sex, date of birth and body check-ins (its waist feeds the VO2peak).
-    var profile by remember { mutableStateOf<com.bioscan.fieldterminal.data.model.UserProfileRow?>(null) }
-    var checkins by remember { mutableStateOf<List<com.bioscan.fieldterminal.domain.BodyCheckinRecord>>(emptyList()) }
+    var profile by remember { mutableStateOf<UserProfileRow?>(null) }
+    var checkins by remember { mutableStateOf<List<BodyCheckinRecord>>(emptyList()) }
     LaunchedEffect(Unit) {
-        profile = catching { com.bioscan.fieldterminal.data.UserProfileRepository(SupabaseClientProvider.client).loadProfile() }.getOrNull()
-        checkins = catching { com.bioscan.fieldterminal.data.BodyCheckinRepository(SupabaseClientProvider.client).loadHistory() }.getOrElse { emptyList() }
+        profile = catching { UserProfileRepository(SupabaseClientProvider.client).loadProfile() }.getOrNull()
+        checkins = catching { BodyCheckinRepository(SupabaseClientProvider.client).loadHistory() }.getOrElse { emptyList() }
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).ftPlatinumWash()) {
@@ -82,9 +88,9 @@ fun AgingProfileScreen(onBack: () -> Unit) {
                 OverviewCard(current)
                 DimensionsCard(current)
                 HistoryCard(current)
-                com.bioscan.fieldterminal.ui.screens.status.FitnessAgeSection(
+                FitnessAgeSection(
                     sex = profile?.sex?.takeIf { it == "male" || it == "female" },
-                    birth = profile?.dateOfBirth?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
+                    birth = profile?.dateOfBirth?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
                     checkins = checkins,
                 )
             }

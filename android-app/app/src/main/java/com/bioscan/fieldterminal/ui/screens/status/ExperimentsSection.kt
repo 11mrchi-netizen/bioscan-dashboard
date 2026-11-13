@@ -25,8 +25,8 @@ import com.bioscan.fieldterminal.domain.todayAssignment
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Analysis Layer 3 / Phase 5, randomised in analysis review phase F. The person's registered experiments, what today asks
 // for, and the latest published result of each. While an experiment runs the numbers are interim and carry no verdict; when

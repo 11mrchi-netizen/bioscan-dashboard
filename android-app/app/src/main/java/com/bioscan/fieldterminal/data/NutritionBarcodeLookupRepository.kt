@@ -1,7 +1,7 @@
 package com.bioscan.fieldterminal.data
 
-import com.bioscan.fieldterminal.domain.LenientJson
 import android.util.Base64
+import com.bioscan.fieldterminal.domain.LenientJson
 import io.github.jan.supabase.SupabaseClient
 import io.ktor.client.request.post
 import io.ktor.client.statement.bodyAsText

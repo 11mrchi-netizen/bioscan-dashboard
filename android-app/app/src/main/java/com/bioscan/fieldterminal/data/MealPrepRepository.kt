@@ -11,6 +11,7 @@ import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.time.LocalDate
+import java.time.OffsetDateTime
 
 // Meal prep storage (fuel planning phase 11; supabase/migrations/20261029_meal_prep.sql): one row per prep week
 // (picks, recipes, meals eaten out, the containers once cooked) and the fixed breakfast. The numbers are worked out by
@@ -84,7 +85,7 @@ private fun MealPrepWeek.toRow() = PrepWeekRow(
     skipped = skipped.sorted(),
     containers = containers?.map { ContainerJson(it.date.toString(), it.slot.name, it.letter.toString(), it.grams) },
     status = if (cooked) "cooked" else "planned",
-    updatedAt = java.time.OffsetDateTime.now().toString(),
+    updatedAt = OffsetDateTime.now().toString(),
 )
 
 class MealPrepRepository(private val supabase: SupabaseClient) {
@@ -109,7 +110,7 @@ class MealPrepRepository(private val supabase: SupabaseClient) {
     }
 
     suspend fun saveBreakfast(items: List<BreakfastItem>) {
-        supabase.postgrest.from(BREAKFAST).upsert(BreakfastRow(items.map { BreakfastItemJson(it.foodId, it.grams) }, java.time.OffsetDateTime.now().toString())) {
+        supabase.postgrest.from(BREAKFAST).upsert(BreakfastRow(items.map { BreakfastItemJson(it.foodId, it.grams) }, OffsetDateTime.now().toString())) {
             onConflict = "user_id"
         }
     }

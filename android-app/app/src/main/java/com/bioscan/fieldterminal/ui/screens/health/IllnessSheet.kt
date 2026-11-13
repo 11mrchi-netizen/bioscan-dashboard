@@ -1,7 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.health
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -12,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -25,7 +22,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -42,15 +38,17 @@ import com.bioscan.fieldterminal.domain.score.IllnessCheckIn
 import com.bioscan.fieldterminal.domain.score.gravityOf
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
+import com.bioscan.fieldterminal.ui.components.FTChoiceChip
+import com.bioscan.fieldterminal.ui.components.FTRatingSlider
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
-import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import java.time.LocalDate
 import java.time.ZonedDateTime
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Health › + ILLNESS (docs/health-concerns/README.md, "Illness, infections and the symptom check"): an infection or another
 // illness, logged as what it is rather than through the body map. KIND (a cold, a stomach bug, COVID...), when it started,
@@ -131,7 +129,7 @@ fun IllnessSheet(
                 }
             }
 
-            com.bioscan.fieldterminal.ui.components.FTRatingSlider("HOW BAD, AT WORST NOW", severity, 0..10, FT.Metric.Soreness, { severity = it }, lowWord = "barely", highWord = "worst", reversed = true)
+            FTRatingSlider("HOW BAD, AT WORST NOW", severity, 0..10, FT.Metric.Soreness, { severity = it }, lowWord = "barely", highWord = "worst", reversed = true)
             Label("TRAINING")
             TextChipRow(IMPACT_LABELS, impact?.let { IMPACT_LABELS[it] }, perRow = 2) { picked -> impact = picked?.let { IMPACT_LABELS.indexOf(it) } }
             Label("TEMPERATURE °C (OPTIONAL)")
@@ -139,7 +137,7 @@ fun IllnessSheet(
 
             // What it does to CHARGE, as the score will read it.
             severity?.let { s ->
-                val g = gravityOf(IllnessCheckIn(java.time.LocalDate.now(), impact, temp, s, symptoms))
+                val g = gravityOf(IllnessCheckIn(LocalDate.now(), impact, temp, s, symptoms))
                 Text(
                     "Reads as ${g.label.uppercase()}" + (g.ceiling?.let { " · CHARGE held at ${it.roundToInt()} or below" } ?: " · no ceiling on CHARGE") +
                         ". It eases as you check in better, or by itself after two days.",
@@ -195,4 +193,4 @@ fun IllnessSheet(
 internal fun Label(text: String) = Text(text, style = FTType.Micro, color = FT.TextMuted)
 
 @Composable
-internal fun Chip(text: String, on: Boolean, onClick: () -> Unit) = com.bioscan.fieldterminal.ui.components.FTChoiceChip(text, on, onClick)
+internal fun Chip(text: String, on: Boolean, onClick: () -> Unit) = FTChoiceChip(text, on, onClick)

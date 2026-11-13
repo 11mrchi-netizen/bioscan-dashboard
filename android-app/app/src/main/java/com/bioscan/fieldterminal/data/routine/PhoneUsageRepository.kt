@@ -10,6 +10,7 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.time.Instant
@@ -95,7 +96,7 @@ class PhoneUsageRepository(private val supabase: SupabaseClient) {
                 written++
             }
             PhoneUsageSyncResult.Success(written)
-        } catch (e: kotlinx.coroutines.CancellationException) {
+        } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             PhoneUsageSyncResult.Failed(e.message ?: e.javaClass.simpleName)

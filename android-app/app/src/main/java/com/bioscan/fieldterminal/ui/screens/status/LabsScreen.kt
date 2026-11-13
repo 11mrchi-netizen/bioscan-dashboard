@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -22,27 +20,33 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AnalysisRepository
+import com.bioscan.fieldterminal.data.LabWatchRepository
 import com.bioscan.fieldterminal.data.LabsOverview
-import com.bioscan.fieldterminal.domain.BloodworkMarkerEvaluation
-import com.bioscan.fieldterminal.domain.evaluateBloodworkMarker
-import com.bioscan.fieldterminal.ui.components.bloodworkTrendMetricState
-import java.time.LocalDate
 import com.bioscan.fieldterminal.data.LabsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
+import com.bioscan.fieldterminal.domain.BloodworkMarkerEvaluation
 import com.bioscan.fieldterminal.domain.LabMarkerTheme
+import com.bioscan.fieldterminal.domain.LabWatch
 import com.bioscan.fieldterminal.domain.MarkerComparison
 import com.bioscan.fieldterminal.domain.MarkerDirection
 import com.bioscan.fieldterminal.domain.PersonalRange
 import com.bioscan.fieldterminal.domain.RangeKind
+import com.bioscan.fieldterminal.domain.evaluateBloodworkMarker
 import com.bioscan.fieldterminal.domain.labMarkerTheme
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
 import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.SkeletonSections
+import com.bioscan.fieldterminal.ui.components.bloodworkTrendMetricState
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.labFlagState
+import com.bioscan.fieldterminal.ui.components.rememberCacheVersion
 import com.bioscan.fieldterminal.ui.theme.FTType
+import java.time.LocalDate
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Step 9 (Phase C). Real data from `lab_draws`/`lab_results` -- NOT a port of
@@ -66,16 +70,16 @@ fun LabsScreen() {
 
     var error by remember { mutableStateOf<String?>(null) }
     // Lab watch: markers worth watching for what the regimen holds. Enrichment: a failed read hides it.
-    var watches by remember { mutableStateOf<List<com.bioscan.fieldterminal.domain.LabWatch>>(emptyList()) }
+    var watches by remember { mutableStateOf<List<LabWatch>>(emptyList()) }
 
-    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    val cacheVersion = rememberCacheVersion()
     LaunchedEffect(reloadKey, cacheVersion) {
         isLoading = overview == null
         error = null
         try {
             overview = LabsRepository(SupabaseClientProvider.client).loadOverview()
             rcv = catching { loadRcv() }.getOrDefault(emptyMap())
-            watches = catching { com.bioscan.fieldterminal.data.LabWatchRepository(SupabaseClientProvider.client).watches() }.getOrDefault(watches)
+            watches = catching { LabWatchRepository(SupabaseClientProvider.client).watches() }.getOrDefault(watches)
         } catch (e: Exception) {
             error = e.message ?: "Unknown error"
         }
@@ -86,7 +90,7 @@ fun LabsScreen() {
         Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(top = 16.dp)) { LabWatchSection(watches) }
     }
     when {
-        isLoading -> com.bioscan.fieldterminal.ui.components.SkeletonSections()
+        isLoading -> SkeletonSections()
         error != null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Critical)
         }
@@ -246,14 +250,14 @@ private fun MarkerRow(marker: MarkerComparison, rcv: BloodworkMarkerEvaluation?)
                     style = FTType.Value,
                     color = FT.TextSecondary,
                     modifier = Modifier.width(64.dp),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                    textAlign = TextAlign.End,
                 )
                 Text(
                     marker.latestDisplay ?: "—",
                     style = FTType.Telemetry,
                     color = flagColor(marker.latestFlag),
                     modifier = Modifier.width(64.dp),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                    textAlign = TextAlign.End,
                 )
                 Box(modifier = Modifier.width(24.dp), contentAlignment = Alignment.CenterEnd) {
                     Text(

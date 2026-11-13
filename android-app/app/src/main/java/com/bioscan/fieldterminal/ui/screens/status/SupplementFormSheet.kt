@@ -1,10 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import com.bioscan.fieldterminal.data.catching
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -28,34 +25,40 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
 import com.bioscan.fieldterminal.data.IngredientInput
+import com.bioscan.fieldterminal.data.LabWatchRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementImpactRepository
 import com.bioscan.fieldterminal.data.SupplementLookupRepository
 import com.bioscan.fieldterminal.data.SupplementsRepository
-import com.bioscan.fieldterminal.util.scanBarcode
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.InteractionRecord
+import com.bioscan.fieldterminal.domain.LabWatch
+import com.bioscan.fieldterminal.domain.REGIMEN_SLOTS
+import com.bioscan.fieldterminal.domain.RegimenKind
 import com.bioscan.fieldterminal.domain.RosterItem
+import com.bioscan.fieldterminal.domain.Splitting
 import com.bioscan.fieldterminal.domain.detectInteractions
+import com.bioscan.fieldterminal.domain.formRule
+import com.bioscan.fieldterminal.domain.formatAmount
+import com.bioscan.fieldterminal.domain.spec
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.util.ExternalActivityGuard
+import com.bioscan.fieldterminal.util.scanBarcode
 import kotlinx.coroutines.launch
-import java.time.LocalDate
-import com.bioscan.fieldterminal.domain.formatAmount
-import com.bioscan.fieldterminal.domain.spec
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // DAV-81. The roster (`supplements`) itself had no UI to create or edit --
 // only ever read, by SupplementsScreen.kt's display and AddEntrySheet.kt's
@@ -99,7 +102,7 @@ fun SupplementFormSheet(
             val full = repo.loadProductIngredientsFull(pid)
             // The rows are per label serving; the sheet shows one dose (label x servings per dose).
             val spd = existing.servingsPerDose
-            fun perDose(v: Double) = com.bioscan.fieldterminal.domain.formatAmount(Math.round(v * spd * 1000) / 1000.0)
+            fun perDose(v: Double) = formatAmount(Math.round(v * spd * 1000) / 1000.0)
             ingredients.clear()
             full.forEach { ing ->
                 ingredients.add(EditableIngredient().apply {
@@ -118,7 +121,7 @@ fun SupplementFormSheet(
     }
 
     ModalBottomSheet(
-        onDismissRequest = { if (!com.bioscan.fieldterminal.util.ExternalActivityGuard.active) onDismiss() },
+        onDismissRequest = { if (!ExternalActivityGuard.active) onDismiss() },
         sheetState = sheetState,
         shape = FT.SheetShape,
         containerColor = FT.Surface,
@@ -150,7 +153,7 @@ fun SupplementFormSheet(
                     name = name,
                     timeOfDay = regimen.firstSlot,
                     everyNDays = regimen.everyNDaysOrNull,
-                    slots = if (regimen.asNeeded) emptyList() else com.bioscan.fieldterminal.domain.REGIMEN_SLOTS.filter { it in regimen.slots },
+                    slots = if (regimen.asNeeded) emptyList() else REGIMEN_SLOTS.filter { it in regimen.slots },
                     ingredientKeys = roster.firstOrNull { it.id == draftId }?.ingredientKeys.orEmpty(),
                     ingredientNames = ingredients.map { it.name },
                 ),
@@ -247,7 +250,7 @@ fun SupplementFormSheet(
 
             // Medications, hormones, peptides: a reference card from RxNorm and the FDA label (or PubMed); supplements keep
             // their label-database check below.
-            if (regimen.kind != com.bioscan.fieldterminal.domain.RegimenKind.SUPPLEMENT) {
+            if (regimen.kind != RegimenKind.SUPPLEMENT) {
                 RegimenReferenceSection(existing?.id, name.trim(), roster.filter { it.id != existing?.id }.map { it.id to it.name },
                     unit = regimen.unit, dose = regimen.amount.replace(',', '.').toDoubleOrNull())
             }
@@ -275,7 +278,7 @@ fun SupplementFormSheet(
                             // pantry (which counts servings) and the nutrient totals stay right. A label serving that can
                             // be compared with the dose sets servings per dose; otherwise the serving becomes one unit
                             // (capsules, tablets...) or the dose itself (measured forms).
-                            val wholeUnits = com.bioscan.fieldterminal.domain.formRule(draft.form)?.splitting != com.bioscan.fieldterminal.domain.Splitting.MEASURED
+                            val wholeUnits = formRule(draft.form)?.splitting != Splitting.MEASURED
                             val pid = existing?.productId
                             val (labelSize, labelUnit) = pid?.let { catching { repo.loadProductServing(it) }.getOrDefault(null to null) } ?: (null to null)
                             val known = com.bioscan.fieldterminal.domain.servingsPerDose(draft.amount, draft.unit, labelSize, labelUnit)
@@ -374,9 +377,9 @@ fun SupplementFormSheet(
                 )
             }
             if (existing != null) {
-                var itemWatches by remember(existing.id) { mutableStateOf<List<com.bioscan.fieldterminal.domain.LabWatch>>(emptyList()) }
+                var itemWatches by remember(existing.id) { mutableStateOf<List<LabWatch>>(emptyList()) }
                 LaunchedEffect(existing.id) {
-                    itemWatches = catching { com.bioscan.fieldterminal.data.LabWatchRepository(SupabaseClientProvider.client).watches() }
+                    itemWatches = catching { LabWatchRepository(SupabaseClientProvider.client).watches() }
                         .getOrDefault(emptyList()).filter { it.itemId == existing.id }
                 }
                 LabWatchSection(itemWatches, title = "LABS TO WATCH", showItem = false)
@@ -426,7 +429,7 @@ private class EditableIngredient {
 }
 
 @Composable
-private fun IngredientsSection(ingredients: androidx.compose.runtime.snapshots.SnapshotStateList<EditableIngredient>) {
+private fun IngredientsSection(ingredients: SnapshotStateList<EditableIngredient>) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         FormFieldLabel("INGREDIENTS IN ONE DOSE (OPTIONAL)")
         Text("Amounts for the dose above. Scanned labels list one serving: check they match your dose.", style = FTType.Caption, color = FT.TextMuted)

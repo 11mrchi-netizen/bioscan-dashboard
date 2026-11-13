@@ -5,6 +5,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -12,14 +13,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.PlexMono
 
 // Shared tap/drag-to-inspect behavior for DateTrendLine and LineChart (25/9
 // rework). Horizontal drag only: every chart lives inside a vertically
@@ -73,8 +71,8 @@ internal fun DrawScope.drawInspectOverlay(
     val h = layout.size.height + padPx * 2
     val left = if (x + 12f + w <= size.width) x + 12f else (x - 12f - w).coerceAtLeast(0f)
     val top = 2f
-    drawRoundRect(FT.Surface.copy(alpha = 0.96f), Offset(left, top), androidx.compose.ui.geometry.Size(w, h), CornerRadius(8f))
-    drawRoundRect(FT.GlassBorder, Offset(left, top), androidx.compose.ui.geometry.Size(w, h), CornerRadius(8f), style = Stroke(1f))
+    drawRoundRect(FT.Surface.copy(alpha = 0.96f), Offset(left, top), Size(w, h), CornerRadius(8f))
+    drawRoundRect(FT.GlassBorder, Offset(left, top), Size(w, h), CornerRadius(8f), style = Stroke(1f))
     drawText(layout, topLeft = Offset(left + padPx, top + padPx))
 }
 

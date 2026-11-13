@@ -13,38 +13,42 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.domain.events.buildableEvents
+import com.bioscan.fieldterminal.domain.events.taperWeeks
 import com.bioscan.fieldterminal.domain.training.definition.ConditioningProtocolDef
 import com.bioscan.fieldterminal.domain.training.definition.StrengthModuleDef
 import com.bioscan.fieldterminal.domain.training.generate.CondSlot
 import com.bioscan.fieldterminal.domain.training.generate.STRENGTH_GROUPS
-import com.bioscan.fieldterminal.domain.training.generate.isMainProtocol
-import com.bioscan.fieldterminal.domain.training.generate.strengthGroupOf
-import com.bioscan.fieldterminal.domain.training.generate.versionsOf
 import com.bioscan.fieldterminal.domain.training.generate.WeekKind
 import com.bioscan.fieldterminal.domain.training.generate.countedWeeks
+import com.bioscan.fieldterminal.domain.training.generate.isMainProtocol
+import com.bioscan.fieldterminal.domain.training.generate.strengthGroupOf
 import com.bioscan.fieldterminal.domain.training.generate.text
+import com.bioscan.fieldterminal.domain.training.generate.versionsOf
 import com.bioscan.fieldterminal.domain.training.generate.weeksForBlocks
-import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTDropdown
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
-import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.DayOfWeek
 import java.time.format.TextStyle
 import java.util.Locale
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // DAV-345. The steps of the build path: pick a strength template, pick a conditioning template,
 // decide how they share the week, then which weeks are deloads. Every choice is a suggestion the
@@ -66,11 +70,11 @@ private fun budgetSummary(p: ConditioningProtocolDef): String {
 
 // ---------------- Strength program ----------------
 // Each program is one card; its versions open in a sheet (nothing expands in the list, so nothing moves under a tap).
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun StrengthStep(state: TrainingPlannerState) {
     val modules = state.catalog?.definitions.orEmpty().filterIsInstance<StrengthModuleDef>()
-    var picking by androidx.compose.runtime.remember { mutableStateOf<String?>(null) }
+    var picking by remember { mutableStateOf<String?>(null) }
     Label("STRENGTH PROGRAM")
     Body("Pick the main program and its version. Options and exercises come later, in DETAILS.", muted = true)
     STRENGTH_GROUPS.forEach { g ->
@@ -88,9 +92,9 @@ internal fun StrengthStep(state: TrainingPlannerState) {
     picking?.let { id ->
         val g = STRENGTH_GROUPS.first { it.id == id }
         val versions = versionsOf(g, modules)
-        androidx.compose.material3.ModalBottomSheet(
+        ModalBottomSheet(
             onDismissRequest = { picking = null },
-            sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             shape = FT.SheetShape, containerColor = FT.Surface, contentColor = FT.TextPrimary,
         ) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
@@ -186,14 +190,14 @@ private fun DayChip(label: String, active: Boolean, accent: Color, modifier: Mod
 // ---------------- The frame: an event to build toward, and the length (the first step) ----------------
 @Composable
 internal fun FrameFields(state: TrainingPlannerState) {
-    val buildable = com.bioscan.fieldterminal.domain.events.buildableEvents(state.events, state.startDate)
+    val buildable = buildableEvents(state.events, state.startDate)
     if (buildable.isNotEmpty()) {
         Label("BUILD TOWARD AN EVENT")
         Chips(buildable.map { it.id.toString() } + "none", setOfNotNull(state.targetEvent?.id?.toString() ?: "none"), { k ->
             buildable.firstOrNull { it.id.toString() == k }?.let { "${it.name} · ${it.date}" } ?: "NO EVENT"
         }) { k -> state.buildToward(buildable.firstOrNull { it.id.toString() == k }) }
         state.targetEvent?.let { e ->
-            val taper = com.bioscan.fieldterminal.domain.events.taperWeeks(e)
+            val taper = taperWeeks(e)
             Body(
                 "Ends in the week of ${e.name}." + if (taper > 0) {
                     " The last $taper week${if (taper > 1) "s" else ""} taper (lighter weeks, about half the volume; Bosquet 2007): keep a few short efforts at race pace."

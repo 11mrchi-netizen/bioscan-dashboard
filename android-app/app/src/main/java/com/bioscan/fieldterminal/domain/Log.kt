@@ -1,25 +1,28 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain
 
-import kotlinx.serialization.UseSerializers
-import kotlinx.serialization.Serializable
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
 import com.bioscan.fieldterminal.data.model.LogExerciseRow
 import com.bioscan.fieldterminal.data.model.LogGripRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
-import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
 import com.bioscan.fieldterminal.data.model.LogOstrcRow
+import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
 import com.bioscan.fieldterminal.data.model.LogSleepRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import kotlin.math.abs
 
 enum class LogEntryKind(val label: String) {
     Exercise("EXERCISE"), Food("FOOD"), Sleep("SLEEP"), Stool("STOOL"),
@@ -108,9 +111,9 @@ fun logEntryWhen(entry: LogEntry, today: LocalDate): String {
     val day = when (date) {
         today -> "TODAY"
         today.minusDays(1) -> "YESTERDAY"
-        else -> date.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM", java.util.Locale.ENGLISH)).uppercase()
+        else -> date.format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)).uppercase()
     }
-    val time = if (entry.source.hasTimeOfDay) " · " + entry.timestamp.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")) else ""
+    val time = if (entry.source.hasTimeOfDay) " · " + entry.timestamp.format(DateTimeFormatter.ofPattern("HH:mm")) else ""
     return "${entry.kind.label} · $day$time"
 }
 
@@ -316,8 +319,8 @@ internal fun dedupeLogExerciseSessions(sessions: List<LogExerciseRow>): List<Log
                 val repDuration = rep.durationMin ?: 0.0
                 val sameDay = repStart.toLocalDate() == sessionStart.toLocalDate()
                 val sameType = rep.type == session.type
-                val startDiffMin = kotlin.math.abs(Duration.between(repStart, sessionStart).toMinutes())
-                val durationDiffMin = kotlin.math.abs(repDuration - sessionDuration)
+                val startDiffMin = abs(Duration.between(repStart, sessionStart).toMinutes())
+                val durationDiffMin = abs(repDuration - sessionDuration)
                 val durationTolerance = maxOf(SAME_RUN_DURATION_TOLERANCE_MIN, minOf(repDuration, sessionDuration) * 0.2)
                 sameDay && sameType && startDiffMin <= SAME_RUN_START_TOLERANCE_MIN && durationDiffMin <= durationTolerance
             }

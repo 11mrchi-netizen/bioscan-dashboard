@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import android.util.Log
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.serialization.Serializable
@@ -23,6 +24,6 @@ object SyncHeartbeat {
                 ignoreDuplicates = true
             }
         }
-        if (done == null) android.util.Log.w("SyncHeartbeat", "heartbeat for $stream not recorded")
+        if (done == null) Log.w("SyncHeartbeat", "heartbeat for $stream not recorded")
     }
 }

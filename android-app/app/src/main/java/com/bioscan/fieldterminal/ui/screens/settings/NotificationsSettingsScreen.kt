@@ -1,8 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.settings
 
-import com.bioscan.fieldterminal.ui.components.LoadingOrError
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
-import com.bioscan.fieldterminal.data.catching
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -17,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import com.bioscan.fieldterminal.ui.components.FTSwitch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.bioscan.fieldterminal.data.NotificationRulesRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.NotificationKind
 import com.bioscan.fieldterminal.data.model.NotificationPrefsRow
 import com.bioscan.fieldterminal.data.model.NotificationRuleRow
@@ -39,14 +36,18 @@ import com.bioscan.fieldterminal.domain.notifications.parseHm
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTSwitch
+import com.bioscan.fieldterminal.ui.components.LoadingOrError
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.TimeField
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private val RULE_LABELS = mapOf(
     NotificationKind.SUPPLEMENT_DUE to "SUPPLEMENT REMINDERS",
@@ -159,7 +160,7 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
                         scope.launch {
                             notifSaving = true
                             notifError = catching { notificationsRepository.savePrefs(toSave) }.isFailure
-                            if (!notifError) notifSavedAt = java.time.LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+                            if (!notifError) notifSavedAt = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
                             notifSaving = false
                         }
                     }

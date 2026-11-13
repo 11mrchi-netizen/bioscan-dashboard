@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.ExperimentsRepository
 import com.bioscan.fieldterminal.data.InterventionEventsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.DrawRow
 import com.bioscan.fieldterminal.data.model.EpisodicIntervention
 import com.bioscan.fieldterminal.data.model.EventEvidenceRow
@@ -41,8 +41,8 @@ import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Lab › N=1: interventions you repeat (nasal strips, a lactose meal, a cold shower), the events logged for them, how each
 // felt, and what the nightly analysis makes of them so far. The label climbs with the number of events that have data

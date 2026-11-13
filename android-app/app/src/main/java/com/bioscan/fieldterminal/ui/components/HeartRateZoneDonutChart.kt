@@ -21,8 +21,8 @@ import com.bioscan.fieldterminal.domain.HeartRateZone
 import com.bioscan.fieldterminal.domain.HeartRateZoneBreakdown
 import com.bioscan.fieldterminal.domain.ZoneBounds
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Session detail's HR zone breakdown. The v1 ordinal HR-zone ramp (--z-hr-1..5, low to
 // high effort), not a reuse of FT's Warning/Critical -- those are this app's

@@ -1,12 +1,14 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain.fuel
 
-import kotlinx.serialization.UseSerializers
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
+import java.time.LocalTime
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 // What a meal's targets look like on the plate (fuel planning phase 10). Deterministic: a fixed food table (the
 // person's own catalogue foods and the built-in staples, StapleFoods.kt), a template per meal, portions solved by
@@ -279,7 +281,7 @@ private fun solveGrams(t: PlateTarget, foods: List<FoodOption>, fixed: List<Port
         val fixedPart = foods.indices.filter { it !in free }
         val rows = mutableListOf<DoubleArray>(); val rhs = mutableListOf<Double>()
         fun macroRow(per: (FoodOption) -> Double, target: Double, scale: Double, w: Double) {
-            val k = kotlin.math.sqrt(w) / scale
+            val k = sqrt(w) / scale
             rows += DoubleArray(free.size) { per(foods[free[it]]) * k }
             rhs += (target - fixedPart.sumOf { per(foods[it]) * x[it] }) * k
         }
@@ -409,7 +411,7 @@ fun staplesWithUses(descriptions: List<Pair<MealSlotKind, String>>, staples: Lis
 }
 
 /** The slot a meal eaten at [time] belongs to: the nearest of the person's meal times within 2 hours, else a snack. */
-fun slotForTime(time: java.time.LocalTime, times: MealTimes): MealSlotKind {
+fun slotForTime(time: LocalTime, times: MealTimes): MealSlotKind {
     val slots = listOfNotNull(
         MealSlotKind.BREAKFAST to times.breakfast, MealSlotKind.LUNCH to times.lunch,
         times.snack?.let { MealSlotKind.SNACK to it }, MealSlotKind.DINNER to times.dinner,
@@ -466,7 +468,7 @@ fun ownFoods(logged: List<LoggedFood>, catalogue: Map<Long, CatalogueFood>): Lis
  * when that one is open, else the first meal of the day before it starts, else a snack. [logged] are the labels already
  * used that day. The person can change it; the label is stored on the meal (meals.meal_slot).
  */
-fun suggestMealSlot(time: java.time.LocalTime, times: MealTimes, logged: Set<MealSlotKind>): MealSlotKind {
+fun suggestMealSlot(time: LocalTime, times: MealTimes, logged: Set<MealSlotKind>): MealSlotKind {
     val slots = listOfNotNull(
         MealSlotKind.BREAKFAST to times.breakfast, MealSlotKind.LUNCH to times.lunch,
         times.snack?.let { MealSlotKind.SNACK to it }, MealSlotKind.DINNER to times.dinner,

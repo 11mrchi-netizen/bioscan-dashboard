@@ -6,7 +6,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -22,12 +24,15 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.domain.MetricState
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.sqrt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // One spoke of the radar. `value` is already a 0..100 radius supplied upstream; null means the axis could
 // not be assessed -- it is drawn as a dashed spoke with no marker and a "—" label, and left OUT of the polygon (never
@@ -40,7 +45,7 @@ data class RadarAxis(
     val value: Double?,
     val color: Color,
     val valueLabel: String? = null,
-    val state: com.bioscan.fieldterminal.domain.MetricState? = null,
+    val state: MetricState? = null,
     val description: String? = null,
 )
 
@@ -100,14 +105,14 @@ fun FTRadarChart(
             val path = Path()
             for (i in 0 until n) point(i, ring).let { if (i == 0) path.moveTo(it.x, it.y) else path.lineTo(it.x, it.y) }
             path.close()
-            val marked = markedRings.any { kotlin.math.abs(it.value / 100.0 - ring) < 0.001 }
+            val marked = markedRings.any { abs(it.value / 100.0 - ring) < 0.001 }
             drawPath(
                 path, if (marked) FT.TextMuted.copy(alpha = 0.55f) else FT.GlassBorder,
                 style = Stroke(width = if (ring == 1f || marked) 1.5.dp.toPx() else 1.dp.toPx()),
             )
         }
         // A marked ring that is not one of the four grid rings is drawn too.
-        markedRings.filter { r -> listOf(25.0, 50.0, 75.0, 100.0).none { kotlin.math.abs(it - r.value) < 0.001 } }.forEach { r ->
+        markedRings.filter { r -> listOf(25.0, 50.0, 75.0, 100.0).none { abs(it - r.value) < 0.001 } }.forEach { r ->
             val path = Path()
             for (i in 0 until n) point(i, (r.value / 100.0).toFloat()).let { if (i == 0) path.moveTo(it.x, it.y) else path.lineTo(it.x, it.y) }
             path.close()
@@ -157,7 +162,7 @@ fun FTRadarChart(
             val p = point(0, (r.value / 100.0).toFloat())
             val layout = measurer.measure(r.label, FTType.Micro.copy(color = FT.TextMuted))
             val tl = Offset(p.x - layout.size.width - 5.dp.toPx(), p.y - layout.size.height / 2f)
-            drawRoundRect(FT.Surface.copy(alpha = 0.85f), tl - Offset(2.dp.toPx(), 0f), androidx.compose.ui.geometry.Size(layout.size.width + 4.dp.toPx(), layout.size.height.toFloat()), androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()))
+            drawRoundRect(FT.Surface.copy(alpha = 0.85f), tl - Offset(2.dp.toPx(), 0f), Size(layout.size.width + 4.dp.toPx(), layout.size.height.toFloat()), CornerRadius(3.dp.toPx()))
             drawText(layout, topLeft = tl)
         }
     }
@@ -166,11 +171,11 @@ fun FTRadarChart(
 private fun DrawScope.drawVertex(axis: RadarAxis, p: Offset) {
     val r = 4.5.dp.toPx()
     when (axis.state) {
-        com.bioscan.fieldterminal.domain.MetricState.Neutral -> {
+        MetricState.Neutral -> {
             drawCircle(FT.Surface, radius = 6.dp.toPx(), center = p)
             drawCircle(axis.color, radius = r, center = p, style = Stroke(width = 2.dp.toPx()))
         }
-        com.bioscan.fieldterminal.domain.MetricState.Warning, com.bioscan.fieldterminal.domain.MetricState.Critical -> {
+        MetricState.Warning, MetricState.Critical -> {
             val t = Path().apply {
                 moveTo(p.x, p.y - r * 1.35f); lineTo(p.x + r * 1.2f, p.y + r * 0.85f); lineTo(p.x - r * 1.2f, p.y + r * 0.85f); close()
             }
@@ -198,7 +203,7 @@ private fun DrawScope.drawAxisLabel(measurer: TextMeasurer, axis: RadarAxis, sel
     // Push the label outward along the spoke, keeping it on the canvas.
     val dx = tip.x - center.x
     val dy = tip.y - center.y
-    val len = kotlin.math.sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
+    val len = sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
     val ox = tip.x + dx / len * pad - layout.size.width * (0.5f - 0.5f * dx / len)
     val oy = tip.y + dy / len * pad - layout.size.height * (0.5f - 0.5f * dy / len)
     val x = ox.coerceIn(0f, size.width - layout.size.width)

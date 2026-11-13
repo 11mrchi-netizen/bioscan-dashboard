@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -35,21 +34,22 @@ import com.bioscan.fieldterminal.data.PantryItem
 import com.bioscan.fieldterminal.data.PantryRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.flagTexts
+import com.bioscan.fieldterminal.domain.OBSERVED_WINDOW_DAYS
 import com.bioscan.fieldterminal.domain.PantryFindingKind
 import com.bioscan.fieldterminal.domain.RateBasis
 import com.bioscan.fieldterminal.domain.StockEventKind
-import com.bioscan.fieldterminal.domain.OBSERVED_WINDOW_DAYS
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTConfirmDestructive
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.PinnedPage
+import com.bioscan.fieldterminal.ui.components.SkeletonSections
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private val label = FTType.LabelCaps
 private val body = FTType.BodySmall
@@ -89,7 +89,7 @@ fun PantryScreen(onBack: () -> Unit) {
             val list = items
             when {
                 error != null && list == null -> Text("Failed to load: $error", style = body, color = FT.Critical)
-                list == null -> com.bioscan.fieldterminal.ui.components.SkeletonSections()
+                list == null -> SkeletonSections()
                 list.isEmpty() -> Text("No supplements with a linked product yet. Add ingredients to a supplement (or verify it by barcode) to track its stock here.", style = body, color = FT.TextSecondary)
                 else -> {
                     val attention = list.filter { it.assessment.findings.any { f -> f.kind != PantryFindingKind.NoStock } }

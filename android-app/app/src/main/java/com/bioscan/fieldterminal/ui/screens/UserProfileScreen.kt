@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -23,14 +22,16 @@ import com.bioscan.fieldterminal.data.HealthspanBundle
 import com.bioscan.fieldterminal.data.HealthspanRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingCyclesRepository
+import com.bioscan.fieldterminal.data.catching
+import com.bioscan.fieldterminal.domain.Confidence
 import com.bioscan.fieldterminal.domain.DataAvailability
 import com.bioscan.fieldterminal.domain.TrainingCycle
 import com.bioscan.fieldterminal.domain.levels.SkillLevel
 import com.bioscan.fieldterminal.ui.components.FTCard
-import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
 import com.bioscan.fieldterminal.ui.components.FTDataState
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
+import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.screens.training.currentBlockProgress
 import com.bioscan.fieldterminal.ui.screens.training.currentBlockTitle
@@ -41,9 +42,10 @@ import com.bioscan.fieldterminal.ui.screens.user.conditioningLevelOf
 import com.bioscan.fieldterminal.ui.screens.user.runningLevelOf
 import com.bioscan.fieldterminal.ui.screens.user.strengthLevelOf
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // User tab: Healthspan (radar over the scored factors), Aging, the three skill pages (Running / Strength / Conditioning) as buttons
 // under Aging, then the training block. Skill levels are computed from real history (see domain/levels/SkillLevel.kt); nothing on
@@ -71,7 +73,7 @@ fun UserProfileScreen(
         val overview = agingOverview ?: return@LaunchedEffect
         healthspanFailed = false
         healthspan = catching { HealthspanRepository(SupabaseClientProvider.client).load(overview) }
-            .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it else healthspanFailed = true }
+            .onFailure { if (it is CancellationException) throw it else healthspanFailed = true }
             .getOrNull()
     }
 
@@ -117,12 +119,12 @@ fun UserProfileScreen(
 private suspend fun loadLevel(compute: suspend () -> SkillLevel): SkillLevel =
     try {
         compute()
-    } catch (e: kotlinx.coroutines.CancellationException) {
+    } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         SkillLevel(
             label = "Not enough data yet", position = null, basis = null, provisional = false, headline = null,
-            reason = "Couldn't load history — check connection", confidence = com.bioscan.fieldterminal.domain.Confidence(0, 1),
+            reason = "Couldn't load history — check connection", confidence = Confidence(0, 1),
         )
     }
 

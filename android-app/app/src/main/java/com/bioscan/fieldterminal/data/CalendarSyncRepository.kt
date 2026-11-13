@@ -1,9 +1,9 @@
 package com.bioscan.fieldterminal.data
 
-import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.data.model.CalendarAttachmentRow
 import com.bioscan.fieldterminal.data.model.CalendarSyncStateRow
 import com.bioscan.fieldterminal.data.model.NewCalendarEventRow
+import com.bioscan.fieldterminal.domain.LenientJson
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.ktor.client.HttpClient

@@ -22,10 +22,10 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.domain.routine.ModeGroup
 import com.bioscan.fieldterminal.domain.routine.PlaceCategory
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // The day map's and the commute's shared colours and marks. Modes are a categorical set, in stack order, checked with the
 // dataviz validator against the dark surface (#11161A): lightness band, chroma, adjacent colour-blind separation (worst

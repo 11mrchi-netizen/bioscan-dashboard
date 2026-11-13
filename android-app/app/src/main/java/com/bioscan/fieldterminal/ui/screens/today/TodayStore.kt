@@ -2,13 +2,13 @@
 
 package com.bioscan.fieldterminal.ui.screens.today
 
-import com.bioscan.fieldterminal.data.catching
 import android.content.Context
 import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.ReadCache
 import com.bioscan.fieldterminal.data.ScoresView
 import com.bioscan.fieldterminal.data.TodayFuel
 import com.bioscan.fieldterminal.data.TodayPreviews
+import com.bioscan.fieldterminal.data.catching
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable

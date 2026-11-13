@@ -27,6 +27,7 @@ import com.bioscan.fieldterminal.data.model.FindingDto
 import com.bioscan.fieldterminal.data.model.HealthConcernRow
 import com.bioscan.fieldterminal.data.model.HealthObservationRow
 import com.bioscan.fieldterminal.data.model.TrialReadDto
+import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.domain.health.IMPACT_LABELS
 import com.bioscan.fieldterminal.domain.health.concernStateWord
 import com.bioscan.fieldterminal.domain.health.durationText
@@ -54,10 +55,9 @@ import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.components.parallel
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
-import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Health concerns (plan §5.3-5.6): one concern's page. OVERVIEW leads with the state and why, then the timeline,
 // episodes, recurrence, recovery and training impact; CONTEXT puts training and recovery on the same days and, per

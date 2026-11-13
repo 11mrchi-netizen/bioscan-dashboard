@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.data.routine
 
-import com.bioscan.fieldterminal.data.catching
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -8,6 +7,7 @@ import android.content.Intent
 import androidx.core.app.NotificationManagerCompat
 import com.bioscan.fieldterminal.data.NotificationRulesRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.NotificationKind
 import com.bioscan.fieldterminal.data.model.NotificationOutcome
 import com.bioscan.fieldterminal.domain.routine.LogSource

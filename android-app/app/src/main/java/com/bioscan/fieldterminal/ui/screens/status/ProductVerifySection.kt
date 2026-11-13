@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -30,9 +29,10 @@ import com.bioscan.fieldterminal.data.ProductVerification
 import com.bioscan.fieldterminal.data.SUPPCO_SOURCE_NAME
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SuppcoVerification
-import com.bioscan.fieldterminal.data.model.flagTexts
 import com.bioscan.fieldterminal.data.SupplementLookupRepository
 import com.bioscan.fieldterminal.data.SupplementSourceRepository
+import com.bioscan.fieldterminal.data.catching
+import com.bioscan.fieldterminal.data.model.flagTexts
 import com.bioscan.fieldterminal.domain.DsldComparison
 import com.bioscan.fieldterminal.domain.DsldConflictKind
 import com.bioscan.fieldterminal.domain.FactField
@@ -43,10 +43,10 @@ import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.util.scanBarcode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private val body = FTType.BodySmall
 private val sourceLabel = FTType.LabelCaps

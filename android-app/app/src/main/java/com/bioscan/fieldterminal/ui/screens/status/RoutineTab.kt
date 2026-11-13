@@ -50,19 +50,21 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
-import com.bioscan.fieldterminal.ui.screens.settings.PlacesCard
+import com.bioscan.fieldterminal.ui.components.rememberCacheVersion
 import com.bioscan.fieldterminal.ui.screens.routine.ModeBar
 import com.bioscan.fieldterminal.ui.screens.routine.ModeLegend
+import com.bioscan.fieldterminal.ui.screens.routine.RoutineTimeSection
 import com.bioscan.fieldterminal.ui.screens.routine.clock
 import com.bioscan.fieldterminal.ui.screens.routine.clockOfMinute
 import com.bioscan.fieldterminal.ui.screens.routine.hm
 import com.bioscan.fieldterminal.ui.screens.routine.modeLine
+import com.bioscan.fieldterminal.ui.screens.settings.PlacesCard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Routine intelligence R5 (docs/routine-intelligence/01-research-and-plan.md, section 10): Lab › ROUTINE. Practices, logged
 // time and the week's time (R7), then the week by place, the commute with other ways to make it, and the phone. Views of what was recorded, not findings: what goes with
@@ -80,7 +82,7 @@ fun RoutineTab(onOpenDay: (LocalDate) -> Unit = {}) {
     var apps by remember { mutableStateOf<List<AppWeekTotal>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    val cacheVersion = rememberCacheVersion()
     LaunchedEffect(cacheVersion, reload) {
         scope.launchSafe(onError = { error = describeLoadFailure(it) }) {
             val yesterday = LocalDate.now().minusDays(1)
@@ -99,7 +101,7 @@ fun RoutineTab(onOpenDay: (LocalDate) -> Unit = {}) {
     Column(verticalArrangement = Arrangement.spacedBy(18.dp), modifier = Modifier.padding(horizontal = 22.dp, vertical = 16.dp)) {
         error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
         // Routine R7: practices, logged time and the week's time (ui/screens/routine/PracticesCards.kt).
-        com.bioscan.fieldterminal.ui.screens.routine.RoutineTimeSection()
+        RoutineTimeSection()
         FTButton("OPEN DAY MAP", modifier = Modifier.fillMaxWidth(), emphasis = FTButtonEmphasis.Primary) { onOpenDay(LocalDate.now()) }
         WeekCard(strip, onOpenDay)
         // Naming places is what turns the week and the commute into categories, so it sits here as well as in Setup.

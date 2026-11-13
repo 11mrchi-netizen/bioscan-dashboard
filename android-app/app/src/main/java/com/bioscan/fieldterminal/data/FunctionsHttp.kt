@@ -1,9 +1,9 @@
 package com.bioscan.fieldterminal.data
 
+import io.github.jan.supabase.SupabaseClient
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpRequestTimeoutException
-import io.github.jan.supabase.SupabaseClient
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.header

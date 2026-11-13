@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.fuel
 
-import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,18 +8,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.data.FuelPlanRepository
-import com.bioscan.fieldterminal.data.NutritionOverview
-import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TodayFuel
 import com.bioscan.fieldterminal.data.TodayFuelResult
 import com.bioscan.fieldterminal.domain.fuel.CodedDay
@@ -28,6 +20,10 @@ import com.bioscan.fieldterminal.domain.fuel.CodedMeal
 import com.bioscan.fieldterminal.domain.fuel.MealAdherence
 import com.bioscan.fieldterminal.domain.fuel.MealSlotKind
 import com.bioscan.fieldterminal.domain.fuel.MealSuggestion
+import com.bioscan.fieldterminal.domain.fuel.Plate
+import com.bioscan.fieldterminal.domain.fuel.PrepSlot
+import com.bioscan.fieldterminal.domain.fuel.PreppedDay
+import com.bioscan.fieldterminal.domain.fuel.RaceFuelPlan
 import com.bioscan.fieldterminal.domain.fuel.SessionFuelKind
 import com.bioscan.fieldterminal.domain.fuel.SessionWindow
 import com.bioscan.fieldterminal.domain.fuel.formatGPerKg
@@ -37,10 +33,11 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTCardEmphasis
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Fuel › Plan's lead card (docs/fuel-planning/README.md, phases 6 and 10): today's carbohydrate class and target, the
 // meals in order with their codes, carbohydrate, protein and fat, reasons and two example plates, the sessions with what
@@ -128,9 +125,9 @@ private sealed interface Row2 {
 internal fun Timeline(
     day: CodedDay,
     adherence: Map<String, Pair<Double, MealAdherence>>,
-    longPlans: Map<String, com.bioscan.fieldterminal.domain.fuel.RaceFuelPlan>,
+    longPlans: Map<String, RaceFuelPlan>,
     suggestions: List<MealSuggestion>? = null,
-    prep: com.bioscan.fieldterminal.domain.fuel.PreppedDay? = null,
+    prep: PreppedDay? = null,
 ) {
     val plates = suggestions?.let { s -> day.meals.zip(s).toMap() }.orEmpty()
     // The snack remainder is shown once, under the first snack of the day.
@@ -151,7 +148,7 @@ private fun MealLine(
     m: CodedMeal,
     logged: Pair<Double, MealAdherence>?,
     plates: MealSuggestion? = null,
-    prep: com.bioscan.fieldterminal.domain.fuel.PreppedDay? = null,
+    prep: PreppedDay? = null,
     showSnackRemainder: Boolean = false,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -200,13 +197,13 @@ private fun MealLine(
 }
 
 /** What a prepped day puts in [m]'s slot: the scaled breakfast, the container, or OUT with the targets; null otherwise. */
-private fun prepLine(m: CodedMeal, prep: com.bioscan.fieldterminal.domain.fuel.PreppedDay): List<Pair<String, String>>? {
-    fun totals(p: com.bioscan.fieldterminal.domain.fuel.Plate) = "C ${p.carbG.roundToInt()} · P ${p.proteinG.roundToInt()} · F ${p.fatG.roundToInt()} G"
+private fun prepLine(m: CodedMeal, prep: PreppedDay): List<Pair<String, String>>? {
+    fun totals(p: Plate) = "C ${p.carbG.roundToInt()} · P ${p.proteinG.roundToInt()} · F ${p.fatG.roundToInt()} G"
     return when (m.kind) {
         MealSlotKind.BREAKFAST -> prep.breakfast?.let { listOf("YOUR BREAKFAST" to "${it.label} · ${totals(it)}") }
         MealSlotKind.LUNCH, MealSlotKind.DINNER -> {
-            val slot = if (m.kind == MealSlotKind.LUNCH) com.bioscan.fieldterminal.domain.fuel.PrepSlot.LUNCH else com.bioscan.fieldterminal.domain.fuel.PrepSlot.DINNER
-            val c = if (slot == com.bioscan.fieldterminal.domain.fuel.PrepSlot.LUNCH) prep.lunch else prep.dinner
+            val slot = if (m.kind == MealSlotKind.LUNCH) PrepSlot.LUNCH else PrepSlot.DINNER
+            val c = if (slot == PrepSlot.LUNCH) prep.lunch else prep.dinner
             when {
                 c != null -> listOf("CONTAINER ${c.letter}" to "${c.plate.label} · ${totals(c.plate)}")
                 slot in prep.skipped -> listOf(
@@ -239,7 +236,7 @@ private fun PlateLines(s: MealSuggestion) {
 }
 
 @Composable
-private fun SessionLine(w: SessionWindow, long: com.bioscan.fieldterminal.domain.fuel.RaceFuelPlan?) {
+private fun SessionLine(w: SessionWindow, long: RaceFuelPlan?) {
     val item = w.item
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(item.start?.format(HM) ?: "--:--", style = FTType.MonoCaption, color = FT.DomainTraining, modifier = Modifier.width(44.dp))
@@ -279,7 +276,7 @@ fun TodayFuelSummary(fuel: TodayFuel, onOpen: () -> Unit, modifier: Modifier = M
                 style = FTType.LabelCaps, color = FT.TextPrimary,
             )
         }
-        fuel.todayCoded.meals.firstOrNull { it.time.isAfter(java.time.ZonedDateTime.now()) }?.let { next ->
+        fuel.todayCoded.meals.firstOrNull { it.time.isAfter(ZonedDateTime.now()) }?.let { next ->
             Text("NEXT: ${next.kind.label} ${next.code.label} · ${gRange(next.carbLowG, next.carbHighG)} CARBS", style = FTType.MonoCaption, color = FT.TextSecondary)
         }
     }

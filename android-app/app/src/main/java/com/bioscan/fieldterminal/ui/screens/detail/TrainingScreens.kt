@@ -18,6 +18,7 @@ import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.data.restingSeries
+import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.domain.LoadSpans
 import com.bioscan.fieldterminal.domain.evaluateRestCadence
 import com.bioscan.fieldterminal.domain.evaluateSubjective
@@ -27,7 +28,6 @@ import com.bioscan.fieldterminal.domain.trainingLoadSeries
 import com.bioscan.fieldterminal.domain.weeklyRestCadenceHistory
 import com.bioscan.fieldterminal.ui.components.parallel
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
-import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.ui.screens.health.ConcernsTab
 import com.bioscan.fieldterminal.ui.screens.status.ActiveTravelCard
 import com.bioscan.fieldterminal.ui.screens.status.IntensityCard
@@ -35,8 +35,8 @@ import com.bioscan.fieldterminal.ui.screens.today.TsbGauge
 import com.bioscan.fieldterminal.ui.screens.today.TsbLine
 import com.bioscan.fieldterminal.ui.screens.user.UserDataCache
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private const val TSB_INFO =
     "Form (training stress balance): yesterday's fitness minus yesterday's fatigue. Negative means more recent load than " +

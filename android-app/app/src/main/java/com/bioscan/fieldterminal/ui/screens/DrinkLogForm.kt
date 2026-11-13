@@ -1,9 +1,9 @@
 package com.bioscan.fieldterminal.ui.screens
 
-import com.bioscan.fieldterminal.data.catching
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -27,6 +27,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -34,6 +35,7 @@ import androidx.core.content.ContextCompat
 import com.bioscan.fieldterminal.data.DrinksRepository
 import com.bioscan.fieldterminal.data.NutritionBarcodeLookupRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.DrinkMatch
 import com.bioscan.fieldterminal.domain.STANDARD_DRINK_G
 import com.bioscan.fieldterminal.domain.UsualDrink
@@ -45,20 +47,25 @@ import com.bioscan.fieldterminal.domain.usualDrinks
 import com.bioscan.fieldterminal.ui.components.DateTimeField
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
+import com.bioscan.fieldterminal.ui.components.FTIcon
+import com.bioscan.fieldterminal.ui.components.FTIconSize
+import com.bioscan.fieldterminal.ui.components.FTIcons
 import com.bioscan.fieldterminal.ui.components.FTRatingSlider
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.ftGlass
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.util.PendingCameraCapture
 import com.bioscan.fieldterminal.util.createCameraCaptureUri
 import com.bioscan.fieldterminal.util.scanBarcode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // The drink log, top to bottom: FIND A DRINK (a search of the catalog: USDA, Taiwan FDA, scanned products; or its barcode),
 // KIND (a typical drink of a kind, herbal tea among them), USUALS (kept closed). A pick opens the panel with when, the
@@ -131,13 +138,13 @@ internal fun DrinkLogForm(
         try {
             defaults = repo.search("")
             val logged = repo.logged(days = 60, zone = zone)
-            val u = usualDrinks(logged, java.time.Instant.now())
+            val u = usualDrinks(logged, Instant.now())
             val byId = repo.byIds(u.mapNotNull { it.foodId }.distinct()).associateBy { it.id }
             usual = u.map { it to it.foodId?.let(byId::get) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            android.util.Log.w("DrinkLog", "drink lists failed", e)
+            Log.w("DrinkLog", "drink lists failed", e)
         }
     }
     LaunchedEffect(query) {
@@ -176,7 +183,7 @@ internal fun DrinkLogForm(
 
     val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         externalActivityActive?.value = false
-        com.bioscan.fieldterminal.util.PendingCameraCapture.clear(context)
+        PendingCameraCapture.clear(context)
         if (ok) pendingCameraUri?.let { labelPhotos = labelPhotos + it }
     }
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -239,7 +246,7 @@ internal fun DrinkLogForm(
                 ) {
                     DrinkLabel("USUALS (${usual.size})")
                     Spacer(Modifier.weight(1f))
-                    com.bioscan.fieldterminal.ui.components.FTIcon(if (usualOpen) com.bioscan.fieldterminal.ui.components.FTIcons.Minus else com.bioscan.fieldterminal.ui.components.FTIcons.Plus, null, tint = FT.TextSecondary, size = com.bioscan.fieldterminal.ui.components.FTIconSize.Inline)
+                    FTIcon(if (usualOpen) FTIcons.Minus else FTIcons.Plus, null, tint = FT.TextSecondary, size = FTIconSize.Inline)
                 }
                 if (usualOpen) usual.forEach { (u, match) ->
                     DrinkRow(
@@ -414,7 +421,7 @@ private fun DrinkReadout(kcal: Double?, sugarG: Double?, caffeineMg: Double?, ca
 }
 
 @Composable
-private fun ReadoutCell(label: String, value: String?, ink: androidx.compose.ui.graphics.Color) {
+private fun ReadoutCell(label: String, value: String?, ink: Color) {
     Column {
         Text(label, style = FTType.Micro, color = FT.TextMuted)
         Text(value ?: "—", style = FTType.StatValue, color = if (value == null) FT.TextMuted else ink)

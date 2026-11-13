@@ -45,6 +45,7 @@ import com.bioscan.fieldterminal.healthconnect.HealthConnectManager
 import com.bioscan.fieldterminal.healthconnect.readAllRecords
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.coroutines.CancellationException
 import java.time.Instant
 import java.time.LocalDate
@@ -155,7 +156,7 @@ class HealthConnectDailySyncRepository(
         // Health Connect's value for the same day would overwrite it. Lookup failure falls back to writing as before.
         val scaleDays = catching {
             supabase.postgrest.from("body_metrics")
-                .select(io.github.jan.supabase.postgrest.query.Columns.list("date")) { filter { eq("source", SCALE_BIA_SOURCE) } }
+                .select(Columns.list("date")) { filter { eq("source", SCALE_BIA_SOURCE) } }
                 .decodeList<ScaleDayRow>().map { it.date }.toSet()
         }.getOrDefault(emptySet())
         val bodyFat = latestByLocalDate(readAll(BodyFatRecord::class, since, until).map { TimedValue(it.time, it.percentage.value) }, zone)

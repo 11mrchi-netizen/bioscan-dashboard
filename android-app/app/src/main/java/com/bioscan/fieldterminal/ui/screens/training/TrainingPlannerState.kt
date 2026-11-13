@@ -1,17 +1,23 @@
 package com.bioscan.fieldterminal.ui.screens.training
 
-import com.bioscan.fieldterminal.data.catching
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.bioscan.fieldterminal.data.AthleteEventsRepository
 import com.bioscan.fieldterminal.data.BlockPlan
 import com.bioscan.fieldterminal.data.DefinitionCatalog
 import com.bioscan.fieldterminal.data.ImportFile
+import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingProgramRepository
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.TrainingSettingsRow
 import com.bioscan.fieldterminal.domain.ZoneMethod
+import com.bioscan.fieldterminal.domain.events.AthleteEvent
+import com.bioscan.fieldterminal.domain.events.taperWeeks
+import com.bioscan.fieldterminal.domain.events.weeksToEvent
+import com.bioscan.fieldterminal.domain.events.withTaper
 import com.bioscan.fieldterminal.domain.training.PercentBase
 import com.bioscan.fieldterminal.domain.training.ResolvedMax
 import com.bioscan.fieldterminal.domain.training.definition.ConditioningProtocolDef
@@ -32,12 +38,14 @@ import com.bioscan.fieldterminal.domain.training.generate.cycleWeekKind
 import com.bioscan.fieldterminal.domain.training.generate.defaultTimeline
 import com.bioscan.fieldterminal.domain.training.generate.generateMergedBlock
 import com.bioscan.fieldterminal.domain.training.generate.generateTemplateBlock
+import com.bioscan.fieldterminal.domain.training.generate.isCluster
 import com.bioscan.fieldterminal.domain.training.generate.layoutWarnings
 import com.bioscan.fieldterminal.domain.training.generate.resizeTimeline
+import com.bioscan.fieldterminal.domain.training.generate.slotsToChoose
 import com.bioscan.fieldterminal.domain.training.generate.suggestLayout
-import com.bioscan.fieldterminal.domain.training.generate.weeksForBlocks
 import com.bioscan.fieldterminal.domain.training.generate.templateDayPositions
 import com.bioscan.fieldterminal.domain.training.generate.templateModuleKeys
+import com.bioscan.fieldterminal.domain.training.generate.weeksForBlocks
 import com.bioscan.fieldterminal.domain.training.movementKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -115,8 +123,8 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
     var weeks by mutableIntStateOf(8)
     var startWithTest by mutableStateOf(false)
     // Fuel planning phase 9: the event the block builds toward (it ends in that week, the last weeks taper).
-    var events by mutableStateOf<List<com.bioscan.fieldterminal.domain.events.AthleteEvent>>(emptyList())
-    var targetEvent by mutableStateOf<com.bioscan.fieldterminal.domain.events.AthleteEvent?>(null)
+    var events by mutableStateOf<List<AthleteEvent>>(emptyList())
+    var targetEvent by mutableStateOf<AthleteEvent?>(null)
 
     val index: DefinitionIndex? get() = catalog?.let { DefinitionIndex(it.definitions) }
 
@@ -159,7 +167,7 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
                 zoneMethod = repo.loadZoneMethod()
                 maxes = repo.loadMaxes()
             }.onFailure { error = it.message ?: "Could not load" }
-            events = catching { com.bioscan.fieldterminal.data.AthleteEventsRepository(com.bioscan.fieldterminal.data.SupabaseClientProvider.client).loadUpcoming(LocalDate.now()) }
+            events = catching { AthleteEventsRepository(SupabaseClientProvider.client).loadUpcoming(LocalDate.now()) }
                 .getOrDefault(emptyList())
             loading = false
         }
@@ -215,7 +223,7 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
         moduleChoices.remove(key)
         if (!lengthChosen) weeks = weeksForBlocks(2, blockLength())
         resetLayout(); resetTimeline()
-        targetEvent?.let { e -> timeline = com.bioscan.fieldterminal.domain.events.withTaper(timeline, com.bioscan.fieldterminal.domain.events.taperWeeks(e)) }
+        targetEvent?.let { e -> timeline = withTaper(timeline, taperWeeks(e)) }
     }
 
     fun pickProtocol(key: String?) {
@@ -241,13 +249,13 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
     }
 
     /** Sets the length to end in [event]'s week and makes the last weeks a taper; null clears the target. */
-    fun buildToward(event: com.bioscan.fieldterminal.domain.events.AthleteEvent?) {
+    fun buildToward(event: AthleteEvent?) {
         targetEvent = event
         if (event == null) return
         lengthChosen = true
-        changeWeeks(com.bioscan.fieldterminal.domain.events.weeksToEvent(startDate, event.date))
+        changeWeeks(weeksToEvent(startDate, event.date))
         resetTimeline()
-        timeline = com.bioscan.fieldterminal.domain.events.withTaper(timeline, com.bioscan.fieldterminal.domain.events.taperWeeks(event))
+        timeline = withTaper(timeline, taperWeeks(event))
         if (name.isBlank()) name = "Toward ${event.name}"
     }
 
@@ -323,11 +331,11 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
     /** The exercises picked (or the book's defaults) that have no max yet: the generator needs one to set loads. */
     fun missingMaxes(): List<String> = strengthModules.flatMap { m ->
         val choice = choiceFor(m.key)
-        com.bioscan.fieldterminal.domain.training.generate.slotsToChoose(m).flatMap { slot ->
+        slotsToChoose(m).flatMap { slot ->
             val chosen = choice.exercises[slot.id].orEmpty()
             when {
-                com.bioscan.fieldterminal.domain.training.generate.isCluster(m, slot) && slot.pick != null -> emptyList()
-                com.bioscan.fieldterminal.domain.training.generate.isCluster(m, slot) -> chosen.ifEmpty { listOf(slot.standard) }
+                isCluster(m, slot) && slot.pick != null -> emptyList()
+                isCluster(m, slot) -> chosen.ifEmpty { listOf(slot.standard) }
                 else -> listOf(chosen.firstOrNull() ?: slot.standard)
             }
         }

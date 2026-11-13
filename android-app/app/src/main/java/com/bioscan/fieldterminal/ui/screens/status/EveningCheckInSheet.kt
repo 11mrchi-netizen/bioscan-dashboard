@@ -1,28 +1,15 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import com.bioscan.fieldterminal.ui.components.LoadErrorCard
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
-import com.bioscan.fieldterminal.data.catching
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.semantics.Role
-import com.bioscan.fieldterminal.data.AddEntryRepository
-import com.bioscan.fieldterminal.data.AnalysisRepository
-import com.bioscan.fieldterminal.data.model.StoolAnalysisRow
-import com.bioscan.fieldterminal.domain.GUT_SYMPTOMS
-import com.bioscan.fieldterminal.ui.components.ftClickable
-import java.time.LocalTime
-import java.time.OffsetDateTime
-import java.time.ZoneId
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -35,23 +22,38 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.data.AddEntryRepository
+import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.EveningCheckinRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
+import com.bioscan.fieldterminal.data.model.StoolAnalysisRow
 import com.bioscan.fieldterminal.domain.EveningCheckin
+import com.bioscan.fieldterminal.domain.GUT_SYMPTOMS
+import com.bioscan.fieldterminal.domain.WallClock
 import com.bioscan.fieldterminal.domain.withNothingElse
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
+import com.bioscan.fieldterminal.ui.components.FTRatingSlider
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Analysis review phase B: the evening check-in (reminder at 22:25; also opened from Today's LAST EVENING card the next
 // morning). One tap per exposure the relationship engine asks about. NOTHING ELSE turns every unanswered exposure into an
@@ -113,11 +115,11 @@ fun EveningCheckInSheet(date: LocalDate, onDismiss: () -> Unit, onSaved: (Evenin
             TextChipRow(YES_NO, draft.lateMeal?.let { if (it) "YES" else "NO" }, perRow = 2) { picked ->
                 draft = draft.copy(lateMeal = picked?.let { it == "YES" })
             }
-            com.bioscan.fieldterminal.ui.components.FTRatingSlider("STRESS TODAY", draft.stress, 1..5, FT.Metric.Stress, { draft = draft.copy(stress = it) },
+            FTRatingSlider("STRESS TODAY", draft.stress, 1..5, FT.Metric.Stress, { draft = draft.copy(stress = it) },
                 lowWord = "calm", highWord = "very stressed", reversed = true)
 
             // Scoring system (FUEL › gut): how the gut was, what happened, and the day's logged movements with their times.
-            com.bioscan.fieldterminal.ui.components.FTRatingSlider("GUT", draft.gutComfort, 0..4, FT.Metric.GutComfort, { draft = draft.copy(gutComfort = it) },
+            FTRatingSlider("GUT", draft.gutComfort, 0..4, FT.Metric.GutComfort, { draft = draft.copy(gutComfort = it) },
                 lowWord = "rough", highWord = "comfortable")
             CheckInLabel("ANY OF THESE? (TICK ALL THAT HAPPENED)")
             SymptomChips(draft.gutSymptoms.orEmpty()) { symptom ->
@@ -189,7 +191,7 @@ private fun BowelMovements(date: LocalDate) {
     val zone = ZoneId.systemDefault()
     suspend fun reload() {
         entries = catching { AnalysisRepository(SupabaseClientProvider.client).loadStoolLog() }.getOrNull()
-            ?.filter { row -> com.bioscan.fieldterminal.domain.WallClock.date(row.occurredAt) == date }
+            ?.filter { row -> WallClock.date(row.occurredAt) == date }
     }
     LaunchedEffect(date) { reload() }
 
@@ -200,7 +202,7 @@ private fun BowelMovements(date: LocalDate) {
             list == null -> "Loading…"
             list.isEmpty() -> "None logged for this day."
             else -> list.joinToString(" · ") { row ->
-                val time = com.bioscan.fieldterminal.domain.WallClock.read(row.occurredAt)?.format(TIME_OF_DAY) ?: "?"
+                val time = WallClock.read(row.occurredAt)?.format(TIME_OF_DAY) ?: "?"
                 "$time type ${row.bristolType ?: "?"}"
             }
         },
@@ -216,7 +218,7 @@ private fun BowelMovements(date: LocalDate) {
                 val type = picked?.toInt() ?: return@TextChipRow
                 picking = false
                 scope.launchSafe(onError = { e -> error = describeLoadFailure(e) }) {
-                    AddEntryRepository(SupabaseClientProvider.client).addStool(com.bioscan.fieldterminal.domain.WallClock.write(java.time.LocalDateTime.now(zone)), type, null)
+                    AddEntryRepository(SupabaseClientProvider.client).addStool(WallClock.write(LocalDateTime.now(zone)), type, null)
                     reload()
                 }
             }

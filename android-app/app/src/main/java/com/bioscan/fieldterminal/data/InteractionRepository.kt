@@ -1,9 +1,9 @@
 package com.bioscan.fieldterminal.data
 
-import com.bioscan.fieldterminal.domain.spec
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.InteractionRecord
 import com.bioscan.fieldterminal.domain.RosterItem
+import com.bioscan.fieldterminal.domain.spec
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns

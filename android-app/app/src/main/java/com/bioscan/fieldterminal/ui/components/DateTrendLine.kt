@@ -29,11 +29,12 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.domain.oneADay
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import kotlin.math.abs
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // DAV-76. Shares DotPlot.kt's own Canvas + bounding-box + calendar-date
 // xFor/yFor technique, but connects points with a line -- unlike bloodwork's
@@ -81,7 +82,7 @@ data class TrendMark(val date: LocalDate, val value: Double, val color: Color)
 // A dated note: a dashed line for one day (a new device), a shaded span for several (a logged illness).
 data class TrendAnnotation(val start: LocalDate, val end: LocalDate = start, val label: String)
 
-private fun defaultTrendFormat(v: Double): String = if (kotlin.math.abs(v) >= 100) "%.0f".format(v) else "%.1f".format(v)
+private fun defaultTrendFormat(v: Double): String = if (abs(v) >= 100) "%.0f".format(v) else "%.1f".format(v)
 
 @Composable
 fun DateTrendLine(
@@ -144,7 +145,7 @@ fun DateTrendLine(
 ) {
     val sortedSeries = series
         // A line has one point a day (several on one date drew a vertical zigzag); dots keep every reading.
-        .map { it.copy(points = if (it.dotsOnly) it.points.sortedBy { p -> p.first } else com.bioscan.fieldterminal.domain.oneADay(it.points)) }
+        .map { it.copy(points = if (it.dotsOnly) it.points.sortedBy { p -> p.first } else oneADay(it.points)) }
         .filter { it.points.size >= if (it.dotsOnly || it.maxGapDays != null) 1 else 2 }
     val sortedBand = band.sortedBy { it.date }
     if (sortedSeries.isEmpty() && sortedBand.isEmpty()) return
@@ -206,7 +207,7 @@ fun DateTrendLine(
                 .fillMaxWidth()
                 .height(chartHeight)
                 .chartInspect(Triple(sortedSeries, sortedBand, gutter)) { x, width, isTap ->
-                    val nearest = inspectDays.minBy { kotlin.math.abs(xFor(it, width) - x) }
+                    val nearest = inspectDays.minBy { abs(xFor(it, width) - x) }
                     selectedDay = if (isTap && selectedDay == nearest) null else nearest
                 },
         ) {

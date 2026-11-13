@@ -1,8 +1,5 @@
 package com.bioscan.fieldterminal.domain
 
-import java.time.LocalDate
-import java.time.temporal.ChronoUnit
-
 // Phase A4 (Analysis Layer). Evaluation Method Spec, Category 8 (digestive/
 // Bristol half): a rolling 14-day distribution, not a daily value -- a
 // single BSFS reading is nearly meaningless per the spec; the pattern

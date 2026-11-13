@@ -1,97 +1,121 @@
 package com.bioscan.fieldterminal.ui.screens.today
 
-import com.bioscan.fieldterminal.data.catching
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.bioscan.fieldterminal.data.AnalysisRepository
+import com.bioscan.fieldterminal.data.NutritionGoalsStore
 import com.bioscan.fieldterminal.data.ScoresView
+import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
+import com.bioscan.fieldterminal.data.model.RelationshipResultRow
 import com.bioscan.fieldterminal.domain.ScorecardResult
 import com.bioscan.fieldterminal.domain.ScorecardVerdict
 import com.bioscan.fieldterminal.domain.score.AnsState
-import com.bioscan.fieldterminal.domain.score.InputKind
-import com.bioscan.fieldterminal.domain.score.ScoreKeys
-import com.bioscan.fieldterminal.domain.score.ScoreSpecs
-import com.bioscan.fieldterminal.domain.score.ansPoints
-import com.bioscan.fieldterminal.domain.score.bandWord
-import com.bioscan.fieldterminal.domain.score.bulletOf
-import com.bioscan.fieldterminal.domain.score.formatJudgedValue
-import com.bioscan.fieldterminal.domain.score.inSentence
-import com.bioscan.fieldterminal.domain.score.metricStats
-import com.bioscan.fieldterminal.domain.score.qualitySentence
-import com.bioscan.fieldterminal.domain.score.relatedInputs
+import com.bioscan.fieldterminal.domain.score.CHARGE_WEIGHTS
 import com.bioscan.fieldterminal.domain.score.ChargeStatus
 import com.bioscan.fieldterminal.domain.score.DomainKey
 import com.bioscan.fieldterminal.domain.score.DomainScore
-import com.bioscan.fieldterminal.domain.score.InputScore
-import com.bioscan.fieldterminal.domain.score.LoadDirection
+import com.bioscan.fieldterminal.domain.score.InputDirection
+import com.bioscan.fieldterminal.domain.score.InputKind
+import com.bioscan.fieldterminal.domain.score.Relation
+import com.bioscan.fieldterminal.domain.score.ScoreKeys
 import com.bioscan.fieldterminal.domain.score.ScoreScale
-import com.bioscan.fieldterminal.domain.score.Series
+import com.bioscan.fieldterminal.domain.score.ScoreSpecs
+import com.bioscan.fieldterminal.domain.score.SignalsVerdict
+import com.bioscan.fieldterminal.domain.score.ansPoints
+import com.bioscan.fieldterminal.domain.score.bandWord
 import com.bioscan.fieldterminal.domain.score.baselineOf
+import com.bioscan.fieldterminal.domain.score.bulletOf
 import com.bioscan.fieldterminal.domain.score.chargeRankLine
 import com.bioscan.fieldterminal.domain.score.directionGlyph
 import com.bioscan.fieldterminal.domain.score.directionWords
 import com.bioscan.fieldterminal.domain.score.domainSentence
-import com.bioscan.fieldterminal.domain.score.driverSummary
 import com.bioscan.fieldterminal.domain.score.formatInputValue
+import com.bioscan.fieldterminal.domain.score.formatJudgedValue
+import com.bioscan.fieldterminal.domain.score.inSentence
 import com.bioscan.fieldterminal.domain.score.inputPoints
+import com.bioscan.fieldterminal.domain.score.metricStats
+import com.bioscan.fieldterminal.domain.score.qualitySentence
 import com.bioscan.fieldterminal.domain.score.referenceLine
+import com.bioscan.fieldterminal.domain.score.relatedInputs
+import com.bioscan.fieldterminal.domain.score.scoreInput
 import com.bioscan.fieldterminal.domain.score.trendOf
 import com.bioscan.fieldterminal.domain.score.weekday
 import com.bioscan.fieldterminal.domain.score.whatIs
 import com.bioscan.fieldterminal.domain.score.whatIsInput
-import com.bioscan.fieldterminal.ui.components.RingState
+import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTCardEmphasis
+import com.bioscan.fieldterminal.ui.components.FTChevron
+import com.bioscan.fieldterminal.ui.components.FTIconButton
+import com.bioscan.fieldterminal.ui.components.FTIcons
+import com.bioscan.fieldterminal.ui.components.FTMetricDot
+import com.bioscan.fieldterminal.ui.components.FTMotion
 import com.bioscan.fieldterminal.ui.components.GaugePalette
+import com.bioscan.fieldterminal.ui.components.RingState
 import com.bioscan.fieldterminal.ui.components.ScoreRing
-import com.bioscan.fieldterminal.ui.components.InfoHelpButton
-import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.ScoreScene
+import com.bioscan.fieldterminal.ui.components.ScoreSceneBackdrop
 import com.bioscan.fieldterminal.ui.components.ftChargeWash
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.ftDomainWash
+import com.bioscan.fieldterminal.ui.screens.detail.HistorySpec
+import com.bioscan.fieldterminal.ui.screens.detail.LinkRow
+import com.bioscan.fieldterminal.ui.screens.detail.MetricHistoryOverlay
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.metricInk
 import java.time.LocalDate
 import kotlin.math.abs
+import kotlin.math.exp
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Scoring system (docs/scoring-system/02-page-mockups.md §0, §2-§4): the full-screen overlays a tap opens. Level 2 is
 // CHARGE or a domain, everything expanded; level 3 is one metric. ‹ goes back a level, ✕ closes them all.
 
 /** True to draw overlays in place instead of in a dialog (the screenshot tour). */
-val LocalInlineOverlays = androidx.compose.runtime.staticCompositionLocalOf { false }
+val LocalInlineOverlays = staticCompositionLocalOf { false }
 
 sealed interface ScoreOverlay {
     data object Charge : ScoreOverlay
@@ -108,11 +132,11 @@ fun FullScreenOverlay(
     onBack: (() -> Unit)? = null,
     trailing: String? = null,
     // v1 background wash: a domain hue (FT.Domain.*), CHARGE's own wash with [chargeWash], or the plain ground.
-    wash: androidx.compose.ui.graphics.Color? = null,
+    wash: Color? = null,
     chargeWash: Boolean = false,
     // A score page's scene (ScoreScenes.kt): edge to edge across the top of the page, behind the title and the score,
     // fading into the page under them, and scrolling away with the content. [sceneScore] moves it.
-    scene: com.bioscan.fieldterminal.ui.components.ScoreScene? = null,
+    scene: ScoreScene? = null,
     sceneScore: Double? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -125,12 +149,12 @@ fun FullScreenOverlay(
         val scroll = rememberScrollState()
         // Shared motion: an overlay fades in over 240 ms (none with reduced motion, or when drawn in place for screenshots).
         val inline = LocalInlineOverlays.current
-        val fade = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(if (inline || com.bioscan.fieldterminal.ui.components.FTMotion.reduced) 1f else 0f) }
-        androidx.compose.runtime.LaunchedEffect(Unit) { fade.animateTo(1f, com.bioscan.fieldterminal.ui.components.FTMotion.tweenSlow()) }
-        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().graphicsLayer { alpha = fade.value }.background(FT.Base).then(washed)) {
+        val fade = remember { Animatable(if (inline || FTMotion.reduced) 1f else 0f) }
+        LaunchedEffect(Unit) { fade.animateTo(1f, FTMotion.tweenSlow()) }
+        Box(Modifier.fillMaxSize().graphicsLayer { alpha = fade.value }.background(FT.Base).then(washed)) {
         if (scene != null) {
-            val top = androidx.compose.foundation.layout.WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-            com.bioscan.fieldterminal.ui.components.ScoreSceneBackdrop(
+            val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+            ScoreSceneBackdrop(
                 scene, sceneScore,
                 Modifier.fillMaxWidth().height(top + SCENE_HEIGHT).graphicsLayer { translationY = -scroll.value.toFloat() },
                 // the ring's centre: under the status bar, the title row (56), the page's top padding (8), the header's (12), half the ring (88)
@@ -142,10 +166,10 @@ fun FullScreenOverlay(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (onBack != null) com.bioscan.fieldterminal.ui.components.FTIconButton(com.bioscan.fieldterminal.ui.components.FTIcons.Back, "Back", onBack)
+                if (onBack != null) FTIconButton(FTIcons.Back, "Back", onBack)
                 Text(title, style = FTType.LabelCaps, color = FT.TextPrimary, modifier = Modifier.weight(1f).padding(start = if (onBack != null) 4.dp else 8.dp))
                 if (trailing != null) Text(trailing, style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(end = 4.dp))
-                com.bioscan.fieldterminal.ui.components.FTIconButton(com.bioscan.fieldterminal.ui.components.FTIcons.Close, "Close", onClose)
+                FTIconButton(FTIcons.Close, "Close", onClose)
             }
             Column(
                 modifier = Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = 16.dp, vertical = 8.dp),
@@ -164,7 +188,7 @@ fun FullScreenOverlay(
 @Composable
 fun OverlaySection(title: String, info: String? = null, content: @Composable ColumnScope.() -> Unit) =
     // A block inside a full-screen overlay: the shared card at its Compact level (one header, the "?" help button).
-    com.bioscan.fieldterminal.ui.components.FTCard(title = title, info = info, emphasis = com.bioscan.fieldterminal.ui.components.FTCardEmphasis.Compact, content = content)
+    FTCard(title = title, info = info, emphasis = FTCardEmphasis.Compact, content = content)
 
 /** FUEL inputs scored against the saved daily targets (water falls back to a generic range, so it is never missing for this). */
 private val TARGET_INPUTS = setOf(ScoreKeys.ENERGY_RATIO, ScoreKeys.PROTEIN_RATIO, ScoreKeys.CARB_RATIO)
@@ -188,11 +212,11 @@ internal fun RingHeader(
 private val SCENE_HEIGHT = 390.dp
 
 private fun sceneOf(key: DomainKey) = when (key) {
-    DomainKey.SLEEP -> com.bioscan.fieldterminal.ui.components.ScoreScene.SLEEP
-    DomainKey.RECOVERY -> com.bioscan.fieldterminal.ui.components.ScoreScene.RECOVERY
-    DomainKey.LOAD -> com.bioscan.fieldterminal.ui.components.ScoreScene.LOAD
-    DomainKey.FUEL -> com.bioscan.fieldterminal.ui.components.ScoreScene.FUEL
-    DomainKey.BALANCE -> com.bioscan.fieldterminal.ui.components.ScoreScene.BALANCE
+    DomainKey.SLEEP -> ScoreScene.SLEEP
+    DomainKey.RECOVERY -> ScoreScene.RECOVERY
+    DomainKey.LOAD -> ScoreScene.LOAD
+    DomainKey.FUEL -> ScoreScene.FUEL
+    DomainKey.BALANCE -> ScoreScene.BALANCE
 }
 
 // ---- level 2: CHARGE ----
@@ -201,7 +225,7 @@ private fun sceneOf(key: DomainKey) = when (key) {
 fun ChargeOverlay(view: ScoresView, onOpen: (ScoreOverlay) -> Unit, onClose: () -> Unit) {
     val charge = view.scores.charge
     FullScreenOverlay(title = "CHARGE", trailing = dayLabel(view.day), onClose = onClose, chargeWash = true,
-        scene = com.bioscan.fieldterminal.ui.components.ScoreScene.CHARGE, sceneScore = charge.score) {
+        scene = ScoreScene.CHARGE, sceneScore = charge.score) {
         val status = if (view.status == ChargeStatus.FINAL) "FINAL ✓" else "PROVISIONAL"
         val words = listOfNotNull(charge.score?.let { bandWord(null, it) }, status).joinToString(" · ")
         val sentence = listOfNotNull(
@@ -230,8 +254,8 @@ fun ChargeOverlay(view: ScoresView, onOpen: (ScoreOverlay) -> Unit, onClose: () 
             }
         }
         view.signals?.takeIf { view.illness == null }?.let { s ->
-            OverlaySection(if (s.verdict == com.bioscan.fieldterminal.domain.score.SignalsVerdict.HEADS_UP) "HEADS-UP" else "BODY SIGNALS", info = SIGNALS_INFO) {
-                Text(s.line, style = FTType.BodySmall, color = if (s.verdict == com.bioscan.fieldterminal.domain.score.SignalsVerdict.HEADS_UP) FT.Warning else FT.TextSecondary)
+            OverlaySection(if (s.verdict == SignalsVerdict.HEADS_UP) "HEADS-UP" else "BODY SIGNALS", info = SIGNALS_INFO) {
+                Text(s.line, style = FTType.BodySmall, color = if (s.verdict == SignalsVerdict.HEADS_UP) FT.Warning else FT.TextSecondary)
             }
         }
 
@@ -249,15 +273,15 @@ fun ChargeOverlay(view: ScoresView, onOpen: (ScoreOverlay) -> Unit, onClose: () 
 
         // What the nightly relationship engine found about evenings and the next morning's RECOVERY and SLEEP scores
         // (supabase/functions/_shared/analysis-core/hypotheses.ts, catalogue 2.2.0). Settled answers only.
-        val effects by androidx.compose.runtime.produceState<List<com.bioscan.fieldterminal.data.model.RelationshipResultRow>?>(null) {
-            value = catching { com.bioscan.fieldterminal.data.AnalysisRepository(com.bioscan.fieldterminal.data.SupabaseClientProvider.client).loadRelationships() }
+        val effects by produceState<List<RelationshipResultRow>?>(null) {
+            value = catching { AnalysisRepository(SupabaseClientProvider.client).loadRelationships() }
                 .getOrDefault(emptyList())
                 .filter { it.payload.outcome == "recovery_score" || it.payload.outcome == "sleep_score" }
         }
         OverlaySection("WHAT GOES WITH YOUR MORNINGS", info = MORNINGS_INFO) {
             val rows = effects
             val settled = rows.orEmpty().filter { it.state == "clear" || it.state == "negligible" }
-                .sortedWith(compareBy({ if (it.state == "clear") 0 else 1 }, { -(kotlin.math.abs(it.payload.effect?.value ?: 0.0)) }))
+                .sortedWith(compareBy({ if (it.state == "clear") 0 else 1 }, { -(abs(it.payload.effect?.value ?: 0.0)) }))
             when {
                 rows == null -> Text("Loading…", style = FTType.Caption, color = FT.TextMuted)
                 settled.isEmpty() -> Text(
@@ -274,7 +298,7 @@ fun ChargeOverlay(view: ScoresView, onOpen: (ScoreOverlay) -> Unit, onClose: () 
         }
 
         OverlaySection("WEIGHTS") {
-            WeightsBars(view.weights.weights, com.bioscan.fieldterminal.domain.score.CHARGE_WEIGHTS, view.weights.personal)
+            WeightsBars(view.weights.weights, CHARGE_WEIGHTS, view.weights.personal)
             Text(view.weights.sentence, style = FTType.Caption, color = FT.TextMuted)
         }
         OverlaySection("DOES IT EARN ITS PLACE?") {
@@ -302,7 +326,7 @@ private fun DetailLine(label: String, value: String) {
 }
 
 @Composable
-private fun DriverBar(label: String, points: Double, max: Double, color: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
+private fun DriverBar(label: String, points: Double, max: Double, color: Color, onClick: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().ftClickable(role = Role.Button, onClickLabel = "Open $label") { onClick() }.padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -310,21 +334,21 @@ private fun DriverBar(label: String, points: Double, max: Double, color: android
     ) {
         // The bar is in the domain's own hue; which way it moved CHARGE is the side of the centre and the signed number.
         Row(Modifier.width(88.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            com.bioscan.fieldterminal.ui.components.FTMetricDot(color, size = 7.dp)
+            FTMetricDot(color, size = 7.dp)
             Text(label, style = FTType.Label, color = FT.TextPrimary)
         }
         Canvas(modifier = Modifier.weight(1f).height(10.dp)) {
             val mid = size.width / 2
             drawLine(FT.Dim, Offset(mid, -2f), Offset(mid, size.height + 2f), strokeWidth = 1.dp.toPx())
             val w = (abs(points) / max).toFloat().coerceAtMost(1f) * mid
-            val r = androidx.compose.ui.geometry.CornerRadius(size.height / 2)
+            val r = CornerRadius(size.height / 2)
             if (points >= 0) drawRoundRect(color, Offset(mid, 0f), Size(w, size.height), r)
             else drawRoundRect(color, Offset(mid - w, 0f), Size(w, size.height), r)
         }
         Text("${if (points >= 0) "+" else ""}${points.roundToInt()}", style = FTType.Telemetry,
             color = when { points >= 1 -> FT.Ok; points <= -1 -> FT.Bad; else -> FT.TextMuted },
             modifier = Modifier.width(36.dp), textAlign = TextAlign.End)
-        com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted)
+        FTChevron(tint = FT.TextMuted)
     }
 }
 
@@ -366,7 +390,7 @@ fun DomainOverlay(
                 for (input in scored) BulletRow(input, points[input.spec.key]) { onOpen(ScoreOverlay.Input(key, input.spec.key)) }
                 val missing = g.group.inputs.filter { spec -> scored.none { it.spec.key == spec.key } }
                 // Intake is scored against the daily targets: without them those inputs are missing although meals are logged.
-                val goalsSet = com.bioscan.fieldterminal.data.NutritionGoalsStore.getGoals(androidx.compose.ui.platform.LocalContext.current).isSet
+                val goalsSet = NutritionGoalsStore.getGoals(LocalContext.current).isSet
                 val (noTarget, noData) = missing.partition { !goalsSet && it.key in TARGET_INPUTS }
                 if (noTarget.isNotEmpty()) Text("No target set: ${noTarget.joinToString { inSentence(it.label) }}. Set daily targets in ME › ⚙ › NUTRITION GOALS.", style = FTType.Caption, color = FT.Warning)
                 if (noData.isNotEmpty()) Text("No data: ${noData.joinToString { inSentence(it.label) }}", style = FTType.Caption, color = FT.TextMuted)
@@ -411,7 +435,7 @@ private fun PictureTile(title: String, headline: String, thumb: @Composable () -
             if (headline.isNotEmpty()) Text(headline, style = FTType.MonoCaption, color = FT.TextSecondary, maxLines = 2)
         }
         thumb()
-        com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted)
+        FTChevron(tint = FT.TextMuted)
     }
 }
 
@@ -455,7 +479,7 @@ fun InputOverlay(view: ScoresView, key: DomainKey, inputKey: String, onBack: () 
             val points = inputPoints(domain.raw)[spec.key]
             val line = listOfNotNull(referenceLine(input), points?.let { "moved ${key.label} ${if (it >= 0) "+" else ""}${it.roundToInt()}" }).joinToString(" · ")
             if (line.isNotEmpty()) Text(line, style = FTType.BodySmall, color = FT.TextSecondary)
-            bulletOf(input)?.let { BulletBar(it, com.bioscan.fieldterminal.ui.theme.metricInk(spec.key), Modifier.fillMaxWidth()) }
+            bulletOf(input)?.let { BulletBar(it, metricInk(spec.key), Modifier.fillMaxWidth()) }
         } else {
             Text("No reading for this morning.", style = FTType.Body, color = FT.TextMuted)
         }
@@ -464,21 +488,21 @@ fun InputOverlay(view: ScoresView, key: DomainKey, inputKey: String, onBack: () 
         val values = (0..59).mapNotNull { series[view.day.minusDays(it.toLong())] }
         val band: Pair<Double, Double>? = when (val k = spec.kind) {
             is InputKind.Baseline, is InputKind.Stability -> baselineOf(series, view.day, 60, 14, log, minSd)?.let { (m, sd) ->
-                if (log) kotlin.math.exp(m - sd) to kotlin.math.exp(m + sd) else (m - sd) to (m + sd)
+                if (log) exp(m - sd) to exp(m + sd) else (m - sd) to (m + sd)
             }
             is InputKind.AtLeast -> k.target to maxOf(k.target, values.maxOrNull() ?: k.target)
             is InputKind.AtMost -> minOf(0.0, values.minOrNull() ?: 0.0) to k.limit
             is InputKind.Band -> k.lo to k.hi
         }
         val personal = spec.kind is InputKind.Baseline || spec.kind is InputKind.Stability
-        var history by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+        var history by remember { mutableStateOf(false) }
         OverlaySection("60 DAYS") {
             MetricChart(series, view.day, spec.key, band, if (personal) "your normal" else "on target")
-            if (series.size > 1) com.bioscan.fieldterminal.ui.screens.detail.LinkRow("All of its history", "${series.size} mornings · 30 D to all time") { history = true }
+            if (series.size > 1) LinkRow("All of its history", "${series.size} mornings · 30 D to all time") { history = true }
         }
-        if (history) com.bioscan.fieldterminal.ui.screens.detail.MetricHistoryOverlay(
-            com.bioscan.fieldterminal.ui.screens.detail.HistorySpec(spec.label, series, "", { v -> formatInputValue(spec.key, v) },
-                com.bioscan.fieldterminal.ui.theme.metricInk(spec.key), log = log, minSd = minSd, info = whatIsInput(spec.key)),
+        if (history) MetricHistoryOverlay(
+            HistorySpec(spec.label, series, "", { v -> formatInputValue(spec.key, v) },
+                metricInk(spec.key), log = log, minSd = minSd, info = whatIsInput(spec.key)),
             view.day, onBack = { history = false },
         ) { history = false }
 
@@ -491,7 +515,7 @@ fun InputOverlay(view: ScoresView, key: DomainKey, inputKey: String, onBack: () 
                 stats.insideBand?.let { DetailLine("IN YOUR NORMAL", "$it of the last ${stats.withReading} mornings") }
             } else {
                 // Target-type inputs are judged against the target, not against the person's usual.
-                val month = (0..29).mapNotNull { d -> view.day.minusDays(d.toLong()).let { day -> com.bioscan.fieldterminal.domain.score.scoreInput(spec, series, day) } }
+                val month = (0..29).mapNotNull { d -> view.day.minusDays(d.toLong()).let { day -> scoreInput(spec, series, day) } }
                 if (month.isNotEmpty()) DetailLine("ON TARGET", "${month.count { it.direction == com.bioscan.fieldterminal.domain.score.InputDirection.ON_TARGET }} of the last ${month.size} mornings")
             }
             if (stats.sevenDay == null && stats.rarerThan == null) Text("Not enough readings yet.", style = FTType.BodySmall, color = FT.TextMuted)
@@ -499,7 +523,7 @@ fun InputOverlay(view: ScoresView, key: DomainKey, inputKey: String, onBack: () 
 
         val labels = ScoreSpecs.ALL.values.flatMap { it.groups }.flatMap { it.inputs }.associate { it.key to it.label }
         val others = view.scores.domains.values.flatMap { it.raw.inputs }
-            .filter { it.spec.key != spec.key && it.direction != com.bioscan.fieldterminal.domain.score.InputDirection.NORMAL && it.direction != com.bioscan.fieldterminal.domain.score.InputDirection.ON_TARGET }
+            .filter { it.spec.key != spec.key && it.direction != InputDirection.NORMAL && it.direction != InputDirection.ON_TARGET }
             .sortedBy { it.score }.take(4)
         OverlaySection("WHAT WENT WITH IT · THIS MORNING") {
             if (others.isEmpty()) Text("Everything else was close to usual.", style = FTType.BodySmall, color = FT.TextMuted)
@@ -525,25 +549,25 @@ fun InputOverlay(view: ScoresView, key: DomainKey, inputKey: String, onBack: () 
 
 /** One relation as a bar from the centre: right when the two rise together, left when one rises as the other falls. */
 @Composable
-private fun RelationRow(r: com.bioscan.fieldterminal.domain.score.Relation, onClick: (() -> Unit)?) {
-    val ink = com.bioscan.fieldterminal.ui.theme.metricInk(r.key)
+private fun RelationRow(r: Relation, onClick: (() -> Unit)?) {
+    val ink = metricInk(r.key)
     Row(
         modifier = Modifier.fillMaxWidth().then(if (onClick != null) Modifier.ftClickable(role = Role.Button, onClickLabel = "Open ${r.label}") { onClick() } else Modifier).padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(Modifier.width(120.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            com.bioscan.fieldterminal.ui.components.FTMetricDot(ink, size = 7.dp)
+            FTMetricDot(ink, size = 7.dp)
             Text(r.label, style = FTType.BodySmall, color = FT.TextPrimary, maxLines = 1)
         }
         Canvas(Modifier.weight(1f).height(12.dp)) {
             val mid = size.width / 2
             drawLine(FT.TextMuted, Offset(mid, 0f), Offset(mid, size.height), strokeWidth = 1.5f)
             val w = (abs(r.r) * mid).toFloat()
-            val cr = androidx.compose.ui.geometry.CornerRadius((size.height - 4f) / 2)
+            val cr = CornerRadius((size.height - 4f) / 2)
             if (r.r >= 0) drawRoundRect(ink, Offset(mid, 2f), Size(w, size.height - 4f), cr) else drawRoundRect(ink, Offset(mid - w, 2f), Size(w, size.height - 4f), cr)
         }
         Text(if (r.r >= 0) "together" else "opposite", style = FTType.Micro, color = FT.TextSecondary, modifier = Modifier.width(56.dp), textAlign = TextAlign.End)
-        if (onClick != null) com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted)
+        if (onClick != null) FTChevron(tint = FT.TextMuted)
     }
 }
 

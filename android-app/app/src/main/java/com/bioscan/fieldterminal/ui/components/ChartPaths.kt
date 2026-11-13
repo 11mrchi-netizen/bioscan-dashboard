@@ -2,6 +2,8 @@ package com.bioscan.fieldterminal.ui.components
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
+import kotlin.math.abs
+import kotlin.math.exp
 
 // Line charts read as trends, not survey plots, so the line is drawn as a soft curve instead of straight segments
 // between the points -- "more curves, fewer angles". The curve still passes through every point; it only rounds the
@@ -47,12 +49,12 @@ fun localTrendAt(xs: List<Double>, ys: List<Double>, at: Double, bandwidth: Doub
     var sw = 0.0; var sx = 0.0; var sy = 0.0; var sxx = 0.0; var sxy = 0.0
     for (k in xs.indices) {
         val d = (xs[k] - at) / bandwidth
-        val w = kotlin.math.exp(-0.5 * d * d)
+        val w = exp(-0.5 * d * d)
         if (w < 1e-12) continue
         val dx = xs[k] - at
         sw += w; sx += w * dx; sy += w * ys[k]; sxx += w * dx * dx; sxy += w * dx * ys[k]
     }
-    if (sw < 1e-9) return ys[xs.indices.minBy { kotlin.math.abs(xs[it] - at) }]
+    if (sw < 1e-9) return ys[xs.indices.minBy { abs(xs[it] - at) }]
     val mx = sx / sw
     val my = sy / sw
     val varX = sxx / sw - mx * mx

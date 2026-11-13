@@ -9,8 +9,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // design/FIELD_TERMINAL_IA_CONTRACT.md + FUTURISTIC_MATERIAL_DESIGN_CONTRACT.md
 // (DAV-94): title/context chrome shared across all top-level and tile screens,

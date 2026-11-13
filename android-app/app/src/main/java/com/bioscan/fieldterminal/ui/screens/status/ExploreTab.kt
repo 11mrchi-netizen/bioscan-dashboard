@@ -31,8 +31,8 @@ import com.bioscan.fieldterminal.ui.screens.detail.EmptyLine
 import com.bioscan.fieldterminal.ui.screens.detail.Section
 import com.bioscan.fieldterminal.ui.screens.today.TodayStore
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // LAB › EXPLORE: any two of the daily series the scores are built from, the second a chosen number of days later, as a
 // scatter with Pearson's r, its interval and the number of days (domain/Correlation.kt). Read from the series TODAY

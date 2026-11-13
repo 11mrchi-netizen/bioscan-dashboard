@@ -24,6 +24,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SweatTestsRepository
+import com.bioscan.fieldterminal.domain.events.formatHoursMinutes
 import com.bioscan.fieldterminal.domain.events.parseHoursMinutes
 import com.bioscan.fieldterminal.domain.fuel.Intensity
 import com.bioscan.fieldterminal.domain.fuel.SweatTest
@@ -38,8 +39,8 @@ import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // A sweat test (domain/fuel/SweatProfile.kt): weigh in before and after a session, note what was drunk. Hydration plans
 // are built from these; without any they use a wide estimate.
@@ -64,7 +65,7 @@ fun SweatTestSheet(
     var date by remember { mutableStateOf(initialDate) }
     var type by remember { mutableStateOf(initialType) }
     var intensity by remember { mutableStateOf(Intensity.MODERATE) }
-    var duration by remember { mutableStateOf(initialDurationMin?.let { com.bioscan.fieldterminal.domain.events.formatHoursMinutes(it) }.orEmpty()) }
+    var duration by remember { mutableStateOf(initialDurationMin?.let { formatHoursMinutes(it) }.orEmpty()) }
     var before by remember { mutableStateOf("") }
     var after by remember { mutableStateOf("") }
     var fluid by remember { mutableStateOf("") }

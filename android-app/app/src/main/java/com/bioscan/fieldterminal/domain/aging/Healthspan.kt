@@ -1,8 +1,6 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain.aging
 
-import kotlinx.serialization.UseSerializers
-import kotlinx.serialization.Serializable
 import com.bioscan.fieldterminal.domain.LiftReading
 import com.bioscan.fieldterminal.domain.SRI_REGULAR
 import com.bioscan.fieldterminal.domain.SriEvaluation
@@ -11,9 +9,13 @@ import com.bioscan.fieldterminal.domain.comparison.extendedPercentile
 import com.bioscan.fieldterminal.domain.levels.ladderFraction
 import com.bioscan.fieldterminal.domain.strengthLevelFor
 import com.bioscan.fieldterminal.domain.strengthThresholds
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
+import kotlin.math.floor
+import kotlin.math.round
 
 // Analysis Layer 3 / Phase 8. A general "healthspan" score, product-defined and not clinically validated. It exists ONLY for
 // the User profile page (a unit test fails if any other screen imports it): everywhere else this app deliberately shows no
@@ -192,7 +194,7 @@ internal fun weakerPart(a: Int, b: Int): Int =
 
 // A whole-number score held inside the band its cut-offs give, so number and status never disagree.
 internal fun scoreIn(band: FactorStatus, raw: Double): Int {
-    val s = kotlin.math.floor(raw).toInt()
+    val s = floor(raw).toInt()
     return when (band) {
         FactorStatus.FAVORABLE -> s.coerceIn(SCORE_FAVORABLE, 100)
         FactorStatus.NEUTRAL -> s.coerceIn(SCORE_NEUTRAL, SCORE_FAVORABLE - 1)
@@ -357,7 +359,7 @@ private fun strength(i: HealthspanInputs): HealthspanFactor {
     }
     if (median == null && gripScore == null) return unassessed(id, g.missing, howTo).copy(notes = notes)
     val parts = listOfNotNull(median?.score, gripScore)
-    val score = kotlin.math.round(parts.average()).toInt().coerceIn(1, 100)
+    val score = round(parts.average()).toInt().coerceIn(1, 100)
     val basis = when {
         median != null && gripScore != null -> ScoreBasis.MIXED
         median != null -> ScoreBasis.LIFTER_STANDARD
@@ -486,6 +488,6 @@ fun healthspanSummary(inputs: HealthspanInputs): HealthspanSummary {
     val assessed = scores.size
     val favorable = factors.count { it.status == FactorStatus.FAVORABLE }
     val preliminary = assessed < HEALTHSPAN_MIN_ASSESSED
-    val score = if (preliminary) null else kotlin.math.round(scores.average()).toInt()
+    val score = if (preliminary) null else round(scores.average()).toInt()
     return HealthspanSummary(factors, assessed, favorable, score, preliminary)
 }

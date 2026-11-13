@@ -1,7 +1,7 @@
 package com.bioscan.fieldterminal.data
 
-import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.domain.GpxPoint
+import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.domain.MapEvent
 import com.bioscan.fieldterminal.domain.parseGpxLink
 import com.bioscan.fieldterminal.domain.parseGpxPoints

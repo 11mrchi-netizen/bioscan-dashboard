@@ -44,12 +44,12 @@ import com.bioscan.fieldterminal.data.routine.RoutinePageData
 import com.bioscan.fieldterminal.data.routine.RoutinePageRepository
 import com.bioscan.fieldterminal.domain.routine.CalendarState
 import com.bioscan.fieldterminal.domain.routine.DailyLine
+import com.bioscan.fieldterminal.domain.routine.LogStatus
 import com.bioscan.fieldterminal.domain.routine.RIBBON_SLOTS
 import com.bioscan.fieldterminal.domain.routine.RibbonDay
 import com.bioscan.fieldterminal.domain.routine.RibbonKind
 import com.bioscan.fieldterminal.domain.routine.RoutineActivity
 import com.bioscan.fieldterminal.domain.routine.RoutineLog
-import com.bioscan.fieldterminal.domain.routine.LogStatus
 import com.bioscan.fieldterminal.domain.routine.adherence
 import com.bioscan.fieldterminal.domain.routine.bestStreak
 import com.bioscan.fieldterminal.domain.routine.changeWords
@@ -60,17 +60,23 @@ import com.bioscan.fieldterminal.domain.routine.practiceCalendar
 import com.bioscan.fieldterminal.domain.routine.practicesInWindow
 import com.bioscan.fieldterminal.domain.routine.ribbonTotals
 import com.bioscan.fieldterminal.domain.routine.scheduleWords
+import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTChevron
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.rememberCacheVersion
 import com.bioscan.fieldterminal.ui.screens.detail.HistorySpec
 import com.bioscan.fieldterminal.ui.screens.detail.MetricHistoryOverlay
+import com.bioscan.fieldterminal.ui.screens.settings.PlacesCard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import kotlinx.coroutines.CancellationException
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // ME › ROUTINE (docs/routine-intelligence/README.md, "ME › ROUTINE"): the long view of the routine, top to bottom:
 //   THE LAST 28 DAYS  a 24-hour ribbon a day (tap a day for its map);
@@ -134,12 +140,12 @@ fun RoutinePage(onOpenDay: (LocalDate) -> Unit) {
     var history by remember { mutableStateOf<DailyLine?>(null) }
     var calendar by remember { mutableStateOf<RoutineActivity?>(null) }
     var reload by remember { mutableIntStateOf(0) }
-    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    val cacheVersion = rememberCacheVersion()
     LaunchedEffect(reload, cacheVersion) {
         try {
             data = RoutinePageRepository(SupabaseClientProvider.client).load()
             error = null
-        } catch (e: kotlinx.coroutines.CancellationException) {
+        } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             error = describeLoadFailure(e)
@@ -149,7 +155,7 @@ fun RoutinePage(onOpenDay: (LocalDate) -> Unit) {
     Column(Modifier.padding(horizontal = 22.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         error?.let {
             Text("Couldn't load: $it", style = FTType.BodySmall, color = FT.Critical)
-            com.bioscan.fieldterminal.ui.components.FTButton("RETRY") { reload++ }
+            FTButton("RETRY") { reload++ }
         }
         val d = data
         if (d == null) {
@@ -194,7 +200,7 @@ fun RoutinePageContent(
             empty = "No recorded days yet. Turn on Locations in Setup › Profile & goals › Data capture.",
             unitCaption = "H A DAY",
         )
-        if (placesEditor) com.bioscan.fieldterminal.ui.screens.settings.PlacesCard(showDay = false)
+        if (placesEditor) PlacesCard(showDay = false)
         PhoneCard(d.phone, d.apps, through, open)
         PracticesCard(d.activities, d.logs, d.today, calendarOf)
         ComparisonCard(d.time + d.places + d.phone + d.regularity, through)
@@ -298,7 +304,7 @@ private fun LineRow(l: DailyLine, through: LocalDate, onOpen: (DailyLine) -> Uni
             Text("${l.source.label} · $days OF 28 DAYS", style = FTType.MonoCaption, color = FT.TextSecondary)
         }
         Text(avg?.let(f.format) ?: "—", style = FTType.Telemetry, color = lineColor(l.key))
-        com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextSecondary)
+        FTChevron(tint = FT.TextSecondary)
     }
 }
 
@@ -355,7 +361,7 @@ private fun PracticesCard(activities: List<RoutineActivity>, logs: List<RoutineL
                     if (kept.scheduled > 0) "${kept.done}/${kept.scheduled}" else "${logs.count { it.activityId == a.id && it.status == LogStatus.DONE && it.date.isAfter(today.minusDays(28)) }}×",
                     style = FTType.Telemetry, color = FT.Metric.TimeLogged,
                 )
-                com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextSecondary)
+                FTChevron(tint = FT.TextSecondary)
             }
         }
     }
@@ -429,7 +435,7 @@ private fun ComparisonCard(lines: List<DailyLine>, through: LocalDate) {
             Text("Needs 7 recorded days in each of the two 28-day windows; it fills in as history builds up.", style = FTType.BodySmall, color = FT.TextSecondary)
             return@FTCard
         }
-        changes.sortedByDescending { (_, c) -> kotlin.math.abs(c.relative ?: 0.0) }.forEach { (l, c) ->
+        changes.sortedByDescending { (_, c) -> abs(c.relative ?: 0.0) }.forEach { (l, c) ->
             val f = formatOf(l.key)
             Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(l.label.uppercase(), style = FTType.LabelCaps, color = FT.TextPrimary, modifier = Modifier.weight(1f), maxLines = 1)

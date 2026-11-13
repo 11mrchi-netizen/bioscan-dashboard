@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens
 
-import com.bioscan.fieldterminal.domain.toAppIso
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -132,6 +131,7 @@ import com.bioscan.fieldterminal.domain.sitesFor
 import com.bioscan.fieldterminal.domain.spec
 import com.bioscan.fieldterminal.domain.stateWords
 import com.bioscan.fieldterminal.domain.target
+import com.bioscan.fieldterminal.domain.toAppIso
 import com.bioscan.fieldterminal.domain.unitsWords
 import com.bioscan.fieldterminal.ui.components.AddEntryStartSaver
 import com.bioscan.fieldterminal.ui.components.AddEntryTargetSaver

@@ -3,6 +3,7 @@ package com.bioscan.fieldterminal.data
 import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
 import com.bioscan.fieldterminal.data.model.CaseCrossoverResultRow
 import com.bioscan.fieldterminal.data.model.EventCurveRow
+import com.bioscan.fieldterminal.data.model.ExerciseSessionRow
 import com.bioscan.fieldterminal.data.model.ExpectedBandRow
 import com.bioscan.fieldterminal.data.model.FitnessFatigueRow
 import com.bioscan.fieldterminal.data.model.HrPoint
@@ -23,6 +24,7 @@ import com.bioscan.fieldterminal.data.model.SportSessionRow
 import com.bioscan.fieldterminal.data.model.StoolAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.TypicalityResultRow
+import com.bioscan.fieldterminal.data.model.Vo2MaxRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.domain.DailyNutrition
@@ -232,6 +234,29 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
         ReadCache.get("analysis.hr_dip", tables = setOf("wearable_daily", "sleep_daily"), serializer = ListSerializer(HrDipRow.serializer())) {
             supabase.postgrest.from("v_hr_dip").select(Columns.list("date,dip_pct")).decodeList<HrDipRow>()
         }.mapNotNull { r -> runCatching { LocalDate.parse(r.date) }.getOrNull()?.let { it to r.dipPct } }.toMap()
+
+    /** The newest [days] days that carry a VO2max estimate, oldest first (an ascending query with a limit read the oldest). */
+    suspend fun loadVo2MaxDays(days: Long): List<Vo2MaxRow> =
+        ReadCache.kept("analysis.vo2max.$days", tables = setOf("wearable_daily")) {
+            supabase.postgrest.from("wearable_daily").select(Columns.list("date,vo2max")) {
+                filter { filterNot("vo2max", FilterOperator.IS, "null") }
+                order("date", Order.DESCENDING); limit(days)
+            }.decodeList<Vo2MaxRow>().sortedBy { it.date }
+        }
+
+    /** The newest grip readings, each with its hand. occurred_at is a logged time: its digits are the local day. */
+    suspend fun loadGripLog(limit: Long = 500): List<GripLogRow> =
+        ReadCache.kept("analysis.grip.$limit", tables = setOf("grip_strength_log")) {
+            supabase.postgrest.from("grip_strength_log").select(Columns.list("occurred_at,kg,hand")) { order("occurred_at", Order.DESCENDING); limit(limit) }
+                .decodeList<GripLogRow>()
+        }
+
+    /** Strength sessions since [since], with their exercises and sets. */
+    suspend fun loadStrengthSessionsSince(since: LocalDate): List<ExerciseSessionRow> =
+        supabase.postgrest.from("exercise_sessions").select(Columns.list("id,type,start_time,source,details")) {
+            filter { eq("type", "strength"); gte("start_time", since.toString()) }
+            limit(1000)
+        }.decodeList<ExerciseSessionRow>()
 
     private suspend fun fetchWearableDaily(): List<WearableAnalysisRow> =
         pagedByDate<WearableAnalysisRow>("wearable_daily", "date,hrv,rhr,steps,spo2_avg") { it.date }
@@ -547,3 +572,6 @@ data class EvidenceRows(
 
 @kotlinx.serialization.Serializable
 data class HrDipRow(val date: String, @kotlinx.serialization.SerialName("dip_pct") val dipPct: Double)
+
+@kotlinx.serialization.Serializable
+data class GripLogRow(@kotlinx.serialization.SerialName("occurred_at") val occurredAt: String, val kg: Double, val hand: String? = null)

@@ -1,7 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.health
 
-import java.time.ZoneId
-import com.bioscan.fieldterminal.domain.localDateIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -47,6 +45,7 @@ import com.bioscan.fieldterminal.domain.health.checkInDate
 import com.bioscan.fieldterminal.domain.health.isConcernOpen
 import com.bioscan.fieldterminal.domain.health.recallStart
 import com.bioscan.fieldterminal.domain.health.shortDate
+import com.bioscan.fieldterminal.domain.localDateIn
 import com.bioscan.fieldterminal.ui.components.BodyMap
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
@@ -58,6 +57,7 @@ import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.theme.FTType
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale

@@ -3,13 +3,12 @@ package com.bioscan.fieldterminal.ui.screens.status
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
 import com.bioscan.fieldterminal.data.AnalysisRepository
+import com.bioscan.fieldterminal.data.BodyCheckinRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.catching
-import com.bioscan.fieldterminal.data.model.Vo2MaxRow
+import com.bioscan.fieldterminal.data.UserProfileRepository
+import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.domain.ActivitySession
-import com.bioscan.fieldterminal.domain.BodyCheckinRecord
 import com.bioscan.fieldterminal.domain.BodySite
 import com.bioscan.fieldterminal.domain.FitnessAgeReading
 import com.bioscan.fieldterminal.domain.WallClock
@@ -17,15 +16,14 @@ import com.bioscan.fieldterminal.domain.fitnessAgeOn
 import com.bioscan.fieldterminal.domain.fitnessAgeWeeks
 import com.bioscan.fieldterminal.domain.fitnessAgeWords
 import com.bioscan.fieldterminal.domain.vo2MaxSeries
+import com.bioscan.fieldterminal.ui.components.LoadingOrError
+import com.bioscan.fieldterminal.ui.components.rememberGuarded
 import com.bioscan.fieldterminal.ui.screens.detail.EmptyLine
 import com.bioscan.fieldterminal.ui.screens.detail.Fmt
 import com.bioscan.fieldterminal.ui.screens.detail.LocalRangeDays
 import com.bioscan.fieldterminal.ui.screens.detail.Section
 import com.bioscan.fieldterminal.ui.screens.detail.TrendChart
 import com.bioscan.fieldterminal.ui.theme.FTType
-import io.github.jan.supabase.postgrest.postgrest
-import io.github.jan.supabase.postgrest.query.Columns
-import io.github.jan.supabase.postgrest.query.Order
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.roundToInt
@@ -39,20 +37,29 @@ private const val FITNESS_AGE_INFO =
         "it is shown with a ±5-year band and updated weekly, each Saturday. Read the direction over weeks, not the number. " +
         "A waist measurement from a body check-in adds the VO2peak estimate itself."
 
-private data class FitnessAgeData(val weekly: List<FitnessAgeReading>, val watchVo2: Pair<LocalDate, Double>?)
+private data class FitnessAgeData(val hasProfile: Boolean, val weekly: List<FitnessAgeReading>, val watchVo2: Pair<LocalDate, Double>?)
 
-/** ME › BODY: Fitness Age, weekly, with the VO2peak estimate when a waist is measured and the watch's VO2max beside it. */
+/**
+ * Aging: Fitness Age, weekly, with the VO2peak estimate when a waist is measured and the watch's VO2max beside it. It
+ * reads what it needs itself; a read that fails is shown as a failure, never as "needs your date of birth".
+ */
 @Composable
-internal fun FitnessAgeSection(sex: String?, birth: LocalDate?, checkins: List<BodyCheckinRecord>) {
+internal fun FitnessAgeSection() {
     val days = LocalRangeDays.current
-    val waist = checkins.sortedByDescending { it.occurredAt }.firstNotNullOfOrNull { it.value(BodySite.WAIST_NAVEL) ?: it.value(BodySite.WAIST_MIDPOINT) }
-    val data by produceState<FitnessAgeData?>(null, sex, birth, waist) {
-        if (sex == null || birth == null) { value = FitnessAgeData(emptyList(), null); return@produceState }
-        val analysis = AnalysisRepository(SupabaseClientProvider.client)
+    val (data, guard) = rememberGuarded {
+        val client = SupabaseClientProvider.client
+        val profile = UserProfileRepository(client).loadProfile()
+        val sex = profile?.sex?.takeIf { it == "male" || it == "female" }
+        val birth = profile?.dateOfBirth?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        if (sex == null || birth == null) return@rememberGuarded FitnessAgeData(false, emptyList(), null)
+        // Optional: a waist from a body check-in adds the VO2peak estimate, the watch's VO2max sits beside the age.
+        val waist = softLoad { BodyCheckinRepository(client).loadHistory() }.orEmpty()
+            .sortedByDescending { it.occurredAt }.firstNotNullOfOrNull { it.value(BodySite.WAIST_NAVEL) ?: it.value(BodySite.WAIST_MIDPOINT) }
+        val analysis = AnalysisRepository(client)
         val zone = ZoneId.systemDefault()
-        val rhr = catching { analysis.loadWearableDaily() }.getOrDefault(emptyList())
+        val rhr = analysis.loadWearableDaily()
             .mapNotNull { r -> r.rhr?.let { v -> runCatching { LocalDate.parse(r.date) }.getOrNull()?.let { it to v } } }.toMap()
-        val rows = catching { analysis.loadExerciseSessionsForTrainingLoad() }.getOrDefault(emptyList())
+        val rows = analysis.loadExerciseSessionsForTrainingLoad()
         val sessions = rows.mapNotNull { s ->
             // Session starts are logged times (local digits with a zero offset, domain/WallClock.kt).
             val day = WallClock.zoned(s.startTime, zone)?.toLocalDate() ?: return@mapNotNull null
@@ -61,18 +68,14 @@ internal fun FitnessAgeSection(sex: String?, birth: LocalDate?, checkins: List<B
         val today = LocalDate.now()
         val maxHr = rows.filter { s -> WallClock.zoned(s.startTime, zone)?.toLocalDate()?.isAfter(today.minusYears(1)) == true }.mapNotNull { it.maxHr }.maxOrNull()
         val weekly = fitnessAgeWeeks(today, 52).mapNotNull { fitnessAgeOn(it, sex == "male", birth, rhr, sessions, maxHr, waist) }
-        val vo2 = catching {
-            SupabaseClientProvider.client.postgrest.from("wearable_daily").select(Columns.list("date,vo2max")) {
-                order("date", Order.DESCENDING); limit(60)
-            }.decodeList<Vo2MaxRow>()
-        }.getOrDefault(emptyList())
-        value = FitnessAgeData(weekly, vo2MaxSeries(vo2).lastOrNull())
+        val vo2 = softLoad { analysis.loadVo2MaxDays(60) }.orEmpty()
+        FitnessAgeData(true, weekly, vo2MaxSeries(vo2).lastOrNull())
     }
     Section("FITNESS AGE", info = FITNESS_AGE_INFO, trailing = "WEEKLY") {
         val d = data
         when {
-            sex == null || birth == null -> EmptyLine("Needs your date of birth and sex in Setup › Profile.")
-            d == null -> EmptyLine("Working it out…")
+            d == null -> LoadingOrError(guard, "Working it out…")
+            !d.hasProfile -> EmptyLine("Needs your date of birth and sex in Setup › Profile.")
             d.weekly.isEmpty() -> EmptyLine("Needs resting heart rate on at least 4 days of a week.")
             else -> {
                 val r = d.weekly.last()

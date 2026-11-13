@@ -22,6 +22,8 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
+import com.bioscan.fieldterminal.ui.components.LoadingOrError
+import com.bioscan.fieldterminal.ui.components.rememberGuarded
 import com.bioscan.fieldterminal.ui.screens.EnduranceFuelForm
 import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -43,12 +45,10 @@ private fun label(s: FuelingSessionRow): String {
 @Composable
 internal fun RunFuelEntry(onSaved: () -> Unit) {
     val repo = remember { FuelDebriefRepository(SupabaseClientProvider.client) }
-    var sessions by remember { mutableStateOf<List<FuelingSessionRow>?>(null) }
+    val (sessions, guard) = rememberGuarded { FuelingRepository(SupabaseClientProvider.client).recentSessions() }
     var picked by remember { mutableStateOf<FuelingSessionRow?>(null) }
     var single by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        sessions = catching { FuelingRepository(SupabaseClientProvider.client).recentSessions() }.getOrDefault(emptyList()).also { if (picked == null) picked = it.firstOrNull() }
-    }
+    LaunchedEffect(sessions) { if (picked == null) picked = sessions?.firstOrNull() }
     val target by produceState<DebriefTarget?>(initialValue = null, picked?.id) {
         value = picked?.let { catching { repo.targetForSession(it) }.getOrNull() }
     }
@@ -58,13 +58,13 @@ internal fun RunFuelEntry(onSaved: () -> Unit) {
                 EnduranceFuelForm(onSaved = onSaved)
                 FTButton("BACK TO THE DEBRIEF", emphasis = FTButtonEmphasis.Tertiary, modifier = Modifier.fillMaxWidth()) { single = false }
             }
-            sessions == null -> Text("Loading…", style = FTType.BodySmall, color = FT.TextSecondary)
-            sessions!!.isEmpty() -> {
+            sessions == null -> LoadingOrError(guard, "Loading…")
+            sessions.isEmpty() -> {
                 Text("No run, hike or ride in the last three weeks to debrief. Sync your watch or log the activity first.", style = FTType.BodySmall, color = FT.TextSecondary)
             }
             else -> {
                 Text("ACTIVITY", color = FT.TextMuted, style = FTType.LabelCaps)
-                val labels = sessions!!.associateBy({ label(it) }, { it })
+                val labels = sessions.associateBy({ label(it) }, { it })
                 TextChipRow(labels.keys.toList(), picked?.let { label(it) }, perRow = 1) { chosen -> if (chosen != null) picked = labels[chosen] }
                 target?.let { t -> key(t.sessionId) { FuelDebriefContent(t, onSaved) } }
                 FTButton("LOG ONE INTAKE INSTEAD", emphasis = FTButtonEmphasis.Tertiary, modifier = Modifier.fillMaxWidth()) { single = true }

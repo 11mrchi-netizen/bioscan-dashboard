@@ -1,7 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import java.time.ZoneId
-import com.bioscan.fieldterminal.domain.localDateIn
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -39,6 +37,7 @@ import com.bioscan.fieldterminal.domain.DsldComparison
 import com.bioscan.fieldterminal.domain.DsldConflictKind
 import com.bioscan.fieldterminal.domain.FactField
 import com.bioscan.fieldterminal.domain.ProductFacts
+import com.bioscan.fieldterminal.domain.localDateIn
 import com.bioscan.fieldterminal.domain.normalizeBarcode
 import com.bioscan.fieldterminal.domain.proposeFacts
 import com.bioscan.fieldterminal.ui.components.FTButton
@@ -48,6 +47,7 @@ import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.util.scanBarcode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import java.time.ZoneId
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private val body = FTType.BodySmall

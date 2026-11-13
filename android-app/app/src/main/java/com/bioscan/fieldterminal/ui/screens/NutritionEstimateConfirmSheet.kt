@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens
 
-import com.bioscan.fieldterminal.domain.toAppIso
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -52,6 +51,7 @@ import com.bioscan.fieldterminal.data.usingDatabaseMatch
 import com.bioscan.fieldterminal.data.withGrams
 import com.bioscan.fieldterminal.data.withItems
 import com.bioscan.fieldterminal.data.withMeasure
+import com.bioscan.fieldterminal.domain.toAppIso
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField

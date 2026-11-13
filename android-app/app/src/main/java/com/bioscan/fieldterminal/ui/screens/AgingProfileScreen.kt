@@ -24,12 +24,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AgingProfileOverview
 import com.bioscan.fieldterminal.data.AgingProfileRepository
-import com.bioscan.fieldterminal.data.BodyCheckinRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.UserProfileRepository
-import com.bioscan.fieldterminal.data.catching
-import com.bioscan.fieldterminal.data.model.UserProfileRow
-import com.bioscan.fieldterminal.domain.BodyCheckinRecord
 import com.bioscan.fieldterminal.domain.DataAvailability
 import com.bioscan.fieldterminal.domain.DisplayValue
 import com.bioscan.fieldterminal.domain.aging.BiologicalAgeResult
@@ -46,7 +41,6 @@ import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.screens.status.FitnessAgeSection
 import com.bioscan.fieldterminal.ui.theme.FTType
-import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
@@ -61,14 +55,6 @@ fun AgingProfileScreen(onBack: () -> Unit) {
     LaunchedEffect(guard.attempt) {
         guard.run { overview = AgingProfileRepository(SupabaseClientProvider.client).loadOverview() }
     }
-    // For the folded-in Fitness Age (HUNT model): sex, date of birth and body check-ins (its waist feeds the VO2peak).
-    var profile by remember { mutableStateOf<UserProfileRow?>(null) }
-    var checkins by remember { mutableStateOf<List<BodyCheckinRecord>>(emptyList()) }
-    LaunchedEffect(Unit) {
-        profile = catching { UserProfileRepository(SupabaseClientProvider.client).loadProfile() }.getOrNull()
-        checkins = catching { BodyCheckinRepository(SupabaseClientProvider.client).loadHistory() }.getOrElse { emptyList() }
-    }
-
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).ftPlatinumWash()) {
         TileHeader(onBack = onBack, title = "AGING PROFILE", subtitle = "BIOLOGICAL AGE · DIMENSIONS · HISTORY", accent = FT.DomainUser)
 
@@ -88,11 +74,7 @@ fun AgingProfileScreen(onBack: () -> Unit) {
                 OverviewCard(current)
                 DimensionsCard(current)
                 HistoryCard(current)
-                FitnessAgeSection(
-                    sex = profile?.sex?.takeIf { it == "male" || it == "female" },
-                    birth = profile?.dateOfBirth?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
-                    checkins = checkins,
-                )
+                FitnessAgeSection()
             }
         }
     }

@@ -84,7 +84,7 @@ fun AgingProfileScreen(onBack: () -> Unit) {
 private fun OverviewCard(overview: AgingProfileOverview) {
     FTCard(title = "OVERVIEW") {
         BioAgeHero(overview)
-        StatLineHelp("Chronological age", "${overview.chronologicalAgeYears} yr", "Chronological age", "Your real age, from date of birth (Setup › Profile & goals). Every biological-age model is compared against this.")
+        AgeStatLine("Chronological age", "${overview.chronologicalAgeYears} yr", "Chronological age", "Your real age, from date of birth (Setup › Profile & goals). Every biological-age model is compared against this.")
     }
 }
 
@@ -213,7 +213,7 @@ private fun ResultLine(result: BiologicalAgeResult, help: String) {
 }
 
 @Composable
-private fun StatLineHelp(label: String, value: String, helpTitle: String, helpBody: String) {
+private fun AgeStatLine(label: String, value: String, helpTitle: String, helpBody: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(label, style = FTType.Body, color = FT.TextSecondary)

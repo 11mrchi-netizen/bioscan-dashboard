@@ -91,14 +91,14 @@ fun TrainingBlockFormSheet(cycle: TrainingCycle?, onDismiss: () -> Unit, onSaved
             )
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                FormLabel("TEMPLATE NAME")
+                BlockFormLabel("TEMPLATE NAME")
                 FieldTextField(templateName, { templateName = it }, "e.g. Operator, Base Building")
             }
 
             DateField("START DATE", startDate, { startDate = it })
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                FormLabel("DURATION (WEEKS)")
+                BlockFormLabel("DURATION (WEEKS)")
                 FieldTextField(
                     weeks,
                     { weeks = it.filter { c -> c.isDigit() } },
@@ -113,7 +113,7 @@ fun TrainingBlockFormSheet(cycle: TrainingCycle?, onDismiss: () -> Unit, onSaved
             )
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                FormLabel("PRIMARY FOCUS *")
+                BlockFormLabel("PRIMARY FOCUS *")
                 FocusChipGrid(
                     selected = primaryFocus,
                     exclude = secondaryFocus,
@@ -122,7 +122,7 @@ fun TrainingBlockFormSheet(cycle: TrainingCycle?, onDismiss: () -> Unit, onSaved
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                FormLabel("SECONDARY FOCUS (OPTIONAL)")
+                BlockFormLabel("SECONDARY FOCUS (OPTIONAL)")
                 FocusChipGrid(
                     selected = secondaryFocus,
                     exclude = primaryFocus,
@@ -132,27 +132,27 @@ fun TrainingBlockFormSheet(cycle: TrainingCycle?, onDismiss: () -> Unit, onSaved
 
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FormLabel("STR DAYS/WEEK")
+                    BlockFormLabel("STR DAYS/WEEK")
                     DaysStepper(strengthDays, { if (strengthDays > 0) strengthDays-- }, { if (strengthDays < 7) strengthDays++ })
                 }
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FormLabel("COND DAYS/WEEK")
+                    BlockFormLabel("COND DAYS/WEEK")
                     DaysStepper(conditioningDays, { if (conditioningDays > 0) conditioningDays-- }, { if (conditioningDays < 7) conditioningDays++ })
                 }
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                FormLabel("GOAL METRIC (OPTIONAL)")
+                BlockFormLabel("GOAL METRIC (OPTIONAL)")
                 FieldTextField(goalMetric, { goalMetric = it }, "e.g. weekly_mileage_km")
             }
             if (goalMetric.isNotBlank()) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FormLabel("STARTING VALUE")
+                        BlockFormLabel("STARTING VALUE")
                         FieldTextField(startingValue, { startingValue = it }, "e.g. 30", keyboardType = KeyboardType.Decimal)
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FormLabel("TARGET VALUE")
+                        BlockFormLabel("TARGET VALUE")
                         FieldTextField(targetValue, { targetValue = it }, "e.g. 60", keyboardType = KeyboardType.Decimal)
                     }
                 }
@@ -267,7 +267,7 @@ private fun DaysStepper(value: Int, onDecrement: () -> Unit, onIncrement: () -> 
 }
 
 @Composable
-private fun FormLabel(text: String) {
+private fun BlockFormLabel(text: String) {
     Text(text, style = formLabelStyle, color = FT.TextSecondary)
 }
 

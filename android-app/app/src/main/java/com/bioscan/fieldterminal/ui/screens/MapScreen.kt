@@ -14,20 +14,12 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -41,18 +33,14 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.bioscan.fieldterminal.auth.GoogleAuthorizationManager
-import com.bioscan.fieldterminal.data.AddEntryRepository
 import com.bioscan.fieldterminal.data.GeocodingRepository
 import com.bioscan.fieldterminal.data.MapRepository
 import com.bioscan.fieldterminal.data.MapSettingsStore
-import com.bioscan.fieldterminal.data.PeopleRepository
 import com.bioscan.fieldterminal.data.PlannedRouteRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.WeatherRepository
-import com.bioscan.fieldterminal.data.model.PersonRow
 import com.bioscan.fieldterminal.data.model.PlannedRouteRow
 import com.bioscan.fieldterminal.domain.GpxPoint
 import com.bioscan.fieldterminal.domain.MapEvent
@@ -61,23 +49,13 @@ import com.bioscan.fieldterminal.domain.MapPin
 import com.bioscan.fieldterminal.domain.SessionWeather
 import com.bioscan.fieldterminal.domain.TRAINING_COLOR_ID
 import com.bioscan.fieldterminal.domain.classifyMapEvent
-import com.bioscan.fieldterminal.domain.classifySessionKind
 import com.bioscan.fieldterminal.domain.parseSessionZonedDateTime
 import com.bioscan.fieldterminal.domain.routeDistanceKm
 import com.bioscan.fieldterminal.domain.routeElevationGainM
-import com.bioscan.fieldterminal.domain.weatherCodeLabel
-import com.bioscan.fieldterminal.domain.weatherCodeSymbol
 import com.bioscan.fieldterminal.ui.components.FTButton
-import com.bioscan.fieldterminal.ui.components.FTCard
-import com.bioscan.fieldterminal.ui.components.FTIcon
-import com.bioscan.fieldterminal.ui.components.FTIconSize
-import com.bioscan.fieldterminal.ui.components.FTIcons
-import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.fitTo
-import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.stableMapView
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.Inter
 import com.google.android.gms.common.api.ApiException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -92,12 +70,6 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Shared text styles for this screen's own chrome (sheet titles, compact
-// action/status labels) -- DAV-108 follow-up migration off FieldTextStyles'
-// legacy JetBrainsMono onto the FT contract's Inter/Roboto Mono split.
-private val sheetHeaderTitleStyle = FTType.SectionTitle
-private val sheetActionLabelStyle = FTType.LabelCaps
-
 // Replaces Step 14's single
 // "next training session" view with a real multi-pin map of every calendar
 // event in the next 24h -- events with a real address are geocoded (see
@@ -109,14 +81,14 @@ private val sheetActionLabelStyle = FTType.LabelCaps
 // Encounter/Social and get a partner match/search/create section instead
 // (see PartnerSection below). Logging a real encounter from one of these is
 // Phase M3, not built here.
-private sealed interface MapState {
+internal sealed interface MapState {
     data object CheckingAccess : MapState
     data class NeedsConsent(val pendingIntent: PendingIntent) : MapState
     data class Error(val message: String) : MapState
     data class Ready(val pins: List<MapPin>, val droppedCount: Int, val accessToken: String) : MapState
 }
 
-private sealed interface WeatherUiState {
+internal sealed interface WeatherUiState {
     data object Idle : WeatherUiState
     data object Loading : WeatherUiState
     data class Loaded(val weather: SessionWeather) : WeatherUiState
@@ -428,369 +400,18 @@ private fun pinMarker(mapView: MapView, point: GeoPoint, color: Int, onClick: ()
         setOnMarkerClickListener { _, _ -> onClick(); true }
     }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun PinDetailSheet(
-    pin: MapPin,
-    routePoints: List<GpxPoint>?,
-    routeError: String?,
-    plannedPreview: PlannedRouteRow?,
-    weatherState: WeatherUiState,
-    onRequestWeather: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val event = pin.event
-    val category = remember(event.id, event.colorId, event.title) { classifyMapEvent(event.colorId, event.title) }
-    val context = LocalContext.current
-    val home = remember { MapSettingsStore.getHome(context) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = FT.SheetShape,
-        containerColor = FT.Surface,
-        contentColor = FT.TextPrimary,
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text(
-                when (category) {
-                    MapEventCategory.Training -> sessionCardTitle(classifySessionKind(event.title))
-                    MapEventCategory.Encounter -> "ENCOUNTER"
-                    MapEventCategory.Social -> "SOCIAL EVENT"
-                    MapEventCategory.Other -> "EVENT"
-                },
-                style = sheetHeaderTitleStyle,
-                color = FT.DomainMap,
-            )
-            Text(
-                text = event.title.trim().ifBlank { "Untitled event" },
-                style = FTType.SectionTitle,
-                color = FT.TextPrimary,
-            )
-            event.description.takeIf { it.isNotBlank() }?.let {
-                Text(it, style = FTType.BodySmall, color = FT.TextSecondary)
-            }
-            Text(
-                text = formatEventMeta(event),
-                style = FTType.Value,
-                color = FT.TextSecondary,
-            )
-            Text(
-                text = if (pin.isHomeFallback) "Pinned at home — this event has no location." else (event.location ?: ""),
-                style = FTType.Caption,
-                color = FT.TextSecondary,
-            )
-
-            when (category) {
-                MapEventCategory.Training -> {
-                    // DAV-149: a cached DAV-148 preview (real Mountain Index/
-                    // KM-effort/grade-band terrain analysis) takes priority
-                    // over the live naive GPX summary below when one exists
-                    // for this event -- the live fetch stays as the fallback
-                    // for an event the pipeline hasn't reached yet, per this
-                    // ticket's own "design so future metrics can be added
-                    // without changing the route-preview contract."
-                    when {
-                        plannedPreview != null -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(
-                                plannedRouteSummary(plannedPreview),
-                                style = FTType.Value,
-                                color = FT.DomainTraining,
-                            )
-                            plannedPreview.confidenceTier?.let { tier ->
-                                val staleSuffix = if (plannedPreview.isStale) " · MAY BE STALE" else ""
-                                Text(
-                                    "CONFIDENCE: ${tier.uppercase()}$staleSuffix",
-                                    style = FTType.MonoCaption,
-                                    color = if (plannedPreview.isStale) FT.Warn else FT.TextSecondary,
-                                )
-                            }
-                        }
-                        routeError != null -> Text(
-                            "Couldn't load the route (${routeError}).",
-                            style = FTType.BodySmall,
-                            color = FT.TextSecondary,
-                        )
-                        routePoints != null -> Text(
-                            routeSummary(routePoints),
-                            style = FTType.Value,
-                            color = FT.DomainTraining,
-                        )
-                        event.gpxLink == null -> Text(
-                            "No route file linked to this session.",
-                            style = FTType.Caption,
-                            color = FT.TextSecondary,
-                        )
-                    }
-                    WeatherRow(weatherState, onClick = onRequestWeather)
-                }
-                MapEventCategory.Encounter, MapEventCategory.Social -> PartnerSection(event)
-                MapEventCategory.Other -> {}
-            }
-
-            if (!pin.isHomeFallback && home != null) {
-                FTButton(label = "DIRECTIONS") {
-                    context.startActivity(directionsIntent(home.first, home.second, pin.lat, pin.lon))
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-        }
-    }
-}
-
-// NoMatch shows a search field over the 168-row `people` table
-// plus a create-new action -- per the user's own choice, not create-only,
-// since a typo or nickname in the calendar title shouldn't force a
-// duplicate partner record. Deliberately no "change match" action once
-// Matched -- a wrong auto-match is a real, accepted rough edge for this
-// phase's "keep it minimal" scope, not solved here.
-private sealed interface PartnerUiState {
-    data object Loading : PartnerUiState
-    data class Matched(val person: PersonRow) : PartnerUiState
-    data object NoMatch : PartnerUiState
-    data class Error(val message: String) : PartnerUiState
-}
-
-@Composable
-private fun PartnerSection(event: MapEvent) {
-    val repo = remember { PeopleRepository(SupabaseClientProvider.client) }
-    val scope = rememberCoroutineScope()
-    var state by remember(event.id) { mutableStateOf<PartnerUiState>(PartnerUiState.Loading) }
-    var query by remember(event.id) { mutableStateOf("") }
-    var searchResults by remember(event.id) { mutableStateOf<List<PersonRow>>(emptyList()) }
-    var creating by remember(event.id) { mutableStateOf(false) }
-
-    LaunchedEffect(event.id, event.title) {
-        state = PartnerUiState.Loading
-        state = try {
-            repo.findByNameInTitle(event.title)?.let { PartnerUiState.Matched(it) } ?: PartnerUiState.NoMatch
-        } catch (e: Exception) {
-            PartnerUiState.Error(e.message ?: "Couldn't check for a matching partner.")
-        }
-    }
-
-    LaunchedEffect(query, state) {
-        searchResults = if (state is PartnerUiState.NoMatch && query.isNotBlank()) {
-            try {
-                repo.search(query)
-            } catch (e: Exception) {
-                emptyList()
-            }
-        } else {
-            emptyList()
-        }
-    }
-
-    FTCard(title = "PARTNER") {
-        when (val s = state) {
-            PartnerUiState.Loading -> Text(
-                "Checking this event's title for a partner match…",
-                style = FTType.BodySmall,
-                color = FT.TextSecondary,
-            )
-            is PartnerUiState.Matched -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    s.person.name,
-                    style = FTType.RowTitle,
-                    color = FT.TextPrimary,
-                )
-                EncounterLogRow(event = event, personId = s.person.id)
-            }
-            is PartnerUiState.Error -> Text(
-                "Couldn't check for a matching partner (${s.message}).",
-                style = FTType.BodySmall,
-                color = FT.TextSecondary,
-            )
-            PartnerUiState.NoMatch -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    "No partner matched in this event's title.",
-                    style = FTType.BodySmall,
-                    color = FT.TextSecondary,
-                )
-                FieldTextField(value = query, onValueChange = { query = it }, placeholder = "Search partners…")
-                searchResults.forEach { person ->
-                    Text(
-                        person.name,
-                        style = FTType.BodySmall,
-                        color = FT.DomainMap,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .ftClickable {
-                                state = PartnerUiState.Matched(person)
-                            }
-                            .padding(vertical = 6.dp),
-                    )
-                }
-                if (query.isNotBlank() && !creating) {
-                    FTButton(label = "NEW PARTNER: \"${query.trim()}\"") {
-                        creating = true
-                        scope.launch {
-                            state = try {
-                                PartnerUiState.Matched(repo.createPerson(query.trim()))
-                            } catch (e: Exception) {
-                                PartnerUiState.Error(e.message ?: "Couldn't create this partner.")
-                            } finally {
-                                creating = false
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// Minimal by the user's own choice -- date (from the event) +
-// optional type/notes, same 3 real fields the Log tab's own EncounterForm
-// collects (see AddEntrySheet.kt), just with person_id and the real
-// calendar title threaded through too. The encounters table's richer unused
-// columns (activities, ratings, location_type, duration) stay untouched, as
-// does `status` (left at its 'logged' default -- the 'pending' state is
-// explicitly not used by this phase).
-@Composable
-private fun EncounterLogRow(event: MapEvent, personId: Long) {
-    var type by remember(event.id) { mutableStateOf("") }
-    var notes by remember(event.id) { mutableStateOf("") }
-    var saving by remember(event.id) { mutableStateOf(false) }
-    var saved by remember(event.id) { mutableStateOf(false) }
-    var error by remember(event.id) { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
-
-    if (saved) {
-        Text(
-            "Encounter logged.",
-            style = FTType.RowTitle,
-            color = FT.Ok,
-        )
-        return
-    }
-
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("LOG ENCOUNTER", style = sheetActionLabelStyle, color = FT.TextSecondary)
-        FieldTextField(value = type, onValueChange = { type = it }, placeholder = "Type (optional) — e.g. date, call, hangout")
-        FieldTextField(value = notes, onValueChange = { notes = it }, placeholder = "Notes (optional)", singleLine = false)
-        error?.let {
-            Text("Couldn't log this encounter (${it}).", style = FTType.Caption, color = FT.TextSecondary)
-        }
-        FTButton(label = if (saving) "SAVING…" else "LOG ENCOUNTER") {
-            if (!saving) {
-                saving = true
-                error = null
-                scope.launch {
-                    try {
-                        val date = parseSessionZonedDateTime(event.startIso).toLocalDate().toString()
-                        AddEntryRepository(SupabaseClientProvider.client).addEncounter(
-                            date = date,
-                            encounterType = type.trim().ifBlank { null },
-                            notes = notes.trim().ifBlank { null },
-                            personId = personId,
-                            calendarEventTitle = event.title,
-                        )
-                        saved = true
-                    } catch (e: Exception) {
-                        error = e.message ?: "Unknown error."
-                    } finally {
-                        saving = false
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun WeatherRow(state: WeatherUiState, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-            .ftClickable(onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall))
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text("WEATHER AT SESSION TIME", style = sheetActionLabelStyle, color = FT.TextSecondary)
-        when (state) {
-            is WeatherUiState.Loaded -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(weatherCodeSymbol(state.weather.code), fontSize = 16.sp)
-                Text("%.0f°".format(state.weather.temperatureC), style = sheetActionLabelStyle, color = FT.TextPrimary)
-            }
-            WeatherUiState.Loading -> Text("···", style = sheetActionLabelStyle, color = FT.TextSecondary)
-            is WeatherUiState.Failed -> FTIcon(FTIcons.Warning, "Weather unavailable", tint = FT.Bad, size = FTIconSize.Inline)
-            WeatherUiState.Idle -> Text("VIEW", style = sheetActionLabelStyle, color = FT.DomainMap)
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun WeatherSheet(state: WeatherUiState, onDismiss: () -> Unit) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = FT.SheetShape,
-        containerColor = FT.Surface,
-        contentColor = FT.TextPrimary,
-    ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("FORECAST AT SESSION TIME", style = sheetHeaderTitleStyle, color = FT.DomainMap)
-            when (state) {
-                is WeatherUiState.Loaded -> {
-                    val w = state.weather
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(weatherCodeSymbol(w.code), fontSize = 32.sp)
-                        Column {
-                            Text(
-                                text = "%.0f°C".format(w.temperatureC),
-                                style = FTType.PageTitle,
-                                color = FT.TextPrimary,
-                            )
-                            Text(weatherCodeLabel(w.code), style = FTType.BodySmall, color = FT.TextSecondary)
-                        }
-                    }
-                    Text(
-                        text = "Wind %.0f km/h · Precip %.1f mm".format(w.windSpeedKmh, w.precipitationMm),
-                        style = FTType.Value,
-                        color = FT.TextSecondary,
-                    )
-                }
-                WeatherUiState.Loading -> Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = FT.DomainMap)
-                }
-                is WeatherUiState.Failed -> Text(
-                    "Couldn't load the forecast (${state.message}).",
-                    style = FTType.BodySmall,
-                    color = FT.TextSecondary,
-                )
-                WeatherUiState.Idle -> Text("—", style = FTType.BodySmall, color = FT.TextSecondary)
-            }
-            Text(
-                "Forecast, not a guarantee — Open-Meteo, no personal weather station.",
-                style = FTType.Caption,
-                color = FT.TextSecondary,
-            )
-            Spacer(Modifier.height(12.dp))
-        }
-    }
-}
-
 // Consumer Google Maps deep link -- no API key, no billing. Doesn't accept a
 // pre-filled arrival time (that parameter only exists in Google's separate,
 // also-billed Directions API) -- the person sets "Arrive by" themselves once
 // Maps opens with the route ready, per the user's own chosen trade-off.
-private fun directionsIntent(homeLat: Double, homeLon: Double, destLat: Double, destLon: Double): Intent {
+internal fun directionsIntent(homeLat: Double, homeLon: Double, destLat: Double, destLon: Double): Intent {
     val uri = Uri.parse(
         "https://www.google.com/maps/dir/?api=1&origin=$homeLat,$homeLon&destination=$destLat,$destLon&travelmode=driving",
     )
     return Intent(Intent.ACTION_VIEW, uri)
 }
 
-private fun sessionCardTitle(kind: String): String = when (kind) {
+internal fun sessionCardTitle(kind: String): String = when (kind) {
     "strength" -> "STRENGTH SESSION"
     "hill" -> "ENDURANCE · HILL LOOP"
     "trail run" -> "ENDURANCE · TRAIL RUN"
@@ -798,7 +419,7 @@ private fun sessionCardTitle(kind: String): String = when (kind) {
     else -> "TRAINING SESSION"
 }
 
-private fun formatEventMeta(event: MapEvent): String {
+internal fun formatEventMeta(event: MapEvent): String {
     val start = parseSessionZonedDateTime(event.startIso)
     val dateText = start.format(DateTimeFormatter.ofPattern("EEE d MMM HH:mm")).uppercase()
     val minutesUntil = ChronoUnit.MINUTES.between(ZonedDateTime.now(start.zone), start)
@@ -812,7 +433,7 @@ private fun formatEventMeta(event: MapEvent): String {
 
 // Real distance/elevation-gain, computed from the actual GPX points (not
 // fabricated).
-private fun routeSummary(points: List<GpxPoint>): String {
+internal fun routeSummary(points: List<GpxPoint>): String {
     val distanceKm = routeDistanceKm(points)
     val gainM = routeElevationGainM(points)
     return "%.1f KM".format(distanceKm) + (gainM?.let { " · %.0f M GAIN".format(it) } ?: "")
@@ -822,7 +443,7 @@ private fun routeSummary(points: List<GpxPoint>): String {
 // not this file's own naive haversine/elevation-delta math above. Only
 // non-null figures render; a preview with just distance (no real elevation
 // data in the GPX) still shows something real rather than nothing.
-private fun plannedRouteSummary(preview: PlannedRouteRow): String {
+internal fun plannedRouteSummary(preview: PlannedRouteRow): String {
     val parts = mutableListOf<String>()
     preview.distanceM?.let { parts += "%.1f KM".format(it / 1000.0) }
     preview.elevationGainM?.let { parts += "%.0f M GAIN".format(it) }

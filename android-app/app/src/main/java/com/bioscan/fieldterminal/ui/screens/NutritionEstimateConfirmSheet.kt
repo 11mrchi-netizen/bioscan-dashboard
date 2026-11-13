@@ -496,14 +496,10 @@ private fun ActionLink(label: String, onClick: () -> Unit) {
     )
 }
 
-private val sheetHeaderTitleStyle = FTType.SectionTitle
-private val sheetActionLabelStyle = FTType.LabelCaps
-
 @Composable
 private fun FormFieldLabel(text: String) {
     Text(text, style = sheetActionLabelStyle, color = FT.TextSecondary, modifier = Modifier.padding(bottom = 6.dp))
 }
-
 
 // ---- Photo logging v3 ----
 

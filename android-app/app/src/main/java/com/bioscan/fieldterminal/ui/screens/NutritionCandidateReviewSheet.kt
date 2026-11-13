@@ -40,7 +40,6 @@ import com.bioscan.fieldterminal.data.model.FoodRow
 import com.bioscan.fieldterminal.data.model.FoodServingRow
 import com.bioscan.fieldterminal.domain.toAppIso
 import com.bioscan.fieldterminal.ui.components.FTButton
-import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
@@ -57,36 +56,6 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 // NutritionResolverRepository (DAV-164); this file never computes a
 // nutrient value itself, matching the same boundary the resolver's own
 // design doc draws.
-
-// Local copies of AddEntrySheet.kt's own sheet-chrome styles/helpers --
-// those stay file-private there (MapScreen.kt independently keeps its own
-// copies too), so this file follows the same established per-file pattern
-// rather than widening visibility across files for a few one-line helpers.
-private val sheetHeaderTitleStyle = FTType.SectionTitle
-private val sheetActionLabelStyle = FTType.LabelCaps
-
-@Composable
-private fun SheetBackHeader(label: String, onBack: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
-            "BACK",
-            style = sheetActionLabelStyle,
-            color = FT.TextSecondary,
-            modifier = Modifier.ftClickable(onClick = onBack),
-        )
-        Text(label, style = sheetHeaderTitleStyle, color = FT.DomainLog)
-    }
-}
-
-@Composable
-private fun FormLabel(text: String) {
-    Text(text, style = sheetActionLabelStyle, color = FT.TextSecondary, modifier = Modifier.padding(bottom = 6.dp))
-}
-
-@Composable
-private fun SaveButton(saving: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    FTButton(label = if (saving) "SAVING..." else "SAVE", enabled = enabled && !saving, onClick = onClick, emphasis = FTButtonEmphasis.Primary)
-}
 
 data class ReviewSeedItem(
     val description: String,

@@ -40,7 +40,6 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AddEntryRepository
 import com.bioscan.fieldterminal.data.LOG_PAGE_DAYS
 import com.bioscan.fieldterminal.data.LOG_WINDOW_DAYS
-import com.bioscan.fieldterminal.data.LogFeed
 import com.bioscan.fieldterminal.data.LogRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.domain.DayMark
@@ -62,7 +61,6 @@ import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
 import com.bioscan.fieldterminal.ui.components.rememberCacheVersion
 import com.bioscan.fieldterminal.ui.screens.status.UnloggedVisitsCard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import kotlinx.coroutines.CancellationException
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -77,15 +75,13 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 // `reloadKey` so the feed re-fetches immediately.
 @Composable
 fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
-    var feed by remember { mutableStateOf<LogFeed?>(null) }
+    val page = remember { LogState() }
     // Entries deleted but still inside their undo window: hidden at once, shown again on UNDO or a failed delete.
     var hidden by remember { mutableStateOf(emptySet<Pair<LogSource, Long>>()) }
     var visibleDays by remember { mutableIntStateOf(LOG_PAGE_DAYS) }
     // How many days back the feed is loaded; LOAD OLDER widens it once the loaded days are all shown, until a widening
     // finds nothing older.
     var windowDays by remember { mutableIntStateOf(LOG_WINDOW_DAYS) }
-    var olderExhausted by remember { mutableStateOf(false) }
-    var loadingOlder by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableIntStateOf(0) }
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
     // + LOG in the dock opens the menu straight away. The request is remembered across a restore,
@@ -100,31 +96,12 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
     var actionEntry by remember { mutableStateOf<LogEntry?>(null) }
     var editingEntry by remember { mutableStateOf<LogEntry?>(null) }
     var sleepDetailEntryId by remember { mutableStateOf<Long?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
     // Days are collapsed unless opened; the open set and the filter survive switching tabs (kept as a string so it is saveable).
     var expandedKeys by rememberSaveable { mutableStateOf("") }
     var gapsOnly by rememberSaveable { mutableStateOf(false) }
 
     val cacheVersion = rememberCacheVersion()
-    LaunchedEffect(reloadKey, windowDays, cacheVersion) {
-        error = null
-        try {
-            val since = LocalDate.now().minusDays(windowDays - 1L)
-            val loaded = LogRepository(SupabaseClientProvider.client).loadFeed(since)
-            // A widening that adds nothing older than the previous window ends LOAD OLDER.
-            if (windowDays > LOG_WINDOW_DAYS) {
-                val previousStart = since.plusDays(LOG_WINDOW_DAYS.toLong())
-                olderExhausted = loaded.entries.none { it.timestamp.toLocalDate().isBefore(previousStart) }
-            }
-            feed = loaded
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            error = e.message ?: "Unknown error"
-        } finally {
-            loadingOlder = false
-        }
-    }
+    LaunchedEffect(reloadKey, windowDays, cacheVersion) { page.load(windowDays) }
 
     fun refresh() {
         visibleDays = LOG_PAGE_DAYS
@@ -132,8 +109,8 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
     }
 
     // Everything about days (grouping, marks, gaps, summaries) is computed in the domain; the screen only draws it.
-    val days = remember(feed, hidden) {
-        feed?.let { f ->
+    val days = remember(page.feed, hidden) {
+        page.feed?.let { f ->
             buildLogDays(f.entries.filter { (it.source to it.id) !in hidden }, LocalDate.now(), f.coverage, { date -> supplementExpectedOn(f.supplementSchedule, date) }, from = f.since)
         }.orEmpty()
     }
@@ -145,14 +122,14 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().background(FT.Base).ftPlatinumWash()) {
-            val current = feed
+            val current = page.feed
             val gapCount = days.count { it.hasGap }
             // UX review P4: the header counts today (the all-time count of loaded rows said little) and keeps the gap count.
             val today = LocalDate.now()
             ScreenHeader(
                 title = "LOG",
                 context = when {
-                    error != null -> "ERROR"
+                    page.error != null -> "ERROR"
                     current != null -> "TODAY ${current.entries.count { it.timestamp.toLocalDate() == today }} · " +
                         if (gapCount == 0) "NO GAPS" else "$gapCount DAY${if (gapCount == 1) "" else "S"} WITH GAPS"
                     else -> "LOADING"
@@ -160,8 +137,8 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
             )
 
             when {
-                error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Bad)
+                page.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Failed to load: ${page.error}", style = FTType.BodySmall, color = FT.Bad)
                 }
                 current == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = FT.DomainLog)
@@ -200,12 +177,12 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
                                 onEntryClick = { actionEntry = it },
                             )
                         }
-                        if (visibleDays < shown.size || !olderExhausted) {
+                        if (visibleDays < shown.size || !page.olderExhausted) {
                             item(key = "older") {
-                                LoadOlderButton(loading = loadingOlder, onClick = {
+                                LoadOlderButton(loading = page.loadingOlder, onClick = {
                                     visibleDays += LOG_PAGE_DAYS
-                                    if (visibleDays > shown.size && !olderExhausted && !loadingOlder) {
-                                        loadingOlder = true
+                                    if (visibleDays > shown.size && !page.olderExhausted && !page.loadingOlder) {
+                                        page.loadingOlder = true
                                         windowDays += LOG_WINDOW_DAYS
                                     }
                                 })

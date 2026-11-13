@@ -1,7 +1,6 @@
 package com.bioscan.fieldterminal.data
 
 import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.ktor.client.HttpClient
@@ -107,7 +106,7 @@ class RegimenReferenceRepository(private val supabase: SupabaseClient) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     private suspend fun call(body: JsonObject): JsonObject {
-        val token = supabase.auth.currentAccessTokenOrNull() ?: throw IllegalStateException("Not signed in")
+        val token = supabase.sessionToken() ?: throw IllegalStateException("Not signed in")
         val response = client.post("$FUNCTIONS_BASE_URL/regimen-reference-lookup") {
             header("Authorization", "Bearer $token")
             contentType(ContentType.Application.Json)

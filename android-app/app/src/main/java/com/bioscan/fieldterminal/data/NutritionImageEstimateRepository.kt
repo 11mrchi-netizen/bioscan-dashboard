@@ -2,7 +2,6 @@ package com.bioscan.fieldterminal.data
 
 import android.util.Base64
 import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.header
@@ -105,7 +104,7 @@ class NutritionImageEstimateRepository(private val supabase: SupabaseClient) {
         answers: List<PhotoAnswer> = emptyList(),
     ): NutritionImageEstimateResult {
         require(images.isNotEmpty()) { "At least one photo is required" }
-        val token = supabase.auth.currentAccessTokenOrNull()
+        val token = supabase.sessionToken()
             ?: throw NutritionImageEstimateException("Not signed in")
 
         val requestBody = ImageEstimateRequest(

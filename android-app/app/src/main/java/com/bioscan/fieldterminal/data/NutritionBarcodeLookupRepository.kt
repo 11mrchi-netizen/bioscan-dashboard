@@ -2,7 +2,6 @@ package com.bioscan.fieldterminal.data
 
 import android.util.Base64
 import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -149,7 +148,7 @@ class NutritionBarcodeLookupRepository(private val supabase: SupabaseClient) {
     }
 
     private suspend fun post(httpClient: io.ktor.client.HttpClient, body: String): String {
-        val token = supabase.auth.currentAccessTokenOrNull() ?: throw BarcodeLookupException("Not signed in")
+        val token = supabase.sessionToken() ?: throw BarcodeLookupException("Not signed in")
         return httpClient.post("$FUNCTIONS_BASE_URL/nutrition-barcode-lookup") {
             header("Authorization", "Bearer $token")
             contentType(ContentType.Application.Json)

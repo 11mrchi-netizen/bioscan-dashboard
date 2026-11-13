@@ -15,7 +15,9 @@ object Supabase {
         createSupabaseClient(supabaseUrl = SUPABASE_URL, supabaseKey = SUPABASE_ANON_KEY) {
             requestTimeout = 45.seconds
             httpEngine = io.ktor.client.engine.okhttp.OkHttp.create()
-            install(Auth)
+            // The collector runs with no activity on screen. The library's lifecycle callbacks drop the session from memory
+            // whenever the app leaves the foreground, after which an upload would wait for it for ever.
+            install(Auth) { enableLifecycleCallbacks = false }
             install(Postgrest)
         }
     }

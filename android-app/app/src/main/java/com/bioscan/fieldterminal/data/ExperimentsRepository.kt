@@ -5,7 +5,6 @@ import com.bioscan.fieldterminal.domain.MdePreviewRow
 import com.bioscan.fieldterminal.domain.PROTOCOL_VERSION_RANDOMISED
 import com.bioscan.fieldterminal.domain.scheduleSpan
 import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.ktor.client.HttpClient
@@ -96,7 +95,7 @@ class ExperimentsRepository(private val supabase: SupabaseClient) {
 
     // The smallest difference a design with these phase lengths could detect on this person's own data, per outcome.
     suspend fun previewMde(plannedA: Int, plannedB: Int): List<MdePreviewRow> {
-        val token = supabase.auth.currentAccessTokenOrNull() ?: throw ExperimentException("Not signed in")
+        val token = supabase.sessionToken() ?: throw ExperimentException("Not signed in")
         val response = client.post("$FUNCTIONS_BASE_URL/analysis-run") {
             header("Authorization", "Bearer $token")
             contentType(ContentType.Application.Json)

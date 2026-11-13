@@ -1,7 +1,6 @@
 package com.bioscan.fieldterminal.data
 
 import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.header
@@ -331,7 +330,7 @@ class NutritionCronometerLookupRepository(private val supabase: SupabaseClient) 
             ),
         )
 
-    private fun token(): String = supabase.auth.currentAccessTokenOrNull()
+    private suspend fun token(): String = supabase.sessionToken()
         ?: throw NutritionCronometerLookupException("Not signed in")
 
     private suspend fun callLookup(requestBody: String): CronometerEnrichment {

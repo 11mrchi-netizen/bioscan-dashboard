@@ -3,7 +3,6 @@ package com.bioscan.fieldterminal.data
 import com.bioscan.fieldterminal.data.model.DsldLookupResponse
 import com.bioscan.fieldterminal.data.model.SuppcoLookupResponse
 import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.header
@@ -67,7 +66,7 @@ class SupplementLookupRepository(private val supabase: SupabaseClient) {
             if (System.currentTimeMillis() - at < CACHE_TTL_MS) return result as ProviderResult<T>
         }
         return try {
-            val token = supabase.auth.currentAccessTokenOrNull() ?: throw IllegalStateException("Not signed in")
+            val token = supabase.sessionToken() ?: throw IllegalStateException("Not signed in")
             val response = client.post("$FUNCTIONS_BASE_URL/$function") {
                 header("Authorization", "Bearer $token")
                 contentType(ContentType.Application.Json)

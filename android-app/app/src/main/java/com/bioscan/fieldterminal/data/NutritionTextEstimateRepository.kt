@@ -1,7 +1,6 @@
 package com.bioscan.fieldterminal.data
 
 import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.header
@@ -61,7 +60,7 @@ class NutritionTextEstimateRepository(private val supabase: SupabaseClient) {
     private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun estimate(description: String): NutritionEstimateResult {
-        val token = supabase.auth.currentAccessTokenOrNull()
+        val token = supabase.sessionToken()
             ?: throw NutritionEstimateException("Not signed in")
 
         val response = client.post("$FUNCTIONS_BASE_URL/nutrition-estimate-text") {

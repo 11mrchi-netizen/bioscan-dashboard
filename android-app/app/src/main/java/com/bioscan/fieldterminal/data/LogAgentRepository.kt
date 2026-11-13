@@ -7,7 +7,6 @@ import com.bioscan.fieldterminal.domain.localDate
 import com.bioscan.fieldterminal.domain.toAppIso
 import com.bioscan.fieldterminal.domain.whenLocal
 import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.header
@@ -69,7 +68,7 @@ class LogAgentRepository(private val supabase: SupabaseClient) {
     }
 
     private suspend fun post(requestBody: String): LogAgentResponse {
-        val token = supabase.auth.currentAccessTokenOrNull() ?: throw LogAgentException("Not signed in")
+        val token = supabase.sessionToken() ?: throw LogAgentException("Not signed in")
         val response = client.post("$FUNCTIONS_BASE_URL/log-agent") {
             header("Authorization", "Bearer $token")
             contentType(ContentType.Application.Json)

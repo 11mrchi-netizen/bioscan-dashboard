@@ -5,7 +5,6 @@ import com.bioscan.fieldterminal.domain.agentErrorMessage
 import com.bioscan.fieldterminal.domain.question
 import com.bioscan.fieldterminal.domain.toJson
 import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.ktor.client.request.header
@@ -99,7 +98,7 @@ class AgentRepository(private val supabase: SupabaseClient) {
     }
 
     private suspend fun post(requestBody: String): AgentResponse {
-        val token = supabase.auth.currentAccessTokenOrNull() ?: throw AgentException("Not signed in")
+        val token = supabase.sessionToken() ?: throw AgentException("Not signed in")
         val response = client.post("$FUNCTIONS_BASE_URL/health-agent") {
             header("Authorization", "Bearer $token")
             contentType(ContentType.Application.Json)

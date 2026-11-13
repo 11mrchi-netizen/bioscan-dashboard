@@ -93,6 +93,7 @@ fun rememberCacheVersion(): Int {
 fun describeLoadFailure(e: Throwable): String {
     var t: Throwable? = e
     while (t != null) {
+        if (t is com.bioscan.fieldterminal.data.NoSessionException) return t.message.orEmpty()
         val name = t.javaClass.name
         if (t is java.io.IOException || name.contains("Timeout") || name.contains("UnknownHost") || name.contains("Connect")) {
             return "No connection to the server (offline or timed out). Your data is safe."

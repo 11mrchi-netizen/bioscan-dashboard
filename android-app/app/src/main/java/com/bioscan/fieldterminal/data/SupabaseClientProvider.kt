@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.annotations.SupabaseInternal
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.createSupabaseClient
@@ -18,7 +19,7 @@ private const val SUPABASE_ANON_KEY = "sb_publishable_GyandyvuVbF0RxZLnugz4A_GlN
 
 @OptIn(SupabaseInternal::class) // httpConfig: only to install the debug request log
 object SupabaseClientProvider {
-    val client by lazy {
+    val client: SupabaseClient by lazy {
         createSupabaseClient(
             supabaseUrl = SUPABASE_URL,
             supabaseKey = SUPABASE_ANON_KEY,
@@ -27,7 +28,8 @@ object SupabaseClientProvider {
             // zepp-extract edge function. A genuinely dead connection still fails (and now shows a RETRY card) within this.
             requestTimeout = 45.seconds
             httpEngine = io.ktor.client.engine.okhttp.OkHttp.create()
-            install(Auth)
+            // The session stays in memory while the app is in the background (data/SessionGuard.kt says why).
+            install(Auth) { enableLifecycleCallbacks = false }
             install(Postgrest)
             install(Functions)
             // Debug-only request log (util/Perf.kt); a no-op when Perf.enabled is false.
@@ -35,6 +37,8 @@ object SupabaseClientProvider {
                 install(PerfHttpLog)
                 // Any write through this client clears data/ReadCache, so cached reads never outlive a write.
                 install(CacheInvalidation)
+                // No data request leaves without the user's token: unsigned, it would be answered with empty lists.
+                install(sessionGuard(SUPABASE_ANON_KEY) { client.sessionToken() })
             }
         }
     }

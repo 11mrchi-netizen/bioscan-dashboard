@@ -1,11 +1,13 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain.fuel
 
-import kotlinx.serialization.UseSerializers
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
@@ -92,7 +94,7 @@ fun slotKey(date: LocalDate, slot: PrepSlot): String = "$date:${slot.name}"
 
 /** The recipe letter a weekday's lunch or dinner gets: A-B-A-B-A and C-D-C-D-C from Monday. */
 fun letterFor(weekStart: LocalDate, date: LocalDate, slot: PrepSlot): Char? {
-    val d = java.time.temporal.ChronoUnit.DAYS.between(weekStart, date).toInt()
+    val d = ChronoUnit.DAYS.between(weekStart, date).toInt()
     if (d !in 0 until PREP_DAYS) return null
     return when (slot) {
         PrepSlot.LUNCH -> if (d % 2 == 0) 'A' else 'B'
@@ -214,7 +216,7 @@ fun prepDay(day: CodedDay, template: List<BreakfastItem>, containers: List<Conta
         proteinG = (small.sumOf { it.proteinG } + rp).coerceAtLeast(0.0),
         fatG = if (hasFat) (small.sumOf { it.fatG ?: 0.0 } + rf).coerceAtLeast(0.0) else null,
     )
-    if (fixed.isNotEmpty() && kotlin.math.abs(dc) >= 15) {
+    if (fixed.isNotEmpty() && abs(dc) >= 15) {
         val word = if (dc > 0) "short of" else "over"
         notes += "The containers are ${kotlin.math.abs(dc).roundToInt()} g of carbohydrate $word today's plan: breakfast and the snack take it up."
     }

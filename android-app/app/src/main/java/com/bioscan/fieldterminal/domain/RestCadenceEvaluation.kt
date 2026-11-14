@@ -3,7 +3,7 @@ package com.bioscan.fieldterminal.domain
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
-// Phase A4 (Analysis Layer). Evaluation Method Spec, Category 7 (Rest days &
+// Evaluation Method Spec, Category 7 (Rest days &
 // recovery cadence): replaces the untraceable "14-day rule" with two
 // periodization-grounded signals, built on the exact same daily session_load
 // map Category 6's CTL/ATL/TSB already walks (see

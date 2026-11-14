@@ -1,12 +1,13 @@
 package com.bioscan.fieldterminal.domain
 
+import com.bioscan.fieldterminal.domain.trail.haversineMeters
 import org.w3c.dom.Element
 import org.xml.sax.InputSource
 import java.io.StringReader
 import java.time.LocalDate
 import java.time.OffsetDateTime
-import java.time.ZonedDateTime
 import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 import javax.xml.parsers.DocumentBuilderFactory
 
@@ -97,4 +98,4 @@ fun routeElevationGainM(points: List<GpxPoint>): Double? {
 // DAV-133: delegates to the shared formula domain/trail/Trackpoint.kt's
 // Health-Connect adapter also uses, instead of a second copy.
 private fun haversineKm(a: GpxPoint, b: GpxPoint): Double =
-    com.bioscan.fieldterminal.domain.trail.haversineMeters(a.lat, a.lon, b.lat, b.lon) / 1000.0
+    haversineMeters(a.lat, a.lon, b.lat, b.lon) / 1000.0

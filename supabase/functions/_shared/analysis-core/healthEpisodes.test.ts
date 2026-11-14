@@ -9,7 +9,9 @@ import { validateVocab, vocabRows } from './healthVocab.ts'
 import type { HealthVocab } from './healthVocab.ts'
 
 const vocab = JSON.parse(readFileSync(new URL('../health-vocab/health-vocab.json', import.meta.url), 'utf8')) as HealthVocab
-const migration = readFileSync(new URL('../../../migrations/20261101_health_concerns.sql', import.meta.url), 'utf8')
+// Every migration that seeds the vocabulary (1.0.0, then the symptoms 1.1.0 added).
+const migration = ['20261101000000_health_concerns.sql', '20261110102027_health_illness_checks.sql']
+  .map((f) => readFileSync(new URL(`../../../migrations/${f}`, import.meta.url), 'utf8')).join('\n')
 
 const D0 = '2026-06-01'
 const day = (n: number) => shiftDate(D0, n)
@@ -35,8 +37,9 @@ test('the vocabulary is valid and the migration seeds exactly it', () => {
   assert.deepEqual(validateVocab(vocab), [])
   for (const r of vocabRows(vocab)) {
     const parent = r.parent === null ? 'null' : `'${r.parent}'`
-    const line = `('${r.code}', '${r.kind}', '${r.label}', ${parent}, ${r.sided}, '${vocab.vocabVersion}')`
-    assert.ok(migration.includes(line), `seed is missing ${line}`)
+    // Each code is seeded with the version that added it.
+    const seededAt = ['1.0.0', vocab.vocabVersion].find((ver) => migration.includes(`('${r.code}', '${r.kind}', '${r.label}', ${parent}, ${r.sided}, '${ver}')`))
+    assert.ok(seededAt, `seed is missing ${r.code}`)
   }
   const seeded = migration.match(/\('(sym\.)?[a-z_]+', '(region|symptom)', /g) ?? []
   assert.equal(seeded.length, vocabRows(vocab).length)
@@ -233,4 +236,16 @@ test('data quality counts check-ins against what comparisons need', () => {
   assert.equal(q.coverage90, 0.5)
   assert.equal(q.word, 'GOOD') // 0.5 of the 0.6 needed is 83%
   assert.equal(q.symptomFreeObservedDays90, 45)
+})
+
+test('a symptom check names a region without joining its concern, and is not left waiting for one', () => {
+  const k = concern('k')
+  const check = obs(1, { scope: 'check', concern_id: null })
+  const sweep = obs(2, { scope: 'sweep', concern_id: null })
+  const built = buildConcernSeries([k], [check, sweep], [sig(check, 3), sig(sweep, 4)], D0, day(2))
+  const cells = built.series.get('k')!.cells
+  // The check says nothing about the knee concern; the sweep's knee signal joins it as before.
+  assert.deepEqual(cells.map((c) => c.observed), [false, false, true])
+  assert.equal(cells[2].severity, 4)
+  assert.equal(built.unassigned.length, 0)
 })

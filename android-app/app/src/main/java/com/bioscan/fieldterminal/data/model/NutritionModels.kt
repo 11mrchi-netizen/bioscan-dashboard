@@ -27,16 +27,6 @@ data class HydrationDailyRow(
 )
 
 @Serializable
-data class FoodSourceRow(
-    val id: Long,
-    val name: String,
-    val version: String? = null,
-    val attribution: String? = null,
-    val country: String? = null,
-    val language: String? = null,
-)
-
-@Serializable
 data class FoodRow(
     val id: Long? = null,
     @SerialName("food_source_id") val foodSourceId: Long,
@@ -121,17 +111,6 @@ data class MealItemRow(
     @SerialName("beverage_class") val beverageClass: String? = null,
 )
 
-@Serializable
-data class MealInputRow(
-    val id: Long? = null,
-    @SerialName("meal_id") val mealId: Long,
-    @SerialName("input_type") val inputType: String,
-    @SerialName("raw_text") val rawText: String? = null,
-    @SerialName("image_path") val imagePath: String? = null,
-    @SerialName("barcode_value") val barcodeValue: String? = null,
-    @SerialName("barcode_format") val barcodeFormat: String? = null,
-)
-
 // DAV-181. Lightweight projection of a beverage meal_items row — used to
 // show effective hydration and caffeine contributions in HydrationTabContent
 // without loading the full MealItemRow schema.
@@ -142,22 +121,6 @@ data class BeverageItemRow(
     @SerialName("water_ml") val waterMl: Double? = null,
     @SerialName("caffeine_mg") val caffeineMg: Double? = null,
     @SerialName("effective_hydration_ml") val effectiveHydrationMl: Double? = null,
-)
-
-@Serializable
-data class AiEstimateRow(
-    val id: Long? = null,
-    @SerialName("meal_id") val mealId: Long? = null,
-    @SerialName("meal_item_id") val mealItemId: Long? = null,
-    @SerialName("meal_input_id") val mealInputId: Long? = null,
-    val model: String,
-    @SerialName("model_version") val modelVersion: String? = null,
-    @SerialName("prompt_text") val promptText: String? = null,
-    @SerialName("prompt_image_path") val promptImagePath: String? = null,
-    @SerialName("raw_response") val rawResponse: String? = null,
-    @SerialName("parsed_output") val parsedOutput: String? = null,
-    @SerialName("latency_ms") val latencyMs: Int? = null,
-    val accepted: Boolean? = null,
 )
 
 @Serializable

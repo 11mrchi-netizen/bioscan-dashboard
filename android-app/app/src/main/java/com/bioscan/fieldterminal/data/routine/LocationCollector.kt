@@ -11,6 +11,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import android.util.Log
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.ActivityRecognition
 import com.google.android.gms.location.ActivityTransition
@@ -95,7 +96,7 @@ object LocationCollector {
                 ActivityTransitionRequest(transitions),
                 broadcast(context, RoutineTransitionReceiver::class.java, RC_TRANSITIONS),
             )
-        }.onFailure { android.util.Log.w("LocationCollector", "transitions: ${it.message}") }
+        }.onFailure { Log.w("LocationCollector", "transitions: ${it.message}") }
         RoutineSettingsStore.stayCentre(context)?.let { (lat, lon) -> armStayGeofence(context, lat, lon) }
     }
 
@@ -123,7 +124,7 @@ object LocationCollector {
         runCatching {
             LocationServices.getGeofencingClient(context)
                 .addGeofences(request, broadcast(context, RoutineGeofenceReceiver::class.java, RC_GEOFENCE))
-        }.onFailure { android.util.Log.w("LocationCollector", "geofence: ${it.message}") }
+        }.onFailure { Log.w("LocationCollector", "geofence: ${it.message}") }
     }
 
     // One fix now at balanced power (Wi-Fi/cell, GPS only if needed); null if none comes within Play services' own timeout.

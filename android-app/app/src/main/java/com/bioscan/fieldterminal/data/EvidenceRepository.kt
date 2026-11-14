@@ -79,7 +79,7 @@ class EvidenceRepository(private val supabase: SupabaseClient) {
             .decodeList<EvidenceClaimRow>()
             // The owner's verdicts: a confirmed claim counts as reviewed, a disputed one is not shown as an expected outcome.
             .let { rows ->
-                val reviews = runCatching { RegistryReviewRepository(supabase).loadReviews() }.getOrDefault(emptyMap())
+                val reviews = catching { RegistryReviewRepository(supabase).loadReviews() }.getOrDefault(emptyMap())
                 rows.mapNotNull {
                     when (reviewState(it.reviewStatus, it.version, reviews["evidence" to it.id])) {
                         ReviewState.DISPUTED -> null

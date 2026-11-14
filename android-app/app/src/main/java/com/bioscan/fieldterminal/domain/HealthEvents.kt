@@ -1,24 +1,7 @@
 package com.bioscan.fieldterminal.domain
 
-import com.bioscan.fieldterminal.data.model.IllnessRow
-import com.bioscan.fieldterminal.data.model.InjuryRow
-import com.bioscan.fieldterminal.data.model.MedicationEntry
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
-
-enum class HealthEventKind { Injury, Illness }
-
-data class HealthEvent(
-    val id: Long,
-    val kind: HealthEventKind,
-    val title: String,
-    val detail: String?,
-    val status: String,
-    val startDate: LocalDate,
-    val endDate: LocalDate?,
-    val doctorSeen: Boolean = false,
-    val medications: List<MedicationEntry> = emptyList(),
-)
 
 // Merges injuries + illnesses into one list, same "display decision, not a
 // database one" as index.html's PANELS.history (genuinely different fields
@@ -36,33 +19,5 @@ data class HealthEvent(
 
 /** An injury or illness is open while it is active or monitored; resolving it closes it at once, everywhere. */
 fun isHealthEventOpen(status: String): Boolean = status == "active" || status == "monitoring"
-
-fun mergeHealthEvents(injuries: List<InjuryRow>, illnesses: List<IllnessRow>): List<HealthEvent> {
-    val fromInjuries = injuries.map {
-        HealthEvent(
-            id = it.id,
-            kind = HealthEventKind.Injury,
-            title = "${it.part} — ${it.type}",
-            detail = it.notes,
-            status = it.status,
-            startDate = LocalDate.parse(it.startDate),
-            endDate = it.endDate?.let(LocalDate::parse),
-        )
-    }
-    val fromIllnesses = illnesses.map {
-        HealthEvent(
-            id = it.id,
-            kind = HealthEventKind.Illness,
-            title = it.name,
-            detail = it.symptoms,
-            status = it.status,
-            startDate = LocalDate.parse(it.startDate),
-            endDate = it.endDate?.let(LocalDate::parse),
-            doctorSeen = it.doctorSeen,
-            medications = it.medications,
-        )
-    }
-    return (fromInjuries + fromIllnesses).sortedByDescending { it.startDate }
-}
 
 fun daysSince(date: LocalDate, today: LocalDate): Long = ChronoUnit.DAYS.between(date, today)

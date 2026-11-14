@@ -9,13 +9,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AthleteEventsRepository
+import com.bioscan.fieldterminal.data.DebriefTarget
+import com.bioscan.fieldterminal.data.FuelDebriefRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.domain.events.AthleteEvent
 import com.bioscan.fieldterminal.domain.events.EventStatus
@@ -26,18 +30,23 @@ import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTCardEmphasis
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.PinnedPage
+import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TrailElevationChart
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.launchSafe
+import com.bioscan.fieldterminal.ui.components.produceGuarded
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.screens.fuel.EventFuelTab
+import com.bioscan.fieldterminal.ui.screens.fuel.FuelDebriefSheet
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private val EVENT_DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d MMM yyyy", Locale.ENGLISH)
 private val EVENT_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.ENGLISH)
@@ -70,9 +79,9 @@ fun EventScreen(eventId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit
     val repo = remember { AthleteEventsRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
     var event by remember { mutableStateOf<AthleteEvent?>(null) }
-    var editing by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    var editing by rememberSaveable { mutableStateOf(false) }
     var actionError by remember { mutableStateOf<String?>(null) }
-    var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(EventTab.Overview) }
+    var tab by rememberSaveable { mutableStateOf(EventTab.Overview) }
     var reviewing by remember { mutableStateOf(false) }
     val guard = rememberLoadGuard()
     LaunchedEffect(guard.attempt) { guard.run { event = repo.load(eventId) } }
@@ -83,11 +92,11 @@ fun EventScreen(eventId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit
         title = e?.name ?: "EVENT",
         subtitle = e?.let { eventWhenLabel(it) },
         accent = FT.DomainTraining,
-        rail = { com.bioscan.fieldterminal.ui.components.SubTabRow(items = EventTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
+        rail = { SubTabRow(items = EventTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
     ) {
         if (tab == EventTab.Fuel) {
             // Keyed on the event, rebuilt after an edit (the plan reads the course, times and aid stations).
-            androidx.compose.runtime.key(e) { com.bioscan.fieldterminal.ui.screens.fuel.EventFuelTab(eventId) }
+            key(e) { EventFuelTab(eventId) }
             return@PinnedPage
         }
         Column(Modifier.padding(horizontal = 22.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -138,7 +147,7 @@ fun EventScreen(eventId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit
                     }
                 }
             }
-            actionError?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Critical) }
+            actionError?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Bad) }
             // After the event: what of the fuel schedule was taken, any discomfort, how it felt, the weigh-ins (race fuel rework).
             if (!e.date.isAfter(LocalDate.now()) && e.status != EventStatus.CANCELLED && e.status != EventStatus.DNS) {
                 FTButton("FUEL DEBRIEF", emphasis = FTButtonEmphasis.Primary) { reviewing = true }
@@ -159,10 +168,12 @@ fun EventScreen(eventId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit
     }
     if (reviewing && e != null) {
         // The debrief: the event's fuel schedule (or the planned run it was linked to) checked against what was taken.
-        val debrief by androidx.compose.runtime.produceState<com.bioscan.fieldterminal.data.DebriefTarget?>(initialValue = null, e.id) {
-            value = runCatching { com.bioscan.fieldterminal.data.FuelDebriefRepository(com.bioscan.fieldterminal.data.SupabaseClientProvider.client).targetForEvent(e) }.getOrNull()
+        val debriefGuard = rememberLoadGuard(refreshOnUpdates = false)
+        val debrief by produceGuarded<DebriefTarget?>(debriefGuard, null, e.id) {
+            FuelDebriefRepository(SupabaseClientProvider.client).targetForEvent(e)
         }
-        debrief?.let { com.bioscan.fieldterminal.ui.screens.fuel.FuelDebriefSheet(it, onDismiss = { reviewing = false }, onSaved = { reviewing = false; guard.retry() }) }
+        LoadErrorLine(debriefGuard, "the debrief for this event", Modifier.padding(horizontal = 22.dp))
+        debrief?.let { FuelDebriefSheet(it, onDismiss = { reviewing = false }, onSaved = { reviewing = false; guard.retry() }) }
     }
     if (editing && e != null) {
         EventFormSheet(

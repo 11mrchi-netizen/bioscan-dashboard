@@ -23,10 +23,10 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Type a food, pick it from suggestions: the user's remembered choice, the app's own catalog (barcode products, scanned
 // labels) and Cronometer, merged server-side. `initial` shows before anything is typed (e.g. an item's alternatives).
@@ -84,7 +84,7 @@ fun FoodSuggestField(
         }
         when {
             searching -> Text("Searching...", style = FTType.Caption, color = FT.TextMuted)
-            failed -> Text("Couldn't search right now -- try again in a moment.", style = FTType.Caption, color = FT.Warning)
+            failed -> Text("Couldn't search right now -- try again in a moment.", style = FTType.Caption, color = FT.Warn)
             typed && query.trim().length >= 2 && suggestions.isEmpty() -> Text("No foods found.", style = FTType.Caption, color = FT.TextMuted)
         }
         if (suggestions.isNotEmpty()) {
@@ -100,7 +100,7 @@ fun FoodSuggestField(
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                     ) {
                         Text(s.name, style = FTType.BodySmall, color = FT.TextPrimary)
-                        Text(suggestionDetail(s), style = FTType.Caption, color = if (s.remembered) FT.Emerald else FT.TextMuted)
+                        Text(suggestionDetail(s), style = FTType.Caption, color = if (s.remembered) FT.Ok else FT.TextMuted)
                     }
                 }
             }

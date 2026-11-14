@@ -13,38 +13,42 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.domain.events.buildableEvents
+import com.bioscan.fieldterminal.domain.events.taperWeeks
 import com.bioscan.fieldterminal.domain.training.definition.ConditioningProtocolDef
 import com.bioscan.fieldterminal.domain.training.definition.StrengthModuleDef
 import com.bioscan.fieldterminal.domain.training.generate.CondSlot
 import com.bioscan.fieldterminal.domain.training.generate.STRENGTH_GROUPS
-import com.bioscan.fieldterminal.domain.training.generate.isMainProtocol
-import com.bioscan.fieldterminal.domain.training.generate.strengthGroupOf
-import com.bioscan.fieldterminal.domain.training.generate.versionsOf
 import com.bioscan.fieldterminal.domain.training.generate.WeekKind
 import com.bioscan.fieldterminal.domain.training.generate.countedWeeks
+import com.bioscan.fieldterminal.domain.training.generate.isMainProtocol
+import com.bioscan.fieldterminal.domain.training.generate.strengthGroupOf
 import com.bioscan.fieldterminal.domain.training.generate.text
+import com.bioscan.fieldterminal.domain.training.generate.versionsOf
 import com.bioscan.fieldterminal.domain.training.generate.weeksForBlocks
-import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTDropdown
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
-import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.DayOfWeek
 import java.time.format.TextStyle
 import java.util.Locale
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // DAV-345. The steps of the build path: pick a strength template, pick a conditioning template,
 // decide how they share the week, then which weeks are deloads. Every choice is a suggestion the
@@ -65,11 +69,14 @@ private fun budgetSummary(p: ConditioningProtocolDef): String {
 }
 
 // ---------------- Strength program ----------------
+// Each program is one card; its versions open in a sheet (nothing expands in the list, so nothing moves under a tap).
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun StrengthStep(state: TrainingPlannerState) {
     val modules = state.catalog?.definitions.orEmpty().filterIsInstance<StrengthModuleDef>()
+    var picking by remember { mutableStateOf<String?>(null) }
     Label("STRENGTH PROGRAM")
-    Body("Pick the main program. Its versions, days and options are fine-tuned afterwards.", muted = true)
+    Body("Pick the main program and its version. Options and exercises come later, in DETAILS.", muted = true)
     STRENGTH_GROUPS.forEach { g ->
         val versions = versionsOf(g, modules)
         if (versions.isEmpty()) return@forEach
@@ -77,13 +84,27 @@ internal fun StrengthStep(state: TrainingPlannerState) {
         val days = versions.map { it.sessionsPerWeek }.distinct().sorted().joinToString("-")
         ProgramCard(
             g.label.lowercase().replaceFirstChar { it.uppercase() },
-            "${versions.size} version" + (if (versions.size == 1) "" else "s") + " · $days days a week",
-            null, selected,
-        ) { if (!selected) state.pickStrength(versions.first().key) }
-        if (selected) {
-            Label("VERSION")
-            FTDropdown(versions.map { it.key to it.title }, state.strengthKey, "Pick a version") { state.pickStrength(it) }
-            state.strengthModule?.let { Body("${it.sessionsPerWeek} days a week · ${it.domain.replace('_', ' ')}", muted = true) }
+            if (selected) "${state.strengthModule?.title} · ${state.strengthModule?.sessionsPerWeek} days a week"
+            else "${versions.size} version" + (if (versions.size == 1) "" else "s") + " · $days days a week",
+            if (selected && versions.size > 1) "Tap to change the version" else null, selected,
+        ) { if (versions.size == 1) state.pickStrength(versions.first().key) else picking = g.id }
+    }
+    picking?.let { id ->
+        val g = STRENGTH_GROUPS.first { it.id == id }
+        val versions = versionsOf(g, modules)
+        ModalBottomSheet(
+            onDismissRequest = { picking = null },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            shape = FT.SheetShape, containerColor = FT.Surface, contentColor = FT.TextPrimary,
+        ) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
+                Text(g.label.uppercase() + " · VERSION", style = FTType.SectionTitle, color = FT.TextPrimary)
+                versions.forEach { v ->
+                    ProgramCard(v.title, "${v.sessionsPerWeek} days a week · ${v.domain.replace('_', ' ')}", null, v.key == state.strengthKey) {
+                        state.pickStrength(v.key); picking = null
+                    }
+                }
+            }
         }
     }
 }
@@ -147,7 +168,7 @@ internal fun LayoutStep(state: TrainingPlannerState) {
         FTMetricRow("Conditioning days", "${l.count { it.conditioning != null }} (${l.count { it.conditioning?.kind == "lic" }} LIC, ${l.count { it.conditioning?.kind == "hic" }} HIC, ${l.count { it.conditioning?.kind == "wc" }} WC)")
         FTMetricRow("Rest days", "${l.count { it.isRest }}")
         protocol?.let { Text(budgetSummary(it), style = FTType.Caption, color = FT.TextMuted) }
-        state.layoutWarnings.forEach { Text("! $it", style = FTType.BodySmall, color = FT.Warning) }
+        state.layoutWarnings.forEach { Text("! $it", style = FTType.BodySmall, color = FT.Warn) }
         if (state.layoutWarnings.isEmpty()) Text("No clashes found.", style = FTType.BodySmall, color = FT.TextSecondary)
         Spacer(Modifier.height(4.dp))
         FTButton("RESET TO SUGGESTION") { state.resetLayout() }
@@ -166,19 +187,17 @@ private fun DayChip(label: String, active: Boolean, accent: Color, modifier: Mod
     ) { Text(label.take(22), style = FTType.Label, color = if (active) FT.TextPrimary else FT.TextMuted) }
 }
 
-// ---------------- Length and deloads ----------------
+// ---------------- The frame: an event to build toward, and the length (the first step) ----------------
 @Composable
-internal fun TimelineStep(state: TrainingPlannerState) {
-    val len = state.blockLength()
-    val t = state.timeline
-    val buildable = com.bioscan.fieldterminal.domain.events.buildableEvents(state.events, state.startDate)
+internal fun FrameFields(state: TrainingPlannerState) {
+    val buildable = buildableEvents(state.events, state.startDate)
     if (buildable.isNotEmpty()) {
         Label("BUILD TOWARD AN EVENT")
         Chips(buildable.map { it.id.toString() } + "none", setOfNotNull(state.targetEvent?.id?.toString() ?: "none"), { k ->
             buildable.firstOrNull { it.id.toString() == k }?.let { "${it.name} · ${it.date}" } ?: "NO EVENT"
         }) { k -> state.buildToward(buildable.firstOrNull { it.id.toString() == k }) }
         state.targetEvent?.let { e ->
-            val taper = com.bioscan.fieldterminal.domain.events.taperWeeks(e)
+            val taper = taperWeeks(e)
             Body(
                 "Ends in the week of ${e.name}." + if (taper > 0) {
                     " The last $taper week${if (taper > 1) "s" else ""} taper (lighter weeks, about half the volume; Bosquet 2007): keep a few short efforts at race pace."
@@ -191,10 +210,24 @@ internal fun TimelineStep(state: TrainingPlannerState) {
     }
     Label("LENGTH")
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        FTButton("-", enabled = state.weeks > 1) { state.changeWeeks(state.weeks - 1) }
+        FTButton("-", enabled = state.weeks > 1) { state.setLength(state.weeks - 1) }
         Text("${state.weeks} WEEKS", style = FTType.MetricMedium, color = FT.TextPrimary)
-        FTButton("+", enabled = state.weeks < 52) { state.changeWeeks(state.weeks + 1) }
+        FTButton("+", enabled = state.weeks < 52) { state.setLength(state.weeks + 1) }
     }
+    Body(
+        "Ends ${state.startDate.plusWeeks(state.weeks.toLong()).minusDays(1).format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy"))}" +
+            if (state.targetEvent != null) ", in the week of ${state.targetEvent!!.name}." else ". Deload and test weeks are set in THE WEEKS.",
+        muted = true,
+    )
+}
+
+// ---------------- The weeks: blocks, test week, deloads ----------------
+@Composable
+internal fun TimelineStep(state: TrainingPlannerState) {
+    val len = state.blockLength()
+    val t = state.timeline
+    Body("${state.weeks} weeks from ${state.startDate.format(java.time.format.DateTimeFormatter.ofPattern("d MMM"))}" +
+        (state.targetEvent?.let { ", toward ${it.name}" } ?: "") + ". The length is set in WHEN.", muted = true)
     if (state.strengthModule != null) {
         Label("OR BY BLOCKS OF $len WEEKS")
         Chips(listOf("1", "2", "3", "4"), emptySet(), { "$it BLOCK" + if (it != "1") "S" else "" }) { n ->
@@ -209,7 +242,7 @@ internal fun TimelineStep(state: TrainingPlannerState) {
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             kinds.forEachIndexed { j, k ->
                 val i = row * 6 + j
-                val accent = when (k) { WeekKind.Normal -> FT.DomainTraining; WeekKind.Deload -> FT.Warning; WeekKind.Test -> FT.Info }
+                val accent = when (k) { WeekKind.Normal -> FT.DomainTraining; WeekKind.Deload -> FT.Warn; WeekKind.Test -> FT.Info }
                 DayChip("${i + 1} ${k.label.take(1)}", k != WeekKind.Normal, accent, Modifier.weight(1f)) { state.toggleWeek(i) }
             }
             repeat(6 - kinds.size) { Spacer(Modifier.weight(1f)) }

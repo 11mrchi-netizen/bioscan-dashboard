@@ -25,10 +25,10 @@ import com.bioscan.fieldterminal.domain.todayAssignment
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Analysis Layer 3 / Phase 5, randomised in analysis review phase F. The person's registered experiments, what today asks
+// The person's registered experiments, what today asks
 // for, and the latest published result of each. While an experiment runs the numbers are interim and carry no verdict; when
 // the last period or day ends, a randomised design answers in four words against the zone set at registration (CLEAR
 // BENEFIT, CLEAR HARM, NO MEANINGFUL EFFECT, UNCLEAR) -- the TESTED rung of the evidence ladder. Deleting is soft.
@@ -51,24 +51,6 @@ fun ExperimentsSection(
     FTCard(title = title, info = EXPERIMENTS_INFO, methodology = "supplement_experiment") {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             shown.forEach { e -> ExperimentEntry(e, results[e.id], today, onDelete) }
-        }
-    }
-}
-
-// The Today page's line for each running randomised experiment: what today's draw asks for (never a blinded arm).
-@Composable
-fun TodaysDrawCard(experiments: List<ExperimentRow>, today: LocalDate) {
-    val draws = experiments.filter { it.status != "abandoned" }.mapNotNull { e -> e.protocol?.let { todayAssignment(it, today) }?.let { e to it } }
-    if (draws.isEmpty()) return
-    FTCard(title = "TODAY'S DRAW", info = "What each running randomised experiment asks of today. The order was drawn when you registered; a day you don't follow still counts as drawn, so just log what you did.") {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            draws.forEach { (e, a) ->
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(e.name, style = FTType.Label, color = FT.TextSecondary)
-                    Text(a.headline, style = FTType.BodySmall, color = FT.TextPrimary)
-                    a.detail?.let { Text(it, style = FTType.Caption, color = FT.TextMuted) }
-                }
-            }
         }
     }
 }

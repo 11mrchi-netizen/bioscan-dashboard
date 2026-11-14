@@ -35,9 +35,10 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.TimeField
+import com.bioscan.fieldterminal.ui.screens.shoes.ShoesCard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalTime
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private val PLATE_CHOICES = listOf(0.5, 1.25, 2.5, 5.0, 10.0, 15.0, 20.0, 25.0)
 
@@ -48,19 +49,20 @@ private fun time(s: String) = runCatching { LocalTime.parse(s) }.getOrDefault(Lo
 // UX review P5 / P8: the program library and its import moved into PLAN A NEW BLOCK (TrainingPlannerScreen's first step),
 // so Setup keeps only true settings and a block is started, seen and edited in Training › Plan alone.
 @Composable
-fun TrainingSettingsScreen(onBack: () -> Unit) {
+fun TrainingSettingsScreen(onBack: () -> Unit, onOpenShoe: (Long) -> Unit = {}) {
     val scope = rememberCoroutineScope()
     val state = remember { TrainingPlannerState(TrainingProgramRepository(SupabaseClientProvider.client), scope) }
     LaunchedEffect(Unit) { state.load() }
 
     Column(Modifier.fillMaxSize().background(FT.Base)) {
-        TileHeader(onBack = onBack, title = "TRAINING SETUP", subtitle = "EQUIPMENT · SESSION TIMES", accent = FT.DomainTraining)
+        TileHeader(onBack = onBack, title = "TRAINING SETUP", subtitle = "EQUIPMENT · SHOES · SESSION TIMES", accent = FT.DomainTraining)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (state.loading) {
                 Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = FT.DomainTraining) }
             } else {
-                state.error?.let { Text(it, color = FT.Critical, style = FTType.BodySmall) }
+                state.error?.let { Text(it, color = FT.Bad, style = FTType.BodySmall) }
                 EquipmentCard(state)
+                ShoesCard(onOpenShoe)
                 ScheduleCard(state)
                 HeartRateZonesCard(state)
                 Spacer(Modifier.height(24.dp))

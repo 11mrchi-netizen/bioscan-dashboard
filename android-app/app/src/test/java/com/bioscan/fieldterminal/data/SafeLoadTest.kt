@@ -15,10 +15,21 @@ class SafeLoadTest {
 
     @Test
     fun aFailureIsNullButCancellationPropagates() = runBlocking {
-        assertNull(orNullUnlessCancelled<Int> { throw IllegalStateException("offline") })
-        assertEquals(3, orNullUnlessCancelled { 3 })
+        assertNull(softLoad<Int> { throw IllegalStateException("offline") })
+        assertEquals(3, softLoad { 3 })
         try {
-            orNullUnlessCancelled<Int> { throw CancellationException("screen closed") }
+            softLoad<Int> { throw CancellationException("screen closed") }
+            fail("cancellation was swallowed")
+        } catch (_: CancellationException) {
+        }
+    }
+
+    @Test
+    fun catchingKeepsTheFailureButNeverACancellation() = runBlocking {
+        assertEquals("offline", catching<Int> { throw IllegalStateException("offline") }.exceptionOrNull()?.message)
+        assertEquals(7, catching { 7 }.getOrNull())
+        try {
+            catching<Int> { throw CancellationException("screen closed") }
             fail("cancellation was swallowed")
         } catch (_: CancellationException) {
         }

@@ -1,5 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,17 +10,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,7 +27,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.ConfirmedMealItem
@@ -39,18 +38,16 @@ import com.bioscan.fieldterminal.data.ResolvedMealItem
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.FoodRow
 import com.bioscan.fieldterminal.data.model.FoodServingRow
+import com.bioscan.fieldterminal.domain.toAppIso
 import com.bioscan.fieldterminal.ui.components.FTButton
-import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.PlexMono
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // DAV-168. The single review/correction step every candidate source
 // (barcode/text/image) funnels through before a real meal_items row exists
@@ -59,36 +56,6 @@ import java.time.LocalDateTime
 // NutritionResolverRepository (DAV-164); this file never computes a
 // nutrient value itself, matching the same boundary the resolver's own
 // design doc draws.
-
-// Local copies of AddEntrySheet.kt's own sheet-chrome styles/helpers --
-// those stay file-private there (MapScreen.kt independently keeps its own
-// copies too), so this file follows the same established per-file pattern
-// rather than widening visibility across files for a few one-line helpers.
-private val sheetHeaderTitleStyle = FTType.SectionTitle
-private val sheetActionLabelStyle = FTType.LabelCaps
-
-@Composable
-private fun SheetBackHeader(label: String, onBack: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
-            "BACK",
-            style = sheetActionLabelStyle,
-            color = FT.TextSecondary,
-            modifier = Modifier.ftClickable(onClick = onBack),
-        )
-        Text(label, style = sheetHeaderTitleStyle, color = FT.DomainLog)
-    }
-}
-
-@Composable
-private fun FormLabel(text: String) {
-    Text(text, style = sheetActionLabelStyle, color = FT.TextSecondary, modifier = Modifier.padding(bottom = 6.dp))
-}
-
-@Composable
-private fun SaveButton(saving: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    FTButton(label = if (saving) "SAVING..." else "SAVE", enabled = enabled && !saving, onClick = onClick, emphasis = FTButtonEmphasis.Primary)
-}
 
 data class ReviewSeedItem(
     val description: String,
@@ -164,7 +131,7 @@ fun NutritionCandidateReviewSheet(
             }
 
             saveError?.let {
-                Text(it, style = FTType.BodySmall, color = FT.Critical)
+                Text(it, style = FTType.BodySmall, color = FT.Bad)
             }
 
             val allResolved = rows.isNotEmpty() && rows.all { confirmed.containsKey(it.first) }
@@ -180,7 +147,7 @@ fun NutritionCandidateReviewSheet(
                 saveError = null
                 scope.launch {
                     try {
-                        saveRepo.saveMeal(mealDateTime.toIsoWithOffset(), description.trim(), rows.mapNotNull { confirmed[it.first] }, mealSlot)
+                        saveRepo.saveMeal(mealDateTime.toAppIso(), description.trim(), rows.mapNotNull { confirmed[it.first] }, mealSlot)
                         saving = false
                         onSaved()
                     } catch (e: Exception) {
@@ -295,7 +262,7 @@ private fun ReviewItemCard(
                     Text(
                         "NEEDS CONFIRMATION",
                         style = FTType.LabelCaps,
-                        color = FT.Warning,
+                        color = FT.Warn,
                     )
                 }
             }
@@ -387,14 +354,14 @@ private fun ReviewItemCard(
                 CircularProgressIndicator(color = FT.DomainLog, modifier = Modifier.padding(2.dp))
                 Text("Calculating...", style = FTType.Caption, color = FT.TextSecondary)
             }
-            resolveError != null -> Text(resolveError!!, style = FTType.Caption, color = FT.Critical)
+            resolveError != null -> Text(resolveError!!, style = FTType.Caption, color = FT.Bad)
             resolved != null -> ResolvedTotalsRow(resolved!!)
         }
 
         Text(
             "REMOVE",
             style = sheetActionLabelStyle,
-            color = FT.Critical,
+            color = FT.Bad,
             modifier = Modifier.ftClickable(onClick = onRemove),
         )
     }
@@ -439,9 +406,9 @@ private fun StatChip(label: String, value: String) {
 @Composable
 private fun ConfidenceBadge(label: String, confidence: Double) {
     val color = when {
-        confidence >= 0.75 -> FT.Emerald
-        confidence >= 0.4 -> FT.Warning
-        else -> FT.Critical
+        confidence >= 0.75 -> FT.Ok
+        confidence >= 0.4 -> FT.Warn
+        else -> FT.Bad
     }
     Text(
         "$label ${(confidence * 100).toInt()}%",
@@ -450,4 +417,3 @@ private fun ConfidenceBadge(label: String, confidence: Double) {
     )
 }
 
-private fun LocalDateTime.toIsoWithOffset(): String = this.atOffset(java.time.ZoneOffset.UTC).toString()

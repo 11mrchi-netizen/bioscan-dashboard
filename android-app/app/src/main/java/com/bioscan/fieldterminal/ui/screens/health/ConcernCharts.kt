@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.health
 
+import android.graphics.Paint
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -25,14 +26,17 @@ import com.bioscan.fieldterminal.data.model.ContextLanesDto
 import com.bioscan.fieldterminal.data.model.EpisodeDto
 import com.bioscan.fieldterminal.domain.health.SeverityPoint
 import com.bioscan.fieldterminal.domain.health.recoveryCurves
+import com.bioscan.fieldterminal.ui.components.BarLayout
+import com.bioscan.fieldterminal.ui.components.FTBarSpec
 import com.bioscan.fieldterminal.ui.components.drawBar
 import com.bioscan.fieldterminal.ui.components.drawBarStub
+import com.bioscan.fieldterminal.ui.components.smoothedPath
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Health concerns (plan §5.3-5.4): the concern page's charts, drawn with the shared chart rules (R4): labelled y values,
 // a line that breaks where nothing was checked in, explicit zeros as ticks on the baseline (a symptom-free day is data),
@@ -41,7 +45,7 @@ import java.util.Locale
 private val MONTH_DAY = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
 
 private fun DrawScope.axisLabel(text: String, x: Float, y: Float, color: Color) {
-    val paint = android.graphics.Paint().apply {
+    val paint = Paint().apply {
         this.color = android.graphics.Color.argb((color.alpha * 255).toInt(), (color.red * 255).toInt(), (color.green * 255).toInt(), (color.blue * 255).toInt())
         textSize = 26f
         isAntiAlias = true
@@ -129,11 +133,7 @@ fun RecoveryOverlay(s: ConcernStateDto) {
         }
         curves.forEachIndexed { i, (_, pts) ->
             val alpha = 0.35f + 0.65f * (i + 1) / curves.size
-            val path = Path()
-            pts.forEachIndexed { k, (d, v) ->
-                val o = Offset(left + d / maxDay.toFloat() * w, 8f + h - v / 10f * h)
-                if (k == 0) path.moveTo(o.x, o.y) else path.lineTo(o.x, o.y)
-            }
+            val path = smoothedPath(pts.map { (d, v) -> Offset(left + d / maxDay.toFloat() * w, 8f + h - v / 10f * h) })
             drawPath(path, FT.DomainHeart.copy(alpha = alpha), style = Stroke(if (i == curves.lastIndex) 3.5f else 2f))
         }
         axisLabel("day 0", left, size.height - 4f, FT.TextMuted)
@@ -160,7 +160,7 @@ fun ContextLanes(lanes: ContextLanesDto, from: LocalDate) {
             val n = vals.size.coerceAtLeast(1)
             val bw = size.width / n
             if (bars) {
-                val layout = com.bioscan.fieldterminal.ui.components.BarLayout(size.width, n, com.bioscan.fieldterminal.ui.components.FTBarSpec.gapFor(n).toPx())
+                val layout = BarLayout(size.width, n, FTBarSpec.gapFor(n).toPx())
                 vals.forEachIndexed { i, v ->
                     if (v != null && v > 0) drawBar(color, layout.left(i), size.height * (1 - (v / max).toFloat()), layout.barWidth, cap = i == vals.lastIndex)
                     else drawBarStub(layout.left(i), layout.barWidth)

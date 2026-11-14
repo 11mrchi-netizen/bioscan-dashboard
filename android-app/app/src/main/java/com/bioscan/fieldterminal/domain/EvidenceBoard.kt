@@ -51,7 +51,7 @@ data class EvidenceRowView(
     val checks: List<String>,
     val warning: String?,
     val notes: List<String>,
-    // Phase E: why the verdict can differ from the drawn interval, the pooled estimate, and the registration line.
+    // Why the verdict can differ from the drawn interval, the pooled estimate, and the registration line.
     val verdictIntervalLine: String? = null,
     val pooledLine: String? = null,
     val registeredLine: String? = null,
@@ -167,7 +167,7 @@ fun evidenceBoard(rows: List<RelationshipResultRow>, registered: List<Relationsh
         val inGroup = views.filter { (row, _) -> row.payload.outcome == key }.map { it.second }
         if (inGroup.isEmpty()) null else EvidenceGroup(key, title, inGroup.firstNotNullOfOrNull { it.unit.ifBlank { null } } ?: "", inGroup, scaleOf(inGroup))
     }
-    // Phase E: questions registered from a hint, tested only on days after registration, in their own group. Their
+    // Questions registered from a hint, tested only on days after registration, in their own group. Their
     // units differ, so each row keeps its own axis.
     val mine = registered.sortedBy { it.payload.registeredOn ?: "" }.map(::evidenceRow)
     return if (mine.isEmpty()) catalogue else catalogue + EvidenceGroup("registered", "QUESTIONS YOU REGISTERED", "", mine, scaleOf(mine))

@@ -29,23 +29,26 @@ import com.bioscan.fieldterminal.data.ProductVerification
 import com.bioscan.fieldterminal.data.SUPPCO_SOURCE_NAME
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SuppcoVerification
-import com.bioscan.fieldterminal.data.model.flagTexts
 import com.bioscan.fieldterminal.data.SupplementLookupRepository
 import com.bioscan.fieldterminal.data.SupplementSourceRepository
+import com.bioscan.fieldterminal.data.catching
+import com.bioscan.fieldterminal.data.model.flagTexts
 import com.bioscan.fieldterminal.domain.DsldComparison
 import com.bioscan.fieldterminal.domain.DsldConflictKind
 import com.bioscan.fieldterminal.domain.FactField
 import com.bioscan.fieldterminal.domain.ProductFacts
+import com.bioscan.fieldterminal.domain.localDateIn
 import com.bioscan.fieldterminal.domain.normalizeBarcode
 import com.bioscan.fieldterminal.domain.proposeFacts
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.util.scanBarcode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import java.time.ZoneId
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private val body = FTType.BodySmall
 private val sourceLabel = FTType.LabelCaps
@@ -68,7 +71,7 @@ fun ProductVerifySection(productId: Long) {
     var info by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(productId) {
-        own = runCatching { repo.ownProduct(productId) }.getOrNull()
+        own = catching { repo.ownProduct(productId) }.getOrNull()
         own?.barcode?.let { if (barcode.isEmpty()) barcode = it }
     }
 
@@ -135,7 +138,7 @@ fun ProductVerifySection(productId: Long) {
             }
         }
         info?.let { Text(it, style = body, color = FT.TextSecondary) }
-        error?.let { Text("Couldn't verify ($it).", style = FTType.Caption, color = FT.Critical) }
+        error?.let { Text("Couldn't verify ($it).", style = FTType.Caption, color = FT.Bad) }
         candidates?.let { c ->
             CandidateList(c, own?.name ?: "") { code ->
                 barcode = code
@@ -167,8 +170,8 @@ private fun CandidateList(c: ProductLookup, query: String, onPick: (String) -> U
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("Matches for \"$query\" (tap one to verify with its barcode):", style = body, color = FT.TextSecondary)
         if (suppco.isEmpty() && dsld.isEmpty()) Text("No matches from either source. Try the barcode instead.", style = body, color = FT.TextSecondary)
-        c.suppco.error?.let { Text("SuppCo unavailable ($it).", style = body, color = FT.Warning) }
-        c.dsld.error?.let { Text("DSLD unavailable ($it).", style = body, color = FT.Warning) }
+        c.suppco.error?.let { Text("SuppCo unavailable ($it).", style = body, color = FT.Warn) }
+        c.dsld.error?.let { Text("DSLD unavailable ($it).", style = body, color = FT.Warn) }
         suppco.forEach { p ->
             CandidateRow("SuppCo · ${p.name ?: "unnamed"}${p.brand?.let { " · $it" } ?: ""}") { onPick(p.upc!!) }
         }
@@ -191,7 +194,7 @@ private fun CandidateList(c: ProductLookup, query: String, onPick: (String) -> U
                 }
             }
         }
-        note?.let { Text(it, style = body, color = FT.Warning) }
+        note?.let { Text(it, style = body, color = FT.Warn) }
     }
 }
 
@@ -286,9 +289,9 @@ private fun BarcodePanel(productId: Long, code: String, current: String?, repo: 
 @Composable
 private fun DsldBlock(v: DsldVerification?, error: String?) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text("NIH DSLD${v?.retrievedAt?.let { " · retrieved ${it.take(10)}" } ?: ""}", style = sourceLabel, color = FT.TextSecondary)
+        Text("NIH DSLD${v?.retrievedAt?.let { " · retrieved ${retrievedDay(it)}" } ?: ""}", style = sourceLabel, color = FT.TextSecondary)
         if (v == null) {
-            Text("DSLD unavailable${error?.let { " ($it)" } ?: ""}. The other source's result is still shown.", style = body, color = FT.Warning)
+            Text("DSLD unavailable${error?.let { " ($it)" } ?: ""}. The other source's result is still shown.", style = body, color = FT.Warn)
             return@Column
         }
         val label = v.label
@@ -314,9 +317,9 @@ private fun DsldBlock(v: DsldVerification?, error: String?) {
 @Composable
 private fun SuppcoBlock(v: SuppcoVerification?, error: String?) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text("SUPPCO${v?.retrievedAt?.let { " · retrieved ${it.take(10)}" } ?: ""} · data: supp.co", style = sourceLabel, color = FT.TextSecondary)
+        Text("SUPPCO${v?.retrievedAt?.let { " · retrieved ${retrievedDay(it)}" } ?: ""} · data: supp.co", style = sourceLabel, color = FT.TextSecondary)
         if (v == null) {
-            Text("SuppCo unavailable${error?.let { " ($it)" } ?: ""}. The other source's result is still shown.", style = body, color = FT.Warning)
+            Text("SuppCo unavailable${error?.let { " ($it)" } ?: ""}. The other source's result is still shown.", style = body, color = FT.Warn)
             return@Column
         }
         val p = v.product
@@ -357,7 +360,7 @@ private fun SuppcoBlock(v: SuppcoVerification?, error: String?) {
         if (flags.isEmpty()) {
             Text("No recall, warning letter, failed test or off-market flag reported.", style = body, color = FT.TextSecondary)
         } else {
-            flags.forEach { Text("! $it", style = body.copy(fontWeight = FontWeight.SemiBold), color = FT.Warning) }
+            flags.forEach { Text("! $it", style = body.copy(fontWeight = FontWeight.SemiBold), color = FT.Warn) }
         }
         if (p.testing.certifications.isNotEmpty()) {
             Text("Certifications: ${p.testing.certifications.joinToString()}", style = body, color = FT.TextSecondary)
@@ -374,7 +377,7 @@ private fun ComparisonSummary(c: DsldComparison?) {
         c.conflicts.isEmpty() ->
             Text("${c.matchedIngredients} matching ingredient(s) compared; amounts are consistent.", style = body, color = FT.TextSecondary)
         else -> {
-            Text("${c.conflicts.size} difference(s) found (not applied):", style = body, color = FT.Warning)
+            Text("${c.conflicts.size} difference(s) found (not applied):", style = body, color = FT.Warn)
             c.conflicts.forEach {
                 val what = if (it.kind == DsldConflictKind.UNIT_NOT_COMPARABLE) "units can't be compared" else "amounts differ"
                 Text("${it.ingredient}: yours ${it.productText} vs source ${it.dsldText} ($what)", style = body, color = FT.TextSecondary)
@@ -387,3 +390,6 @@ private fun ComparisonSummary(c: DsldComparison?) {
 }
 
 private fun trim(d: Double): String = if (d % 1.0 == 0.0) d.toLong().toString() else d.toString()
+
+/** The local day a source was fetched on. retrieved_at is a real instant: its own date is the UTC one. */
+internal fun retrievedDay(ts: String): String = localDateIn(ts, ZoneId.systemDefault())?.toString() ?: ts.take(10)

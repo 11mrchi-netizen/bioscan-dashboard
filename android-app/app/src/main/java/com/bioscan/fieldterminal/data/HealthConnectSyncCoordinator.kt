@@ -5,6 +5,10 @@ import android.util.Log
 import com.bioscan.fieldterminal.healthconnect.HealthConnectManager
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.supervisorScope
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
@@ -12,10 +16,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import java.time.Duration
 import java.time.Instant
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.async
-import kotlinx.coroutines.supervisorScope
 
 sealed interface HealthConnectSyncResult {
     data object Unavailable : HealthConnectSyncResult
@@ -24,7 +24,7 @@ sealed interface HealthConnectSyncResult {
     data class Failed(val message: String) : HealthConnectSyncResult
 }
 
-// Phase G2. Orchestrates every HealthConnectDailySyncRepository.sync*() call
+// Orchestrates every HealthConnectDailySyncRepository.sync*() call
 // and tracks progress via the existing `sync_log` table (sync_source =
 // 'health_connect') rather than a new table -- that table already exists
 // for exactly this purpose (the old Wellness Project sync logged its runs

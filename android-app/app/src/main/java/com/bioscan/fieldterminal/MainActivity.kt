@@ -1,63 +1,63 @@
 package com.bioscan.fieldterminal
 
-import androidx.compose.runtime.remember
-import io.github.jan.supabase.auth.status.RefreshFailureCause
-import com.bioscan.fieldterminal.ui.theme.FTType
-import androidx.compose.ui.unit.dp
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.material3.Text
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Arrangement
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.content.Intent
-import android.os.Build
+import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.auth.GoogleAuthManager
-import com.bioscan.fieldterminal.domain.AuthState
-import com.bioscan.fieldterminal.domain.GateView
-import com.bioscan.fieldterminal.domain.gateView
-import com.bioscan.fieldterminal.domain.showsApp
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import com.bioscan.fieldterminal.data.HealthConnectSyncWorker
 import com.bioscan.fieldterminal.data.NotificationActionReceiver
 import com.bioscan.fieldterminal.data.NotificationDispatchWorker
+import com.bioscan.fieldterminal.data.NutritionGoalsStore
+import com.bioscan.fieldterminal.data.ReadCache
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.ZeppSyncWorker
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.routine.LocationCollector
 import com.bioscan.fieldterminal.data.routine.RoutineCaptureWorker
-import com.bioscan.fieldterminal.data.ZeppSyncWorker
-import com.bioscan.fieldterminal.data.model.NotificationKind
+import com.bioscan.fieldterminal.domain.AuthState
+import com.bioscan.fieldterminal.domain.GateView
+import com.bioscan.fieldterminal.domain.gateView
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
+import com.bioscan.fieldterminal.ui.components.FTMotion
 import com.bioscan.fieldterminal.ui.nav.FieldTerminalNavHost
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.screens.today.TodayStore
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FieldTerminalTheme
 import com.bioscan.fieldterminal.util.Perf
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.status.RefreshFailureCause
 import io.github.jan.supabase.auth.status.SessionStatus
 import kotlinx.coroutines.launch
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Step 2 (auth) + Step 3 (navigation skeleton) + Step 4 (visual design,
 // applied here to the sign-in/loading states -- the 4-tab UI itself is
@@ -85,9 +85,10 @@ class MainActivity : ComponentActivity() {
         // Edge to edge on every Android version (15+ enforces it already), with light icons on the dark base: the
         // Scaffold and the overlays pad for the status bar, the navigation bar and the keyboard themselves.
         enableEdgeToEdge(
-            statusBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
-            navigationBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
+        FTMotion.init(this)
         Perf.enabled = BuildConfig.DEBUG // logcat tag "perf"; see util/Perf.kt
         // Notification channels, the Supabase client and the metric registry are warmed on a background thread by FieldTerminalApp.
         // Only on a fresh launch: after process restore the same intent is redelivered and would re-navigate.
@@ -113,7 +114,7 @@ private fun AuthGate(pendingNotificationKind: String?, onNotificationHandled: ()
     var signInError by remember { mutableStateOf<String?>(null) }
     val isAuthenticated = sessionStatus is SessionStatus.Authenticated
 
-    // Phase G2: auto-sync once per app open, replacing the old manual/
+    // Auto-sync once per app open, replacing the old manual/
     // chat-triggered Wellness Project sync for the metrics Health Connect
     // now covers. Enqueued as WorkManager background work (HealthConnectSyncWorker)
     // rather than run inline here -- a real on-device sync got killed
@@ -138,7 +139,7 @@ private fun AuthGate(pendingNotificationKind: String?, onNotificationHandled: ()
             RoutineCaptureWorker.schedule(context)
             LocationCollector.registerAll(context)
             // Daily targets live with the account too (FUEL scores intake against them).
-            runCatching { com.bioscan.fieldterminal.data.NutritionGoalsStore.sync(context, SupabaseClientProvider.client) }
+            catching { NutritionGoalsStore.sync(context, SupabaseClientProvider.client) }
         }
     }
 
@@ -180,21 +181,21 @@ private fun AuthGate(pendingNotificationKind: String?, onNotificationHandled: ()
                 }
             }
             GateView.SIGN_IN -> {
-                androidx.compose.runtime.LaunchedEffect(Unit) {
+                LaunchedEffect(Unit) {
                     appShown = false
-                    com.bioscan.fieldterminal.data.ReadCache.clearEverything() // nothing of the last user survives sign-out, in memory or on disk
-                    com.bioscan.fieldterminal.ui.screens.today.TodayStore.clearEverything(context)
+                    ReadCache.clearEverything() // nothing of the last user survives sign-out, in memory or on disk
+                    TodayStore.clearEverything(context)
                 }
                 SignInPrompt("SIGN IN WITH GOOGLE", FTButtonEmphasis.Primary, signInError) {
                     scope.launch { signInError = GoogleAuthManager.signIn(context).exceptionOrNull()?.message }
                 }
             }
-            GateView.LOADING -> CircularProgressIndicator(color = FT.Emerald)
+            GateView.LOADING -> CircularProgressIndicator(color = FT.Ok)
             // supabase-kt keeps retrying the refresh by itself when the cause is the network, so an offline phone with an
             // expired access token is not a lost session: say so instead of demanding a sign-in. Only a real auth failure
             // (revoked or dead refresh token, mirrors the web dashboard's own handling) asks to sign in.
             GateView.OFFLINE -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                CircularProgressIndicator(color = FT.Emerald)
+                CircularProgressIndicator(color = FT.Ok)
                 Text("Offline. Reconnecting when the network is back.", style = FTType.BodySmall, color = FT.TextSecondary)
             }
             GateView.SESSION_EXPIRED -> {
@@ -213,7 +214,7 @@ private fun SignInPrompt(label: String, emphasis: FTButtonEmphasis, error: Strin
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         FTButton(label = label, emphasis = emphasis, onClick = onClick)
         Box(Modifier.widthIn(max = 300.dp).height(52.dp), contentAlignment = Alignment.TopCenter) {
-            error?.let { Text(it, style = FTType.Caption, color = FT.Critical, textAlign = TextAlign.Center, maxLines = 3) }
+            error?.let { Text(it, style = FTType.Caption, color = FT.Bad, textAlign = TextAlign.Center, maxLines = 3) }
         }
     }
 }

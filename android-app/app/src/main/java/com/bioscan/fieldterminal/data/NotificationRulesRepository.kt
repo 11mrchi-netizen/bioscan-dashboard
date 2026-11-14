@@ -113,6 +113,14 @@ private val DEFAULT_RULES = listOf(
         conditions = NotificationConditions(skipIfLogged = true),
         limits = NotificationLimits(maxPerDay = 1, minGapMin = 60, snoozeMin = 30),
     ),
+    // Practices: no clock times here; each practice carries its own time and reminder switch (domain/routine/Practices.kt).
+    NewNotificationRuleRow(
+        kind = NotificationKind.PRACTICE_DUE,
+        enabled = true,
+        schedule = NotificationSchedule(),
+        conditions = NotificationConditions(skipIfLogged = true),
+        limits = NotificationLimits(maxPerDay = 6, minGapMin = 15, snoozeMin = 15),
+    ),
     // Fuel planning: no clock times; the worker reads the planned sessions and races (domain/notifications/FuelPrompts.kt).
     NewNotificationRuleRow(
         kind = NotificationKind.FUEL_SESSION,

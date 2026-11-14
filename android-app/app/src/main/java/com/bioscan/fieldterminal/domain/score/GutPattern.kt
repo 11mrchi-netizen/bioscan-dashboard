@@ -1,9 +1,9 @@
 package com.bioscan.fieldterminal.domain.score
 
 import com.bioscan.fieldterminal.data.model.StoolAnalysisRow
+import com.bioscan.fieldterminal.domain.WallClock
 import java.time.Instant
 import java.time.LocalDate
-import java.time.OffsetDateTime
 import java.time.ZoneId
 import kotlin.math.abs
 import kotlin.math.max
@@ -46,7 +46,7 @@ data class StoolPattern(
 // stool_log.occurred_at is a logged time: the local wall clock with a zero offset (domain/WallClock.kt). Its digits are
 // the local time; the instant is that time in [zone].
 private fun StoolAnalysisRow.mark(zone: ZoneId): StoolMark? {
-    val local = com.bioscan.fieldterminal.domain.WallClock.read(occurredAt) ?: return null
+    val local = WallClock.read(occurredAt) ?: return null
     return StoolMark(local.atZone(zone).toInstant(), local.toLocalDate(), local.toLocalTime().toSecondOfDay() / 60, bristolType, bristolType?.let(StoolLane::of))
 }
 

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import android.R
 import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -43,10 +44,10 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 val addRepo = AddEntryRepository(supabase)
                 val takenAt = LocalDateTime.now().toAppIso()
                 for (id in toLog) addRepo.addSupplementTakenById(takenAt, id, 1.0)
-                runCatching { NotificationRulesRepository(supabase).appendLog(kind, NotificationOutcome.ACTIONED, action = "log_all") }
+                catching { NotificationRulesRepository(supabase).appendLog(kind, NotificationOutcome.ACTIONED, action = "log_all") }
             } catch (e: Exception) {
                 val retry = NotificationCompat.Builder(app, kind)
-                    .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                    .setSmallIcon(R.drawable.ic_dialog_alert)
                     .setContentTitle("Couldn't log your supplements")
                     .setContentText("Tap to open the app and log them")
                     .setPriority(NotificationCompat.PRIORITY_DEFAULT)

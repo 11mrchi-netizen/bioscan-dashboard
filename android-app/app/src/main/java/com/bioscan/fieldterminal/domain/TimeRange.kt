@@ -1,12 +1,11 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class)
 package com.bioscan.fieldterminal.domain
 
-import kotlinx.serialization.UseSerializers
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
-import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 
 // Redesign: the one range selector on the Training, Nutrition and Health pages (7D · 1M · 3M · 6M · 1Y · ALL). It sets
@@ -61,5 +60,3 @@ fun aggregateRanges(points: List<Pair<LocalDate, DayRange>>, range: TimeRange, a
         .map { (d, v) -> d to DayRange(v.map { it.second.low }.average(), v.map { it.second.high }.average()) }
 }
 
-/** Days of history a fetch must cover so the range is not silently cut short. */
-fun TimeRange.fetchDays(): Long = days ?: ChronoUnit.DAYS.between(LocalDate.of(2015, 1, 1), LocalDate.now())

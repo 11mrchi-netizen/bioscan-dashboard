@@ -1,10 +1,11 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.data.model.BeverageItemRow
+import com.bioscan.fieldterminal.domain.WallClock
 import com.bioscan.fieldterminal.domain.fuel.DayHydration
 import com.bioscan.fieldterminal.domain.fuel.HydrationDayInputs
 import com.bioscan.fieldterminal.domain.fuel.HydrationWorkout
 import com.bioscan.fieldterminal.domain.fuel.hydrationAccounting
-import com.bioscan.fieldterminal.data.model.BeverageItemRow
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -40,9 +41,9 @@ class HydrationAccountingRepository(private val supabase: SupabaseClient) {
         val first = dates.first()
 
         val water = overview.hydrationHistory.mapNotNull { r -> r.ml?.let { LocalDate.parse(r.date) to it.toDouble() } }.toMap()
-        val mealDay = overview.meals.mapNotNull { m -> m.id?.let { id -> com.bioscan.fieldterminal.domain.WallClock.date(m.loggedAt)?.let { id to it } } }.toMap().filterValues { it >= first }
-        // Optional reads: a failure leaves that input out, cancellation still cancels (orNullUnlessCancelled, not runCatching).
-        val drinks = if (mealDay.isEmpty()) emptyList() else orNullUnlessCancelled {
+        val mealDay = overview.meals.mapNotNull { m -> m.id?.let { id -> WallClock.date(m.loggedAt)?.let { id to it } } }.toMap().filterValues { it >= first }
+        // Optional reads: a failure leaves that input out, cancellation still cancels (softLoad, not runCatching).
+        val drinks = if (mealDay.isEmpty()) emptyList() else softLoad {
             supabase.postgrest.from("meal_items")
                 .select(columns = Columns.list("meal_id,description,water_ml,caffeine_mg,effective_hydration_ml")) {
                     filter {
@@ -55,14 +56,14 @@ class HydrationAccountingRepository(private val supabase: SupabaseClient) {
         val drinkMl = drinks.mapNotNull { r -> r.effectiveHydrationMl?.let { ml -> mealDay[r.mealId]?.let { d -> d to ml } } }
             .groupBy({ it.first }, { it.second }).mapValues { (_, v) -> v.sum() }
 
-        val bodyRows = orNullUnlessCancelled { AnalysisRepository(supabase).loadBodyMetrics() } ?: emptyList()
+        val bodyRows = softLoad { AnalysisRepository(supabase).loadBodyMetrics() } ?: emptyList()
         val weight = bodyRows.lastOrNull { it.weightKg != null }?.weightKg ?: FALLBACK_WEIGHT_KG
         val profile = SweatTestsRepository(supabase).profile(weight)
 
-        val sessions = (orNullUnlessCancelled { AnalysisRepository(supabase).loadExerciseSessionsForTrainingLoad() } ?: emptyList())
+        val sessions = (softLoad { AnalysisRepository(supabase).loadExerciseSessionsForTrainingLoad() } ?: emptyList())
             .mapNotNull { s ->
                 // Session starts are logged times: their digits are local (domain/WallClock.kt).
-                val start = com.bioscan.fieldterminal.domain.WallClock.zoned(s.startTime, zone)?.toOffsetDateTime() ?: return@mapNotNull null
+                val start = WallClock.zoned(s.startTime, zone)?.toOffsetDateTime() ?: return@mapNotNull null
                 val day = start.toLocalDate()
                 val minutes = s.durationMin ?: return@mapNotNull null
                 if (day < first || minutes < MIN_SESSION_MINUTES) null else Session(start, day, minutes, s.rpe, s.type ?: "run")
@@ -74,10 +75,10 @@ class HydrationAccountingRepository(private val supabase: SupabaseClient) {
                 async {
                     day to home?.let { (lat, lon) ->
                         val at = list.first().start.atZoneSameInstant(zone)
-                        orNullUnlessCancelled {
+                        softLoad {
                             ReadCache.kept("hydration.temp.$day.$lat,$lon", tables = setOf("exercise_sessions")) {
                                 // The archive first; the forecast endpoint for days the archive has not caught up with.
-                                orNullUnlessCancelled { weather.fetchHistoricalAt(lat, lon, at).temperatureC }
+                                softLoad { weather.fetchHistoricalAt(lat, lon, at).temperatureC }
                                     ?: weather.fetchAt(lat, lon, at).temperatureC
                             }
                         }

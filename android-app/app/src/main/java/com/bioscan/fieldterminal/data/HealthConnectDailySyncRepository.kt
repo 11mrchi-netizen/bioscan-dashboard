@@ -45,6 +45,7 @@ import com.bioscan.fieldterminal.healthconnect.HealthConnectManager
 import com.bioscan.fieldterminal.healthconnect.readAllRecords
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.coroutines.CancellationException
 import java.time.Instant
 import java.time.LocalDate
@@ -53,7 +54,7 @@ import java.time.Period
 import java.time.ZoneId
 import kotlin.reflect.KClass
 
-// Phase G2. Reads raw Health Connect records over [since, until], groups
+// Reads raw Health Connect records over [since, until], groups
 // them by local calendar date (domain/DailyAggregation.kt), and upserts one
 // column at a time into the existing wearable_daily/body_metrics/sleep_daily
 // tables -- all three already have a real unique(user_id, date) index
@@ -153,9 +154,9 @@ class HealthConnectDailySyncRepository(
 
         // A day with a scale weigh-in keeps the body fat derived from that weigh-in (ScaleReadingRepository, source = scale_bia);
         // Health Connect's value for the same day would overwrite it. Lookup failure falls back to writing as before.
-        val scaleDays = runCatching {
+        val scaleDays = catching {
             supabase.postgrest.from("body_metrics")
-                .select(io.github.jan.supabase.postgrest.query.Columns.list("date")) { filter { eq("source", SCALE_BIA_SOURCE) } }
+                .select(Columns.list("date")) { filter { eq("source", SCALE_BIA_SOURCE) } }
                 .decodeList<ScaleDayRow>().map { it.date }.toSet()
         }.getOrDefault(emptySet())
         val bodyFat = latestByLocalDate(readAll(BodyFatRecord::class, since, until).map { TimedValue(it.time, it.percentage.value) }, zone)
@@ -300,7 +301,7 @@ class HealthConnectDailySyncRepository(
         return mainSessionByDate.size
     }
 
-    // Analysis Layer 3 / R1: record which origin wrote each daily field, in the side table daily_field_provenance (a column on
+    // Record which origin wrote each daily field, in the side table daily_field_provenance (a column on
     // wearable_daily/sleep_daily would be overwritten by whichever of the concurrent single-column upserts ran last).
     // Best effort: provenance must never fail the data sync it describes.
     private suspend fun recordProvenance(field: String, originByDate: Map<LocalDate, String>) {

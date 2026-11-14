@@ -36,7 +36,7 @@ const val TRAINING_WINDOW_DAYS = 28L
 class NutritionTargetsRepository(private val supabase: SupabaseClient) {
 
     suspend fun loadMaintenanceInputs(today: LocalDate = LocalDate.now()): MaintenanceInputs {
-        val profile = runCatching { UserProfileRepository(supabase).loadProfile() }.getOrNull()
+        val profile = catching { UserProfileRepository(supabase).loadProfile() }.getOrNull()
         val age = profile?.dateOfBirth?.let { runCatching { chronologicalAgeYears(LocalDate.parse(it), today) }.getOrNull() }
         val weight = supabase.postgrest.from("body_metrics")
             .select(Columns.list("date,weight_kg")) {

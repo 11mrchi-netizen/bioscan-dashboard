@@ -32,16 +32,17 @@ import com.bioscan.fieldterminal.domain.missing
 import com.bioscan.fieldterminal.domain.whenLocal
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
+import com.bioscan.fieldterminal.ui.components.FTRatingSlider
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.util.UUID
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Analysis Layer 3 / R2 (docs/analysis-layer-3). "Say it": one message, reviewed before anything is written.
+// "Say it": one message, reviewed before anything is written.
 //   1. The log-agent Edge Function reads the message into PROPOSED entries; every number in a proposal was stated in the
 //      message (the function drops any it cannot find there) and what it could not ground is shown as a field to fill in.
 //   2. Nothing is saved until the person presses SAVE: ready, un-skipped proposals are written one by one through the same
@@ -138,7 +139,7 @@ fun LogAgentForm(onSaved: () -> Unit, onFoodHandoff: (text: String, at: LocalDat
                 Text("Reading...", style = FTType.BodySmall, color = FT.TextSecondary)
             }
         }
-        error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+        error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
 
         proposals.forEach { p ->
             ProposalCard(
@@ -210,7 +211,7 @@ private fun ProposalCard(
         Text(summaryOf(p), style = FTType.Body, color = if (skipped) FT.TextMuted else FT.TextPrimary)
         if (p.quote.isNotBlank()) Text("“${p.quote}”", style = FTType.BodySmall, color = FT.TextMuted)
         p.warnings.forEach { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
-        error?.let { Text("Not saved: $it", style = FTType.BodySmall, color = FT.Critical) }
+        error?.let { Text("Not saved: $it", style = FTType.BodySmall, color = FT.Bad) }
         if (saved || skipped) return@Column
 
         when (p.kind) {
@@ -238,7 +239,8 @@ private fun ProposalCard(
                     else -> FT.Metric.WeightEma
                 }
                 // Picking a value answers the question (the row disappears), so the slider has no CLEAR.
-                com.bioscan.fieldterminal.ui.components.FTRatingSlider(dim.uppercase(), null, 0..10, ink, { v -> v?.let { onChange(withDim(p, dim, it)) } }, optional = false)
+                FTRatingSlider(dim.uppercase(), null, 0..10, ink, { v -> v?.let { onChange(withDim(p, dim, it)) } }, optional = false,
+                    reversed = dim == "stress" || dim == "soreness")
             }
             "supplement_taken" -> if (p.supplementId == null) {
                 if (p.candidates.isEmpty()) {

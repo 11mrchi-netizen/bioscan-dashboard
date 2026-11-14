@@ -18,15 +18,22 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.ui.components.PinnedPage
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.SubTabRow
+import com.bioscan.fieldterminal.ui.components.rememberCacheVersion
 import com.bioscan.fieldterminal.ui.nav.PlanTab
+import com.bioscan.fieldterminal.ui.screens.events.EventsCard
+import com.bioscan.fieldterminal.ui.screens.fuel.FuelPlanPage
+import com.bioscan.fieldterminal.ui.screens.fuel.MealPrepPage
+import com.bioscan.fieldterminal.ui.screens.status.TrainingSessionsTab
+import com.bioscan.fieldterminal.ui.screens.training.TrainingPlanTab
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Scoring system rebuild (docs/scoring-system/02-page-mockups.md §5): PLAN, a dock tab. What is planned and what was done:
+// PLAN, a dock tab. What is planned and what was done:
 // the training block, the food plan with meal prep, events with their race fuel, and the sessions. The content is the
 // existing screens' (was Lab › Planning and Training › Sessions), hosted here unchanged.
 
@@ -63,16 +70,16 @@ fun PlanScreen(
         scrollState = scroll,
     ) {
         when (tab) {
-            PlanTab.Training -> com.bioscan.fieldterminal.ui.screens.training.TrainingPlanTab(onOpenPlanner, onOpenAllBlocks = onOpenAllBlocks)
+            PlanTab.Training -> TrainingPlanTab(onOpenPlanner, onOpenAllBlocks = onOpenAllBlocks)
             PlanTab.Food -> FoodPlan()
             PlanTab.Race -> Column(
                 Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text("Each event opens its own fuel plan on its FUEL tab.", style = FTType.Caption, color = FT.TextSecondary)
-                com.bioscan.fieldterminal.ui.screens.events.EventsCard(onOpenEvent = onOpenEvent)
+                EventsCard(onOpenEvent = onOpenEvent)
             }
-            PlanTab.Sessions -> com.bioscan.fieldterminal.ui.screens.status.TrainingSessionsTab(onOpenSessionDetail)
+            PlanTab.Sessions -> TrainingSessionsTab(onOpenSessionDetail)
         }
     }
 }
@@ -86,17 +93,17 @@ private fun FoodPlan() {
     var openDays by rememberSaveable { mutableStateOf(setOf<LocalDate>()) }
     var overview by remember { mutableStateOf<NutritionOverview?>(null) }
     // The food plan reads better with today's intake; without it (a failed read) the plan still shows.
-    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
-    LaunchedEffect(cacheVersion) { overview = runCatching { NutritionRepository(SupabaseClientProvider.client).loadOverview() }.getOrNull() ?: overview }
+    val cacheVersion = rememberCacheVersion()
+    LaunchedEffect(cacheVersion) { overview = catching { NutritionRepository(SupabaseClientProvider.client).loadOverview() }.getOrNull() ?: overview }
     Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(top = 12.dp)) {
         SegmentedToggle(options = FoodPlanView.entries, selected = view, labelOf = { it.label }, onSelect = { view = it }, accentColor = FT.DomainFuel)
     }
     when (view) {
-        FoodPlanView.Days -> com.bioscan.fieldterminal.ui.screens.fuel.FuelPlanPage(
+        FoodPlanView.Days -> FuelPlanPage(
             overview,
             openDays = openDays,
             onToggleDay = { d -> openDays = if (d in openDays) openDays - d else openDays + d },
         )
-        FoodPlanView.Prep -> com.bioscan.fieldterminal.ui.screens.fuel.MealPrepPage(overview)
+        FoodPlanView.Prep -> MealPrepPage(overview)
     }
 }

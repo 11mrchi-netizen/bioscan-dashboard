@@ -29,9 +29,9 @@ import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // DAV-84. Single marker+value+date at a time, matching AddEntrySheet.kt's
 // established one-item-per-form pattern -- bulk panel import from a file is
@@ -69,7 +69,7 @@ fun LabResultFormSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("ADD LAB RESULT", style = sheetHeaderTitleStyle, color = FT.Emerald)
+            Text("ADD LAB RESULT", style = sheetHeaderTitleStyle, color = FT.Ok)
 
             DateField("DRAW DATE", date, { date = it })
             Column { FormFieldLabel("MARKER"); FieldTextField(markerName, { markerName = it }, "e.g. Ferritin") }
@@ -81,7 +81,7 @@ fun LabResultFormSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
             }
 
             error?.let {
-                Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical)
+                Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Bad)
             }
 
             val valid = markerName.isNotBlank() && value.toDoubleOrNull() != null

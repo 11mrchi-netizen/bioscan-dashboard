@@ -4,7 +4,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -19,8 +21,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.BodyCheckinRepository
@@ -28,38 +33,46 @@ import com.bioscan.fieldterminal.data.ScaleCompositionPoint
 import com.bioscan.fieldterminal.data.ScaleReadingRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.UserProfileRepository
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
 import com.bioscan.fieldterminal.data.model.UserProfileRow
 import com.bioscan.fieldterminal.domain.BodyCheckinRecord
 import com.bioscan.fieldterminal.domain.BodyComposition
 import com.bioscan.fieldterminal.domain.MusclePotential
 import com.bioscan.fieldterminal.domain.PotentialMethod
-import com.bioscan.fieldterminal.domain.latestFrame
+import com.bioscan.fieldterminal.domain.RegimenMarker
 import com.bioscan.fieldterminal.domain.evaluateWeightTrend
 import com.bioscan.fieldterminal.domain.jacksonPollockBodyFat
+import com.bioscan.fieldterminal.domain.latestFrame
 import com.bioscan.fieldterminal.domain.musclePotential
 import com.bioscan.fieldterminal.domain.navyBodyFat
 import com.bioscan.fieldterminal.domain.rollingBodyFat
 import com.bioscan.fieldterminal.domain.score.Series
 import com.bioscan.fieldterminal.domain.trendStateWord
 import com.bioscan.fieldterminal.domain.weightChangeSplit
+import com.bioscan.fieldterminal.ui.components.FTChip
+import com.bioscan.fieldterminal.ui.components.FTChipRow
+import com.bioscan.fieldterminal.ui.components.TrendSeries
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.components.rememberRange
 import com.bioscan.fieldterminal.ui.screens.detail.ChartRange
-import com.bioscan.fieldterminal.ui.screens.detail.Chip
 import com.bioscan.fieldterminal.ui.screens.detail.EmptyLine
 import com.bioscan.fieldterminal.ui.screens.detail.Fmt
 import com.bioscan.fieldterminal.ui.screens.detail.Loading
 import com.bioscan.fieldterminal.ui.screens.detail.LocalRangeDays
+import com.bioscan.fieldterminal.ui.screens.detail.LocalRegimenMarkers
 import com.bioscan.fieldterminal.ui.screens.detail.MetricPanel
 import com.bioscan.fieldterminal.ui.screens.detail.MetricTiles
 import com.bioscan.fieldterminal.ui.screens.detail.Section
 import com.bioscan.fieldterminal.ui.screens.detail.StatTiles
 import com.bioscan.fieldterminal.ui.screens.detail.TileSpec
+import com.bioscan.fieldterminal.ui.screens.detail.loadRegimenMarkers
+import com.bioscan.fieldterminal.ui.screens.detail.shortDate
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // ME › BODY, in the detail pages' look (map request): weight trend, body fat trend, the monthly measurements on the body
 // map, then what the scale's impedance gives beyond weight as tiles that open their trend, and muscle potential as a ring.
@@ -107,28 +120,32 @@ fun BodyTabContent() {
     LaunchedEffect(guard.attempt) {
         guard.run { bodyMetrics = AnalysisRepository(SupabaseClientProvider.client).loadBodyMetrics() }
         val repo = BodyCheckinRepository(SupabaseClientProvider.client)
-        checkins = runCatching { repo.loadHistory() }.getOrElse { checkins }
-        heightCm = runCatching { repo.latestHeightCm() }.getOrNull() ?: heightCm
-        profile = runCatching { UserProfileRepository(SupabaseClientProvider.client).loadProfile() }.getOrNull() ?: profile
-        scaleSeries = runCatching { ScaleReadingRepository(SupabaseClientProvider.client).loadCompositionSeries() }.getOrElse { scaleSeries }
+        checkins = catching { repo.loadHistory() }.getOrElse { checkins }
+        heightCm = catching { repo.latestHeightCm() }.getOrNull() ?: heightCm
+        profile = catching { UserProfileRepository(SupabaseClientProvider.client).loadProfile() }.getOrNull() ?: profile
+        scaleSeries = catching { ScaleReadingRepository(SupabaseClientProvider.client).loadCompositionSeries() }.getOrElse { scaleSeries }
     }
 
-    var range by rememberSaveable { mutableStateOf(ChartRange.M3) }
+    var range by rememberRange("me:body", ChartRange.M3)
     var showRegimen by rememberSaveable { mutableStateOf(true) }
-    var markers by remember { mutableStateOf(emptyList<com.bioscan.fieldterminal.domain.RegimenMarker>()) }
-    LaunchedEffect(Unit) { markers = runCatching { com.bioscan.fieldterminal.ui.screens.detail.loadRegimenMarkers() }.getOrDefault(emptyList()) }
+    var markers by remember { mutableStateOf(emptyList<RegimenMarker>()) }
+    LaunchedEffect(Unit) { markers = catching { loadRegimenMarkers() }.getOrDefault(emptyList()) }
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            for (r in ChartRange.entries) Chip(r.label, r == range) { range = r }
-            if (markers.isNotEmpty()) Chip("REGIMEN", showRegimen) { showRegimen = !showRegimen }
-        }
+        FTChipRow(
+            ChartRange.entries, range, { it.label }, { range = it },
+            contentPadding = PaddingValues(0.dp),
+            trailing = if (markers.isEmpty()) null else ({
+                Spacer(Modifier.padding(start = 6.dp))
+                FTChip("REGIMEN", showRegimen, { showRegimen = !showRegimen }, role = Role.Switch)
+            }),
+        )
         val b = bodyMetrics
         if (b == null) {
             Loading(guard)
             return@Column
         }
         CompositionLocalProvider(LocalRangeDays provides range.days,
-            com.bioscan.fieldterminal.ui.screens.detail.LocalRegimenMarkers provides if (showRegimen) markers else emptyList()) {
+            LocalRegimenMarkers provides if (showRegimen) markers else emptyList()) {
             BodyPage(b, checkins, profile?.heightCm ?: heightCm, profile, scaleSeries)
         }
     }
@@ -162,7 +179,16 @@ private fun BodyPage(
     val tape = remember(checkins, heightCm, sex) { checkins.mapNotNull { c -> navyBodyFat(c, heightCm, sex)?.let { c.date to it } }.sortedBy { it.first } }
     val folds = remember(checkins, age, sex) { checkins.mapNotNull { c -> jacksonPollockBodyFat(c, age, sex)?.let { c.date to it } }.sortedBy { it.first } }
     val blended = remember(scaleFat, tape, folds) { rollingBodyFat(scaleFat + tape + folds).toMap() }
-    MetricPanel("BODY FAT", blended, "%", Fmt.one, info = BODY_FAT_INFO, minSd = 0.5, color = FT.DomainFuel, today = today) {
+    // Each method as its own line, one hue each, so they read apart (map request). DEXA has no source yet.
+    val bodyFatOverlay = remember(scaleFat, tape, folds) {
+        listOf(
+            TrendSeries(scaleFat, FT.Metric.BodyFat, label = "SCALE", maxGapDays = 400),
+            TrendSeries(tape, FT.Metric.BodyFatTape, label = "TAPE", maxGapDays = 400),
+            TrendSeries(folds, FT.Metric.BodyFatCaliper, label = "CALIPER", maxGapDays = 400),
+        ).filter { it.points.isNotEmpty() }
+    }
+    MetricPanel("BODY FAT", blended, "%", Fmt.one, info = BODY_FAT_INFO, minSd = 0.5, color = FT.DomainFuel, today = today,
+        overlay = bodyFatOverlay.takeIf { it.isNotEmpty() }) {
         val methods = listOfNotNull(
             scaleFat.lastOrNull()?.let { Triple("SCALE", "%.1f %%".format(it.second), shortDay(it.first)) },
             tape.lastOrNull()?.let { Triple("TAPE", "%.1f %%".format(it.second), shortDay(it.first)) },
@@ -196,7 +222,7 @@ private fun BodyPage(
         fatFree == null -> "Needs a body-fat reading: a weigh-in on the scale, or a body check-in."
         else -> null
     })
-    FitnessAgeSection(sex, profile?.dateOfBirth?.let { runCatching { LocalDate.parse(it) }.getOrNull() }, checkins)
+    // Fitness age now lives on the Aging page (ME › Healthspan › AGING), with the other age models.
 }
 
 @Composable
@@ -209,14 +235,14 @@ private fun ScaleTiles(lastPerDay: Map<LocalDate, ScaleCompositionPoint>, athlet
         fun series(pick: (ScaleCompositionPoint, BodyComposition) -> Double?): Series =
             lastPerDay.mapNotNull { (d, p) -> p.composition?.let { pick(p, it) }?.let { d to it } }.toMap()
         val tiles = listOf(
-            TileSpec("Fat-free mass", series { _, c -> c.split?.fatFreeKg }, "kg", Fmt.one, "Everything that is not fat: muscle, water, organs and bone (Sun 2003).", 0.3, FT.Emerald, betterHigher = true),
+            TileSpec("Fat-free mass", series { _, c -> c.split?.fatFreeKg }, "kg", Fmt.one, "Everything that is not fat: muscle, water, organs and bone (Sun 2003).", 0.3, FT.Ok, betterHigher = true),
             TileSpec("Fat mass", series { _, c -> c.split?.fatKg }, "kg", Fmt.one, "Weight minus fat-free mass.", 0.3, FT.DomainFuel, betterHigher = false),
-            TileSpec("Skeletal muscle", series { _, c -> c.skeletalMuscleKg }, "kg", Fmt.one, "Muscle attached to the skeleton (Janssen 2000), a part of fat-free mass.", 0.3, FT.Emerald, betterHigher = true),
+            TileSpec("Skeletal muscle", series { _, c -> c.skeletalMuscleKg }, "kg", Fmt.one, "Muscle attached to the skeleton (Janssen 2000), a part of fat-free mass.", 0.3, FT.Ok, betterHigher = true),
             TileSpec("Body water", series { p, c -> c.totalBodyWaterL?.let { it / p.weightKg * 100 } }, "%", Fmt.one, "Total body water as a share of weight (Sun 2003). Mostly hydration and leanness; a day-to-day swing is hydration, not tissue.", 0.5, FT.DomainFuel),
             TileSpec("Resting energy", series { _, c -> c.bmrKcal }, "kcal", Fmt.int, "Energy burned at complete rest from fat-free mass (Katch-McArdle).", 15.0, FT.DomainFuel),
             TileSpec("Impedance index", series { _, c -> c.impedanceIndex }, "cm²/Ω", Fmt.one, "Height² ÷ impedance. No population equation involved, so it is the cleanest trend: it rises with more water-rich, lean tissue and falls when you are dehydrated. Compare like with like (same time of day).", 0.5, FT.DomainFuel),
             TileSpec("BMI", series { _, c -> c.bmi }, "kg/m²", Fmt.one, "Weight ÷ height². Says nothing about what the weight is made of; 18.5–25 is the general adult range.", 0.1, FT.DomainFuel),
-            TileSpec("FFMI", series { _, c -> c.split?.ffmi }, "kg/m²", Fmt.one, "Fat-free mass ÷ height²: how much lean mass you carry for your height. Feeds muscle potential below.", 0.1, FT.Emerald, betterHigher = true),
+            TileSpec("FFMI", series { _, c -> c.split?.ffmi }, "kg/m²", Fmt.one, "Fat-free mass ÷ height²: how much lean mass you carry for your height. Feeds muscle potential below.", 0.1, FT.Ok, betterHigher = true),
         ).filter { it.series.isNotEmpty() }
         MetricTiles(tiles, today)
 
@@ -245,12 +271,12 @@ private fun MusclePotentialSection(p: MusclePotential?, askFrame: Boolean, missi
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Box(Modifier.size(112.dp), contentAlignment = Alignment.Center) {
                 val track = FT.GlassBorder
-                val fill = FT.Emerald
+                val fill = FT.Ok
                 Canvas(Modifier.size(112.dp)) {
                     val stroke = 10.dp.toPx()
                     val inset = stroke / 2
-                    val arcSize = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke)
-                    val topLeft = androidx.compose.ui.geometry.Offset(inset, inset)
+                    val arcSize = Size(size.width - stroke, size.height - stroke)
+                    val topLeft = Offset(inset, inset)
                     drawArc(track, -90f, 360f, false, topLeft, arcSize, style = Stroke(stroke))
                     drawArc(fill, -90f, (360 * p.fraction).toFloat(), false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
                 }
@@ -280,4 +306,4 @@ private fun MusclePotentialSection(p: MusclePotential?, askFrame: Boolean, missi
     }
 }
 
-private fun shortDay(d: LocalDate): String = com.bioscan.fieldterminal.ui.screens.detail.shortDate(d)
+private fun shortDay(d: LocalDate): String = shortDate(d)

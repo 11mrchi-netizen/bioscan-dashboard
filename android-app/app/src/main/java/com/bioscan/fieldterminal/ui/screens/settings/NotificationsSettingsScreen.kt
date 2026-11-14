@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import com.bioscan.fieldterminal.ui.components.FTSwitch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.bioscan.fieldterminal.data.NotificationRulesRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.NotificationKind
 import com.bioscan.fieldterminal.data.model.NotificationPrefsRow
 import com.bioscan.fieldterminal.data.model.NotificationRuleRow
@@ -36,14 +36,18 @@ import com.bioscan.fieldterminal.domain.notifications.parseHm
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTSwitch
+import com.bioscan.fieldterminal.ui.components.LoadingOrError
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.TimeField
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private val RULE_LABELS = mapOf(
     NotificationKind.SUPPLEMENT_DUE to "SUPPLEMENT REMINDERS",
@@ -58,6 +62,7 @@ private val RULE_LABELS = mapOf(
     NotificationKind.EVENT_RATING to "RATE HOW IT FELT",
     NotificationKind.EVENT_DRAW to "DAILY INTERVENTION DRAW",
     NotificationKind.EVENT_FOLLOWUP to "OUTCOME FOLLOW-UP",
+    NotificationKind.PRACTICE_DUE to "PRACTICES",
     NotificationKind.FUEL_SESSION to "FUEL BEFORE AND AFTER KEY SESSIONS",
     NotificationKind.FUEL_EVENT to "RACE WEEK FUELLING",
 )
@@ -70,6 +75,7 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
     var notifPrefs by remember { mutableStateOf<NotificationPrefsRow?>(null) }
     var notifSaving by remember { mutableStateOf(false) }
     var notifError by remember { mutableStateOf(false) }
+    var ruleError by remember { mutableStateOf(false) }
     var notifSavedAt by remember { mutableStateOf<String?>(null) }
     var rules by remember { mutableStateOf<List<NotificationRuleRow>>(emptyList()) }
     var notifPermissionGranted by remember {
@@ -82,15 +88,18 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
         notifPermissionGranted = granted
     }
 
-    LaunchedEffect(Unit) {
+    // The stored settings are the page: when they cannot be read it says so, instead of showing defaults that SAVE would
+    // then write over the real ones.
+    val guard = rememberLoadGuard(refreshOnUpdates = false)
+    LaunchedEffect(guard.attempt) {
         val zone = ZoneId.systemDefault().id
-        notifPrefs = runCatching {
-            notificationsRepository.loadPrefs() ?: run {
+        guard.run {
+            notifPrefs = notificationsRepository.loadPrefs() ?: run {
                 notificationsRepository.ensureDefaults(zone)
                 notificationsRepository.loadPrefs()
-            }
-        }.getOrNull() ?: NotificationPrefsRow(timezone = zone)
-        rules = runCatching { notificationsRepository.loadRules() }.getOrElse { emptyList() }
+            } ?: NotificationPrefsRow(timezone = zone)
+            rules = notificationsRepository.loadRules()
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notifPermissionGranted) {
             permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
@@ -104,7 +113,7 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
         ) {
             val prefs = notifPrefs
             if (prefs == null) {
-                Text("Loading…", style = FTType.BodySmall, color = FT.TextSecondary)
+                LoadingOrError(guard, "Loading…")
             } else {
                 FTCard(title = "NOTIFICATIONS") {
                     Text(
@@ -151,8 +160,8 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
                         val toSave = notifPrefs ?: return@FTButton
                         scope.launch {
                             notifSaving = true
-                            notifError = runCatching { notificationsRepository.savePrefs(toSave) }.isFailure
-                            if (!notifError) notifSavedAt = java.time.LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+                            notifError = catching { notificationsRepository.savePrefs(toSave) }.isFailure
+                            if (!notifError) notifSavedAt = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
                             notifSaving = false
                         }
                     }
@@ -160,7 +169,7 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
                         Text(
                             "Couldn't save. Check your connection and try again.",
                             style = FTType.Caption,
-                            color = FT.Critical,
+                            color = FT.Bad,
                         )
                     }
                     notifSavedAt?.let {
@@ -186,16 +195,24 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
                                     checked = rule?.enabled ?: true,
                                     onCheckedChange = { enabled ->
                                         rules = rules.map { if (it.kind == kind) it.copy(enabled = enabled) else it }
-                                        scope.launch { runCatching { notificationsRepository.setRuleEnabled(kind, enabled) } }
+                                        ruleError = false
+                                        scope.launch {
+                                            // Not saved: the switch goes back, so it never shows what the server does not have.
+                                            catching { notificationsRepository.setRuleEnabled(kind, enabled) }.onFailure {
+                                                rules = rules.map { if (it.kind == kind) it.copy(enabled = !enabled) else it }
+                                                ruleError = true
+                                            }
+                                        }
                                     },
                                 )
                             }
                         }
+                        if (ruleError) Text("Couldn't save that switch. Check your connection and try again.", style = FTType.Caption, color = FT.Bad)
                         if (!notifPermissionGranted) {
                             Text(
                                 "Allow notifications in system settings to receive reminders.",
                                 style = FTType.Caption,
-                                color = FT.Critical,
+                                color = FT.Bad,
                             )
                         }
                     }

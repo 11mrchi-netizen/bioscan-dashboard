@@ -29,11 +29,12 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.domain.oneADay
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import kotlin.math.abs
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // DAV-76. Shares DotPlot.kt's own Canvas + bounding-box + calendar-date
 // xFor/yFor technique, but connects points with a line -- unlike bloodwork's
@@ -46,8 +47,6 @@ import java.time.temporal.ChronoUnit
 // three labelled values; a caller can fix the scale to the person's usual range (`scale`), break a daily series at
 // missing days (`TrendSeries.maxGapDays`, the gap is marked on the axis), draw a per-day expected band (`band`), ring
 // flagged points (`marks`) and date illness, device changes and the like (`annotations`).
-private val TREND_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM")
-private val INSPECT_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy")
 
 // `label` names the series in the tap-to-inspect box; null = value only.
 // `highlightLast` draws a permanent state-colored dot on the series' latest
@@ -66,6 +65,12 @@ data class TrendSeries(
     val maxGapDays: Int? = null,
     // Readings as dots, no line: the expected-band chart, where each morning is judged against its own band.
     val dotsOnly: Boolean = false,
+    // A series of 12 readings or more is drawn as its trend (ChartPaths.kt's local fit, about an eighteenth of the span
+    // wide) with the readings as faint dots, so day-to-day noise does not zigzag the line. False draws the line through
+    // every reading (a series that is already an average, or one whose every point matters).
+    val smooth: Boolean = true,
+    // Straight segments, corners kept: a record held until beaten is a step, and a rounded step reads as an S.
+    val straight: Boolean = false,
 )
 
 // A per-day range behind the series: the expected band (80%) with its centre.
@@ -77,7 +82,7 @@ data class TrendMark(val date: LocalDate, val value: Double, val color: Color)
 // A dated note: a dashed line for one day (a new device), a shaded span for several (a logged illness).
 data class TrendAnnotation(val start: LocalDate, val end: LocalDate = start, val label: String)
 
-private fun defaultTrendFormat(v: Double): String = if (kotlin.math.abs(v) >= 100) "%.0f".format(v) else "%.1f".format(v)
+private fun defaultTrendFormat(v: Double): String = if (abs(v) >= 100) "%.0f".format(v) else "%.1f".format(v)
 
 @Composable
 fun DateTrendLine(
@@ -135,9 +140,12 @@ fun DateTrendLine(
     // at the same x in both.
     dateRange: ClosedRange<LocalDate>? = null,
     minGutter: Dp = 0.dp,
+    // The y-axis labels in the series' own format (a time as 24:06, not 1446 seconds); null keeps plain numbers.
+    axisFormat: ((Double) -> String)? = null,
 ) {
     val sortedSeries = series
-        .map { it.copy(points = it.points.sortedBy { p -> p.first }) }
+        // A line has one point a day (several on one date drew a vertical zigzag); dots keep every reading.
+        .map { it.copy(points = if (it.dotsOnly) it.points.sortedBy { p -> p.first } else oneADay(it.points)) }
         .filter { it.points.size >= if (it.dotsOnly || it.maxGapDays != null) 1 else 2 }
     val sortedBand = band.sortedBy { it.date }
     if (sortedSeries.isEmpty() && sortedBand.isEmpty()) return
@@ -172,7 +180,7 @@ fun DateTrendLine(
     val ticks = remember(yLo, yHi) { niceTicks(yLo, yHi) }
     val tickLayouts = remember(ticks, measurer) {
         val decimals = tickDecimals(ticks)
-        ticks.map { measurer.measure("%.${decimals}f".format(it), FTType.Micro.copy(color = FT.TextMuted)) }
+        ticks.map { measurer.measure(axisFormat?.invoke(it) ?: "%.${decimals}f".format(it), FTType.Micro.copy(color = FT.TextMuted)) }
     }
     val gutter = maxOf((tickLayouts.maxOfOrNull { it.size.width } ?: 0) + 6f, with(LocalDensity.current) { minGutter.toPx() })
     val gutterDp = with(LocalDensity.current) { gutter.toDp() }
@@ -181,6 +189,8 @@ fun DateTrendLine(
         gutter + padX + ChronoUnit.DAYS.between(dayMin, day).toFloat() / daySpan * (width - gutter - padX * 2)
     fun yFor(value: Double, height: Float): Float =
         padY + (1f - ((value - yLo) / (yHi - yLo)).toFloat()) * (height - padY * 2)
+    fun xForDays(d: Double, width: Float): Float = gutter + padX + d.toFloat() / daySpan * (width - gutter - padX * 2)
+    val trendBandwidth = maxOf(2.0, daySpan / 18.0)
 
     var selectedDay by remember { mutableStateOf<LocalDate?>(null) }
     // Series/points change when the caller switches timeframe -- a stale
@@ -197,7 +207,7 @@ fun DateTrendLine(
                 .fillMaxWidth()
                 .height(chartHeight)
                 .chartInspect(Triple(sortedSeries, sortedBand, gutter)) { x, width, isTap ->
-                    val nearest = inspectDays.minBy { kotlin.math.abs(xFor(it, width) - x) }
+                    val nearest = inspectDays.minBy { abs(xFor(it, width) - x) }
                     selectedDay = if (isTap && selectedDay == nearest) null else nearest
                 },
         ) {
@@ -267,17 +277,29 @@ fun DateTrendLine(
                     }
                 } else {
                     val segments = trendSegments(s.points, s.maxGapDays)
+                    val smoothIt = s.smooth && s.points.size >= 12
+                    if (smoothIt) {
+                        s.points.forEach { (day, value) -> drawCircle(s.color.copy(alpha = 0.35f), radius = 2.5f, center = Offset(xFor(day, size.width), yFor(value, size.height))) }
+                    }
                     segments.forEach { seg ->
-                        if (seg.size == 1) {
+                        if (smoothIt && seg.size >= 3) {
+                            val xs = seg.map { ChronoUnit.DAYS.between(dayMin, it.first).toDouble() }
+                            val curve = trendCurve(xs, seg.map { it.second }, trendBandwidth)
+                            drawPath(
+                                smoothedPath(curve.map { (d, v) -> Offset(xForDays(d, size.width), yFor(v, size.height)) }),
+                                color = s.color,
+                                style = Stroke(
+                                    width = 4f,
+                                    cap = if (s.dashed) StrokeCap.Butt else StrokeCap.Round,
+                                    join = StrokeJoin.Round,
+                                    pathEffect = if (s.dashed) PathEffect.dashPathEffect(floatArrayOf(14f, 9f)) else null,
+                                ),
+                            )
+                        } else if (seg.size == 1) {
                             drawCircle(s.color, radius = 3.5f, center = Offset(xFor(seg[0].first, size.width), yFor(seg[0].second, size.height)))
                         } else {
-                            val line = Path().apply {
-                                seg.forEachIndexed { i, (day, value) ->
-                                    val x = xFor(day, size.width)
-                                    val y = yFor(value, size.height)
-                                    if (i == 0) moveTo(x, y) else lineTo(x, y)
-                                }
-                            }
+                            val pts = seg.map { (day, value) -> Offset(xFor(day, size.width), yFor(value, size.height)) }
+                            val line = if (s.straight) Path().apply { pts.forEachIndexed { i, o -> if (i == 0) moveTo(o.x, o.y) else lineTo(o.x, o.y) } } else smoothedPath(pts)
                             drawPath(
                                 line,
                                 color = s.color,
@@ -288,6 +310,14 @@ fun DateTrendLine(
                                     pathEffect = if (s.dashed) PathEffect.dashPathEffect(floatArrayOf(14f, 9f)) else null,
                                 ),
                             )
+                        }
+                    }
+                    // A short, unsmoothed series marks each reading, so a line between two draws is not read as data.
+                    if (!smoothIt && !s.straight && s.points.size in 2 until 12) {
+                        s.points.forEach { (day, value) ->
+                            val c = Offset(xFor(day, size.width), yFor(value, size.height))
+                            drawCircle(FT.Surface, radius = 6f, center = c)
+                            drawCircle(s.color, radius = 4f, center = c)
                         }
                     }
                     // Missing days stay visible: a dashed stretch on the baseline under each gap.
@@ -323,7 +353,7 @@ fun DateTrendLine(
                         measurer = measurer,
                         x = x,
                         dots = hits.map { (_, v) -> Offset(x, yFor(v, size.height)) },
-                        header = day.format(INSPECT_DATE_FORMAT),
+                        header = ChartDates.full(day),
                         rows = hits.map { (s, v) -> InspectRow(s.label, valueFormat(v), s.color) } +
                             listOfNotNull(bandDay?.let { InspectRow(bandLabel ?: "BAND", valueFormat(it.low) + "–" + valueFormat(it.high), FT.TextSecondary) }),
                     )
@@ -331,8 +361,8 @@ fun DateTrendLine(
             }
         }
         Row(modifier = Modifier.fillMaxWidth().padding(start = gutterDp, top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(dayMin.format(TREND_DATE_FORMAT), style = FTType.MonoCaption, color = FT.TextSecondary)
-            Text(dayMax.format(TREND_DATE_FORMAT), style = FTType.MonoCaption, color = FT.TextSecondary)
+            Text(ChartDates.short(dayMin), style = FTType.MonoCaption, color = FT.TextSecondary)
+            Text(ChartDates.short(dayMax), style = FTType.MonoCaption, color = FT.TextSecondary)
         }
         if (legend) {
             Row(modifier = Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {

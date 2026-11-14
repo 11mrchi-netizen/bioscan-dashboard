@@ -1,20 +1,25 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.data
 
-import kotlinx.serialization.UseSerializers
 import com.bioscan.fieldterminal.data.model.NewSupplementIngredientRow
 import com.bioscan.fieldterminal.data.model.NewSupplementProductIngredientRow
 import com.bioscan.fieldterminal.data.model.NewSupplementProductRow
-import com.bioscan.fieldterminal.data.model.NewSupplementRosterRow
+import com.bioscan.fieldterminal.data.model.SUPPLEMENT_ROW_COLUMNS
 import com.bioscan.fieldterminal.data.model.SupplementIngredientRow
 import com.bioscan.fieldterminal.data.model.SupplementLogDateRow
-import com.bioscan.fieldterminal.data.model.SupplementProductIngredientRow
 import com.bioscan.fieldterminal.data.model.SupplementProductIngredientFull
+import com.bioscan.fieldterminal.data.model.SupplementProductIngredientRow
 import com.bioscan.fieldterminal.data.model.SupplementProductIngredientWithKey
 import com.bioscan.fieldterminal.data.model.SupplementRow
-import com.bioscan.fieldterminal.domain.isSupplementActive
+import com.bioscan.fieldterminal.domain.DoseIngredient
+import com.bioscan.fieldterminal.domain.DoseStepsJson
+import com.bioscan.fieldterminal.domain.RegimenChange
+import com.bioscan.fieldterminal.domain.ScheduleJson
+import com.bioscan.fieldterminal.domain.WallClock
 import com.bioscan.fieldterminal.domain.doseTextOn
+import com.bioscan.fieldterminal.domain.isSupplementActive
 import com.bioscan.fieldterminal.domain.legacyColumns
+import com.bioscan.fieldterminal.domain.regimenSpec
 import com.bioscan.fieldterminal.domain.spec
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
@@ -22,9 +27,18 @@ import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.time.Instant
 import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.ZoneId
 
 @Serializable
 data class SupplementsOverview(
@@ -84,8 +98,8 @@ data class RegimenDraft(
     val amount: Double,
     val unit: String,
     val slots: List<String>,
-    val schedule: com.bioscan.fieldterminal.domain.ScheduleJson,
-    val steps: com.bioscan.fieldterminal.domain.DoseStepsJson?,
+    val schedule: ScheduleJson,
+    val steps: DoseStepsJson?,
     val syringeUnits: Double? = null,
     val scored: Boolean = false,
     /** Label servings in one dose; set when the dose's ingredients were edited or the label can be compared. */
@@ -98,8 +112,8 @@ data class SupplementChangeRow(
     @SerialName("supplement_id") val supplementId: Long,
     @SerialName("changed_at") val changedAt: String,
     val changes: List<String>,
-    val before: kotlinx.serialization.json.JsonObject? = null,
-    val after: kotlinx.serialization.json.JsonObject,
+    val before: JsonObject? = null,
+    val after: JsonObject,
 )
 
 @Serializable
@@ -121,7 +135,7 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
 
     private suspend fun fetchLoadOverview(): SupplementsOverview {
         val rows = supabase.postgrest.from("supplements")
-            .select(columns = Columns.raw(com.bioscan.fieldterminal.data.model.SUPPLEMENT_ROW_COLUMNS))
+            .select(columns = Columns.raw(SUPPLEMENT_ROW_COLUMNS))
             .decodeList<SupplementRow>()
 
         val today = LocalDate.now()
@@ -141,13 +155,13 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
     // which read only those, keep working. The history trigger records what changed.
     suspend fun saveRegimen(id: Long?, draft: RegimenDraft, productId: Long? = null, aiNote: String? = null) {
         val today = LocalDate.now()
-        val spec = com.bioscan.fieldterminal.domain.regimenSpec(
+        val spec = regimenSpec(
             timeOfDay = draft.slots.firstOrNull() ?: "as-needed", everyNDays = draft.schedule.n, dose = "",
             kind = draft.kind, doseAmount = draft.amount, doseUnit = draft.unit, slots = draft.slots,
             schedule = draft.schedule, doseSteps = draft.steps,
         )
         val legacy = spec.legacyColumns(today)
-        val json = kotlinx.serialization.json.Json { encodeDefaults = false; explicitNulls = true }
+        val json = Json { encodeDefaults = false; explicitNulls = true }
         val body = buildJsonObject {
             put("name", draft.name)
             put("kind", draft.kind)
@@ -155,9 +169,9 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
             put("route", draft.route)
             put("dose_amount", draft.amount)
             put("dose_unit", draft.unit)
-            put("slots", kotlinx.serialization.json.JsonArray(draft.slots.map { kotlinx.serialization.json.JsonPrimitive(it) }))
-            put("schedule", json.encodeToJsonElement(com.bioscan.fieldterminal.domain.ScheduleJson.serializer(), draft.schedule))
-            put("dose_steps", draft.steps?.let { json.encodeToJsonElement(com.bioscan.fieldterminal.domain.DoseStepsJson.serializer(), it) } ?: kotlinx.serialization.json.JsonNull)
+            put("slots", JsonArray(draft.slots.map { JsonPrimitive(it) }))
+            put("schedule", json.encodeToJsonElement(ScheduleJson.serializer(), draft.schedule))
+            put("dose_steps", draft.steps?.let { json.encodeToJsonElement(DoseStepsJson.serializer(), it) } ?: JsonNull)
             put("syringe_units", draft.syringeUnits)
             put("scored", draft.scored)
             draft.servingsPerDose?.let { put("servings_per_dose", it) }
@@ -181,7 +195,7 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
             buildJsonObject {
                 put("status", "active")
                 put("start_date", today.toString())
-                put("end_date", kotlinx.serialization.json.JsonNull)
+                put("end_date", JsonNull)
             }
         ) { filter { eq("id", id) } }
     }
@@ -199,24 +213,25 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
         }
 
     /** [supplementId]'s logged doses since [since], oldest first: the amount-in-body estimate's input. */
-    suspend fun loadDoses(supplementId: Long, since: java.time.Instant): List<DoseLogRow> =
+    suspend fun loadDoses(supplementId: Long, since: Instant): List<DoseLogRow> =
         supabase.postgrest.from("supplement_log")
             .select(columns = Columns.list("taken_at,dose_value,dose_unit,serving_count")) {
                 filter { eq("supplement_id", supplementId); gte("taken_at", since.toString()) }
-                order("taken_at", Order.ASCENDING)
+                // Newest first, so a cap keeps the latest doses; oldest first again for the caller.
+                order("taken_at", Order.DESCENDING)
                 limit(2000)
-            }.decodeList<DoseLogRow>()
+            }.decodeList<DoseLogRow>().reversed()
 
     /** The history as dated changes with item names and doses (for the charts and the before/after readings). */
-    suspend fun loadRegimenChanges(): List<com.bioscan.fieldterminal.domain.RegimenChange> {
+    suspend fun loadRegimenChanges(): List<RegimenChange> {
         val overview = loadOverview()
         val names = (overview.active + overview.ended).associate { it.id to it.name }
-        fun str(o: kotlinx.serialization.json.JsonObject?, k: String) = (o?.get(k) as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString }?.content
+        fun str(o: JsonObject?, k: String) = (o?.get(k) as? JsonPrimitive)?.takeIf { it.isString }?.content
         return loadChanges().mapNotNull { c ->
             val name = names[c.supplementId] ?: str(c.after, "name") ?: return@mapNotNull null
-            val day = runCatching { java.time.OffsetDateTime.parse(c.changedAt).atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDate() }.getOrNull()
+            val day = runCatching { OffsetDateTime.parse(c.changedAt).atZoneSameInstant(ZoneId.systemDefault()).toLocalDate() }.getOrNull()
                 ?: return@mapNotNull null
-            com.bioscan.fieldterminal.domain.RegimenChange(day, name, c.changes, str(c.before, "dose"), str(c.after, "dose"), c.supplementId)
+            RegimenChange(day, name, c.changes, str(c.before, "dose"), str(c.after, "dose"), c.supplementId)
         }
     }
 
@@ -230,7 +245,7 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
             if (spec.steps == null) continue
             val now = spec.doseTextOn(today)
             if (now == row.dose) continue
-            runCatching {
+            catching {
                 supabase.postgrest.from("supplements").update(buildJsonObject { put("dose", now) }) { filter { eq("id", row.id) } }
             }
         }
@@ -240,7 +255,7 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
      * Each item's ingredients for one dose (label rows x servings per dose; elemental amounts where the label states them),
      * with the nutrient and canonical keys the lab rules and interactions match on.
      */
-    suspend fun loadDoseIngredients(rows: List<SupplementRow>): Map<Long, List<com.bioscan.fieldterminal.domain.DoseIngredient>> {
+    suspend fun loadDoseIngredients(rows: List<SupplementRow>): Map<Long, List<DoseIngredient>> {
         val withProduct = rows.filter { it.productId != null }
         if (withProduct.isEmpty()) return emptyMap()
         val links = supabase.postgrest.from("supplement_product_ingredients")
@@ -257,7 +272,7 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
                 val ing = ingredients[l.ingredientId] ?: return@mapNotNull null
                 val amount = l.elementalAmount ?: l.compoundAmount
                 val unit = (if (l.elementalAmount != null) l.elementalUnit else null) ?: l.compoundUnit
-                com.bioscan.fieldterminal.domain.DoseIngredient(ing.name, setOfNotNull(ing.nutrientKey, ing.canonicalKey), amount * r.servingsPerDose, unit)
+                DoseIngredient(ing.name, setOfNotNull(ing.nutrientKey, ing.canonicalKey), amount * r.servingsPerDose, unit)
             }
         }
     }
@@ -415,7 +430,7 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
     /** The last taken day per item and how many doses each has logged today (a twice-a-day item's slots). */
     suspend fun loadRecentTakes(supplementIds: List<Long>, today: LocalDate = LocalDate.now()): RecentTakes {
         if (supplementIds.isEmpty()) return RecentTakes(emptyMap(), emptyMap())
-        val since = today.minusDays(31).atStartOfDay(java.time.ZoneId.systemDefault()).toOffsetDateTime().toString()
+        val since = today.minusDays(31).atStartOfDay(ZoneId.systemDefault()).toOffsetDateTime().toString()
         val rows = supabase.postgrest.from("supplement_log")
             .select(columns = Columns.list("supplement_id,taken_at")) {
                 filter {
@@ -435,7 +450,7 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
 
     // taken_at is a logged wall-clock time (domain/WallClock.kt): its digits are the local date. Converting it as a real
     // instant moved every dose after 16:00 (UTC+8) onto the next day, so "taken today" missed evening doses.
-    private fun localDay(ts: String): LocalDate? = com.bioscan.fieldterminal.domain.WallClock.date(ts)
+    private fun localDay(ts: String): LocalDate? = WallClock.date(ts)
 
     // DAV-362. Active roster items whose product carries this (normalized) barcode.
     suspend fun activeSupplementsForBarcode(barcode: String): List<SupplementRow> {

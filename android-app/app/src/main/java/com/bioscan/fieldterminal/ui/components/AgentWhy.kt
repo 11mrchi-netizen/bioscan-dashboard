@@ -31,13 +31,14 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AgentReply
 import com.bioscan.fieldterminal.data.AgentRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.functionErrorMessage
 import com.bioscan.fieldterminal.domain.WhyContext
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.util.UUID
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Personal health agent, phase 1 (docs/personal-health-agent): WHY? in a card's title bar opens a sheet with the
 // assistant's explanation of that card. The reply was checked on the server against the data it read (numbers, words,
@@ -72,6 +73,7 @@ private fun WhySheet(why: WhyContext, onDismiss: () -> Unit) {
     var reply by remember { mutableStateOf<AgentReply?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var rated by remember { mutableStateOf<Int?>(null) }
+    var ratingFailed by remember { mutableStateOf(false) }
 
     LaunchedEffect(attempt) {
         error = null
@@ -106,11 +108,13 @@ private fun WhySheet(why: WhyContext, onDismiss: () -> Unit) {
                         color = FT.TextMuted,
                     )
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(if (rated == null) "USEFUL?" else "THANKS", style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.padding(end = 4.dp))
+                        Text(if (ratingFailed) "NOT SAVED · TAP AGAIN" else if (rated == null) "USEFUL?" else "THANKS", style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.padding(end = 4.dp))
                         (1..5).forEach { n ->
                             RatingDot(n, selected = rated == n) {
+                                val before = rated
                                 rated = n
-                                scope.launch { runCatching { repo.rate(r.turnId, n) } }
+                                ratingFailed = false
+                                scope.launch { catching { repo.rate(r.turnId, n) }.onFailure { rated = before; ratingFailed = true } }
                             }
                         }
                     }

@@ -1,15 +1,18 @@
 package com.bioscan.fieldterminal.data
 
-import com.bioscan.fieldterminal.domain.dosesPerDay
 import com.bioscan.fieldterminal.data.model.SuppcoProduct
 import com.bioscan.fieldterminal.data.model.flagTexts
+import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.domain.PantryAssessment
+import com.bioscan.fieldterminal.domain.ScheduleJson
 import com.bioscan.fieldterminal.domain.StockEvent
 import com.bioscan.fieldterminal.domain.StockEventKind
 import com.bioscan.fieldterminal.domain.TakenServings
 import com.bioscan.fieldterminal.domain.assessPantry
+import com.bioscan.fieldterminal.domain.dosesPerDay
 import com.bioscan.fieldterminal.domain.isSupplementActive
 import com.bioscan.fieldterminal.domain.pickBestListing
+import com.bioscan.fieldterminal.domain.regimenSpec
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -17,7 +20,6 @@ import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -56,11 +58,11 @@ private data class PantrySupplementRow(
     @SerialName("product_id") val productId: Long? = null,
     @SerialName("servings_per_dose") val servingsPerDose: Double = 1.0,
     val slots: List<String> = emptyList(),
-    val schedule: com.bioscan.fieldterminal.domain.ScheduleJson? = null,
+    val schedule: ScheduleJson? = null,
 ) {
     /** Planned doses a day on average (twice a day, every N days, weekdays, cycles: domain/Regimen.kt). */
     fun dosesPerDay(): Double =
-        com.bioscan.fieldterminal.domain.regimenSpec(timeOfDay, everyNDays, "", slots = slots, schedule = schedule).dosesPerDay()
+        regimenSpec(timeOfDay, everyNDays, "", slots = slots, schedule = schedule).dosesPerDay()
 }
 
 @Serializable
@@ -110,7 +112,7 @@ data class PantryItem(
 // stock). Stock is derived (domain/SupplementPantry.kt); this class only gathers
 // the inputs and writes stock events.
 class PantryRepository(private val supabase: SupabaseClient) {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = LenientJson
 
     suspend fun load(today: LocalDate = LocalDate.now()): List<PantryItem> {
         val roster = supabase.postgrest.from("supplements")

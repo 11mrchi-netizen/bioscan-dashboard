@@ -22,16 +22,20 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementsRepository
 import com.bioscan.fieldterminal.domain.LoggedDose
+import com.bioscan.fieldterminal.domain.WallClock
+import com.bioscan.fieldterminal.domain.activeIngredient
 import com.bioscan.fieldterminal.domain.amountCurve
 import com.bioscan.fieldterminal.domain.curveWindowDays
 import com.bioscan.fieldterminal.domain.formatAmount
 import com.bioscan.fieldterminal.domain.halfLifeWords
-import com.bioscan.fieldterminal.domain.activeIngredient
 import com.bioscan.fieldterminal.domain.spec
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // The estimated amount in the body from the logged doses and the label's half-life (domain/AmountInBody.kt), over about
 // five half-lives, with the amount now and the range over the last week. Labelled as an outline, never as a blood level.
@@ -41,17 +45,18 @@ fun AmountInBodySection(supplementId: Long, halfLifeHours: Double, ingredientNam
     var curve by remember(supplementId, halfLifeHours) { mutableStateOf<List<Pair<Instant, Double>>?>(null) }
     var unit by remember { mutableStateOf<String?>(null) }
     val days = curveWindowDays(halfLifeHours)
-    LaunchedEffect(supplementId, halfLifeHours, ingredientName) {
-        curve = runCatching {
+    val guard = rememberLoadGuard(refreshOnUpdates = false)
+    LaunchedEffect(supplementId, halfLifeHours, ingredientName, guard.attempt) {
+        guard.run { curve = run {
             // The active amount per dose: an injection's dose is its active amount; anything else reads it from the dose's
             // ingredients (the one the reference names, else the only or first one).
             val repo = SupplementsRepository(SupabaseClientProvider.client)
             val overview = repo.loadOverview()
-            val row = (overview.active + overview.ended).firstOrNull { it.id == supplementId } ?: return@runCatching emptyList()
+            val row = (overview.active + overview.ended).firstOrNull { it.id == supplementId } ?: return@run emptyList()
             val spec = row.spec()
             val active = if (spec.form == "injection") spec.amount?.let { a -> spec.unit?.let { u -> a to u } }
             else activeIngredient(repo.loadDoseIngredients(listOf(row))[row.id].orEmpty(), ingredientName, row.name)?.let { it.amount to it.unit }
-            val (perDose, activeUnit) = active ?: return@runCatching emptyList()
+            val (perDose, activeUnit) = active ?: return@run emptyList()
             unit = activeUnit
             val now = Instant.now()
             val from = now.minus(Duration.ofDays(days))
@@ -59,7 +64,7 @@ fun AmountInBodySection(supplementId: Long, halfLifeHours: Double, ingredientNam
             val since = from.minus(Duration.ofMinutes((halfLifeHours * 600).toLong()))
             val doses = repo.loadDoses(supplementId, since).mapNotNull { r ->
                 // taken_at is a logged wall-clock time (domain/WallClock.kt): its real instant is the digits in this zone.
-                val at = com.bioscan.fieldterminal.domain.WallClock.instant(r.takenAt, java.time.ZoneId.systemDefault()) ?: return@mapNotNull null
+                val at = WallClock.instant(r.takenAt, ZoneId.systemDefault()) ?: return@mapNotNull null
                 // How many doses this log was: from the servings it used, else from its count in the dose's unit.
                 val doseCount = spec.amount
                 val qty = r.servingCount?.let { it / row.servingsPerDose }
@@ -68,8 +73,9 @@ fun AmountInBodySection(supplementId: Long, halfLifeHours: Double, ingredientNam
                 LoggedDose(at, perDose * qty)
             }
             if (doses.isEmpty()) emptyList() else amountCurve(doses, halfLifeHours, from, now)
-        }.getOrNull()
+        } }
     }
+    LoadErrorLine(guard, "the amount in the body")
     val points = curve ?: return
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("IN YOUR BODY · ESTIMATE", style = FTType.Micro, color = FT.TextMuted)

@@ -1,7 +1,5 @@
 package com.bioscan.fieldterminal.domain.integrity
 
-import java.time.Instant
-
 enum class IntegritySeverity {
     INFO,
     WARNING,
@@ -17,7 +15,7 @@ enum class IntegrityCategory {
     PROVENANCE_MISSING,
     TIMEZONE_ANOMALY,
     LINEAGE_BROKEN,
-    // Analysis Layer 3 / R1: a metric changed level or noise on a date (a candidate device/source change); see
+    // A metric changed level or noise on a date (a candidate device/source change); see
     // domain/SeriesBreakStarts.kt and the analysis-run Edge Function, which detects and publishes these.
     SERIES_BREAK,
 }
@@ -32,12 +30,3 @@ data class IntegrityIssue(
     val details: Map<String, String> = emptyMap(),
 )
 
-data class IntegrityReport(
-    val checkedAt: Instant = Instant.now(),
-    val issues: List<IntegrityIssue>,
-) {
-    val isValid: Boolean get() = issues.none { it.severity == IntegritySeverity.ERROR }
-    val hasWarnings: Boolean get() = issues.any { it.severity == IntegritySeverity.WARNING }
-    val errors: List<IntegrityIssue> get() = issues.filter { it.severity == IntegritySeverity.ERROR }
-    val warnings: List<IntegrityIssue> get() = issues.filter { it.severity == IntegritySeverity.WARNING }
-}

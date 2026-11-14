@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -100,6 +101,6 @@ private fun ButtonBox(
             .ftClickable(enabled = enabled, shape = shape, role = Role.Button, onClick = onClick)
             .padding(horizontal = if (emphasis == FTButtonEmphasis.Tertiary) 8.dp else 20.dp, vertical = 12.dp),
     ) {
-        Text(text = label, style = if (filled && !critical) FTType.ButtonLabel.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) else FTType.ButtonLabel, color = text)
+        Text(text = label, style = if (filled && !critical) FTType.ButtonLabel.copy(fontWeight = FontWeight.Bold) else FTType.ButtonLabel, color = text)
     }
 }

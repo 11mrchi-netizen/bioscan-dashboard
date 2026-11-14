@@ -23,6 +23,16 @@ data class FuelScheduleRow(
     @SerialName("updated_at") val updatedAt: String? = null,
 )
 
+@Serializable
+private data class FuelScheduleUpsert(
+    val kind: String,
+    @SerialName("ref_key") val refKey: String,
+    @SerialName("duration_min") val durationMin: Int,
+    val blocks: List<FuelBlock>,
+    @SerialName("seeded_from") val seededFrom: String?,
+    @SerialName("updated_at") val updatedAt: String,
+)
+
 /** A supplement product read as fuel: what one serving brings, where its ingredients name the nutrient (null = not listed). */
 data class SupplementFuelOption(val id: Long, val name: String, val servingForm: String?, val carbsG: Double?, val sodiumMg: Double?, val caffeineMg: Double?)
 
@@ -61,6 +71,9 @@ internal fun fuelNutrientOf(ingredientName: String): String? {
     }
 }
 
+/** The ref_key a plan's schedule is kept under: the plan item's id ("calendar:<event id>", "planned:<id>"), at most 64. */
+fun planKey(planRef: String): String = planRef.take(64)
+
 class FuelScheduleRepository(private val supabase: SupabaseClient) {
 
     suspend fun load(kind: String, refKey: String): FuelScheduleRow? =
@@ -73,8 +86,9 @@ class FuelScheduleRepository(private val supabase: SupabaseClient) {
 
     /** Saves in place: the same (kind, ref) updates the one row. */
     suspend fun save(kind: String, refKey: String, durationMin: Int, blocks: List<FuelBlock>, seededFrom: String?) {
+        // Its own row type, without the id: the id is generated always, and a null in the body is refused.
         supabase.postgrest.from("fuel_schedules").upsert(
-            FuelScheduleRow(kind = kind, refKey = refKey, durationMin = durationMin, blocks = blocks, seededFrom = seededFrom, updatedAt = Instant.now().toString()),
+            FuelScheduleUpsert(kind, refKey, durationMin.coerceIn(1, 10080), blocks, seededFrom, Instant.now().toString()),
         ) { onConflict = "user_id,kind,ref_key" }
     }
 

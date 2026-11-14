@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -24,7 +23,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // v1 "new look" surfaces (design/tokens/backgrounds.css + components.css):
@@ -60,6 +58,16 @@ fun Modifier.ftDomainWash(hue: Color): Modifier = drawBehind {
     glow(hue, 0.20f, Offset(size.width * -0.12f, size.height * 0.94f), 480.dp.toPx(), 440.dp.toPx(), 0.64f)
 }
 
+/**
+ * The neutral page wash for screens with no domain hue: a soft platinum glow top centre and a fainter one bottom-left,
+ * so a page that is not colour-themed reads as part of the system without borrowing any metric's colour. Kept low-alpha
+ * because platinum is near-white; put it on the page's root, over [FT.Base] and under the content, like [ftDomainWash].
+ */
+fun Modifier.ftPlatinumWash(): Modifier = drawBehind {
+    glow(FT.PlatinumSolid, 0.10f, Offset(size.width * 0.5f, size.height * -0.12f), 540.dp.toPx(), 440.dp.toPx(), 0.64f)
+    glow(FT.PlatinumSolid, 0.05f, Offset(size.width * -0.12f, size.height * 0.96f), 480.dp.toPx(), 440.dp.toPx(), 0.64f)
+}
+
 /** The CHARGE page's wash (gauge.html): deep teal from the top, violet from the right. */
 fun Modifier.ftChargeWash(): Modifier = drawBehind {
     glow(Color(0xFF2D7882), 0.28f, Offset(size.width * 0.5f, size.height * -0.10f), 640.dp.toPx(), 440.dp.toPx(), 0.62f)
@@ -76,13 +84,6 @@ private fun DrawScope.glow(hue: Color, alpha: Float, center: Offset, rx: Float, 
     }
 }
 
-/** `.ft-card--holo`: the holographic hairline, reserved for CHARGE and premium surfaces. */
-fun Modifier.ftHoloHairline(shape: Shape): Modifier = border(
-    FT.BorderWidth,
-    Brush.linearGradient(listOf(Color(0x8C6D5EFC), Color(0x4019C7E0), Color(0x73FF6EC7))),
-    shape,
-)
-
 /** `.ft-row__dot`: a metric's dot with its glow. */
 @Composable
 fun FTMetricDot(color: Color, modifier: Modifier = Modifier, size: Dp = 9.dp) {
@@ -92,29 +93,6 @@ fun FTMetricDot(color: Color, modifier: Modifier = Modifier, size: Dp = 9.dp) {
             .drawBehind { drawCircle(Brush.radialGradient(listOf(color.copy(alpha = 0.55f), Color.Transparent)), radius = this.size.minDimension) }
             .background(color, CircleShape),
     )
-}
-
-enum class FTBadgeKind { Neutral, Primed, Ok, Bad }
-
-/** `.ft-badge`: a mono pill. PRIMED is the holographic CHARGE state; OK / BAD carry status. */
-@Composable
-fun FTBadge(text: String, kind: FTBadgeKind = FTBadgeKind.Neutral, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(50)
-    val base = when (kind) {
-        FTBadgeKind.Primed -> modifier.background(
-            Brush.linearGradient(listOf(Color(0xFF6D5EFC), Color(0xFF19C7E0), Color(0xFF8BF0A6), Color(0xFFFFD36E), Color(0xFFFF6EC7))), shape,
-        )
-        FTBadgeKind.Ok -> modifier.border(FT.BorderWidth, FT.Ok.copy(alpha = 0.4f), shape)
-        FTBadgeKind.Bad -> modifier.border(FT.BorderWidth, FT.Bad.copy(alpha = 0.4f), shape)
-        FTBadgeKind.Neutral -> modifier.border(FT.BorderWidth, FT.Line, shape)
-    }
-    val ink = when (kind) {
-        FTBadgeKind.Primed -> Color(0xFF06110F)
-        FTBadgeKind.Ok -> FT.Ok
-        FTBadgeKind.Bad -> FT.Bad
-        FTBadgeKind.Neutral -> FT.TextSecondary
-    }
-    Text(text, style = FTType.LabelCaps, color = ink, modifier = base.padding(horizontal = 11.dp, vertical = 5.dp))
 }
 
 /** `.ft-switch`: off = faint glass, on = platinum with the knob to the right. */

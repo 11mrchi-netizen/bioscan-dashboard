@@ -3,7 +3,6 @@ package com.bioscan.fieldterminal.ui.screens.status
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -15,11 +14,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.domain.BODY_CHECKIN_SLOTS
 import com.bioscan.fieldterminal.domain.BodyCheckinRecord
 import com.bioscan.fieldterminal.domain.BodySide
 import com.bioscan.fieldterminal.domain.BodySite
 import com.bioscan.fieldterminal.domain.BodySlot
-import com.bioscan.fieldterminal.domain.BODY_CHECKIN_SLOTS
 import com.bioscan.fieldterminal.domain.ChangeVerdict
 import com.bioscan.fieldterminal.domain.SiteChange
 import com.bioscan.fieldterminal.domain.asymmetries
@@ -35,8 +34,8 @@ import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.format.DateTimeFormatter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Redesign (spec §3.3): the monthly body check-in as an interactive body map. Every measured part is tinted by how it moved
 // at the newest check-in (UP, DOWN, WITHIN ERROR: beyond the site's own measurement error, never beyond it); a tap opens

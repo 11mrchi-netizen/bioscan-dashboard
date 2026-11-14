@@ -1,9 +1,8 @@
 package com.bioscan.fieldterminal.domain
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
-// Analysis Layer 3 / Phase 7: methodology as data. The single source is supabase/functions/_shared/metric-registry/
+// Methodology as data. The single source is supabase/functions/_shared/metric-registry/
 // metric-registry.json (validated by Node tests against docs/analysis-layer-2/02-metric-registry.md); the Gradle build
 // packages that file as an asset so the app shows exactly the text the console shows.
 @Serializable
@@ -24,7 +23,7 @@ data class MetricMethodology(
 @Serializable
 data class MetricRegistryFile(val registryVersion: String, val metrics: List<MetricMethodology>)
 
-private val registryJson = Json { ignoreUnknownKeys = true }
+private val registryJson = LenientJson
 
 fun parseMetricRegistry(json: String): Map<String, MetricMethodology> =
     registryJson.decodeFromString<MetricRegistryFile>(json).metrics.associateBy { it.key }

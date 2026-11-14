@@ -33,9 +33,10 @@ import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
 import com.bioscan.fieldterminal.ui.components.RangeBar
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // The current block, moved here from the User tab (UX review P5): Training › Plan is the one place a block is seen,
 // started, edited and deleted. It reads the active training_cycles row, which planned blocks are mirrored into
@@ -82,7 +83,7 @@ internal fun CurrentBlockCard(cycle: TrainingCycle?, currentValue: Double?, onEd
                     value = elapsedDays,
                     max = totalDays,
                     watchBelow = null,
-                    color = FT.Emerald,
+                    color = FT.Ok,
                 )
                 val weeksElapsed = (elapsedDays / 7).toInt() + 1
                 val totalWeeks = (totalDays / 7).toInt()
@@ -122,7 +123,7 @@ internal fun CurrentBlockCard(cycle: TrainingCycle?, currentValue: Double?, onEd
                     value = entry.weight,
                     max = 1.0,
                     watchBelow = null,
-                    color = if (entry.role == FocusRole.Primary) FT.Emerald else FT.Info,
+                    color = if (entry.role == FocusRole.Primary) FT.Ok else FT.Info,
                     height = 6.dp,
                     topPadding = 2.dp,
                 )
@@ -232,9 +233,9 @@ internal fun BlockHistoryCard(
 }
 
 private fun buildBlockDateRange(start: String, end: String): String {
-    val s = runCatching { java.time.LocalDate.parse(start) }.getOrNull() ?: return start
-    val e = runCatching { java.time.LocalDate.parse(end) }.getOrNull() ?: return end
-    val fmt = java.time.format.DateTimeFormatter.ofPattern("MMM d")
+    val s = runCatching { LocalDate.parse(start) }.getOrNull() ?: return start
+    val e = runCatching { LocalDate.parse(end) }.getOrNull() ?: return end
+    val fmt = DateTimeFormatter.ofPattern("MMM d")
     return if (s.year == e.year)
         "${s.format(fmt)} — ${e.format(fmt)}, ${s.year}"
     else

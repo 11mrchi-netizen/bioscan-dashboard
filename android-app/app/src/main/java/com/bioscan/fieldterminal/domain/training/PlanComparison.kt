@@ -7,7 +7,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.doubleOrNull
-import kotlinx.serialization.json.jsonPrimitive
 
 // DAV-346. Reads a planned session's frozen prescription (planned_sessions.prescription) and
 // compares what the lifter logged with it, so a workout's page can say what was planned and

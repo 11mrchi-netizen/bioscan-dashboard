@@ -1,15 +1,17 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.LenientJson
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
+import java.util.Locale
 
-// Phase M1 (Map tab rework). Nominatim (OpenStreetMap's free public
+// Nominatim (OpenStreetMap's free public
 // geocoder) -- same "free tier, no Google billing" choice this app already
 // made for CARTO tiles and Open-Meteo weather, and needs no signup/API key
 // at all. Its usage policy asks for a real identifying User-Agent and caps
@@ -17,7 +19,7 @@ import kotlinx.serialization.json.Json
 // addresses per screen load, on demand, nothing cached/scheduled).
 class GeocodingRepository {
     companion object { private val client = HttpClient(OkHttp) }
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = LenientJson
 
     // Null on no match or any failure, deliberately not a thrown exception --
     // callers fall back to the user's home coordinates rather than dropping
@@ -48,8 +50,8 @@ class GeocodingRepository {
         val response = client.get("https://nominatim.openstreetmap.org/reverse") {
             header("User-Agent", "FieldTerminal/1.0 (personal health app; single user)")
             url {
-                parameters.append("lat", "%.3f".format(java.util.Locale.ROOT, lat))
-                parameters.append("lon", "%.3f".format(java.util.Locale.ROOT, lon))
+                parameters.append("lat", "%.3f".format(Locale.ROOT, lat))
+                parameters.append("lon", "%.3f".format(Locale.ROOT, lon))
                 parameters.append("format", "jsonv2")
                 parameters.append("zoom", "18")
             }
@@ -58,7 +60,7 @@ class GeocodingRepository {
             val r = json.decodeFromString<NominatimReverse>(response.bodyAsText())
             ReversePlace(r.name?.ifBlank { null } ?: r.displayName?.substringBefore(','), r.category, r.type)
         }
-    } catch (e: kotlinx.coroutines.CancellationException) {
+    } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         null

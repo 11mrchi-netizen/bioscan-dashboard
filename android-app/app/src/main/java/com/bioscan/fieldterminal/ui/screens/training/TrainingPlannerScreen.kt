@@ -6,6 +6,7 @@ import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -23,7 +24,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,7 +37,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.ImportFile
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -43,23 +50,25 @@ import com.bioscan.fieldterminal.domain.training.definition.SeModuleDef
 import com.bioscan.fieldterminal.domain.training.definition.StrengthModuleDef
 import com.bioscan.fieldterminal.domain.training.definition.TemplateDef
 import com.bioscan.fieldterminal.domain.training.generate.GeneratedBlock
+import com.bioscan.fieldterminal.domain.training.generate.WeekKind
 import com.bioscan.fieldterminal.domain.training.generate.deriveBlockDomains
 import com.bioscan.fieldterminal.domain.training.generate.isCluster
 import com.bioscan.fieldterminal.domain.training.generate.slotsToChoose
 import com.bioscan.fieldterminal.domain.training.generate.summaryLines
+import com.bioscan.fieldterminal.domain.training.generate.templateModuleKeys
 import com.bioscan.fieldterminal.domain.training.generate.templateVariables
 import com.bioscan.fieldterminal.domain.training.movementKey
 import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTChevron
 import com.bioscan.fieldterminal.ui.components.FTMultiDropdown
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.SubTabChip
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -67,17 +76,22 @@ import java.time.DayOfWeek
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 internal val methodologyLabels = mapOf("tb3" to "TB III", "tb2" to "TB II", "mass" to "MASS", "green" to "GREEN")
 internal fun methodologyOf(key: String) = key.substringBefore('.')
 
-// DAV-345. Block-first setup: pick a program, the modules and dates, the exercises of each
-// cluster, the conditioning sessions, then review the generated block before it is created.
+// DAV-345, re-laid out (owner, Nov 2026). One fixed walk for both routes, each step a page of its own that opens at
+// the top: WHEN (name, start, an event, the length) → PROGRAM (own block: strength + conditioning; or a published
+// program) → THE WEEK → THE WEEKS (own block only) → DETAILS (version options, exercises and maxes, sessions: each a
+// summary that opens in a sheet) → REVIEW (a summary and a compact calendar; EDIT opens a step and comes back).
+// The step bar opens any step already walked; the bottom bar carries NEXT and a one-line summary of the block.
 @Composable
-fun TrainingPlannerScreen(onBack: () -> Unit, onCreated: () -> Unit) {
+fun TrainingPlannerScreen(onBack: () -> Unit, onCreated: () -> Unit, preset: TrainingPlannerState? = null) {
     val scope = rememberCoroutineScope()
-    val state = remember { TrainingPlannerState(TrainingProgramRepository(SupabaseClientProvider.client), scope) }
-    LaunchedEffect(Unit) { state.load() }
+    // [preset]: a state already loaded (the screenshot tests); the app always loads its own.
+    val state = remember { preset ?: TrainingPlannerState(TrainingProgramRepository(SupabaseClientProvider.client), scope) }
+    LaunchedEffect(Unit) { if (preset == null) state.load() }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
         TileHeader(
@@ -86,35 +100,82 @@ fun TrainingPlannerScreen(onBack: () -> Unit, onCreated: () -> Unit) {
             subtitle = "STEP ${state.steps.indexOf(state.step) + 1} OF ${state.steps.size} · ${state.step.label}",
             accent = FT.DomainTraining,
         )
-        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 22.dp)) {
+        if (!state.loading) StepBar(state)
+        // A fresh scroll for each step: a new step opens at its top.
+        val scroll = remember(state.step) { ScrollState(0) }
+        Column(modifier = Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 22.dp)) {
             when {
                 state.loading -> Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = FT.DomainTraining) }
                 else -> when (state.step) {
+                    PlannerStep.When -> WhenStep(state)
                     PlannerStep.Program -> ProgramStep(state)
-                    PlannerStep.Modules -> ModulesStep(state)
-                    PlannerStep.Strength -> StrengthStep(state)
-                    PlannerStep.Protocol -> ProtocolStep(state)
-                    PlannerStep.Layout -> LayoutStep(state)
-                    PlannerStep.Timeline -> TimelineStep(state)
-                    PlannerStep.Exercises -> ExercisesStep(state)
-                    PlannerStep.Conditioning -> ConditioningStep(state)
+                    PlannerStep.Week -> WeekStep(state)
+                    PlannerStep.Weeks -> TimelineStep(state)
+                    PlannerStep.Details -> DetailsStep(state)
                     PlannerStep.Review -> ReviewStep(state)
                 }
             }
-            state.error?.let { Text(it, color = FT.Critical, style = FTType.BodySmall, modifier = Modifier.padding(vertical = 8.dp)) }
+            state.error?.let { Text(it, color = FT.Bad, style = FTType.BodySmall, modifier = Modifier.padding(vertical = 8.dp)) }
             Spacer(Modifier.height(24.dp))
         }
-        if (!state.loading) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                val last = state.step == PlannerStep.Review
-                if (state.steps.indexOf(state.step) > 0) FTButton("BACK", enabled = !state.creating) { state.back() }
-                FTButton(
-                    if (last) (if (state.creating) "CREATING..." else "CREATE BLOCK") else "NEXT",
-                    enabled = state.canContinue() && !state.creating,
-                    emphasis = FTButtonEmphasis.Primary,
-                ) {
-                    if (last) state.create { onCreated() } else state.next()
-                }
+        if (!state.loading) BottomBar(state, onCreated)
+    }
+}
+
+/** The steps as a row: done ones open with a tap, the current one is lit, later ones wait. */
+@Composable
+private fun StepBar(state: TrainingPlannerState) {
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically,
+    ) {
+        state.steps.forEachIndexed { i, s ->
+            val current = s == state.step
+            val reachable = i <= state.furthest
+            val shape = RoundedCornerShape(50)
+            Text(
+                "${i + 1} ${s.label}",
+                style = FTType.Micro,
+                color = when { current -> FT.PlatinumInk; reachable -> FT.TextSecondary; else -> FT.TextMuted.copy(alpha = 0.5f) },
+                modifier = Modifier
+                    .then(if (current) Modifier.background(FT.PlatinumSolid, shape) else Modifier.border(FT.BorderWidth, if (reachable) FT.GlassBorder else FT.GlassBorder.copy(alpha = 0.4f), shape))
+                    .ftClickable(enabled = reachable && !current && !state.creating, shape = shape) { state.goTo(s) }
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+            )
+        }
+    }
+}
+
+/** NEXT (or CREATE, or BACK TO REVIEW) with a one-line summary of the block as it stands. */
+@Composable
+private fun BottomBar(state: TrainingPlannerState, onCreated: () -> Unit) {
+    val block = remember(
+        state.program, state.startDate, state.projectProgression, state.variables.toMap(), state.moduleChoices.toMap(), state.conditioningChoices.toMap(),
+        state.weekdays.toMap(), state.manualMaxes.toMap(), state.strengthKey, state.protocolKey, state.layout, state.timeline,
+    ) { runCatching { state.generate() }.getOrNull() }
+    Column(Modifier.fillMaxWidth().background(FT.Surface).padding(horizontal = 22.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        val days = (block?.sessions?.groupBy { it.weekIndex }?.values?.map { w -> w.map { it.date }.distinct().size }?.maxOrNull())
+        val end = block?.endDate ?: state.startDate.plusWeeks(state.weeks.toLong()).minusDays(1)
+        val weeks = block?.calendarWeeks ?: state.weeks
+        Text(
+            listOfNotNull("$weeks weeks", days?.let { "$it days a week" }, "${state.startDate.format(DateTimeFormatter.ofPattern("d MMM"))} → ${end.format(DateTimeFormatter.ofPattern("d MMM"))}")
+                .joinToString(" · "),
+            style = FTType.MonoCaption, color = FT.TextSecondary,
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            val last = state.step == PlannerStep.Review
+            if (state.steps.indexOf(state.step) > 0 && !state.editingFromReview) FTButton("BACK", enabled = !state.creating) { state.back() }
+            FTButton(
+                when {
+                    last -> if (state.creating) "CREATING..." else "CREATE BLOCK"
+                    state.editingFromReview -> "BACK TO REVIEW"
+                    else -> "NEXT"
+                },
+                enabled = state.canContinue() && !state.creating,
+                emphasis = FTButtonEmphasis.Primary,
+                modifier = Modifier.weight(1f),
+            ) {
+                if (last) state.create { onCreated() } else state.next()
             }
         }
     }
@@ -133,35 +194,167 @@ internal fun Chips(options: List<String>, selected: Set<String>, label: (String)
     }
 }
 
-// ---------------- Step 1: how to start ----------------
+// ---------------- 1 · WHEN ----------------
+@Composable
+private fun WhenStep(state: TrainingPlannerState) {
+    Label("NAME")
+    FieldTextField(state.name, { state.name = it }, state.targetEvent?.let { "Toward ${it.name}" } ?: "e.g. Base block, winter")
+    Label("START DATE")
+    DateField("Start", state.startDate) { state.changeStart(it) }
+    if (state.program is Program.Fixed) {
+        Body("A published program sets its own length.", muted = true)
+    } else {
+        FrameFields(state)
+    }
+}
+
+// ---------------- 2 · PROGRAM ----------------
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProgramStep(state: TrainingPlannerState) {
-    val templates = state.catalog?.definitions.orEmpty().filterIsInstance<TemplateDef>()
-    var showPublished by remember { mutableStateOf(state.program is Program.Fixed) }
-    var method by remember { mutableStateOf("all") }
-    // UX review P5: the program library is imported here, where it is used (it was in Setup).
+    var library by remember { mutableStateOf(false) }
+    var published by remember { mutableStateOf(false) }
     if (state.catalog?.definitions.isNullOrEmpty()) {
         ImportCard(state)
         return
     }
-    Label("HOW DO YOU WANT TO START?")
-    ProgramCard(
-        "Build a block", "pick a strength template and a conditioning template, then decide how they share the week",
-        "You choose the days, the length and the deload weeks.", state.program is Program.Build,
-    ) { state.choose(Program.Build); showPublished = false }
-    ProgramCard(
-        "Start from a published program", "${templates.size} fixed week-by-day programs (Capacity, Velocity, Outcome, Activation, Hybrid...)",
-        "These come as one piece: strength and conditioning are already placed.", showPublished || state.program is Program.Fixed,
-    ) { showPublished = true }
-    if (showPublished || state.program is Program.Fixed) {
-        val methods = listOf("all") + templates.map { methodologyOf(it.key) }.distinct().sorted()
-        Chips(methods, setOf(method), { methodologyLabels[it] ?: it.uppercase() }) { method = it }
-        val selectedKey = state.program?.key
-        templates.filter { method == "all" || methodologyOf(it.key) == method }.sortedBy { it.title }.forEach { t ->
-            ProgramCard(t.title, "${t.weeks} weeks · ${t.domains.joinToString(", ") { it.replace('_', ' ') }}", t.notes.firstOrNull(), t.key == selectedKey) { state.choose(Program.Fixed(t)) }
+    when (val p = state.program) {
+        is Program.Fixed -> {
+            ProgramCard(p.template.title, "${p.template.weeks} weeks · published program", "Tap to pick another published program", true) { published = true }
+            FixedModules(state, p)
+            ProgramCard("Build my own block instead", "pick a strength and a conditioning program", null, false) { state.choose(Program.Build) }
+        }
+        else -> {
+            StrengthStep(state)
+            ProtocolStep(state)
+            Spacer(Modifier.height(8.dp))
+            ProgramCard("Start from a published program instead", "fixed week-by-day programs, strength and conditioning already placed", null, false) { published = true }
         }
     }
-    ImportCard(state)
+    Text(
+        "PROGRAM LIBRARY ›", style = FTType.LabelCaps, color = FT.TextSecondary,
+        modifier = Modifier.padding(top = 16.dp).ftClickable { library = true }.padding(vertical = 6.dp),
+    )
+    if (published) PublishedPicker(state) { published = false }
+    if (library) PlannerSheet("PROGRAM LIBRARY", { library = false }) { ImportCard(state) }
+}
+
+/** The published programs, in a sheet: filter by method, tap one to use it. */
+@Composable
+private fun PublishedPicker(state: TrainingPlannerState, onDone: () -> Unit) {
+    val templates = state.catalog?.definitions.orEmpty().filterIsInstance<TemplateDef>()
+    var method by remember { mutableStateOf("all") }
+    PlannerSheet("PUBLISHED PROGRAMS", onDone) {
+        val methods = listOf("all") + templates.map { methodologyOf(it.key) }.distinct().sorted()
+        Chips(methods, setOf(method), { methodologyLabels[it] ?: it.uppercase() }) { method = it }
+        templates.filter { method == "all" || methodologyOf(it.key) == method }.sortedBy { it.title }.forEach { t ->
+            ProgramCard(t.title, "${t.weeks} weeks · ${t.domains.joinToString(", ") { it.replace('_', ' ') }}", t.notes.firstOrNull(), t.key == state.program?.key) {
+                state.choose(Program.Fixed(t)); onDone()
+            }
+        }
+    }
+}
+
+/** A published program's own strength choices (which template fills each slot). */
+@Composable
+private fun FixedModules(state: TrainingPlannerState, p: Program.Fixed) {
+    val idx = state.index ?: return
+    val vars = templateVariables(p.template).filter { it.kind == "strength_module" }
+    vars.forEach { v ->
+        Label("${v.name} — STRENGTH TEMPLATE")
+        v.note?.let { Body(it, muted = true) }
+        Chips(v.options, setOfNotNull(state.variables[v.name]), { idx.strength(it)?.title ?: it }) { state.variables[v.name] = it }
+    }
+}
+
+/** A sheet with a title, scrolling content and DONE. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun PlannerSheet(title: String, onDone: () -> Unit, content: @Composable () -> Unit) {
+    ModalBottomSheet(
+        onDismissRequest = onDone,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        shape = FT.SheetShape, containerColor = FT.Surface, contentColor = FT.TextPrimary,
+    ) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
+            Text(title, style = FTType.SectionTitle, color = FT.TextPrimary)
+            content()
+            FTButton("DONE", modifier = Modifier.fillMaxWidth().padding(top = 16.dp), emphasis = FTButtonEmphasis.Primary, onClick = onDone)
+        }
+    }
+}
+
+// ---------------- 3 · THE WEEK ----------------
+@Composable
+private fun WeekStep(state: TrainingPlannerState) {
+    when (state.program) {
+        is Program.Fixed -> {
+            Label("TRAINING DAYS")
+            Body("Each day of the program's week lands on the weekday you choose.", muted = true)
+            state.dayPositions.forEach { pos ->
+                Text("DAY $pos", color = FT.TextSecondary, style = FTType.MonoCaption, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+                Chips(DayOfWeek.entries.map { it.name }, setOf(state.weekdayFor(pos).name), { DayOfWeek.valueOf(it).getDisplayName(TextStyle.SHORT, Locale.ENGLISH).uppercase() }) { state.weekdays[pos] = DayOfWeek.valueOf(it) }
+            }
+        }
+        else -> {
+            Label("THE WEEK")
+            LayoutStep(state)
+        }
+    }
+}
+
+// ---------------- 5 · DETAILS ----------------
+@Composable
+private fun DetailsStep(state: TrainingPlannerState) {
+    var open by remember { mutableStateOf<String?>(null) }
+    Body("Everything here starts from the program's defaults. Open what you want to change.", muted = true)
+    val modules = state.strengthModules
+    modules.filter { it.variants.size > 1 || it.blockLengths.size > 1 || it.options.isNotEmpty() }.forEach { m ->
+        val c = state.choiceFor(m.key)
+        val variant = m.variants.firstOrNull { it.key == c.variant } ?: m.variants.first()
+        DetailRow("VERSION OPTIONS · ${m.title.uppercase()}", "${variant.title.take(40)} · blocks of ${state.blockLength()} weeks") { open = "options:${m.key}" }
+    }
+    if (modules.isNotEmpty() || (state.program as? Program.Fixed) != null) {
+        val missing = state.missingMaxes()
+        DetailRow(
+            "EXERCISES AND MAXES",
+            if (missing.isEmpty()) "defaults from the book · every max known" else "defaults from the book · ${missing.size} max${if (missing.size == 1) "" else "es"} missing",
+            warn = missing.isNotEmpty(),
+        ) { open = "exercises" }
+    }
+    val hasConditioning = state.protocol != null || (state.program as? Program.Fixed)?.let { p -> templateVariables(p.template).any { it.kind != "strength_module" } } == true
+    if (hasConditioning) {
+        val chosen = state.conditioningChoices.values.sumOf { it.size } + state.variables.count { (k, _) -> (state.program as? Program.Fixed)?.let { p -> templateVariables(p.template).any { it.name == k && it.kind != "strength_module" } } == true }
+        DetailRow("CONDITIONING SESSIONS", if (chosen == 0) "the program's own sessions" else "$chosen chosen") { open = "sessions" }
+    }
+    if (modules.isNotEmpty()) {
+        DetailRow("PROGRESSION", if (state.projectProgression) "project max increases between blocks" else "use today's maxes throughout") { open = "progression" }
+    }
+    when (val o = open) {
+        null -> Unit
+        "exercises" -> PlannerSheet("EXERCISES AND MAXES", { open = null }) { ExercisesStep(state) }
+        "sessions" -> PlannerSheet("CONDITIONING SESSIONS", { open = null }) { ConditioningStep(state) }
+        "progression" -> PlannerSheet("PROGRESSION", { open = null }) {
+            Chips(listOf("project", "hold"), setOf(if (state.projectProgression) "project" else "hold"), { if (it == "project") "PROJECT MAX INCREASES" else "USE TODAY'S MAXES" }) { state.projectProgression = it == "project" }
+        }
+        else -> modules.firstOrNull { "options:${it.key}" == o }?.let { m -> PlannerSheet(m.title.uppercase(), { open = null }) { ModuleOptions(state, m) } }
+    }
+}
+
+@Composable
+private fun DetailRow(title: String, summary: String, warn: Boolean = false, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(FT.RadiusModule)
+    Row(
+        Modifier.padding(top = 10.dp).fillMaxWidth().border(BorderStroke(FT.BorderWidth, FT.GlassBorder), shape).background(FT.Glass, shape)
+            .ftClickable(shape = shape, onClick = onClick).padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, color = FT.TextPrimary, style = FTType.RowTitle)
+            Text(summary, color = if (warn) FT.Warn else FT.TextSecondary, style = FTType.MonoCaption)
+        }
+        FTChevron(tint = FT.TextSecondary)
+    }
 }
 
 @Composable
@@ -217,38 +410,6 @@ private fun readJsonFiles(context: Context, tree: Uri): List<ImportFile> {
     return out
 }
 
-// ---------------- Step 2: modules and dates ----------------
-@Composable
-private fun ModulesStep(state: TrainingPlannerState) {
-    val idx = state.index ?: return
-    val p = state.program ?: run { Body("Pick a program first.", muted = true); return }
-    Label("NAME")
-    FieldTextField(state.name, { state.name = it }, "Block name")
-    when (p) {
-        is Program.Fixed -> {
-            val vars = templateVariables(p.template).filter { it.kind == "strength_module" }
-            if (vars.isEmpty()) Body("This program fixes its strength work.", muted = true)
-            vars.forEach { v ->
-                Label("${v.name} — STRENGTH TEMPLATE")
-                v.note?.let { Body(it, muted = true) }
-                Chips(v.options, setOfNotNull(state.variables[v.name]), { idx.strength(it)?.title ?: it }) { state.variables[v.name] = it }
-            }
-            state.strengthModules.forEach { m -> ModuleOptions(state, m) }
-        }
-        is Program.Build -> Unit
-    }
-    Label("START DATE")
-    DateField("Start", state.startDate) { state.startDate = it }
-    Label("TRAINING DAYS")
-    Body("Each day of the programme's week lands on the weekday you choose.", muted = true)
-    state.dayPositions.forEach { pos ->
-        Text("DAY $pos", color = FT.TextSecondary, style = FTType.MonoCaption, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
-        Chips(DayOfWeek.entries.map { it.name }, setOf(state.weekdayFor(pos).name), { DayOfWeek.valueOf(it).getDisplayName(TextStyle.SHORT, Locale.ENGLISH).uppercase() }) { state.weekdays[pos] = DayOfWeek.valueOf(it) }
-    }
-    Label("PROGRESSION")
-    Chips(listOf("project", "hold"), setOf(if (state.projectProgression) "project" else "hold"), { if (it == "project") "PROJECT MAX INCREASES" else "USE TODAY'S MAXES" }) { state.projectProgression = it == "project" }
-}
-
 @Composable
 internal fun ModuleOptions(state: TrainingPlannerState, m: StrengthModuleDef) {
     Label("${m.title.uppercase()} — OPTIONS")
@@ -269,7 +430,7 @@ internal fun ModuleOptions(state: TrainingPlannerState, m: StrengthModuleDef) {
 @Composable
 internal fun ExercisesStep(state: TrainingPlannerState) {
     val mods = state.strengthModules
-    val ses = (state.index?.let { idx -> (state.program as? Program.Fixed)?.template?.let { t -> com.bioscan.fieldterminal.domain.training.generate.templateModuleKeys(t, state.variables).mapNotNull { idx.se(it) } } }).orEmpty()
+    val ses = (state.index?.let { idx -> (state.program as? Program.Fixed)?.template?.let { t -> templateModuleKeys(t, state.variables).mapNotNull { idx.se(it) } } }).orEmpty()
     if (mods.isEmpty() && ses.isEmpty()) { Body("No strength work in this program.", muted = true); return }
     mods.forEach { m ->
         FTCard(title = m.title.uppercase(), modifier = Modifier.padding(top = 12.dp)) {
@@ -298,7 +459,10 @@ internal fun ExercisesStep(state: TrainingPlannerState) {
                     val current = chosen.firstOrNull() ?: slot.standard
                     Chips(options, setOf(current)) { n -> state.updateChoice(m.key) { c -> c.copy(exercises = c.exercises + (slot.id to listOf(n))) } }
                     var custom by remember(m.key, slot.id) { mutableStateOf("") }
-                    FieldTextField(custom, { custom = it; if (it.isNotBlank()) state.updateChoice(m.key) { c -> c.copy(exercises = c.exercises + (slot.id to listOf(it.trim()))) } }, "Or type another exercise")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.weight(1f)) { FieldTextField(custom, { custom = it }, "Or type another exercise") }
+                        FTButton("USE", enabled = custom.isNotBlank()) { state.updateChoice(m.key) { c -> c.copy(exercises = c.exercises + (slot.id to listOf(custom.trim()))) }; custom = "" }
+                    }
                     MaxRow(state, chosen.firstOrNull() ?: slot.standard)
                 }
             }
@@ -333,12 +497,12 @@ private fun MaxRow(state: TrainingPlannerState, exercise: String) {
         Column(Modifier.weight(1f)) {
             Text(
                 if (kg != null) "MAX ${"%.1f".format(kg)} kg" else "NO MAX YET",
-                color = if (kg != null) FT.TextPrimary else FT.Warning, style = FTType.Value,
+                color = if (kg != null) FT.TextPrimary else FT.Warn, style = FTType.Value,
             )
             Text(if (manual != null) "entered here" else resolved?.basedOn ?: "enter a tested or estimated max", color = FT.TextMuted, style = FTType.Caption)
         }
         Box(Modifier.width(110.dp)) {
-            FieldTextField(text, { text = it; it.toDoubleOrNull()?.takeIf { v -> v > 0 }?.let { v -> state.manualMaxes[key] = v } ?: state.manualMaxes.remove(key) }, "kg", keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal)
+            FieldTextField(text, { text = it; it.toDoubleOrNull()?.takeIf { v -> v > 0 }?.let { v -> state.manualMaxes[key] = v } ?: state.manualMaxes.remove(key) }, "kg", keyboardType = KeyboardType.Decimal)
         }
     }
 }
@@ -379,21 +543,33 @@ internal fun ConditioningStep(state: TrainingPlannerState) {
     }
 }
 
-// ---------------- Step 5: review ----------------
+// ---------------- 6 · REVIEW ----------------
 @Composable
 private fun ReviewStep(state: TrainingPlannerState) {
     val block: GeneratedBlock? = remember(state.step, state.program, state.startDate, state.projectProgression, state.variables.toMap(), state.moduleChoices.toMap(), state.conditioningChoices.toMap(), state.weekdays.toMap(), state.manualMaxes.toMap(), state.strengthKey, state.protocolKey, state.layout, state.timeline) { state.generate() }
     if (block == null) { Body("Nothing to review yet.", muted = true); return }
+    val fmt = DateTimeFormatter.ofPattern("d MMM yyyy")
     FTCard(title = state.name.uppercase().ifBlank { "BLOCK" }, modifier = Modifier.padding(top = 8.dp)) {
-        Body("${block.calendarWeeks} calendar weeks (${block.countedWeeks} counted) · ${block.sessions.size} sessions", muted = true)
-        Body("${state.startDate.format(DateTimeFormatter.ofPattern("d MMM yyyy"))} to ${block.endDate.format(DateTimeFormatter.ofPattern("d MMM yyyy"))}", muted = true)
-        val domains = deriveBlockDomains(block.sessions)
-        if (domains.isNotEmpty()) Body(domains.joinToString(" · ") { "${it.domain.replace('_', ' ')} (${it.role})" }, muted = true)
+        ReviewLine("WHEN", "${state.startDate.format(fmt)} → ${block.endDate.format(fmt)} · ${block.calendarWeeks} weeks (${block.countedWeeks} counted)" +
+            (state.targetEvent?.let { " · toward ${it.name}" } ?: "")) { state.editFromReview(PlannerStep.When) }
+        ReviewLine("PROGRAM", when (val p = state.program) {
+            is Program.Fixed -> p.template.title
+            else -> listOfNotNull(state.strengthModule?.title, state.protocol?.title).joinToString(" + ").ifBlank { "—" }
+        }) { state.editFromReview(PlannerStep.Program) }
+        ReviewLine("THE WEEK", "${block.sessions.size} sessions · " + deriveBlockDomains(block.sessions).joinToString(" · ") { it.domain.replace('_', ' ') }) { state.editFromReview(PlannerStep.Week) }
+        if (state.program !is Program.Fixed) {
+            val t = state.timeline
+            ReviewLine("THE WEEKS", "${t.count { it == com.bioscan.fieldterminal.domain.training.generate.WeekKind.Deload }} deload · ${t.count { it == com.bioscan.fieldterminal.domain.training.generate.WeekKind.Test }} test") { state.editFromReview(PlannerStep.Weeks) }
+        }
+        val missing = state.missingMaxes()
+        ReviewLine("DETAILS", if (missing.isEmpty()) "defaults, every max known" else "${missing.size} max${if (missing.size == 1) "" else "es"} missing", warn = missing.isNotEmpty()) { state.editFromReview(PlannerStep.Details) }
     }
-    if (state.program is Program.Build) AdjustSections(state)
+    FTCard(title = "CALENDAR", modifier = Modifier.padding(top = 12.dp)) {
+        CompactCalendar(state, block)
+    }
     if (block.warnings.isNotEmpty()) {
         FTCard(title = "NEEDS ATTENTION", modifier = Modifier.padding(top = 12.dp)) {
-            block.warnings.take(12).forEach { Text("! $it", color = FT.Warning, style = FTType.Caption) }
+            block.warnings.take(12).forEach { Text("! $it", color = FT.Warn, style = FTType.Caption) }
             if (block.warnings.size > 12) Body("and ${block.warnings.size - 12} more", muted = true)
         }
     }
@@ -405,59 +581,80 @@ private fun ReviewStep(state: TrainingPlannerState) {
             Body("Projections only: confirm each increase when its block ends.", muted = true)
         }
     }
-    block.sessions.groupBy { it.weekIndex }.forEach { (week, list) ->
-        val first = list.first()
-        FTCard(title = "WEEK $week" + if (!first.countsTowardBlock) " · DELOAD (NOT COUNTED)" else "", modifier = Modifier.padding(top = 12.dp)) {
+}
+
+@Composable
+private fun ReviewLine(label: String, value: String, warn: Boolean = false, onEdit: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(label, color = FT.TextMuted, style = FTType.Micro)
+            Text(value, color = if (warn) FT.Warn else FT.TextPrimary, style = FTType.BodySmall)
+        }
+        Text("EDIT", color = FT.TextSecondary, style = FTType.LabelCaps, modifier = Modifier.ftClickable(onClick = onEdit).padding(8.dp))
+    }
+}
+
+/**
+ * The block as a grid: a row per week, a cell per day from the start weekday. A cell shows S (strength) and its
+ * conditioning kind; a deload week is dimmed and marked D, a test week T. Tap a week for its sessions.
+ */
+@Composable
+private fun CompactCalendar(state: TrainingPlannerState, block: GeneratedBlock) {
+    var openWeek by remember { mutableStateOf<Int?>(null) }
+    val start = state.startDate
+    val days = (0 until 7).map { start.plusDays(it.toLong()).dayOfWeek }
+    Row(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
+        Spacer(Modifier.width(34.dp))
+        days.forEach { d -> Text(d.getDisplayName(TextStyle.NARROW, Locale.ENGLISH), style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.Center) }
+    }
+    val byWeek = block.sessions.groupBy { it.weekIndex }
+    val kinds = state.timeline
+    (1..block.calendarWeeks).forEach { w ->
+        val list = byWeek[w].orEmpty()
+        val kind = kinds.getOrNull(w - 1)
+        val deload = list.firstOrNull()?.countsTowardBlock == false || kind == WeekKind.Deload
+        val test = kind == WeekKind.Test
+        val weekStart = start.plusWeeks((w - 1).toLong())
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 2.dp).ftClickable(enabled = list.isNotEmpty()) { openWeek = w },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("$w" + if (deload) " D" else if (test) " T" else "", style = FTType.Micro, color = if (deload) FT.Warn else if (test) FT.Info else FT.TextSecondary, modifier = Modifier.width(34.dp))
+            (0 until 7).forEach { di ->
+                val date = weekStart.plusDays(di.toLong())
+                val here = list.filter { it.date == date }
+                val strength = here.any { it.conditioning == null }
+                val cond = here.mapNotNull { it.conditioning?.category }.firstOrNull()
+                val shape = RoundedCornerShape(4.dp)
+                Box(
+                    Modifier.weight(1f).padding(1.5.dp).height(26.dp)
+                        .background(if (here.isEmpty()) Color.Transparent else FT.GlassFill, shape)
+                        .border(FT.BorderWidth, FT.GlassBorder, shape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val alpha = if (deload) 0.5f else 1f
+                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (strength) Text("S", style = FTType.Micro, color = FT.DomainTraining.copy(alpha = alpha))
+                        if (cond != null) Text(cond.take(1).uppercase(), style = FTType.Micro, color = FT.DomainHeart.copy(alpha = alpha))
+                        else if (here.any { it.conditioning != null }) Text("C", style = FTType.Micro, color = FT.DomainHeart.copy(alpha = alpha))
+                    }
+                }
+            }
+        }
+    }
+    Text("S strength · L/H/W low, high intensity, work capacity · D deload · T test · tap a week to see it", style = FTType.Caption, color = FT.TextMuted, modifier = Modifier.padding(top = 6.dp))
+    openWeek?.let { w ->
+        val list = byWeek[w].orEmpty()
+        PlannerSheet("WEEK $w" + if (list.firstOrNull()?.countsTowardBlock == false) " · DELOAD (NOT COUNTED)" else "", { openWeek = null }) {
             list.forEach { s ->
                 Text(
                     s.date.format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)).uppercase() + (s.startTime?.let { " · $it" } ?: "") + if (s.slotInDay > 1) " · 2ND SESSION" else "",
-                    color = FT.DomainTraining, style = FTType.MonoCaption, modifier = Modifier.padding(top = 8.dp),
+                    color = FT.DomainTraining, style = FTType.MonoCaption, modifier = Modifier.padding(top = 10.dp),
                 )
                 Text(s.title, color = FT.TextPrimary, style = FTType.RowTitle)
                 s.summaryLines().forEach { Text(it, color = FT.TextSecondary, style = FTType.MonoCaption) }
                 s.notes.firstOrNull()?.let { Text(it.take(140), color = FT.TextMuted, style = FTType.Caption) }
             }
         }
-    }
-}
-
-// ---------------- Fine-tuning, after the defaults ----------------
-@Composable
-private fun AdjustSections(state: TrainingPlannerState) {
-    val start = state.startDate.dayOfWeek
-    val week = state.layout.sortedBy { (it.weekday.value - start.value + 7) % 7 }.filter { !it.isRest }.joinToString(" · ") { d ->
-        d.weekday.getDisplayName(TextStyle.SHORT, Locale.ENGLISH) + " " + listOfNotNull(d.strengthSession?.let { "S${it + 1}" }, d.conditioning?.kind?.uppercase()).joinToString("+")
-    }
-    Label("FINE-TUNE (OPTIONAL)")
-    Body("The block below uses sensible defaults. Open a section to change it.", muted = true)
-    Section(state, "details", "NAME AND START", "${state.name} · from ${state.startDate.format(DateTimeFormatter.ofPattern("d MMM"))}") {
-        FieldTextField(state.name, { state.name = it }, "Block name")
-        DateField("Start", state.startDate) { state.startDate = it; state.resetLayout() }
-        Body("Moving the start date to another weekday re-suggests the week.", muted = true)
-    }
-    Section(state, "week", "THE WEEK", week.ifEmpty { "no days placed" }) { LayoutStep(state) }
-    Section(state, "timeline", "LENGTH AND DELOADS", "${state.timeline.size} weeks · ${state.timeline.count { it == com.bioscan.fieldterminal.domain.training.generate.WeekKind.Deload }} deload") { TimelineStep(state) }
-    state.strengthModule?.let { m ->
-        Section(state, "options", "VERSION OPTIONS", "${m.title}") { ModuleOptions(state, m) }
-        Section(state, "exercises", "EXERCISES AND MAXES", "defaults from the book") { ExercisesStep(state) }
-    }
-    if (state.protocol != null) Section(state, "sessions", "CONDITIONING SESSIONS", "${state.conditioningChoices.values.sumOf { it.size }} chosen, otherwise the protocol's own") { ConditioningStep(state) }
-}
-
-@Composable
-private fun Section(state: TrainingPlannerState, id: String, title: String, summary: String, content: @Composable () -> Unit) {
-    val open = state.openSection == id
-    val shape = RoundedCornerShape(FT.RadiusModule)
-    Column(
-        Modifier.padding(top = 10.dp).fillMaxWidth().border(BorderStroke(FT.BorderWidth, if (open) FT.DomainTraining else FT.GlassBorder), shape).background(FT.Glass, shape).padding(14.dp),
-    ) {
-        Row(Modifier.fillMaxWidth().ftClickable(shape = shape) { state.openSection = if (open) null else id }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            Column(Modifier.weight(1f)) {
-                Text(title, color = FT.TextPrimary, style = FTType.RowTitle)
-                Text(summary.take(90), color = FT.TextSecondary, style = FTType.MonoCaption)
-            }
-            Text(if (open) "^" else "v", color = FT.TextSecondary, style = FTType.Value)
-        }
-        if (open) content()
     }
 }

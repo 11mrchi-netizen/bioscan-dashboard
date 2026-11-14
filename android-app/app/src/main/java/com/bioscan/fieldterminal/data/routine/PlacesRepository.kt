@@ -3,40 +3,43 @@ package com.bioscan.fieldterminal.data.routine
 import android.content.Context
 import com.bioscan.fieldterminal.data.GeocodingRepository
 import com.bioscan.fieldterminal.data.MapSettingsStore
+import com.bioscan.fieldterminal.data.ReadCache
 import com.bioscan.fieldterminal.data.WeatherRepository
 import com.bioscan.fieldterminal.data.keysetPagesDescending
-import com.bioscan.fieldterminal.data.orNullUnlessCancelled
+import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.domain.routine.DayVisit
 import com.bioscan.fieldterminal.domain.routine.Fix
 import com.bioscan.fieldterminal.domain.routine.Place
 import com.bioscan.fieldterminal.domain.routine.PlaceCategory
 import com.bioscan.fieldterminal.domain.routine.PlaceRowLike
-import com.bioscan.fieldterminal.domain.routine.VisitAtPlace
-import com.bioscan.fieldterminal.domain.routine.claimForManualPlace
 import com.bioscan.fieldterminal.domain.routine.PlaceVisitTime
-import com.bioscan.fieldterminal.domain.routine.PlacedPoint
 import com.bioscan.fieldterminal.domain.routine.Stay
+import com.bioscan.fieldterminal.domain.routine.TimelineVisit
 import com.bioscan.fieldterminal.domain.routine.TransitionEvent
 import com.bioscan.fieldterminal.domain.routine.Trip
 import com.bioscan.fieldterminal.domain.routine.TripLeg
 import com.bioscan.fieldterminal.domain.routine.TripVisit
+import com.bioscan.fieldterminal.domain.routine.VisitAtPlace
 import com.bioscan.fieldterminal.domain.routine.assignStaysToPlaces
 import com.bioscan.fieldterminal.domain.routine.categoryFromOsm
+import com.bioscan.fieldterminal.domain.routine.claimForManualPlace
 import com.bioscan.fieldterminal.domain.routine.commuteFlagChanges
 import com.bioscan.fieldterminal.domain.routine.hourlyPlaceVector
 import com.bioscan.fieldterminal.domain.routine.isCommute
 import com.bioscan.fieldterminal.domain.routine.mobilityDay
 import com.bioscan.fieldterminal.domain.routine.suggestWorkPlace
 import com.bioscan.fieldterminal.domain.routine.tripsBetween
-import com.bioscan.fieldterminal.domain.routine.visitsForNewPlace
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
+import io.github.jan.supabase.postgrest.query.filter.FilterOperator
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import java.time.Instant
 import java.time.LocalDate
+import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.util.UUID
 
@@ -54,8 +57,13 @@ data class PlaceRow(
     @SerialName("osm_name") val osmName: String? = null,
     @SerialName("osm_category") val osmCategory: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("stop_since") val stopSince: String? = null,
 ) : PlaceRowLike {
-    fun toPlace() = Place(id, lat, lon, radiusM, label, PlaceCategory.of(category))
+    fun toPlace() = Place(
+        id, lat, lon, radiusM, label, PlaceCategory.of(category),
+        stopSince?.let { runCatching { OffsetDateTime.parse(it).toInstant().toEpochMilli() }.getOrNull() },
+    )
+    val isStop: Boolean get() = stopSince != null
 }
 
 @Serializable
@@ -99,7 +107,7 @@ private data class DayFixRow(
 
 // One day of what was recorded, for the day map.
 data class DayRecord(
-    val visits: List<com.bioscan.fieldterminal.domain.routine.TimelineVisit>,
+    val visits: List<TimelineVisit>,
     val trips: List<Trip>,
     val storedCommute: Set<Long>,
     val fixes: List<DayFix>,
@@ -186,6 +194,9 @@ private data class DailyContextWeatherRow(
 private data class PlaceLabelUpdate(val label: String?, val category: String?, @SerialName("updated_at") val updatedAt: String)
 
 @Serializable
+private data class PlaceStopUpdate(@SerialName("stop_since") val stopSince: String?)
+
+@Serializable
 private data class PlaceOsmUpdate(
     @SerialName("osm_name") val osmName: String?,
     @SerialName("osm_category") val osmCategory: String?,
@@ -203,11 +214,11 @@ class PlacesRepository(private val supabase: SupabaseClient) {
     // only: what writes (stays, trips, mobility, commute flags, added places) reads fetchLoadPlaces, because a cold worker
     // would otherwise get the disk copy, which can predate a label changed elsewhere and undo it.
     suspend fun loadPlaces(): List<PlaceRow> =
-        com.bioscan.fieldterminal.data.ReadCache.get("routine.places", tables = null, serializer = kotlinx.serialization.builtins.ListSerializer(PlaceRow.serializer())) { fetchLoadPlaces() }
+        ReadCache.get("routine.places", tables = null, serializer = ListSerializer(PlaceRow.serializer())) { fetchLoadPlaces() }
 
     private suspend fun fetchLoadPlaces(): List<PlaceRow> =
         supabase.postgrest.from("places")
-            .select(columns = Columns.list("id,lat,lon,radius_m,label,category,source,osm_name,osm_category,created_at"))
+            .select(columns = Columns.list("id,lat,lon,radius_m,label,category,source,osm_name,osm_category,created_at,stop_since"))
             .decodeList<PlaceRow>()
 
     // Each stay's place, creating places for stays no known place holds. Setup's home location becomes the Home place the
@@ -313,7 +324,7 @@ class PlacesRepository(private val supabase: SupabaseClient) {
     // those two columns as they were.
     private suspend fun recordDayContext(date: LocalDate, zone: ZoneId, at: Pair<Double, Double>?, daylightHours: Double?) {
         val hours = at?.let { (lat, lon) ->
-            orNullUnlessCancelled {
+            softLoad {
                 WeatherRepository().fetchHourly(lat, lon, date.atStartOfDay(zone), date.atTime(23, 0).atZone(zone)).hours
             }
         }.orEmpty()
@@ -342,7 +353,7 @@ class PlacesRepository(private val supabase: SupabaseClient) {
     suspend fun lookUpSuggestions(max: Int = 3) {
         val pending = supabase.postgrest.from("places")
             .select(columns = Columns.list("id,lat,lon")) {
-                filter { filter("osm_checked_at", io.github.jan.supabase.postgrest.query.filter.FilterOperator.IS, "null") }
+                filter { filter("osm_checked_at", FilterOperator.IS, "null") }
                 limit(max.toLong())
             }
             .decodeList<PlaceRow>()
@@ -356,10 +367,20 @@ class PlacesRepository(private val supabase: SupabaseClient) {
     }
 
     // A new label or category can make trips commutes or stop them being ones: the stored flags follow.
-    suspend fun saveLabel(id: String, label: String?, category: PlaceCategory?) {
+    /**
+     * Names a place. [stop]: true marks it a one-off stop from now (kept from when it was first marked), false a place
+     * visited again; null leaves it as it is.
+     */
+    suspend fun saveLabel(id: String, label: String?, category: PlaceCategory?, stop: Boolean? = null) {
         supabase.postgrest.from("places").update(
             PlaceLabelUpdate(label?.trim()?.ifBlank { null }, category?.key, Instant.now().toString()),
         ) { filter { eq("id", id) } }
+        if (stop != null) {
+            val current = fetchLoadPlaces().firstOrNull { it.id == id }
+            if (stop != (current?.isStop == true)) {
+                supabase.postgrest.from("places").update(PlaceStopUpdate(if (stop) Instant.now().toString() else null)) { filter { eq("id", id) } }
+            }
+        }
         recomputeCommuteFlags()
     }
 
@@ -461,7 +482,7 @@ class PlacesRepository(private val supabase: SupabaseClient) {
             .mapNotNull { v ->
                 val s = ms(v.startAt) ?: return@mapNotNull null
                 val e = ms(v.endAt) ?: return@mapNotNull null
-                com.bioscan.fieldterminal.domain.routine.TimelineVisit(s, e, v.lat, v.lon, v.placeId)
+                TimelineVisit(s, e, v.lat, v.lon, v.placeId)
             }
         val tripRows = supabase.postgrest.from("trips")
             .select(columns = Columns.list("start_at,end_at,from_place_id,to_place_id,distance_km,legs,active_min,is_commute")) {
@@ -563,10 +584,12 @@ class PlacesRepository(private val supabase: SupabaseClient) {
         supabase.postgrest.from("trips")
             .select(columns = Columns.list("start_at,end_at,from_place_id,to_place_id,distance_km,legs,active_min,is_commute")) {
                 filter { gte("start_at", since.toString()) }
-                order("start_at", Order.ASCENDING)
+                // Newest first, so a cap keeps the latest trips (an oldest-first cap dropped the recent days); oldest first again below.
+                order("start_at", Order.DESCENDING)
                 limit(1000)
             }
             .decodeList<TripRow>()
+            .reversed()
             .mapNotNull { it.toTrip() }
 
     // DELETE ALL in Setup's LOCATIONS card also removes what R3 derived.

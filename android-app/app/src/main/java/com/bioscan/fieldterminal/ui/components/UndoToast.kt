@@ -1,6 +1,8 @@
 package com.bioscan.fieldterminal.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -23,8 +25,8 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -32,6 +34,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // One toast at a time above the dock, for two things:
 //   * UNDO: a delete is held for [UNDO_WINDOW_MS] before it reaches the server. UNDO cancels it; the screen already
@@ -59,7 +62,7 @@ object Toasts {
         flush()
         val id = ++nextId
         pending = id to {
-            runCatching { commit() }.onFailure { e ->
+            catching { commit() }.onFailure { e ->
                 onFailed(e)
                 notice("Couldn't finish: ${e.message ?: "try again"}")
             }
@@ -89,7 +92,7 @@ object Toasts {
     fun optimistic(apply: () -> Unit, save: suspend () -> Unit, revert: () -> Unit, what: String = "Couldn't save") {
         apply()
         scope.launch {
-            runCatching { save() }.onFailure {
+            catching { save() }.onFailure {
                 revert()
                 notice(what, "RETRY") { optimistic(apply, save, revert, what) }
             }
@@ -116,7 +119,7 @@ object Toasts {
 fun ToastHost(modifier: Modifier = Modifier) {
     val toast by Toasts.current.collectAsState()
     Box(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), contentAlignment = Alignment.BottomCenter) {
-        AnimatedVisibility(toast != null, enter = fadeIn() + slideInVertically { it / 2 }, exit = fadeOut() + slideOutVertically { it / 2 }) {
+        AnimatedVisibility(toast != null, enter = if (FTMotion.reduced) EnterTransition.None else fadeIn(FTMotion.tweenBase()) + slideInVertically(FTMotion.tweenBase()) { it / 2 }, exit = if (FTMotion.reduced) ExitTransition.None else fadeOut(FTMotion.tweenFast()) + slideOutVertically(FTMotion.tweenFast()) { it / 2 }) {
             val t = toast ?: return@AnimatedVisibility
             val shape = RoundedCornerShape(FT.RadiusModule)
             Row(
@@ -127,7 +130,7 @@ fun ToastHost(modifier: Modifier = Modifier) {
             ) {
                 Text(t.message, style = FTType.BodySmall, color = FT.TextPrimary, modifier = Modifier.weight(1f))
                 if (t.action != null && t.onAction != null) {
-                    Text(t.action, style = FTType.LabelCaps, color = FT.Emerald,
+                    Text(t.action, style = FTType.LabelCaps, color = FT.Ok,
                         modifier = Modifier.ftClickable(onClickLabel = t.action) { t.onAction.invoke() }.padding(4.dp))
                 }
             }

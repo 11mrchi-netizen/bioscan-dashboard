@@ -19,10 +19,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -37,29 +37,35 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.data.AddEntryRepository
 import com.bioscan.fieldterminal.data.LOG_PAGE_DAYS
 import com.bioscan.fieldterminal.data.LOG_WINDOW_DAYS
 import com.bioscan.fieldterminal.data.LogFeed
 import com.bioscan.fieldterminal.data.LogRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.domain.DayMark
 import com.bioscan.fieldterminal.domain.LogCategory
-import com.bioscan.fieldterminal.domain.LogEntry
 import com.bioscan.fieldterminal.domain.LogDay
+import com.bioscan.fieldterminal.domain.LogEntry
 import com.bioscan.fieldterminal.domain.LogEntryKind
 import com.bioscan.fieldterminal.domain.LogMark
 import com.bioscan.fieldterminal.domain.LogSource
-import com.bioscan.fieldterminal.domain.DayMark
 import com.bioscan.fieldterminal.domain.MarkState
 import com.bioscan.fieldterminal.domain.buildLogDays
 import com.bioscan.fieldterminal.domain.category
 import com.bioscan.fieldterminal.domain.supplementExpectedOn
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
 import com.bioscan.fieldterminal.ui.components.SubTabChip
+import com.bioscan.fieldterminal.ui.components.Toasts
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
+import com.bioscan.fieldterminal.ui.components.rememberCacheVersion
+import com.bioscan.fieldterminal.ui.screens.status.UnloggedVisitsCard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import kotlinx.coroutines.CancellationException
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Log tab: Step 11's unified read feed plus Step 12's "+" add-entry flow and
 // its edit/delete counterpart. Real data merged from every logged table (see
@@ -82,7 +88,7 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
     var loadingOlder by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableIntStateOf(0) }
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
-    // Scoring system rebuild: + LOG in the dock opens the menu straight away. The request is remembered across a restore,
+    // + LOG in the dock opens the menu straight away. The request is remembered across a restore,
     // so the sheet is not opened again for a tap that was already handled.
     var handledMenuRequest by rememberSaveable { mutableStateOf(0) }
     LaunchedEffect(openMenuRequest) {
@@ -99,7 +105,7 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
     var expandedKeys by rememberSaveable { mutableStateOf("") }
     var gapsOnly by rememberSaveable { mutableStateOf(false) }
 
-    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    val cacheVersion = rememberCacheVersion()
     LaunchedEffect(reloadKey, windowDays, cacheVersion) {
         error = null
         try {
@@ -111,7 +117,7 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
                 olderExhausted = loaded.entries.none { it.timestamp.toLocalDate().isBefore(previousStart) }
             }
             feed = loaded
-        } catch (e: kotlinx.coroutines.CancellationException) {
+        } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             error = e.message ?: "Unknown error"
@@ -138,7 +144,7 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
+        Column(modifier = Modifier.fillMaxSize().background(FT.Base).ftPlatinumWash()) {
             val current = feed
             val gapCount = days.count { it.hasGap }
             // UX review P4: the header counts today (the all-time count of loaded rows said little) and keeps the gap count.
@@ -155,7 +161,7 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
 
             when {
                 error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Critical)
+                    Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Bad)
                 }
                 current == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = FT.DomainLog)
@@ -176,7 +182,7 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
                     )
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
                         // Routine intelligence R5: gym visits with no session recorded (nothing shows when there are none).
-                        item(key = "unlogged-visits") { com.bioscan.fieldterminal.ui.screens.status.UnloggedVisitsCard() }
+                        item(key = "unlogged-visits") { UnloggedVisitsCard() }
                         if (visible.isEmpty()) {
                             item(key = "no-gaps") {
                                 Text(
@@ -236,10 +242,10 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
                 actionEntry = null
                 val key = entry.source to entry.id
                 hidden = hidden + key
-                com.bioscan.fieldterminal.ui.components.Toasts.undoable(
+                Toasts.undoable(
                     "Deleted: ${entry.headline}",
                     commit = {
-                        com.bioscan.fieldterminal.data.AddEntryRepository(SupabaseClientProvider.client).deleteEntry(entry.source, entry.id)
+                        AddEntryRepository(SupabaseClientProvider.client).deleteEntry(entry.source, entry.id)
                         refresh()
                     },
                     onUndo = { hidden = hidden - key },
@@ -337,7 +343,7 @@ private fun LogDayCard(day: LogDay, open: Boolean, onToggle: () -> Unit, onEntry
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(dayLabel(day.date), style = FTType.LabelCaps, color = if (day.hasGap) FT.Warning else FT.TextPrimary, modifier = Modifier.weight(1f))
+                Text(dayLabel(day.date), style = FTType.LabelCaps, color = if (day.hasGap) FT.Warn else FT.TextPrimary, modifier = Modifier.weight(1f))
                 Text("${day.entries.size}", style = FTType.Value, color = FT.TextSecondary)
                 Text(if (open) "  ▾" else "  ▸", style = FTType.Value, color = FT.TextMuted)
             }
@@ -386,7 +392,7 @@ private fun DayMarkCell(m: DayMark, modifier: Modifier = Modifier) {
                     drawRoundRect(color, Offset.Zero, size, corner, style = Stroke(1.5.dp.toPx()))
                 }
                 MarkState.MISSING -> drawRoundRect(
-                    FT.Warning, Offset.Zero, size, corner,
+                    FT.Warn, Offset.Zero, size, corner,
                     style = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 3.dp.toPx()))),
                 )
                 MarkState.NONE -> drawRoundRect(FT.GlassTrack, Offset.Zero, size, corner, style = Stroke(1.dp.toPx()))
@@ -400,7 +406,7 @@ private fun DayMarkCell(m: DayMark, modifier: Modifier = Modifier) {
                 MarkState.PRESENT -> "${m.count}"
             },
             style = FTType.Micro,
-            color = if (m.state == MarkState.MISSING) FT.Warning else FT.TextSecondary,
+            color = if (m.state == MarkState.MISSING) FT.Warn else FT.TextSecondary,
             maxLines = 1,
         )
         Text(

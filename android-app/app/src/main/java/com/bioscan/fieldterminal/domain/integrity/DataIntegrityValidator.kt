@@ -8,6 +8,7 @@ import com.bioscan.fieldterminal.domain.SAME_RUN_START_TOLERANCE_MIN
 import java.time.Duration
 import java.time.Instant
 import java.time.OffsetDateTime
+import kotlin.math.abs
 
 // DAV-179: Cross-domain data-quality and provenance checks engine.
 // Provides reusable integrity and validation checks that protect the analytical foundation
@@ -130,8 +131,8 @@ object DataIntegrityValidator {
 
                 if (aStart.toLocalDate() != bStart.toLocalDate()) break
 
-                val startDiffMin = kotlin.math.abs(Duration.between(aStart, bStart).toMinutes())
-                val durDiffMin = kotlin.math.abs(aDur - bDur)
+                val startDiffMin = abs(Duration.between(aStart, bStart).toMinutes())
+                val durDiffMin = abs(aDur - bDur)
                 val durTolerance = maxOf(SAME_RUN_DURATION_TOLERANCE_MIN, minOf(aDur, bDur) * 0.2)
 
                 if (startDiffMin <= SAME_RUN_START_TOLERANCE_MIN && durDiffMin <= durTolerance) {

@@ -1,17 +1,9 @@
 package com.bioscan.fieldterminal.ui.screens.detail
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -21,7 +13,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
 import com.bioscan.fieldterminal.data.HydrationAccountingRepository
@@ -33,7 +29,9 @@ import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TodaySweat
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.StoolAnalysisRow
+import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.data.todaySweatRate
 import com.bioscan.fieldterminal.domain.CaffeineEvent
 import com.bioscan.fieldterminal.domain.DailyNutrition
@@ -58,18 +56,23 @@ import com.bioscan.fieldterminal.domain.score.bowelTiming
 import com.bioscan.fieldterminal.domain.score.bowelTimingHeadline
 import com.bioscan.fieldterminal.domain.score.stoolPattern
 import com.bioscan.fieldterminal.domain.score.stoolPatternHeadline
+import com.bioscan.fieldterminal.ui.components.DivergingPoles
+import com.bioscan.fieldterminal.ui.components.FTDivergingScale
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.NutrientColor
+import com.bioscan.fieldterminal.ui.components.produceGuarded
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
-import com.bioscan.fieldterminal.ui.components.softLoad
+import com.bioscan.fieldterminal.ui.screens.status.GLUCOSE_INFO
+import com.bioscan.fieldterminal.ui.screens.status.GlucoseSpikingRows
 import com.bioscan.fieldterminal.ui.screens.today.BowelTimingChart
 import com.bioscan.fieldterminal.ui.screens.today.StoolHypnogram
 import com.bioscan.fieldterminal.ui.screens.today.laneColor
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 /** Day columns up to 60 days, weekly means beyond, oldest first; each column the values [pick] returns. */
 internal fun <T> dayColumns(rows: List<Pair<LocalDate, T>>, today: LocalDate, days: Int, pick: (T) -> List<Double>): List<Pair<String, List<Double>>> {
@@ -143,8 +146,8 @@ fun NutritionScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit) {
                 val week = balance.filterKeys { it > today.minusDays(7) }.values
                 // charts-bars-and-scales.md §3: a bipolar value on a zero-centred ±500 kcal axis, deficit left, surplus right.
                 val avg = week.takeIf { it.isNotEmpty() }?.average()
-                com.bioscan.fieldterminal.ui.components.FTDivergingScale(
-                    value = avg, d = 500.0, poles = com.bioscan.fieldterminal.ui.components.DivergingPoles.EnergyBalance,
+                FTDivergingScale(
+                    value = avg, d = 500.0, poles = DivergingPoles.EnergyBalance,
                     label = "IN − OUT · 7-DAY", valueText = avg?.let { "${Fmt.signed(it)} kcal" },
                     deadZone = 50.0, negativeWord = "deficit", positiveWord = "surplus",
                     description = avg?.let { "Energy balance ${Fmt.signed(it)} kcal a day, ${if (it < 0) "deficit" else "surplus"}" } ?: "Energy balance, no data",
@@ -157,7 +160,7 @@ fun NutritionScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit) {
         Section("MACROS", info = "Grams of protein, carbs and fat each day (weekly averages beyond two months). Tap a column to read it.") {
             StackedBars(
                 dayColumns(daily, today, days) { listOf(it.proteinG, it.carbsG, it.fatG) },
-                listOf(NutrientColor.Protein, NutrientColor.Carbs, NutrientColor.Fat), listOf("Protein", "Carbs", "Fat"), Fmt.int, "g",
+                listOf(NutrientColor.Protein, NutrientColor.Carbs, NutrientColor.Fat), listOf("Protein", "Carbs", "Fat"), Fmt.int, "g", lastPartial = days <= 60 && daily.any { it.first == today },
             )
         }
 
@@ -191,16 +194,17 @@ fun NutritionScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit) {
             val slots = byDay.maxOfOrNull { it.second.size }?.coerceAtMost(6) ?: 0
             StackedBars(
                 dayColumns(byDay, today, days) { l -> (0 until slots).map { l.getOrElse(it) { 0.0 } } },
-                (0 until slots).map { NutrientColor.Protein.copy(alpha = 1f - it * 0.13f) }, (1..slots).map { "Meal $it" }, Fmt.int, "g",
+                (0 until slots).map { NutrientColor.Protein.copy(alpha = 1f - it * 0.13f) }, (1..slots).map { "Meal $it" }, Fmt.int, "g", lastPartial = days <= 60 && byDay.any { it.first == today },
             )
         }
 
-        Section("GLUCOSE SPIKING · ESTIMATE", info = com.bioscan.fieldterminal.ui.screens.status.GLUCOSE_INFO, trailing = "TODAY") {
-            com.bioscan.fieldterminal.ui.screens.status.GlucoseSpikingRows(o.todaysMeals)
+        Section("GLUCOSE SPIKING · ESTIMATE", info = GLUCOSE_INFO, trailing = "TODAY") {
+            GlucoseSpikingRows(o.todaysMeals)
         }
 
-        val lowest by produceState<List<Pair<String, Double>>?>(null, days) {
-            value = softLoad {
+        val lowestGuard = rememberLoadGuard(refreshOnUpdates = false)
+        val lowest by produceGuarded<List<Pair<String, Double>>?>(lowestGuard, null, days) {
+            run {
                 val data = NutrientBreakdownRepository(SupabaseClientProvider.client).loadNutrients(days.coerceAtMost(365))
                 NUTRIENT_REFERENCE.values
                     .filter { (it.category == NutrientCategory.Vitamin || it.category == NutrientCategory.Mineral) && it.rda != null }
@@ -211,6 +215,7 @@ fun NutritionScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit) {
         Section("MICRONUTRIENTS · LOWEST", info = "The eight vitamins and minerals furthest below their reference intake, as a daily average over the range (100 % = the adult reference intake, a general guide, not a personal target).") {
             val l = lowest
             when {
+                lowestGuard.error != null -> LoadErrorLine(lowestGuard, "your micronutrients")
                 l == null -> EmptyLine("Working it out…")
                 l.isEmpty() -> EmptyLine("No micronutrient data logged in this range.")
                 else -> ShareBars(l.map { (n, pct) -> Triple(n, pct.coerceAtMost(100.0), "${pct.roundToInt()} %") }, 100.0, NutrientColor.Carbs)
@@ -269,12 +274,14 @@ fun HydrationScreen(onBack: () -> Unit) {
             info = "Water logged each day, in litres. Drinks logged as meals count towards today's total above but are not in this history yet.")
 
         val goals = remember { NutritionGoalsStore.getGoals(context) }
-        val accounting by produceState<List<DayHydration>?>(null, o) {
-            value = softLoad { HydrationAccountingRepository(SupabaseClientProvider.client).load(o, MapSettingsStore.getHome(context), goals) }
+        val needGuard = rememberLoadGuard(refreshOnUpdates = false)
+        val accounting by produceGuarded<List<DayHydration>?>(needGuard, null, o) {
+            HydrationAccountingRepository(SupabaseClientProvider.client).load(o, MapSettingsStore.getHome(context), goals)
         }
         Section("INTAKE AGAINST NEED", info = NEED_INFO) {
             val days = accounting?.takeLast(LocalRangeDays.current.coerceAtMost(60))
             when {
+                needGuard.error != null -> LoadErrorLine(needGuard, "your water need")
                 days == null -> EmptyLine("Working out demand from your sessions and the weather…")
                 days.none { it.intakeMl != null } -> EmptyLine("No water or drinks logged in this period.")
                 else -> {
@@ -309,7 +316,7 @@ fun HydrationScreen(onBack: () -> Unit) {
 
         val key = remember { GeminiApiKeyStore.get(context) }
         if (key != null) {
-            val text by produceState<String?>(null, intel) { value = runCatching { HydrationExplanationRepository(key).explain(intel, null) }.getOrNull() }
+            val text by produceState<String?>(null, intel) { value = catching { HydrationExplanationRepository(key).explain(intel, null) }.getOrNull() }
             Section("IN WORDS", info = "An AI summary of the numbers above. Validated data only; not medical advice.") {
                 Text(text ?: "Writing a summary…", style = FTType.BodySmall, color = if (text == null) FT.TextMuted else FT.TextPrimary)
             }
@@ -369,7 +376,7 @@ private fun DemandRangeChart(days: List<DayHydration>) {
                 val cx = i * slot + slot / 2f
                 drawRect(NutrientColor.Water.copy(alpha = 0.22f), Offset(cx - w / 2f, y(d.demandHighMl)), Size(w, y(d.demandLowMl) - y(d.demandHighMl)))
                 d.intakeMl?.let { ml ->
-                    val color = when (d.status) { HydrationStatus.Within -> FT.Emerald; else -> FT.Warning }
+                    val color = when (d.status) { HydrationStatus.Within -> FT.Ok; else -> FT.Warn }
                     drawCircle(color, 3.5.dp.toPx(), Offset(cx, y(ml)))
                 }
                 if (d.workoutMinutes > 0) drawCircle(FT.TextMuted, 1.5.dp.toPx(), Offset(cx, size.height - 2.dp.toPx()))

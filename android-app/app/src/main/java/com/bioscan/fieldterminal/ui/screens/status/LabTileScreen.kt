@@ -11,25 +11,24 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.data.NutritionRepository
-import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.domain.AddEntryStart
 import com.bioscan.fieldterminal.domain.AddEntryType
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.PinnedPage
-import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.nav.LabTab
 import com.bioscan.fieldterminal.ui.screens.AddEntrySheet
+import com.bioscan.fieldterminal.ui.screens.events.SweatTestSheet
+import com.bioscan.fieldterminal.ui.screens.form.RunningFormSheet
 import com.bioscan.fieldterminal.ui.theme.FTType
+import java.time.LocalDate
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // DAV-74/DAV-87: the Labs tile page; DAV-209 moved Supplements in from Fuel.
@@ -40,7 +39,7 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 fun LabTileScreen(
     onBack: (() -> Unit)?,
     onOpenPantry: () -> Unit = {},
-    onOpenDayMap: (java.time.LocalDate) -> Unit = {},
+    onOpenDayMap: (LocalDate) -> Unit = {},
     // Set by a deep link (supplement reminder -> SUPPLEMENTS, fuel reminder -> PLANNING › FOOD PLAN, body check-in
     // reminder -> TESTS with the check-in up); applied once, then cleared via the callback.
     requestedTab: LabTab? = null,
@@ -93,8 +92,8 @@ fun LabTileScreen(
     when (test) {
         LabTest.Grip -> AddEntrySheet(onDismiss = { test = null }, onSaved = { test = null }, start = AddEntryStart.Form(AddEntryType.Grip))
         LabTest.BodyCheckIn -> BodyCheckInSheet(onDismiss = { test = null }, onSaved = { test = null })
-        LabTest.SweatTest -> com.bioscan.fieldterminal.ui.screens.events.SweatTestSheet(onDismiss = { test = null }, onSaved = { test = null })
-        LabTest.RunningForm -> com.bioscan.fieldterminal.ui.screens.form.RunningFormSheet(onDismiss = { test = null })
+        LabTest.SweatTest -> SweatTestSheet(onDismiss = { test = null }, onSaved = { test = null })
+        LabTest.RunningForm -> RunningFormSheet(onDismiss = { test = null })
         null -> Unit
     }
 }

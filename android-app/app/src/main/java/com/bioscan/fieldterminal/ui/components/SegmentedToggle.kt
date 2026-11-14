@@ -14,6 +14,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -52,13 +54,13 @@ fun <T> SegmentedToggle(
                     .weight(1f)
                     .defaultMinSize(minHeight = 40.dp)
                     .then(if (isSelected) Modifier.background(FT.Platinum, inner) else Modifier)
-                    .ftClickable(shape = inner, role = androidx.compose.ui.semantics.Role.Tab) { onSelect(option) }
+                    .ftClickable(shape = inner, role = Role.Tab) { onSelect(option) }
                     .padding(vertical = 8.dp, horizontal = 4.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     labelOf(option),
-                    style = if (isSelected) FTType.LabelCaps.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) else FTType.LabelCaps,
+                    style = if (isSelected) FTType.LabelCaps.copy(fontWeight = FontWeight.Bold) else FTType.LabelCaps,
                     color = if (isSelected) FT.PlatinumInk else FT.TextSecondary,
                     maxLines = 1,
                 )

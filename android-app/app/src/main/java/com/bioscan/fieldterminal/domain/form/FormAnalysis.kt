@@ -1,6 +1,7 @@
 package com.bioscan.fieldterminal.domain.form
 
 import com.bioscan.fieldterminal.domain.median
+import kotlin.math.abs
 
 // The running form analyser end to end, from the pose extractor's clip to the report: clean tracks, the near foot's
 // contacts, the metrics, the clip's quality and the findings (docs/running-form/README.md).
@@ -56,7 +57,7 @@ fun analyseTracks(tracks: PoseTracks, setup: FormSetup, watch: WatchRunValues? =
     val farSeen = (0 until tracks.size).filter { tracks.detected[it] }
         .flatMap { i -> listOf(farLeg.ankle, farLeg.heel, farLeg.toe).map { tracks.visibility[it][i] } }
     val farContacts = if (farSeen.isNotEmpty() && median(farSeen) >= FAR_LEG_MIN_VISIBILITY) detectContacts(tracks, far, direction) else emptyList()
-    val bothFeet = farContacts.isNotEmpty() && kotlin.math.abs(farContacts.size - nearContacts.size) <= 1
+    val bothFeet = farContacts.isNotEmpty() && abs(farContacts.size - nearContacts.size) <= 1
     val landings = if (bothFeet) (nearContacts + farContacts).map { it.landingMs } else null
 
     val metrics = computeFormMetrics(tracks, near, nearContacts, landings, direction)

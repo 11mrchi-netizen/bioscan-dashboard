@@ -10,20 +10,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Phase A5, Part 1 (Category 9). Isolated real draws plotted against a
+// Isolated real draws plotted against a
 // reference band -- deliberately NOT a line chart. The spec is explicit
 // that ~1 draw/year doesn't support the continuity a connecting line would
 // imply, so points never connect here, however many real draws exist.
 // Shares LineChart.kt's own Canvas + bounding-box + local xFor/yFor-closure
-// technique (Phase G5), adapted to a calendar-date x-axis instead of
+// technique, adapted to a calendar-date x-axis instead of
 // elapsed-session-seconds -- a genuinely different domain, not a
 // generalization of that file.
 private val DOT_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM")
@@ -75,13 +77,13 @@ fun DotPlot(
             if (refLow != null && refHigh != null) {
                 drawRect(
                     color = FT.TextSecondary.copy(alpha = 0.14f),
-                    topLeft = androidx.compose.ui.geometry.Offset(0f, yFor(refHigh)),
-                    size = androidx.compose.ui.geometry.Size(size.width, yFor(refLow) - yFor(refHigh)),
+                    topLeft = Offset(0f, yFor(refHigh)),
+                    size = Size(size.width, yFor(refLow) - yFor(refHigh)),
                 )
             }
 
             sorted.forEach { (day, value) ->
-                drawCircle(color = dotColor(value), radius = 7f, center = androidx.compose.ui.geometry.Offset(xFor(day), yFor(value)))
+                drawCircle(color = dotColor(value), radius = 7f, center = Offset(xFor(day), yFor(value)))
             }
         }
         if (sorted.size > 1) {

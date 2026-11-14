@@ -89,7 +89,7 @@ fun drinkSizes(drink: DrinkMatch?, beverageClass: String?): List<DrinkServing> {
         .take(4)
     val generic = when (beverageClass) {
         "coffee" -> listOf(DrinkServing("espresso", 30.0), DrinkServing("small", 240.0), DrinkServing("medium", 360.0), DrinkServing("large", 480.0))
-        "tea" -> listOf(DrinkServing("cup", 240.0), DrinkServing("medium", 500.0), DrinkServing("large", 700.0))
+        "tea", "infusion" -> listOf(DrinkServing("cup", 240.0), DrinkServing("medium", 500.0), DrinkServing("large", 700.0))
         "alcohol" -> when (drink?.beverageSubtype) {
             "wine" -> listOf(DrinkServing("glass", 150.0), DrinkServing("large glass", 250.0))
             "spirits" -> listOf(DrinkServing("shot", 30.0), DrinkServing("double", 60.0))

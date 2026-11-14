@@ -1,11 +1,12 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain.fuel
 
-import kotlinx.serialization.UseSerializers
-import kotlinx.serialization.Serializable
 import com.bioscan.fieldterminal.domain.events.AidStation
 import com.bioscan.fieldterminal.domain.trail.CoursePoint
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.ZonedDateTime
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
@@ -224,7 +225,7 @@ fun planRaceFuel(input: RaceFuelInput): RaceFuelPlan {
         if (fluid > 0) items += "${(fluid / 10).roundToInt() * 10} ml to drink"
         val caffeine = inRaceCaffeine.filter { (at, _) -> at > t - span && at <= t }.sumOf { it.second }
         if (caffeine > 0) items += "${caffeine.roundToInt()} mg caffeine"
-        val station = stationTimes.firstOrNull { kotlin.math.abs(it.second - t) <= STEP_MIN / 2 }?.first
+        val station = stationTimes.firstOrNull { abs(it.second - t) <= STEP_MIN / 2 }?.first
         FuelStep(t, kmAtElapsed(input.course, times, t, duration, totalKm), temp, carbs, fluid, sodium, caffeine, items, station, parts)
     }
 

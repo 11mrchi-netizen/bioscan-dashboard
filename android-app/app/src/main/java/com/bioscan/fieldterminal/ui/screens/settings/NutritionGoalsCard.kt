@@ -32,6 +32,7 @@ import com.bioscan.fieldterminal.data.NutritionGoals
 import com.bioscan.fieldterminal.data.NutritionGoalsStore
 import com.bioscan.fieldterminal.data.NutritionTargetsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.domain.ActivityLevel
 import com.bioscan.fieldterminal.domain.EnergyBalance
 import com.bioscan.fieldterminal.domain.EnergyBalanceKind
@@ -51,11 +52,10 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.MACRO_COLORS
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
-import com.bioscan.fieldterminal.ui.components.softLoad
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Setup › Profile & goals › Nutrition goals (domain/NutritionTargets.kt). Calories, protein and fat are entered, carbs
 // are what the calories leave, so the goal always adds up; the card shows each macro's share of the calories and reads
@@ -127,8 +127,8 @@ internal fun NutritionGoalsCard() {
         }
 
         when {
-            enteredBad -> Text("Enter numbers only, or leave a field blank.", style = FTType.Caption, color = FT.Critical)
-            result is MacroPlanResult.Invalid -> Text(result.message, style = FTType.Caption, color = FT.Critical)
+            enteredBad -> Text("Enter numbers only, or leave a field blank.", style = FTType.Caption, color = FT.Bad)
+            result is MacroPlanResult.Invalid -> Text(result.message, style = FTType.Caption, color = FT.Bad)
             result is MacroPlanResult.Ok -> GoalSummary(result, maintenance, i?.weightKg)
             else -> Text("No calorie goal: the views show your intake without a target.", style = FTType.Caption, color = FT.TextMuted)
         }
@@ -141,7 +141,7 @@ internal fun NutritionGoalsCard() {
         Text(
             if (waterBad) "Water needs both a min and a max, min below max." else "A range; leave both blank for the 2,500–3,500 ml reference.",
             style = FTType.Caption,
-            color = if (waterBad) FT.Critical else FT.TextMuted,
+            color = if (waterBad) FT.Bad else FT.TextMuted,
         )
 
         val canSave = !enteredBad && !waterBad && result !is MacroPlanResult.Invalid

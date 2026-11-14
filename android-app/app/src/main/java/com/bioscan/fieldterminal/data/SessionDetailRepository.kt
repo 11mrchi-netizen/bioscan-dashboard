@@ -13,14 +13,17 @@ import com.bioscan.fieldterminal.data.model.ExerciseSessionDetailRow
 import com.bioscan.fieldterminal.domain.RouteAvailability
 import com.bioscan.fieldterminal.domain.RoutePoint
 import com.bioscan.fieldterminal.domain.SessionDetail
+import com.bioscan.fieldterminal.domain.SessionPause
 import com.bioscan.fieldterminal.domain.TimePoint
 import com.bioscan.fieldterminal.healthconnect.HealthConnectManager
 import com.bioscan.fieldterminal.healthconnect.readAllRecords
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
+import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import java.time.Duration
 import java.time.Instant
 
@@ -79,7 +82,7 @@ data class ZeppStrengthData(
     val sets: List<ZeppStrengthSetData> = emptyList(),
     // Zepp's current version of the exercises and its fingerprint (zepp-extract/strengthImport.ts). Kept as raw JSON so
     // an unexpected shape can never break the per-set data above; read with zeppExercises().
-    val exercises: kotlinx.serialization.json.JsonElement? = null,
+    val exercises: JsonElement? = null,
     val fingerprint: String? = null,
 )
 
@@ -127,12 +130,12 @@ suspend fun loadZeppWorkoutSummaries(supabase: SupabaseClient): List<ZeppWorkout
     ReadCache.kept("zepp.summaries", tables = setOf("zepp_workout_detail")) {
         supabase.postgrest.from("zepp_workout_detail")
             .select(columns = Columns.list("start_time,summary")) {
-                order("start_time", io.github.jan.supabase.postgrest.query.Order.ASCENDING)
+                order("start_time", Order.ASCENDING)
             }
             .decodeList<ZeppWorkoutDetailSummaryRow>()
     }
 
-// Phase G4/G5. loadHeader() reads the session's real aggregates from Supabase
+// loadHeader() reads the session's real aggregates from Supabase
 // (same source Training/Log already use); loadTimeSeries() reads fresh from
 // Health Connect on demand, every time this screen opens, nothing persisted
 // -- the same fetch-on-demand principle Step 14's GPX route already
@@ -142,7 +145,7 @@ suspend fun loadZeppWorkoutSummaries(supabase: SupabaseClient): List<ZeppWorkout
 //
 // Elevation-over-time isn't part of loadTimeSeries(): ElevationGainedRecord
 // only gives interval deltas, not a continuous profile -- a real profile
-// needs the session's ExerciseRoute, which (Phase G5) checkRouteAvailability()
+// needs the session's ExerciseRoute, which checkRouteAvailability()
 // reads separately, since it needs its own per-session consent flow rather
 // than this app's bulk Health Connect grant.
 class SessionDetailRepository(
@@ -233,7 +236,7 @@ class SessionDetailRepository(
             distanceKm = toPoints(decoded.distanceKm),
             cadenceSpm = toPoints(decoded.cadenceSpm),
             verticalRatioPct = toPoints(decoded.verticalStrideRatioPct),
-            pauses = decoded.pauses.map { com.bioscan.fieldterminal.domain.SessionPause(it.startOffset, it.durationSec) },
+            pauses = decoded.pauses.map { SessionPause(it.startOffset, it.durationSec) },
         )
     }
 
@@ -266,7 +269,7 @@ class SessionDetailRepository(
         return pts.map { RoutePoint(it.offsetSeconds, it.lat, it.lon, altMap[it.offsetSeconds]) }
     }
 
-    // Phase G5. A session's exercise route isn't covered by this app's bulk
+    // A session's exercise route isn't covered by this app's bulk
     // Health Connect grant -- ExerciseSessionRecord.exerciseRouteResult tells
     // us directly which of Health Connect's three states this session is in
     // (real data already attached, a one-time consent screen is needed, or

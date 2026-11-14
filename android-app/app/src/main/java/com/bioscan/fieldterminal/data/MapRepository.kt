@@ -1,6 +1,7 @@
 package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.domain.GpxPoint
+import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.domain.MapEvent
 import com.bioscan.fieldterminal.domain.parseGpxLink
 import com.bioscan.fieldterminal.domain.parseGpxPoints
@@ -11,13 +12,12 @@ import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
 class MapFetchException(message: String) : Exception(message)
 
-private val json = Json { ignoreUnknownKeys = true }
+private val json = LenientJson
 
 // Takes a live Google access token (from GoogleAuthorizationManager, minted
 // fresh per screen load -- see that file for why this app needs no stored
@@ -25,7 +25,7 @@ private val json = Json { ignoreUnknownKeys = true }
 class MapRepository(private val accessToken: String) {
     companion object { private val client = HttpClient(OkHttp) }
 
-    // Phase M1: every event in a rolling 24h window, not just the first
+    // Every event in a rolling 24h window, not just the first
     // training-colored one -- replaces the old fetchNextSession(), which is
     // unused anywhere else in this app (confirmed by a project-wide search
     // before removing it, not assumed safe to drop).

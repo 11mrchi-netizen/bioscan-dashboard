@@ -1,11 +1,9 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -15,7 +13,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AnalysisRepository
@@ -24,6 +21,7 @@ import com.bioscan.fieldterminal.data.ExperimentResultRow
 import com.bioscan.fieldterminal.data.ExperimentRow
 import com.bioscan.fieldterminal.data.ExperimentsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
 import com.bioscan.fieldterminal.data.model.NewRegisteredQuestion
 import com.bioscan.fieldterminal.data.model.PlannedOutcomeRow
@@ -41,14 +39,17 @@ import com.bioscan.fieldterminal.domain.defaultZone
 import com.bioscan.fieldterminal.domain.evidenceBoard
 import com.bioscan.fieldterminal.domain.typicalityView
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
+import com.bioscan.fieldterminal.ui.components.SkeletonSections
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.components.parallel
+import com.bioscan.fieldterminal.ui.components.rememberCacheVersion
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.screens.health.HealthN1Section
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.util.Perf
 import java.time.LocalDate
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // App restructure: Lab › N=1, the personal-experiment cards that were on Today (what goes with what, what came before
 // off mornings, today's draw and the daily tests, do the summaries earn their place) and the sexual-health correlations
@@ -77,11 +78,11 @@ fun N1Tab() {
     val scope = rememberCoroutineScope()
 
     // Optional enrichment, reloaded after a registration or a delete: a failed read just leaves the experiment cards out.
-    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    val cacheVersion = rememberCacheVersion()
     LaunchedEffect(experimentsKey, cacheVersion) {
         val repo = ExperimentsRepository(SupabaseClientProvider.client)
-        runCatching { experiments = repo.loadExperiments() }
-        runCatching { experimentResults = repo.loadResults() }
+        catching { experiments = repo.loadExperiments() }
+        catching { experimentResults = repo.loadResults() }
     }
 
     val guard = rememberLoadGuard()
@@ -94,10 +95,10 @@ fun N1Tab() {
                     { wearable = repo.loadWearableDaily() },
                     { sleep = repo.loadSleepDaily() },
                     { wellbeing = repo.loadWellbeingDaily() },
-                    { sexualActivity = runCatching { repo.loadSexualActivityDaily() }.getOrDefault(emptyList()) },
+                    { sexualActivity = catching { repo.loadSexualActivityDaily() }.getOrDefault(emptyList()) },
                     { breakStarts = repo.loadSeriesBreakStarts() },
                     { loadSpans = repo.loadLoadSpans() },
-                    { planned = runCatching { repo.loadPlannedOutcomes() }.getOrNull() },
+                    { planned = catching { repo.loadPlannedOutcomes() }.getOrNull() },
                     { relationships = repo.loadRelationships() },
                     { typicality = repo.loadTypicality() },
                     { evidence = repo.loadEvidence() },
@@ -116,11 +117,11 @@ fun N1Tab() {
         if (guard.error != null) {
             LoadErrorCard(guard)
         } else {
-            com.bioscan.fieldterminal.ui.components.SkeletonSections()
+            SkeletonSections()
         }
         return
     }
-    // Phase G: each composite's scorecard on this history, worked out off the main thread (null until ready).
+    // Each composite's scorecard on this history, worked out off the main thread (null until ready).
     val scorecards by rememberScorecards(w, sl, wb, s, breakStarts, loadSpans, planned)
 
     Column(
@@ -156,14 +157,14 @@ fun N1Tab() {
                 }
             },
         )
-        experimentError?.let { Text(it, style = FTType.Caption, color = FT.Critical) }
+        experimentError?.let { Text(it, style = FTType.Caption, color = FT.Bad) }
         // Interventions repeated now and then (nasal strips, a lactose meal): events, how each felt, and the evidence so far.
         InterventionEventsSection()
         // Bundles of those around one objective (docs/intervention-protocol-intelligence).
         ProtocolsSection()
         N1ScorecardsCard(scorecards, typicality = typicalityView(typicality).scorecard)
         // Health concerns (docs/health-concerns): patterns found in check-ins and the trials testing them.
-        com.bioscan.fieldterminal.ui.screens.health.HealthN1Section()
+        HealthN1Section()
         if (sexualActivity.isNotEmpty()) SexualHealthCorrelationsCard(wb, sexualActivity, w, sl)
     }
 

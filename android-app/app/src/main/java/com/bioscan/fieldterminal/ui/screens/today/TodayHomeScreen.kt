@@ -2,12 +2,12 @@
 
 package com.bioscan.fieldterminal.ui.screens.today
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.UseSerializers
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,14 +27,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.EveningCheckinRepository
 import com.bioscan.fieldterminal.data.FuelPlanRepository
 import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.NutritionRepository
+import com.bioscan.fieldterminal.data.ReadCache
 import com.bioscan.fieldterminal.data.ScoresRepository
 import com.bioscan.fieldterminal.data.ScoresView
 import com.bioscan.fieldterminal.data.StatusRepository
@@ -42,32 +51,57 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TodayFuel
 import com.bioscan.fieldterminal.data.TodayFuelResult
 import com.bioscan.fieldterminal.data.TodayPreviews
+import com.bioscan.fieldterminal.data.catching
+import com.bioscan.fieldterminal.domain.AddEntryStart
+import com.bioscan.fieldterminal.domain.EVENING_CHECKIN_TIME
 import com.bioscan.fieldterminal.domain.EveningCheckin
+import com.bioscan.fieldterminal.domain.FuelSubType
+import com.bioscan.fieldterminal.domain.checkinDateFor
+import com.bioscan.fieldterminal.domain.expectedShareAt
+import com.bioscan.fieldterminal.domain.fuel.Intensity
 import com.bioscan.fieldterminal.domain.fuel.MealAdherence
+import com.bioscan.fieldterminal.domain.fuel.MealSlotKind
+import com.bioscan.fieldterminal.domain.fuel.mealTargetLine
 import com.bioscan.fieldterminal.domain.score.ChargeStatus
 import com.bioscan.fieldterminal.domain.score.DomainKey
+import com.bioscan.fieldterminal.domain.score.ScoreScale
+import com.bioscan.fieldterminal.domain.score.SignalsVerdict
+import com.bioscan.fieldterminal.domain.score.SleepTarget
 import com.bioscan.fieldterminal.domain.score.trendOf
-import com.bioscan.fieldterminal.ui.components.LoadErrorCard
-import com.bioscan.fieldterminal.ui.components.RingState
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
+import com.bioscan.fieldterminal.ui.components.FTChevron
 import com.bioscan.fieldterminal.ui.components.GaugePalette
 import com.bioscan.fieldterminal.ui.components.GaugeStateWord
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
+import com.bioscan.fieldterminal.ui.components.NutrientColor
+import com.bioscan.fieldterminal.ui.components.RingState
 import com.bioscan.fieldterminal.ui.components.ScoreRing
-import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.ftChargeWash
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.nav.TopLevelTab
+import com.bioscan.fieldterminal.ui.screens.AddEntrySheet
 import com.bioscan.fieldterminal.ui.screens.status.EveningCheckInSheet
 import com.bioscan.fieldterminal.ui.screens.status.NutritionTodayCard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Scoring system (docs/scoring-system/02-page-mockups.md §1): the opening page. Only headlines: the CHARGE ring, the five
 // domain rings with their number and direction, today's plan on one timeline, and one line for intake so far. Every
@@ -100,14 +134,14 @@ sealed interface PlanAction {
     @Serializable
     data object SoFar : PlanAction
     @Serializable
-    data class Meal(val kind: com.bioscan.fieldterminal.domain.fuel.MealSlotKind) : PlanAction
+    data class Meal(val kind: MealSlotKind) : PlanAction
     @Serializable
     data class CloseDay(val date: LocalDate) : PlanAction
     /** A supplement block (morning, afternoon, night): the supplement form opens with that block ticked, ready to log. */
     @Serializable
     data class Supplements(val bucket: String) : PlanAction
     @Serializable
-    data class Tab(val tab: com.bioscan.fieldterminal.ui.nav.TopLevelTab) : PlanAction
+    data class Tab(val tab: TopLevelTab) : PlanAction
     /** Tonight's sleep target: opens the SLEEP overlay. */
     @Serializable
     data object Bedtime : PlanAction
@@ -118,17 +152,17 @@ fun soFarOf(nut: NutritionOverview?, fuel: TodayFuel?): SoFar? =
     nut?.let { n -> n.today.let { t -> SoFar(t?.calories ?: 0.0, fuel?.today?.kcal, t?.carbsG ?: 0.0, t?.proteinG ?: 0.0, t?.fatG ?: 0.0) } }
 
 /** The demand a planned session's intensity puts on CHARGE: READY when CHARGE reaches it. A documented opinion. */
-fun readyThreshold(intensity: com.bioscan.fieldterminal.domain.fuel.Intensity): Double = when (intensity) {
-    com.bioscan.fieldterminal.domain.fuel.Intensity.EASY -> 40.0
-    com.bioscan.fieldterminal.domain.fuel.Intensity.MODERATE -> 55.0
-    com.bioscan.fieldterminal.domain.fuel.Intensity.HARD,
-    com.bioscan.fieldterminal.domain.fuel.Intensity.LONG,
-    com.bioscan.fieldterminal.domain.fuel.Intensity.RACE -> 70.0
+fun readyThreshold(intensity: Intensity): Double = when (intensity) {
+    Intensity.EASY -> 40.0
+    Intensity.MODERATE -> 55.0
+    Intensity.HARD,
+    Intensity.LONG,
+    Intensity.RACE -> 70.0
 }
 
 private val BUCKET_TIMES = mapOf("morning" to LocalTime.of(8, 0), "afternoon" to LocalTime.of(13, 0), "night" to LocalTime.of(21, 0))
 // The evening check-in reminder's own time (22:25), so the plan row and the reminder agree.
-private val CLOSE_DAY_TIME: LocalTime = com.bioscan.fieldterminal.domain.EVENING_CHECKIN_TIME
+private val CLOSE_DAY_TIME: LocalTime = EVENING_CHECKIN_TIME
 
 fun planRows(
     now: LocalDateTime,
@@ -137,12 +171,12 @@ fun planRows(
     charge: Double?,
     closedYesterday: Boolean,
     closedToday: Boolean,
-    sleep: com.bioscan.fieldterminal.domain.score.SleepTarget? = null,
+    sleep: SleepTarget? = null,
 ): List<PlanRow> {
     val today = now.toLocalDate()
     val rows = mutableListOf<PlanRow>()
     if (!closedYesterday && now.toLocalTime().isBefore(LocalTime.NOON)) {
-        val name = today.minusDays(1).dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, Locale.ENGLISH)
+        val name = today.minusDays(1).dayOfWeek.getDisplayName(TextStyle.FULL, Locale.ENGLISH)
         rows += PlanRow(null, "Close $name", "1 min", false, PlanAction.CloseDay(today.minusDays(1)), PlanKind.CLOSE)
     }
     fuel?.todayCoded?.meals?.forEach { meal ->
@@ -165,7 +199,7 @@ fun planRows(
             item.title,
             listOfNotNull("${item.durationMin.roundToInt()} min", ready).joinToString(" · "),
             item.recorded,
-            PlanAction.Tab(com.bioscan.fieldterminal.ui.nav.TopLevelTab.Plan),
+            PlanAction.Tab(TopLevelTab.Plan),
             PlanKind.SESSION,
             durationMin = item.durationMin,
         )
@@ -180,7 +214,7 @@ fun planRows(
 
 @Composable
 fun TodayHomeScreen(
-    onOpenTab: (com.bioscan.fieldterminal.ui.nav.TopLevelTab) -> Unit = {},
+    onOpenTab: (TopLevelTab) -> Unit = {},
     onOpenDetail: (DetailPage) -> Unit = {},
     onOpenFoodPlan: () -> Unit = {},
     // The 22:25 reminder: open with the evening check-in up.
@@ -198,15 +232,15 @@ fun TodayHomeScreen(
     var view by remember { mutableStateOf(kept?.view) }
     // Once TODAY has its scores, the reads behind the pages most opened from it (Sleep, Cardio, Load, Body) are warmed
     // in the background, so those pages open from memory. Each read is cached (data/ReadCache.kt); a failure is ignored.
-    androidx.compose.runtime.LaunchedEffect(view?.day) {
+    LaunchedEffect(view?.day) {
         if (view == null) return@LaunchedEffect
-        kotlinx.coroutines.delay(1_500)
-        val repo = com.bioscan.fieldterminal.data.AnalysisRepository(SupabaseClientProvider.client)
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        delay(1_500)
+        val repo = AnalysisRepository(SupabaseClientProvider.client)
+        withContext(Dispatchers.IO) {
             listOf<suspend () -> Unit>(
                 { repo.loadExpectedBands() }, { repo.loadHeartRateDay() }, { repo.loadHeartRateRanges() },
                 { repo.loadBodyMetrics() }, { repo.loadFitnessFatigue() },
-            ).forEach { runCatching { it() } }
+            ).forEach { catching { it() } }
         }
     }
     var nut by remember { mutableStateOf(kept?.nut) }
@@ -219,15 +253,17 @@ fun TodayHomeScreen(
     var keptSoFar by remember { mutableStateOf(kept?.soFar) }
     var stack by remember { mutableStateOf<List<ScoreOverlay>>(emptyList()) }
     var soFar by remember { mutableStateOf(false) }
-    var mealKind by remember { mutableStateOf<com.bioscan.fieldterminal.domain.fuel.MealSlotKind?>(null) }
+    var mealKind by remember { mutableStateOf<MealSlotKind?>(null) }
     var logFood by remember { mutableStateOf(false) }
     var checkInDate by remember { mutableStateOf<LocalDate?>(null) }
     var supplementBucket by remember { mutableStateOf<String?>(null) }
+    // A voice already done: tapping it shows a read-only card instead of the log flow.
+    var doneRow by remember { mutableStateOf<PlanRow?>(null) }
     var loading by remember { mutableStateOf(kept == null) }
 
     LaunchedEffect(openCheckIn) {
         if (openCheckIn) {
-            checkInDate = com.bioscan.fieldterminal.domain.checkinDateFor(LocalDateTime.now())
+            checkInDate = checkinDateFor(LocalDateTime.now())
             onCheckInHandled()
         }
     }
@@ -238,13 +274,13 @@ fun TodayHomeScreen(
         }
     }
 
-    LaunchedEffect(Unit) { runCatching { EveningCheckinRepository(SupabaseClientProvider.client).recordDailyContext() } }
+    LaunchedEffect(Unit) { catching { EveningCheckinRepository(SupabaseClientProvider.client).recordDailyContext() } }
 
     // While TODAY is on screen: once a minute, rebuild in the background if the kept page went stale (a sync landed, the
     // day changed, or 15 minutes passed). The page on screen stays until the new one is ready.
     LaunchedEffect(Unit) {
         while (true) {
-            kotlinx.coroutines.delay(60_000L)
+            delay(60_000L)
             if (!loading && !TodayStore.isFresh(TodayStore.snapshot, LocalDate.now())) guard.retry()
         }
     }
@@ -268,18 +304,25 @@ fun TodayHomeScreen(
         }
         loading = true
         guard.run {
+            var partFailed = false
             // Its rebuild must see what was just written (a sync, a log): reads wait for the network, never an old copy.
-            kotlinx.coroutines.withContext(com.bioscan.fieldterminal.data.ReadCache.RequireFresh) { coroutineScope {
+            withContext(ReadCache.RequireFresh) { coroutineScope {
                 val client = SupabaseClientProvider.client
                 val status = StatusRepository(client)
+                // The parts around the scores (plan, fuel, nutrition, check-ins) each load on their own. One that fails keeps
+                // what the page already showed for this day instead of going blank, and leaves the page marked stale so the
+                // next minute tries again.
+                val sameDay = TodayStore.snapshot?.day == day
+                suspend fun <T : Any> part(shown: T?, load: suspend () -> T?): T? =
+                    catching { load() }.getOrElse { partFailed = true; shown.takeIf { sameDay } }
                 // The overview only supplies the open illness / injury that caps CHARGE: without it the scores still load.
-                val overviewD = async { runCatching { status.loadOverview() }.getOrNull() }
-                val previewsD = async { runCatching { status.loadTodayPreviews() }.getOrNull() }
-                val n = runCatching { NutritionRepository(client).loadOverview() }.getOrNull()
+                val overviewD = async { part(null) { status.loadOverview() } }
+                val previewsD = async { part(previews) { status.loadTodayPreviews() } }
+                val n = part(nut) { NutritionRepository(client).loadOverview() }
                 nut = n
-                val fuelD = async { runCatching { (FuelPlanRepository(client).loadToday(context, n, ZonedDateTime.now()) as? TodayFuelResult.Ready)?.fuel }.getOrNull() }
+                val fuelD = async { part(fuel) { (FuelPlanRepository(client).loadToday(context, n, ZonedDateTime.now()) as? TodayFuelResult.Ready)?.fuel } }
                 val closedD = async {
-                    runCatching { EveningCheckinRepository(client).loadSince(LocalDate.now().minusDays(1)).map(EveningCheckin::date).toSet() }.getOrDefault(emptySet())
+                    part(closed) { EveningCheckinRepository(client).loadSince(LocalDate.now().minusDays(1)).map(EveningCheckin::date).toSet() } ?: emptySet()
                 }
                 val o = overviewD.await()
                 // The score engine only runs again when what it reads changed (equal key: the kept scores stand).
@@ -297,12 +340,24 @@ fun TodayHomeScreen(
             val sf = soFarOf(nut, fuel)
             keptRows = rows
             keptSoFar = sf
-            TodayStore.snapshot = TodaySnapshot(day, view, nut, fuel, previews, closed, System.currentTimeMillis(), com.bioscan.fieldterminal.data.ReadCache.writeStamp(TodayStore.TABLES), scoresKey, rows, sf)
+            TodayStore.snapshot = TodaySnapshot(day, view, nut, fuel, previews, closed, if (partFailed) 0L else System.currentTimeMillis(), ReadCache.writeStamp(TodayStore.TABLES), scoresKey, rows, sf)
             val v = view
             val k = scoresKey
-            if (v != null && k != null) TodayStore.writeDisk(context, KeptToday(TodayStore.FORMAT, day, System.currentTimeMillis(), k, v, rows, sf, closed))
+            if (v != null && k != null && !partFailed) TodayStore.writeDisk(context, KeptToday(TodayStore.FORMAT, day, System.currentTimeMillis(), k, v, rows, sf, closed))
         }
         loading = false
+    }
+
+    // What a voice's action opens (the log/detail flow); reused by a not-done tap and by the completed card's button.
+    val openAction: (PlanAction) -> Unit = { action ->
+        when (action) {
+            PlanAction.SoFar -> soFar = true
+            is PlanAction.Meal -> mealKind = action.kind
+            is PlanAction.CloseDay -> checkInDate = action.date
+            is PlanAction.Supplements -> supplementBucket = action.bucket
+            is PlanAction.Tab -> onOpenTab(action.tab)
+            PlanAction.Bedtime -> stack = listOf(ScoreOverlay.Domain(DomainKey.SLEEP))
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
@@ -320,16 +375,8 @@ fun TodayHomeScreen(
             loading = loading && view == null,
             today = now.toLocalDate(),
             onOpenOverlay = { stack = listOf(it) },
-            onRow = { action ->
-                when (action) {
-                    PlanAction.SoFar -> soFar = true
-                    is PlanAction.Meal -> mealKind = action.kind
-                    is PlanAction.CloseDay -> checkInDate = action.date
-                    is PlanAction.Supplements -> supplementBucket = action.bucket
-                    is PlanAction.Tab -> onOpenTab(action.tab)
-                    PlanAction.Bedtime -> stack = listOf(ScoreOverlay.Domain(com.bioscan.fieldterminal.domain.score.DomainKey.SLEEP))
-                }
-            },
+            // A completed voice opens its card; one still to do opens its log flow.
+            onRow = { row -> if (row.done) doneRow = row else openAction(row.action) },
             onSoFar = { soFar = true },
         )
     }
@@ -353,21 +400,67 @@ fun TodayHomeScreen(
         )
     }
     if (logFood) {
-        com.bioscan.fieldterminal.ui.screens.AddEntrySheet(
+        AddEntrySheet(
             onDismiss = { logFood = false },
             onSaved = { logFood = false; guard.retry() },
-            start = com.bioscan.fieldterminal.domain.AddEntryStart.Fuel(com.bioscan.fieldterminal.domain.FuelSubType.Food),
+            start = AddEntryStart.Fuel(FuelSubType.Food),
         )
     }
     supplementBucket?.let { bucket ->
-        com.bioscan.fieldterminal.ui.screens.AddEntrySheet(
+        AddEntrySheet(
             onDismiss = { supplementBucket = null },
             onSaved = { supplementBucket = null; guard.retry() },
-            start = com.bioscan.fieldterminal.domain.AddEntryStart.Fuel(com.bioscan.fieldterminal.domain.FuelSubType.Supplements, supplementBundle = bucket.ifBlank { null }),
+            start = AddEntryStart.Fuel(FuelSubType.Supplements, supplementBundle = bucket.ifBlank { null }),
         )
     }
     checkInDate?.let { date ->
         EveningCheckInSheet(date = date, onDismiss = { checkInDate = null }, onSaved = { checkInDate = null; guard.retry() })
+    }
+    doneRow?.let { row ->
+        CompletedVoiceCard(row, fuel, onClose = { doneRow = null }) {
+            val action = row.action
+            doneRow = null
+            openAction(action)
+        }
+    }
+}
+
+/**
+ * A voice already done: a read-only card of what it was and a short summary of what was logged, with one button to
+ * open or change the underlying record. Taps on a voice still to do go straight to its log flow instead.
+ */
+@Composable
+private fun CompletedVoiceCard(row: PlanRow, fuel: TodayFuel?, onClose: () -> Unit, onEdit: () -> Unit) {
+    FullScreenOverlay(title = row.title, trailing = row.time?.format(TIME), onClose = onClose) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("DONE ✓", style = FTType.LabelCaps, color = FT.Ok)
+            row.detail?.let { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
+        }
+        when (val action = row.action) {
+            is PlanAction.Meal -> {
+                fuel?.todayCoded?.meals?.firstOrNull { it.kind == action.kind }?.let {
+                    Text(mealTargetLine(it), style = FTType.BodySmall, color = FT.TextSecondary)
+                }
+                fuel?.adherence?.get(action.kind.name)?.let { (g, adh) ->
+                    if (adh != MealAdherence.NOT_LOGGED)
+                        Text("Logged ${g.roundToInt()} g carbs · ${adh.label}", style = FTType.LabelCaps, color = FT.Ok)
+                }
+                FTButton(label = "VIEW OR CHANGE WHAT YOU LOGGED",
+                    emphasis = FTButtonEmphasis.Secondary, modifier = Modifier.fillMaxWidth()) { onEdit() }
+            }
+            is PlanAction.CloseDay -> {
+                Text("You closed this day. Its morning scores finalise once everything has synced.", style = FTType.BodySmall, color = FT.TextSecondary)
+                FTButton(label = "OPEN THE CHECK-IN",
+                    emphasis = FTButtonEmphasis.Secondary, modifier = Modifier.fillMaxWidth()) { onEdit() }
+            }
+            is PlanAction.Tab -> {
+                Text("Recorded ✓", style = FTType.LabelCaps, color = FT.Ok)
+                FTButton(label = "OPEN IN PLAN",
+                    emphasis = FTButtonEmphasis.Secondary, modifier = Modifier.fillMaxWidth()) { onEdit() }
+            }
+            else -> Unit
+        }
+        Spacer(Modifier.height(24.dp))
     }
 }
 
@@ -384,7 +477,7 @@ fun TodayContent(
     today: LocalDate,
     now: LocalTime = LocalTime.now(),
     onOpenOverlay: (ScoreOverlay) -> Unit,
-    onRow: (PlanAction) -> Unit,
+    onRow: (PlanRow) -> Unit,
     onSoFar: () -> Unit,
 ) {
     Column(
@@ -417,13 +510,13 @@ fun TodayContent(
                 modifier = Modifier.ftClickable(role = Role.Button, onClickLabel = "Open Charge", enabled = v != null) { onOpenOverlay(ScoreOverlay.Charge) },
             )
             charge?.score?.let { sc ->
-                val band = com.bioscan.fieldterminal.domain.score.ScoreScale.band(sc)
+                val band = ScoreScale.band(sc)
                 GaugeStateWord(band.label, band, holo = true)
             }
             // The open illness and what the body's signals say, or an early heads-up (domain/score/IllnessRead.kt).
-            v?.illness?.let { Text("⚠ ${it.reason}", style = FTType.Caption, color = FT.Warning, textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
-            v?.signals?.takeIf { it.verdict == com.bioscan.fieldterminal.domain.score.SignalsVerdict.HEADS_UP || v.illness != null }?.let {
-                Text(it.line, style = FTType.Caption, color = FT.TextSecondary, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            v?.illness?.let { Text("⚠ ${it.reason}", style = FTType.Caption, color = FT.Warn, textAlign = TextAlign.Center) }
+            v?.signals?.takeIf { it.verdict == SignalsVerdict.HEADS_UP || v.illness != null }?.let {
+                Text(it.line, style = FTType.Caption, color = FT.TextSecondary, textAlign = TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 24.dp))
             }
         }
@@ -464,7 +557,7 @@ fun TodayContent(
                     Text("SO FAR", style = FTType.LabelCaps, color = FT.TextMuted, modifier = Modifier.width(72.dp))
                     Text(if (s.target != null) "${s.kcal.roundToInt()} / ${s.target.roundToInt()} kcal" else "${s.kcal.roundToInt()} kcal",
                         style = FTType.Value, color = FT.TextPrimary, modifier = Modifier.weight(1f))
-                    Text("›", style = FTType.Telemetry, color = FT.TextMuted)
+                    FTChevron(tint = FT.TextMuted)
                 }
                 SoFarBar(s, now)
             }
@@ -475,7 +568,7 @@ fun TodayContent(
 }
 
 @Composable
-private fun Section(title: String, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth()
             .background(FT.Glass, RoundedCornerShape(FT.RadiusModule))
@@ -496,12 +589,12 @@ private fun Section(title: String, content: @Composable androidx.compose.foundat
  * supplements as small pills, closing the day as a diamond; filled once done. A NOW line sits where the clock is.
  */
 @Composable
-private fun DayTimeline(rows: List<PlanRow>, now: LocalTime, onRow: (PlanAction) -> Unit) {
+private fun DayTimeline(rows: List<PlanRow>, now: LocalTime, onRow: (PlanRow) -> Unit) {
     val nowIndex = rows.indexOfFirst { it.time != null && it.time.isAfter(now) }.let { if (it < 0) rows.size else it }
     Column {
         rows.forEachIndexed { i, row ->
             if (i == nowIndex && rows.any { it.time != null }) NowLine(now)
-            TimelineRow(row, first = i == 0, last = i == rows.lastIndex && nowIndex != rows.size) { onRow(row.action) }
+            TimelineRow(row, first = i == 0, last = i == rows.lastIndex && nowIndex != rows.size) { onRow(row) }
         }
         if (nowIndex == rows.size && rows.isNotEmpty()) NowLine(now)
     }
@@ -510,47 +603,51 @@ private fun DayTimeline(rows: List<PlanRow>, now: LocalTime, onRow: (PlanAction)
 @Composable
 private fun NowLine(now: LocalTime) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("NOW", style = FTType.Label, color = FT.EmeraldHighlight, modifier = Modifier.width(48.dp))
-        androidx.compose.foundation.Canvas(Modifier.weight(1f).height(10.dp)) {
-            drawLine(FT.EmeraldHighlight, androidx.compose.ui.geometry.Offset(0f, size.height / 2), androidx.compose.ui.geometry.Offset(size.width, size.height / 2), strokeWidth = 2f)
-            drawCircle(FT.EmeraldHighlight, 5f, androidx.compose.ui.geometry.Offset(14.dp.toPx(), size.height / 2))
+        // The present is a position, not a status: neutral primary ink (emerald is "optimal" everywhere else).
+        Text("NOW", style = FTType.Label, color = FT.TextPrimary, modifier = Modifier.width(48.dp))
+        Canvas(Modifier.weight(1f).height(10.dp)) {
+            drawLine(FT.TextPrimary.copy(alpha = 0.7f), Offset(0f, size.height / 2), Offset(size.width, size.height / 2), strokeWidth = 2f)
+            drawCircle(FT.TextPrimary, 5f, Offset(14.dp.toPx(), size.height / 2))
         }
-        Text(now.format(TIME), style = FTType.Micro, color = FT.EmeraldHighlight)
+        Text(now.format(TIME), style = FTType.Micro, color = FT.TextSecondary)
     }
 }
 
 @Composable
-private fun TimelineRow(row: PlanRow, first: Boolean, last: Boolean, onClick: () -> Unit) {
+internal fun TimelineRow(row: PlanRow, first: Boolean, last: Boolean, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().height(44.dp).ftClickable(role = Role.Button, onClickLabel = "Open ${row.title}") { onClick() },
+        // 48 dp: the whole row is the touch target (contract: interactive targets 48 dp).
+        modifier = Modifier.fillMaxWidth().height(48.dp).ftClickable(role = Role.Button, onClickLabel = "Open ${row.title}") { onClick() },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(row.time?.format(TIME) ?: "now", style = FTType.Value, color = if (row.done) FT.TextMuted else FT.TextSecondary, modifier = Modifier.width(48.dp))
-        androidx.compose.foundation.Canvas(Modifier.width(28.dp).fillMaxSize()) {
+        Canvas(Modifier.width(28.dp).fillMaxSize()) {
             val cx = size.width / 2
             val cy = size.height / 2
-            drawLine(FT.GlassBorder, androidx.compose.ui.geometry.Offset(cx, if (first) cy else 0f), androidx.compose.ui.geometry.Offset(cx, if (last) cy else size.height), strokeWidth = 2f)
+            drawLine(FT.GlassBorder, Offset(cx, if (first) cy else 0f), Offset(cx, if (last) cy else size.height), strokeWidth = 2f)
+            // The marker's hue names its kind by the Log's category palette (FT.Category: a meal is intake, a session activity); its shape says it too,
+            // and filled/outlined says done/planned. Status colours (emerald, amber, red) are never a kind.
             val color = when (row.kind) {
-                PlanKind.MEAL -> com.bioscan.fieldterminal.ui.components.NutrientColor.Calories
-                PlanKind.SESSION -> FT.Emerald
+                PlanKind.MEAL -> FT.Category.Intake.c500
+                PlanKind.SESSION -> FT.Category.Activity.c500
                 PlanKind.SUPPLEMENTS -> FT.DomainLabs
                 PlanKind.CLOSE -> FT.DomainLog
             }
-            val style = if (row.done) androidx.compose.ui.graphics.drawscope.Fill else androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f)
+            val style = if (row.done) Fill else Stroke(width = 2.5f)
             when (row.kind) {
                 PlanKind.MEAL -> {
-                    val r = (4f + 7f * kotlin.math.sqrt(((row.kcal ?: 400.0) / 900.0).toFloat().coerceIn(0f, 1.4f))).coerceAtMost(12f)
-                    drawCircle(FT.Base, r + 2f, androidx.compose.ui.geometry.Offset(cx, cy))
-                    drawCircle(color, r, androidx.compose.ui.geometry.Offset(cx, cy), style = style)
+                    val r = (4f + 7f * sqrt(((row.kcal ?: 400.0) / 900.0).toFloat().coerceIn(0f, 1.4f))).coerceAtMost(12f)
+                    drawCircle(FT.Base, r + 2f, Offset(cx, cy))
+                    drawCircle(color, r, Offset(cx, cy), style = style)
                 }
                 PlanKind.SESSION -> {
                     val h = (size.height * ((row.durationMin ?: 45.0) / 120.0).toFloat().coerceIn(0.3f, 1f))
-                    drawRoundRect(color, androidx.compose.ui.geometry.Offset(cx - 5f, cy - h / 2), androidx.compose.ui.geometry.Size(10f, h), androidx.compose.ui.geometry.CornerRadius(5f), style = style)
+                    drawRoundRect(color, Offset(cx - 5f, cy - h / 2), Size(10f, h), CornerRadius(5f), style = style)
                 }
-                PlanKind.SUPPLEMENTS -> drawRoundRect(color, androidx.compose.ui.geometry.Offset(cx - 7f, cy - 4f), androidx.compose.ui.geometry.Size(14f, 8f), androidx.compose.ui.geometry.CornerRadius(4f), style = style)
+                PlanKind.SUPPLEMENTS -> drawRoundRect(color, Offset(cx - 7f, cy - 4f), Size(14f, 8f), CornerRadius(4f), style = style)
                 PlanKind.CLOSE -> {
-                    val path = androidx.compose.ui.graphics.Path().apply { moveTo(cx, cy - 7f); lineTo(cx + 7f, cy); lineTo(cx, cy + 7f); lineTo(cx - 7f, cy); close() }
+                    val path = Path().apply { moveTo(cx, cy - 7f); lineTo(cx + 7f, cy); lineTo(cx, cy + 7f); lineTo(cx - 7f, cy); close() }
                     drawPath(path, color, style = style)
                 }
             }
@@ -560,7 +657,7 @@ private fun TimelineRow(row: PlanRow, first: Boolean, last: Boolean, onClick: ()
             Text(row.title, style = FTType.BodySmall, color = if (row.done) FT.TextSecondary else FT.TextPrimary, maxLines = 1)
             row.detail?.let { Text(it, style = FTType.MonoCaption, color = FT.TextSecondary, maxLines = 1) }
         }
-        Text("›", style = FTType.Telemetry, color = FT.TextMuted)
+        FTChevron()
     }
 }
 
@@ -574,30 +671,30 @@ private fun TimelineRow(row: PlanRow, first: Boolean, last: Boolean, onClick: ()
 private fun SoFarBar(s: SoFar, now: LocalTime) {
     val target = s.target ?: return
     val parts = listOf(
-        "Carbs" to (4 * s.carbsG) to com.bioscan.fieldterminal.ui.components.NutrientColor.Carbs,
-        "Protein" to (4 * s.proteinG) to com.bioscan.fieldterminal.ui.components.NutrientColor.Protein,
-        "Fat" to (9 * s.fatG) to com.bioscan.fieldterminal.ui.components.NutrientColor.Fat,
+        "Carbs" to (4 * s.carbsG) to NutrientColor.Carbs,
+        "Protein" to (4 * s.proteinG) to NutrientColor.Protein,
+        "Fat" to (9 * s.fatG) to NutrientColor.Fat,
     )
-    val expected = com.bioscan.fieldterminal.domain.expectedShareAt(now)
-    androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(16.dp)) {
+    val expected = expectedShareAt(now)
+    Canvas(Modifier.fillMaxWidth().height(16.dp)) {
         val full = target * 1.2
         fun x(kcal: Double) = (size.width * (kcal / full)).toFloat().coerceAtMost(size.width)
-        drawRoundRect(FT.GlassTrack, size = size, cornerRadius = androidx.compose.ui.geometry.CornerRadius(6f))
+        drawRoundRect(FT.GlassTrack, size = size, cornerRadius = CornerRadius(6f))
         var at = 0.0
         for ((part, color) in parts) {
             val (_, kcal) = part
-            drawRect(color, androidx.compose.ui.geometry.Offset(x(at), 0f), androidx.compose.ui.geometry.Size(x(at + kcal) - x(at), size.height))
+            drawRect(color, Offset(x(at), 0f), Size(x(at + kcal) - x(at), size.height))
             at += kcal
         }
-        drawLine(FT.TextPrimary, androidx.compose.ui.geometry.Offset(x(target), -2f), androidx.compose.ui.geometry.Offset(x(target), size.height + 2f), strokeWidth = 2.5f)
-        if (expected > 0) drawLine(FT.TextSecondary, androidx.compose.ui.geometry.Offset(x(target * expected), 0f), androidx.compose.ui.geometry.Offset(x(target * expected), size.height), strokeWidth = 2f,
-            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(4f, 4f)))
+        drawLine(FT.TextPrimary, Offset(x(target), -2f), Offset(x(target), size.height + 2f), strokeWidth = 2.5f)
+        if (expected > 0) drawLine(FT.TextSecondary, Offset(x(target * expected), 0f), Offset(x(target * expected), size.height), strokeWidth = 2f,
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f)))
     }
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         for ((part, color) in parts) {
             val (label, kcal) = part
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                androidx.compose.foundation.Canvas(Modifier.width(8.dp).height(8.dp)) { drawRect(color) }
+                Canvas(Modifier.width(8.dp).height(8.dp)) { drawRect(color) }
                 Text("$label ${kcal.roundToInt()}", style = FTType.Micro, color = FT.TextSecondary)
             }
         }

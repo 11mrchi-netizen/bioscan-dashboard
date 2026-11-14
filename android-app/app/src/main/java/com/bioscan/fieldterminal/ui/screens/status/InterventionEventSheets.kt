@@ -24,6 +24,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.InterventionEventsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.EpisodicIntervention
 import com.bioscan.fieldterminal.data.model.ExpectationRow
 import com.bioscan.fieldterminal.data.model.TrackedOutcomeRow
@@ -41,14 +42,15 @@ import com.bioscan.fieldterminal.domain.windowText
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTDropdown
+import com.bioscan.fieldterminal.ui.components.FTRatingSlider
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZonedDateTime
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Sheets for repeatable, timed interventions (docs: "Interventions as repeatable, timed events"). Declaring an
 // intervention fixes what it is expected to change and the window each outcome is read in; the database locks those once
@@ -142,7 +144,7 @@ fun InterventionSheet(tracked: List<TrackedOutcomeRow>, onDismiss: () -> Unit, o
                 error = null
             }
             if (tracked.isEmpty()) Text("For something you rate or note yourself (stool consistency, headache), add a tracked outcome first.", style = FTType.Caption, color = FT.TextMuted)
-            (error)?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+            (error)?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
 
             FTButton(label = if (saving) "SAVING..." else "SAVE INTERVENTION", enabled = name.trim().length >= 2 && !saving, emphasis = FTButtonEmphasis.Primary) {
                 validateExpectations(drafts)?.let { error = it; return@FTButton }
@@ -202,7 +204,7 @@ fun LogEventSheet(intervention: EpisodicIntervention, expectations: List<Expecta
             FieldTextField(dose, { dose = it }, "e.g. 2 glasses of milk")
             SheetLabel("NOTE (OPTIONAL)")
             FieldTextField(note, { note = it }, "", singleLine = false)
-            error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+            error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
             FTButton(label = if (saving) "SAVING..." else "LOG IT", enabled = !saving, emphasis = FTButtonEmphasis.Primary) {
                 val minutesAgo = WHEN_CHOICES.firstOrNull { it.first == whenLabel }?.second ?: 0L
                 val at = ZonedDateTime.now().minusMinutes(minutesAgo)
@@ -214,7 +216,7 @@ fun LogEventSheet(intervention: EpisodicIntervention, expectations: List<Expecta
                             assignedBy = if (drawId != null) "drawn" else "self",
                         )
                         // the draw keeps pointing at what it led to; a failed link doesn't undo a logged event
-                        if (drawId != null) runCatching { repo.linkDrawEvent(drawId, eventId) }
+                        if (drawId != null) catching { repo.linkDrawEvent(drawId, eventId) }
                         onLogged()
                     } catch (e: CancellationException) {
                         throw e
@@ -251,10 +253,10 @@ fun RateEventSheet(eventId: String, interventionName: String, onDismiss: () -> U
         Column(modifier = Modifier.fillMaxWidth().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("HOW DID IT FEEL · ${interventionName.uppercase()}", style = FTType.SectionTitle, color = FT.DomainLabs)
             Text("Rate it before looking at any numbers, so the data can't colour it. 0 is worst, 10 is best.", style = FTType.BodySmall, color = FT.TextSecondary)
-            com.bioscan.fieldterminal.ui.components.FTRatingSlider("HOW IT FELT", feeling?.toIntOrNull(), 0..10, FT.Metric.Mood, { feeling = it?.toString() }, lowWord = "worst", highWord = "best")
+            FTRatingSlider("HOW IT FELT", feeling?.toIntOrNull(), 0..10, FT.Metric.Mood, { feeling = it?.toString() }, lowWord = "worst", highWord = "best")
             SheetLabel("NOTE (OPTIONAL)")
             FieldTextField(note, { note = it }, "e.g. strip came off at 3am", singleLine = false)
-            error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+            error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
             FTButton(label = if (saving) "SAVING..." else "SAVE", enabled = feeling != null && !saving, emphasis = FTButtonEmphasis.Primary) {
                 val f = feeling?.toIntOrNull() ?: return@FTButton
                 saving = true
@@ -301,7 +303,7 @@ fun TrackedOutcomeSheet(onDismiss: () -> Unit, onCreated: () -> Unit) {
             TextChipRow(listOf("Higher", "Lower", "Neither"), when (better) { "up" -> "Higher"; "down" -> "Lower"; else -> "Neither" }, perRow = 3) {
                 better = when (it) { "Higher" -> "up"; "Lower" -> "down"; else -> "none" }
             }
-            error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+            error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
             FTButton(label = if (saving) "SAVING..." else "SAVE", enabled = name.trim().length >= 2 && !saving, emphasis = FTButtonEmphasis.Primary) {
                 saving = true
                 scope.launch {
@@ -346,7 +348,7 @@ fun TrackedValueSheet(tracked: List<TrackedOutcomeRow>, onDismiss: () -> Unit, o
             FieldTextField(text, { text = it }, "", keyboardType = KeyboardType.Decimal)
             SheetLabel("NOTE (OPTIONAL)")
             FieldTextField(note, { note = it }, "", singleLine = false)
-            error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+            error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
             FTButton(label = if (saving) "SAVING..." else "SAVE", enabled = outcome != null && !saving, emphasis = FTButtonEmphasis.Primary) {
                 val v = parseTrackedValue(scale, text)
                 if (v == null) { error = "Enter a value from ${scale.min.toInt()} to ${scale.max.toInt()}${if (scale.whole) " (whole numbers)" else ""}."; return@FTButton }

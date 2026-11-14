@@ -1,7 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens
 
 import android.net.Uri
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -36,14 +34,15 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.formatAmount
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
+import com.bioscan.fieldterminal.ui.components.FTChoiceChip
 import com.bioscan.fieldterminal.ui.components.FieldTextField
-import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.util.readAndCompressImage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // A packaged food no database knows (most Taiwanese products): photograph its nutrition label (營養標示), check the
 // numbers read from it -- or type them -- and save it under the barcode, so the next scan of it is instant.
@@ -99,7 +98,7 @@ fun LabelEntrySheet(
                 values.getValue(field.key).value = v?.let { formatAmount(if (kj && field.key == "calories") it / 4.184 else it) } ?: ""
             }
             checks = read.normalized.checks
-        } catch (e: kotlinx.coroutines.CancellationException) {
+        } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             readError = e.message ?: "Couldn't read the label"
@@ -119,7 +118,7 @@ fun LabelEntrySheet(
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("NEW PRODUCT", style = FTType.SectionTitle, color = FT.Emerald)
+            Text("NEW PRODUCT", style = FTType.SectionTitle, color = FT.Ok)
             Text(
                 "Barcode $barcode isn't in any food database yet. Take a photo of its nutrition label (營養標示) and check the " +
                     "numbers -- or type them in. It's saved under this barcode, so next time the scan is instant.",
@@ -132,12 +131,12 @@ fun LabelEntrySheet(
             }
             when {
                 reading -> Text("Reading the label...", style = FTType.Caption, color = FT.TextSecondary)
-                readError != null -> Text("$readError -- you can type the numbers in.", style = FTType.Caption, color = FT.Warning)
+                readError != null -> Text("$readError -- you can type the numbers in.", style = FTType.Caption, color = FT.Warn)
             }
             if (checks.isNotEmpty()) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("CHECK THESE", style = FTType.LabelCaps, color = FT.Warning)
-                    checks.forEach { Text("• ${it.message}", style = FTType.Caption, color = FT.Warning) }
+                    Text("CHECK THESE", style = FTType.LabelCaps, color = FT.Warn)
+                    checks.forEach { Text("• ${it.message}", style = FTType.Caption, color = FT.Warn) }
                 }
             }
 
@@ -174,7 +173,7 @@ fun LabelEntrySheet(
                 }
             }
 
-            saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical) }
+            saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Bad) }
 
             val size = servingSize.toAmount()
             val calories = values.getValue("calories").value.toAmount()
@@ -210,7 +209,7 @@ fun LabelEntrySheet(
                     try {
                         val saved = repo.saveLabel(barcode, name.trim(), brand.trim().ifBlank { null }, label)
                         saved.food?.let(onSaved) ?: run { saveError = "no product returned" }
-                    } catch (e: kotlinx.coroutines.CancellationException) {
+                    } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
                         saveError = e.message ?: "Unknown error"
@@ -241,17 +240,8 @@ private val LABEL_FIELDS = listOf(
 private fun String.toAmount(): Double? = trim().replace(',', '.').toDoubleOrNull()?.takeIf { it >= 0 }
 
 @Composable
-private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Text(
-        label,
-        style = FTType.LabelCaps,
-        color = if (selected) FT.Emerald else FT.TextSecondary,
-        modifier = Modifier
-            .border(FT.BorderWidth, if (selected) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-            .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall), onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-    )
-}
+// Selection is platinum (it was emerald, the "optimal" status colour).
+private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) = FTChoiceChip(label, selected, onClick)
 
 @Composable
 private fun LabelFormLabel(text: String) {

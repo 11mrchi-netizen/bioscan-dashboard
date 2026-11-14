@@ -13,9 +13,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,18 +39,22 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.EvidenceRows
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.model.RegisteredQuestion
+import com.bioscan.fieldterminal.data.catching
+import com.bioscan.fieldterminal.data.model.CaseCrossoverEntry
 import com.bioscan.fieldterminal.data.model.CaseCrossoverResultRow
 import com.bioscan.fieldterminal.data.model.EventCurvePayload
 import com.bioscan.fieldterminal.data.model.LagCurvePayload
+import com.bioscan.fieldterminal.data.model.RegisteredQuestion
+import com.bioscan.fieldterminal.domain.DailyChoice
 import com.bioscan.fieldterminal.domain.EvidenceGroup
 import com.bioscan.fieldterminal.domain.EvidenceRowView
 import com.bioscan.fieldterminal.domain.Verdict
-import com.bioscan.fieldterminal.domain.DailyChoice
 import com.bioscan.fieldterminal.domain.canRegister
 import com.bioscan.fieldterminal.domain.dailyChoiceFor
 import com.bioscan.fieldterminal.domain.evidenceTally
@@ -61,8 +67,10 @@ import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.niceTicks
 import com.bioscan.fieldterminal.ui.components.tickDecimals
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.abs
+import kotlin.math.exp
+import kotlin.math.ln
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Analysis review phase D (P3): the evidence board. Every question of the catalogue, drawn to scale and grouped by
 // outcome: the dot is the estimate, the line its 95% interval, the grey block the no-effect zone, the ticks the smallest
@@ -126,7 +134,7 @@ private fun EvidenceRow(row: EvidenceRowView, scale: Double, onOpen: () -> Unit)
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(row.label, style = FTType.Caption, color = FT.TextPrimary, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(0.38f))
+        Text(row.label, style = FTType.Caption, color = FT.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(0.38f))
         Box(Modifier.weight(0.62f)) {
             if (row.verdict == Verdict.NotYet) row.progress?.let { ProgressBar(it.fraction) } ?: Box(Modifier.height(22.dp)) else ForestRow(row, scale)
         }
@@ -212,7 +220,7 @@ private fun AxisLabels(scale: Double, unit: String) {
     Row(Modifier.fillMaxWidth()) {
         Text("-${fmt(scale)}", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
         Text("0 $unit", style = FTType.Micro, color = FT.TextMuted)
-        Text("+${fmt(scale)}", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+        Text("+${fmt(scale)}", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
     }
 }
 
@@ -230,15 +238,15 @@ private fun EvidenceDetailSheet(row: EvidenceRowView, curve: EventCurvePayload?,
             Text(row.summary, style = FTType.Body, color = FT.TextPrimary)
             if (row.verdict != Verdict.NotYet) ForestRow(row, row.zone?.let { maxOf(it * 3, abs(row.lo ?: 0.0), abs(row.hi ?: 0.0)) * 1.1 } ?: 1.0)
             row.sizeLine?.let { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
-            row.warning?.let { Text(it, style = FTType.BodySmall, color = FT.Warning) }
+            row.warning?.let { Text(it, style = FTType.BodySmall, color = FT.Warn) }
             row.registeredLine?.let { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
             row.verdictIntervalLine?.let { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
             if (row.adjustments.isNotEmpty()) Text("Adjusted for ${row.adjustments.joinToString(", ")}.", style = FTType.BodySmall, color = FT.TextSecondary)
             row.pooledLine?.let { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
-            // Phase E: the question's verdicts over time, from the append-only ledger.
+            // The question's verdicts over time, from the append-only ledger.
             var history by remember(row.id) { mutableStateOf<String?>(null) }
             LaunchedEffect(row.id) {
-                history = runCatching { verdictHistoryLine(verdictRuns(AnalysisRepository(SupabaseClientProvider.client).loadLedger(row.id))) }.getOrNull()
+                history = catching { verdictHistoryLine(verdictRuns(AnalysisRepository(SupabaseClientProvider.client).loadLedger(row.id))) }.getOrNull()
             }
             history?.let {
                 Text("VERDICT HISTORY", style = FTType.LabelCaps, color = FT.TextSecondary)
@@ -280,7 +288,7 @@ private fun EvidenceDetailSheet(row: EvidenceRowView, curve: EventCurvePayload?,
                 }
             }
             row.notes.forEach { Text(it, style = FTType.Micro, color = FT.TextMuted) }
-            // Phase F: a same-day choice can be tested -- the step from ASSOCIATED to TESTED.
+            // A same-day choice can be tested -- the step from ASSOCIATED to TESTED.
             onTest?.let { test ->
                 Text("TEST IT", style = FTType.LabelCaps, color = FT.TextSecondary)
                 Text(
@@ -348,7 +356,7 @@ private fun OffsetCurveChart(points: List<OffsetPoint>, unit: String, xLabel: (I
         }
         Row(Modifier.fillMaxWidth()) {
             points.forEach { p ->
-                Text(xLabel(p.x), style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Text(xLabel(p.x), style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
             }
         }
     }
@@ -361,20 +369,20 @@ private fun OffsetCurveChart(points: List<OffsetPoint>, unit: String, xLabel: (I
 @Composable
 internal fun CaseCrossoverCard(
     rows: List<CaseCrossoverResultRow>,
-    // Phase E: a hint can be registered as a question of its own, tested only on days after today.
+    // A hint can be registered as a question of its own, tested only on days after today.
     registered: List<RegisteredQuestion> = emptyList(),
     onRegister: ((exposure: String, outcome: String) -> Unit)? = null,
     registerError: String? = null,
 ) {
     if (rows.isEmpty()) return
-    var open by remember { mutableStateOf<Pair<String, com.bioscan.fieldterminal.data.model.CaseCrossoverEntry>?>(null) }
+    var open by remember { mutableStateOf<Pair<String, CaseCrossoverEntry>?>(null) }
     FTCard(
         title = "WHAT CAME BEFORE OFF MORNINGS",
         info = "Each off morning (outside its expected range on the unfavourable side) is compared with days on the same weekday in the same month, so habits and season cancel out. Each line is how much more often the exposure came the evening before (an odds ratio: right of 1× more often, left less often, with its 95% interval). Many exposures are screened at once: a hint of what to test, not an answer.",
         methodology = "case_crossover",
     ) {
         Text("EXPLORATORY · TAP A LINE FOR ITS NUMBERS", style = FTType.Micro, color = FT.TextMuted)
-        registerError?.let { Text("Couldn't register: $it", style = FTType.Caption, color = FT.Critical) }
+        registerError?.let { Text("Couldn't register: $it", style = FTType.Caption, color = FT.Bad) }
         if (registered.isNotEmpty()) Text("${registered.size} registered to test on new days", style = FTType.Caption, color = FT.TextSecondary)
         rows.sortedBy { listOf("hrv", "rhr", "sleep_hours").indexOf(it.key) }.forEach { r ->
             val p = r.payload
@@ -387,8 +395,8 @@ internal fun CaseCrossoverCard(
                     Text("Not yet: $best of $need off mornings", style = FTType.Caption, color = FT.TextMuted)
                     ProgressBar((best.toFloat() / need).coerceIn(0f, 1f))
                 }
-                val top = ready.maxOfOrNull { maxOf(abs(kotlin.math.ln(it.hi ?: 1.0)), abs(kotlin.math.ln(it.lo ?: 1.0))) }?.coerceIn(kotlin.math.ln(2.0), kotlin.math.ln(20.0)) ?: kotlin.math.ln(4.0)
-                ready.sortedByDescending { abs(kotlin.math.ln(it.oddsRatio ?: 1.0)) }.forEach { e ->
+                val top = ready.maxOfOrNull { maxOf(abs(ln(it.hi ?: 1.0)), abs(ln(it.lo ?: 1.0))) }?.coerceIn(ln(2.0), ln(20.0)) ?: ln(4.0)
+                ready.sortedByDescending { abs(ln(it.oddsRatio ?: 1.0)) }.forEach { e ->
                     val shape = RoundedCornerShape(FT.RadiusSmall)
                     Row(
                         Modifier.fillMaxWidth().clip(shape).ftClickable(shape = shape, role = Role.Button, onClickLabel = "Open ${e.label}") { open = r.key to e }.padding(vertical = 3.dp),
@@ -404,9 +412,9 @@ internal fun CaseCrossoverCard(
                     Row(Modifier.fillMaxWidth()) {
                         Box(Modifier.weight(0.38f))
                         Row(Modifier.weight(0.62f)) {
-                            Text("%.1f×".format(kotlin.math.exp(-top)), style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
+                            Text("%.1f×".format(exp(-top)), style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
                             Text("1×", style = FTType.Micro, color = FT.TextMuted)
-                            Text("%.0f×".format(kotlin.math.exp(top)), style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+                            Text("%.0f×".format(exp(top)), style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
                         }
                     }
                 }
@@ -415,7 +423,7 @@ internal fun CaseCrossoverCard(
     }
     open?.let { (outcome, e) ->
         val canReg = onRegister != null && canRegister(e.exposure, outcome, e.verdict, registered)
-        androidx.compose.material3.AlertDialog(
+        AlertDialog(
             onDismissRequest = { open = null },
             containerColor = FT.Surface,
             title = { Text(e.label.uppercase(), style = FTType.SectionTitle, color = FT.TextPrimary) },
@@ -432,12 +440,12 @@ internal fun CaseCrossoverCard(
             },
             confirmButton = {
                 if (canReg) {
-                    androidx.compose.material3.TextButton(onClick = { onRegister?.invoke(e.exposure, outcome); open = null }) { Text("REGISTER TO TEST", color = FT.DomainTraining) }
+                    TextButton(onClick = { onRegister?.invoke(e.exposure, outcome); open = null }) { Text("REGISTER TO TEST", color = FT.DomainTraining) }
                 } else {
-                    androidx.compose.material3.TextButton(onClick = { open = null }) { Text("GOT IT", color = FT.DomainTraining) }
+                    TextButton(onClick = { open = null }) { Text("GOT IT", color = FT.DomainTraining) }
                 }
             },
-            dismissButton = if (canReg) ({ androidx.compose.material3.TextButton(onClick = { open = null }) { Text("CLOSE", color = FT.TextSecondary) } }) else null,
+            dismissButton = if (canReg) ({ TextButton(onClick = { open = null }) { Text("CLOSE", color = FT.TextSecondary) } }) else null,
         )
     }
 }
@@ -450,13 +458,13 @@ private fun crossoverWord(verdict: String) = when (verdict) {
 
 // One exposure's odds ratio on a log scale around 1×: interval line, estimate dot.
 @Composable
-private fun OddsRow(e: com.bioscan.fieldterminal.data.model.CaseCrossoverEntry, top: Double) {
+private fun OddsRow(e: CaseCrossoverEntry, top: Double) {
     val or = e.oddsRatio ?: return
     Canvas(modifier = Modifier.fillMaxWidth().height(22.dp).semantics { contentDescription = "%.1f times as often".format(or) }) {
         val pad = 8f
         val mid = size.width / 2f
         val half = size.width / 2f - pad
-        fun x(v: Double) = mid + (kotlin.math.ln(v.coerceAtLeast(1e-3)) / top).toFloat().coerceIn(-1.05f, 1.05f) * half
+        fun x(v: Double) = mid + (ln(v.coerceAtLeast(1e-3)) / top).toFloat().coerceIn(-1.05f, 1.05f) * half
         val y = size.height / 2f
         drawLine(FT.TextMuted, Offset(mid, 0f), Offset(mid, size.height), strokeWidth = 1.5f)
         val lo = e.lo

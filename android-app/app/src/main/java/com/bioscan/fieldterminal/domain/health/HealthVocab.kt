@@ -1,7 +1,7 @@
 package com.bioscan.fieldterminal.domain.health
 
+import com.bioscan.fieldterminal.domain.LenientJson
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
 // Health concerns: the region and symptom vocabulary, packaged as the asset health-vocab.json from
 // supabase/functions/_shared/health-vocab (one copy shared with the analysis core and the migration's seed). Codes are
@@ -77,6 +77,6 @@ data class HealthVocab(
     }
 }
 
-private val vocabJson = Json { ignoreUnknownKeys = true }
+private val vocabJson = LenientJson
 
 fun parseHealthVocab(text: String): HealthVocab = vocabJson.decodeFromString(HealthVocab.serializer(), text)

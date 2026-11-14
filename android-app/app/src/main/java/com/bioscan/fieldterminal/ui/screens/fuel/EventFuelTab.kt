@@ -29,10 +29,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.EventFuel
 import com.bioscan.fieldterminal.data.FuelPlanRepository
+import com.bioscan.fieldterminal.data.FuelSettingsStore
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.domain.fuel.RaceFuelPlan
 import com.bioscan.fieldterminal.domain.fuel.WeatherSource
+import com.bioscan.fieldterminal.domain.fuel.elevationAtKm
 import com.bioscan.fieldterminal.domain.fuel.raceFuelPlanText
+import com.bioscan.fieldterminal.domain.fuel.seedBlocks
 import com.bioscan.fieldterminal.domain.trail.CoursePoint
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
@@ -40,11 +43,13 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTCardEmphasis
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import kotlinx.coroutines.CancellationException
+import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // An event's FUEL tab (docs/fuel-planning/README.md, phase 6): the race or long-day plan from domain/fuel/RaceFuelPlan.kt.
 // The plan's text is kept on the phone after every load, so the tab still shows the last plan without signal, and SHARE
@@ -71,7 +76,7 @@ fun EventFuelTab(eventId: Long, modifier: Modifier = Modifier) {
                 val text = raceFuelPlanText(f.plan, startLabel(f))
                 cache(context).edit().putString("event:$eventId", text).putLong("event:$eventId:at", System.currentTimeMillis()).apply()
             }
-        } catch (e: kotlinx.coroutines.CancellationException) {
+        } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             error = describeLoadFailure(e)
@@ -89,10 +94,10 @@ fun EventFuelTab(eventId: Long, modifier: Modifier = Modifier) {
                 val cached = cache(context).getString("event:$eventId", null)
                 Text(
                     error?.let { "Couldn't build the plan now: $it" } ?: "Set a target time or an expected duration on the event to plan it.",
-                    style = FTType.BodySmall, color = if (error != null) FT.Critical else FT.TextSecondary,
+                    style = FTType.BodySmall, color = if (error != null) FT.Bad else FT.TextSecondary,
                 )
                 if (cached != null) {
-                    val at = java.time.Instant.ofEpochMilli(cache(context).getLong("event:$eventId:at", 0L)).atZone(ZoneId.systemDefault())
+                    val at = Instant.ofEpochMilli(cache(context).getLong("event:$eventId:at", 0L)).atZone(ZoneId.systemDefault())
                     FTCard(title = "LAST SAVED PLAN · ${at.format(START).uppercase()}") { Text(cached, style = FTType.MonoCaption, color = FT.TextPrimary) }
                     FTButton("SHARE THE SAVED PLAN") { share(context, cached) }
                 }
@@ -133,14 +138,14 @@ private fun PlanView(f: EventFuel) {
     // The editable schedule: seeded from this plan, then yours. The debrief after the race is checked against it.
     FuelScheduleCard(
         kind = "event", refKey = f.event.id.toString(), durationMin = p.durationMin.roundToInt(),
-        toleratedGPerHour = com.bioscan.fieldterminal.data.FuelSettingsStore.get(context).toleratedGPerHour,
-        seed = { com.bioscan.fieldterminal.domain.fuel.seedBlocks(p) },
+        toleratedGPerHour = FuelSettingsStore.get(context).toleratedGPerHour,
+        seed = { seedBlocks(p) },
     )
     if (f.changes.isNotEmpty()) {
         FTCard(title = "CHANGED SINCE LAST SHOWN") { f.changes.forEach { Text("· $it", style = FTType.BodySmall, color = FT.TextPrimary) } }
     }
     if (p.warnings.isNotEmpty()) {
-        FTCard(title = "WATCH") { p.warnings.forEach { Text("· $it", style = FTType.BodySmall, color = FT.Warning) } }
+        FTCard(title = "WATCH") { p.warnings.forEach { Text("· $it", style = FTType.BodySmall, color = FT.Warn) } }
     }
     if (f.event.course.size >= 2) {
         FTCard(title = "ON THE COURSE") {
@@ -217,7 +222,7 @@ private fun FuelProfileChart(course: List<CoursePoint>, plan: RaceFuelPlan) {
         val path = Path()
         pts.forEachIndexed { i, p -> if (i == 0) path.moveTo(x(p.distanceM), y(p.elevationM!!)) else path.lineTo(x(p.distanceM), y(p.elevationM!!)) }
         drawPath(path, FT.TextSecondary, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
-        fun elevAt(km: Double): Double = com.bioscan.fieldterminal.domain.fuel.elevationAtKm(pts, km) ?: minE
+        fun elevAt(km: Double): Double = elevationAtKm(pts, km) ?: minE
         stations.forEach { km ->
             val px = x(km * 1000)
             drawLine(FT.TextPrimary, Offset(px, pad), Offset(px, size.height - pad), strokeWidth = 1.dp.toPx())

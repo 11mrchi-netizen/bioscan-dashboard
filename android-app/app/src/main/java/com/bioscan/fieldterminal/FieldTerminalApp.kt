@@ -4,11 +4,13 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import com.bioscan.fieldterminal.data.MetricRegistryStore
+import com.bioscan.fieldterminal.data.ReadCache
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.NotificationKind
+import com.bioscan.fieldterminal.data.routine.RoutineTimerStore
 import com.bioscan.fieldterminal.util.Perf
 
-// Performance pass, Stage 3. Everything that used to run on the main thread before the first frame (building the Supabase
+// Everything that used to run on the main thread before the first frame (building the Supabase
 // client, five notification-channel IPC calls, parsing the 37 kB metric registry on the first help button) now starts here,
 // on one background thread, while the Activity is being created. All of it is idempotent and lazy-safe: if a screen asks for
 // the client or the registry first, it simply takes the same lock and gets the same instance.
@@ -16,7 +18,7 @@ class FieldTerminalApp : Application() {
     override fun onCreate() {
         super.onCreate()
         // Pages open from the last data they showed (kept on disk) while fresh data loads (data/ReadCache.kt).
-        com.bioscan.fieldterminal.data.ReadCache.init(filesDir)
+        ReadCache.init(filesDir)
         Perf.enabled = BuildConfig.DEBUG // logcat tag "perf"; see util/Perf.kt
         Thread({
             Perf.timed("startup.warm") {
@@ -43,6 +45,9 @@ class FieldTerminalApp : Application() {
             Triple(NotificationKind.EVENT_FOLLOWUP, "Outcome follow-up", NotificationManager.IMPORTANCE_DEFAULT),
             Triple(NotificationKind.FUEL_SESSION, "Fuel before and after sessions", NotificationManager.IMPORTANCE_DEFAULT),
             Triple(NotificationKind.FUEL_EVENT, "Race week fuelling", NotificationManager.IMPORTANCE_HIGH),
+            Triple(NotificationKind.PRACTICE_DUE, "Practices", NotificationManager.IMPORTANCE_DEFAULT),
+            // The running routine timer: silent, it only carries STOP.
+            Triple(RoutineTimerStore.CHANNEL, "Routine timer", NotificationManager.IMPORTANCE_LOW),
         ).forEach { (id, name, importance) ->
             nm.createNotificationChannel(NotificationChannel(id, name, importance))
         }

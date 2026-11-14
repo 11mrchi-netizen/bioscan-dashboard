@@ -4,9 +4,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
-import java.time.ZoneOffset
 
-// Analysis Layer 3 / R2 (docs/analysis-layer-3). Shapes returned by the `log-agent` Edge Function and the pure rules the app
+// Shapes returned by the `log-agent` Edge Function and the pure rules the app
 // applies before anything is written. The function only PROPOSES (supabase/functions/_shared/log-core/proposal.ts decides
 // every number); the person confirms or fills in what is missing, and the app writes through the same repositories as the forms.
 
@@ -85,4 +84,4 @@ fun LogProposal.whenLocal(): LocalDateTime? =
 
 fun LogProposal.localDate(): String? = date ?: whenLocal()?.toLocalDate()?.toString()
 
-fun LocalDateTime.toAppIso(): String = atOffset(ZoneOffset.UTC).toString()
+fun LocalDateTime.toAppIso(): String = WallClock.write(this)

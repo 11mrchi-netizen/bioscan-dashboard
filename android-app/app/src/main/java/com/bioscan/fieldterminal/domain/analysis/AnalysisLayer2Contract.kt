@@ -1,10 +1,10 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain.analysis
 
-import kotlinx.serialization.UseSerializers
-import kotlinx.serialization.Serializable
 import com.bioscan.fieldterminal.domain.Confidence
 import com.bioscan.fieldterminal.domain.EvalState
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.LocalDate
 
 // DAV-67 (docs/analysis-layer-2/06-output-contract.md), v1.0.0. Shared shapes
@@ -13,7 +13,7 @@ import java.time.LocalDate
 // it needs are ported here; SessionLoadVector/RollingStateSeries/
 // PerformanceAnchor belong to the tickets that first need them (DAV-56/59/61).
 
-// Analysis Layer 3: the contract this file belongs to, including the server-published results read through
+// The contract this file belongs to, including the server-published results read through
 // data/model/AnalysisModels.kt. Additive changes keep the major version (docs/analysis-layer-3/contract-v3.md).
 const val ANALYSIS_CONTRACT_VERSION = "3.0.0"
 

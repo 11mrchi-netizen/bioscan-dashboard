@@ -1,9 +1,9 @@
 package com.bioscan.fieldterminal.data
 
-import com.bioscan.fieldterminal.domain.spec
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.InteractionRecord
 import com.bioscan.fieldterminal.domain.RosterItem
+import com.bioscan.fieldterminal.domain.spec
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -31,7 +31,7 @@ private data class InteractionRecordRow(
     val version: Int? = null,
 )
 
-// Analysis Layer 3 / Phase 6. The curated interaction registry (read-only,
+// The curated interaction registry (read-only,
 // shared) plus the roster reduced to what the pure detector needs.
 class InteractionRepository(private val supabase: SupabaseClient) {
     private companion object {
@@ -42,7 +42,7 @@ class InteractionRepository(private val supabase: SupabaseClient) {
     // The owner's verdicts (registry_reviews) decide "reviewed": confirmed counts, disputed keeps the flag and adds the
     // owner's note to the caveats.
     suspend fun loadRecords(): List<InteractionRecord> {
-        val reviews = runCatching { RegistryReviewRepository(supabase).loadReviews() }.getOrDefault(emptyMap())
+        val reviews = catching { RegistryReviewRepository(supabase).loadReviews() }.getOrDefault(emptyMap())
         return supabase.postgrest.from("interaction_records")
             .select(columns = Columns.list(COLUMNS)) { order("id", Order.ASCENDING) }
             .decodeList<InteractionRecordRow>()

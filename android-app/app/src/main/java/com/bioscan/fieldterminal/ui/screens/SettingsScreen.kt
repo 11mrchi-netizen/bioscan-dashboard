@@ -17,12 +17,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.auth.GoogleAuthManager
 import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTChevron
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Setup's own hub: a flat card dump got too big to scan, so this is now 4
 // buttons into their own pushed sub-screens (ui/screens/settings/), same
@@ -36,7 +38,7 @@ fun SettingsScreen(
     onOpenConnectedServices: () -> Unit,
     onOpenTraining: () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
+    Column(modifier = Modifier.fillMaxSize().background(FT.Base).ftPlatinumWash()) {
         ScreenHeader(title = "SETUP", context = "PROFILE · NOTIFICATIONS · CONNECTED SERVICES · TRAINING")
         Column(
             modifier = Modifier.fillMaxSize().padding(22.dp),
@@ -46,7 +48,7 @@ fun SettingsScreen(
             SettingsNavRow(title = "NOTIFICATIONS", subtitle = "Quiet hours", onClick = onOpenNotifications)
             SettingsNavRow(title = "CONNECTED SERVICES", subtitle = "AI nutrition, Map, Health Connect, Zepp", onClick = onOpenConnectedServices)
             // UX review P5 / P8: Setup keeps only true settings; the program library and import moved into PLAN A NEW BLOCK.
-            SettingsNavRow(title = "TRAINING SETUP", subtitle = "Equipment, session times", onClick = onOpenTraining)
+            SettingsNavRow(title = "TRAINING SETUP", subtitle = "Equipment, shoes, session times", onClick = onOpenTraining)
 
             Box(modifier = Modifier.fillMaxWidth().padding(top = 20.dp), contentAlignment = Alignment.Center) {
                 FTButton(label = "SIGN OUT") { scope.launch { GoogleAuthManager.signOut() } }
@@ -71,6 +73,6 @@ private fun SettingsNavRow(title: String, subtitle: String, onClick: () -> Unit)
             Text(title, style = FTType.RowTitle, color = FT.TextPrimary)
             Text(subtitle, style = FTType.Caption, color = FT.TextSecondary, modifier = Modifier.padding(top = 2.dp))
         }
-        Text("›", style = FTType.SectionTitle, color = FT.TextSecondary)
+        FTChevron(tint = FT.TextSecondary)
     }
 }

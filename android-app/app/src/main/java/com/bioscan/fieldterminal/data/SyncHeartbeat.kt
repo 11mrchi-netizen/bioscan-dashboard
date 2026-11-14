@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import android.util.Log
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.serialization.Serializable
@@ -17,12 +18,12 @@ object SyncHeartbeat {
 
     // Best effort: a heartbeat must never fail the sync it reports on.
     suspend fun record(client: SupabaseClient, stream: String, now: Instant = Instant.now()) {
-        val done = orNullUnlessCancelled {
+        val done = softLoad {
             client.postgrest.from("collector_heartbeats").upsert(listOf(Row(stream, now.toString()))) {
                 onConflict = "user_id,stream,ts"
                 ignoreDuplicates = true
             }
         }
-        if (done == null) android.util.Log.w("SyncHeartbeat", "heartbeat for $stream not recorded")
+        if (done == null) Log.w("SyncHeartbeat", "heartbeat for $stream not recorded")
     }
 }

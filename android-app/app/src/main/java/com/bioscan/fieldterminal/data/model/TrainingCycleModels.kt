@@ -3,7 +3,7 @@ package com.bioscan.fieldterminal.data.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// Phase A3 (Analysis Layer). Mirrors training_cycles' real jsonb shape
+// Mirrors training_cycles' real jsonb shape
 // (focus jsonb: [{quality, weight, role}], see ROADMAP.md Phase A1) --
 // kept as loose strings here since this is the raw-wire DTO; parsing into
 // the real FocusQuality/FocusRole enums (and dropping anything that

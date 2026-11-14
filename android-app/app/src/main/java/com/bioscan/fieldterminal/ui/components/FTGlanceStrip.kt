@@ -35,8 +35,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.domain.MetricState
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.launch
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Contract A3 (design/FUTURISTIC_MATERIAL_DESIGN_CONTRACT.md, "Card emphasis"): a long tab opens with a glance strip, one
 // chip per card below carrying that card's state (or its headline when it has no state); tapping a chip scrolls to the

@@ -153,6 +153,11 @@
             android:name=".data.NotificationActionReceiver"
             android:exported="false" />
 
+        <!-- The practice reminder's DONE / START / SKIP and the routine timer's STOP (data/routine/RoutineActionReceiver.kt). -->
+        <receiver
+            android:name=".data.routine.RoutineActionReceiver"
+            android:exported="false" />
+
         <!-- Hands a temp camera-capture file a content:// Uri so the camera
              app (a different process) can write to it; a plain file:// Uri
              is blocked by StrictMode on API 24+. -->

@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,30 +18,35 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.domain.DayRange
+import com.bioscan.fieldterminal.data.MetricRegistryStore
+import com.bioscan.fieldterminal.domain.EvalState
+import com.bioscan.fieldterminal.domain.MetricState
 import com.bioscan.fieldterminal.domain.StateWord
 import com.bioscan.fieldterminal.domain.TimeRange
 import com.bioscan.fieldterminal.domain.aggregate
-import com.bioscan.fieldterminal.domain.aggregateRanges
+import com.bioscan.fieldterminal.domain.analysis.Directionality
+import com.bioscan.fieldterminal.domain.baselineStateWord
 import com.bioscan.fieldterminal.domain.helpText
 import com.bioscan.fieldterminal.domain.summary
-import com.bioscan.fieldterminal.domain.windowed
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 import kotlin.math.sqrt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Redesign (spec §1, §2): the global range selector and the four reusable card layouts. Contract amendment: the
 // per-card "?" now carries the explanatory notes that used to sit inside cards; the title is right-aligned, the
@@ -51,39 +57,9 @@ object GlobalTimeRange {
     var selected by mutableStateOf(TimeRange.Month)
 }
 
-/** The range as a small dropdown for the page header's right corner (7D · 1M · 3M · 6M · 1Y · ALL). */
-@Composable
-fun TimeRangeDropdown(modifier: Modifier = Modifier) {
-    var open by androidx.compose.runtime.remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(FT.RadiusSmall)
-    Box(modifier) {
-        Row(
-            Modifier
-                .height(32.dp)
-                .border(FT.BorderWidth, FT.GlassBorder, shape)
-                .background(FT.Glass, shape)
-                .ftClickable(shape = shape, role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "Change the time range") { open = true }
-                .padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Text(GlobalTimeRange.selected.label, style = FTType.LabelCaps, color = FT.TextPrimary)
-            Text("▾", style = FTType.Label, color = FT.TextSecondary)
-        }
-        androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = FT.Elevated) {
-            TimeRange.entries.forEach { r ->
-                androidx.compose.material3.DropdownMenuItem(
-                    text = { Text(r.label, style = FTType.LabelCaps, color = if (r == GlobalTimeRange.selected) FT.TextPrimary else FT.TextPrimary) },
-                    onClick = { GlobalTimeRange.selected = r; open = false },
-                )
-            }
-        }
-    }
-}
-
 /** Card chrome without a built-in title row: the header below supplies it. */
 @Composable
-fun RedesignCard(modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+fun RedesignCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val shape = RoundedCornerShape(FT.RadiusCard)
     Column(
         modifier = modifier.fillMaxWidth().clip(shape).border(FT.BorderWidth, FT.GlassBorder, shape).background(FT.Glass, shape).padding(16.dp),
@@ -124,8 +100,8 @@ fun MetricCardHeader(
 
 @Composable
 internal fun rememberHelp(methodology: String?, info: String?): Pair<String?, String?> {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val entry = androidx.compose.runtime.remember(methodology) { methodology?.let { com.bioscan.fieldterminal.data.MetricRegistryStore.get(context, it) } }
+    val context = LocalContext.current
+    val entry = remember(methodology) { methodology?.let { MetricRegistryStore.get(context, it) } }
     val body = listOfNotNull(info, entry?.summary()).joinToString("\n\n").ifBlank { null }
     return body to entry?.helpText()
 }
@@ -145,57 +121,21 @@ fun windowBaseline(values: List<Double>): WindowBaseline? {
  * The direction pill read from the band the card draws: the latest reading against the window's own limits (ABOVE BAND, BELOW
  * BAND or WITHIN BAND), coloured by what that direction means for the metric. Building under five readings.
  */
-fun windowStateWord(values: List<Double>, directionality: com.bioscan.fieldterminal.domain.analysis.Directionality, healthyRange: ClosedFloatingPointRange<Double>? = null): StateWord {
-    val band = windowBaseline(values) ?: return StateWord(com.bioscan.fieldterminal.domain.MetricState.Building)
+fun windowStateWord(values: List<Double>, directionality: Directionality, healthyRange: ClosedFloatingPointRange<Double>? = null): StateWord {
+    val band = windowBaseline(values) ?: return StateWord(MetricState.Building)
     val state = when {
-        values.last() > band.high -> com.bioscan.fieldterminal.domain.EvalState.ShiftUp
-        values.last() < band.low -> com.bioscan.fieldterminal.domain.EvalState.ShiftDown
-        else -> com.bioscan.fieldterminal.domain.EvalState.Stable
+        values.last() > band.high -> EvalState.ShiftUp
+        values.last() < band.low -> EvalState.ShiftDown
+        else -> EvalState.Stable
     }
-    val word = com.bioscan.fieldterminal.domain.baselineStateWord(state, directionality, healthyRange, values.takeLast(7).average())
+    val word = baselineStateWord(state, directionality, healthyRange, values.takeLast(7).average())
     return word.copy(
         word = when (state) {
-            com.bioscan.fieldterminal.domain.EvalState.ShiftUp -> "ABOVE BAND"
-            com.bioscan.fieldterminal.domain.EvalState.ShiftDown -> "BELOW BAND"
+            EvalState.ShiftUp -> "ABOVE BAND"
+            EvalState.ShiftDown -> "BELOW BAND"
             else -> "WITHIN BAND"
         },
     )
-}
-
-/**
- * Spec §1.2. The baseline is the centre of the bar; the shift limits sit at 10 % and 90 % (the range covers 80 % of the
- * bar); the current day is a dot with no number; the limit values are small and quiet. A reading beyond a limit stays on
- * the bar, pinned near its end, so an outlier is never lost off the edge.
- */
-@Composable
-fun BaselineShiftBand(
-    band: WindowBaseline,
-    current: Double?,
-    modifier: Modifier = Modifier,
-    format: (Double) -> String = { if (abs(it) >= 100) "%.0f".format(it) else "%.1f".format(it) },
-    accent: Color = FT.Emerald,
-) {
-    val half = maxOf(band.baseline - band.low, band.high - band.baseline).takeIf { it > 0.0 } ?: 1.0
-    fun at(v: Double): Float = (0.5 + (v - band.baseline) / half * 0.4).toFloat().coerceIn(0.03f, 0.97f)
-    Column(modifier.fillMaxWidth()) {
-        Canvas(Modifier.fillMaxWidth().height(22.dp)) {
-            val y = size.height / 2f
-            val bar = 8.dp.toPx()
-            drawLine(FT.GlassTrack, Offset(0f, y), Offset(size.width, y), strokeWidth = bar, cap = StrokeCap.Round)
-            drawRoundRect(
-                accent.copy(alpha = 0.30f),
-                topLeft = Offset(0.1f * size.width, y - bar / 2f),
-                size = Size(0.8f * size.width, bar),
-                cornerRadius = CornerRadius(bar / 2f),
-            )
-            drawLine(FT.TextSecondary, Offset(size.width / 2f, y - bar), Offset(size.width / 2f, y + bar), strokeWidth = 2.dp.toPx())
-            current?.let { drawCircle(FT.TextPrimary, radius = 5.dp.toPx(), center = Offset(at(it) * size.width, y)) }
-        }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
-            Text(format(band.low), style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
-            Text(format(band.high), style = FTType.Micro, color = FT.TextMuted, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
-        }
-    }
 }
 
 private fun gapFor(range: TimeRange): Int? = when (range.grain) {
@@ -204,7 +144,7 @@ private fun gapFor(range: TimeRange): Int? = when (range.grain) {
     TimeRange.Grain.Month -> 31
 }
 
-/** Spec §1.3 Trend Card: header and the line chart (daily at a month or less, never averaged there). */
+/** Spec §1.3 Trend Card: header and the line chart (daily at a month or less, drawn as its trend with each day a dot). */
 @Composable
 fun TrendCard(
     title: String,
@@ -218,7 +158,7 @@ fun TrendCard(
     color: Color = FT.DomainHeart,
     scale: ClosedFloatingPointRange<Double>? = null,
     format: (Double) -> String = { if (abs(it) >= 100) "%.0f".format(it) else "%.1f".format(it) },
-    footer: (@Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit)? = null,
+    footer: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
     val (helpBody, helpDetails) = rememberHelp(methodology, info)
     val latest = points.maxByOrNull { it.first }?.second
@@ -232,92 +172,6 @@ fun TrendCard(
         }
         footer?.invoke(this)
     }
-}
-
-/** Spec §1.3 Trend and Baseline Card: header, the baseline shift band, then the line chart. The band follows the range. */
-@Composable
-fun TrendBaselineCard(
-    title: String,
-    points: List<Pair<LocalDate, Double>>,
-    unit: String,
-    modifier: Modifier = Modifier,
-    range: TimeRange = GlobalTimeRange.selected,
-    pill: StateWord? = null,
-    directionality: com.bioscan.fieldterminal.domain.analysis.Directionality? = null,
-    healthyRange: ClosedFloatingPointRange<Double>? = null,
-    methodology: String? = null,
-    info: String? = null,
-    color: Color = FT.DomainHeart,
-    scale: ClosedFloatingPointRange<Double>? = null,
-    format: (Double) -> String = { if (abs(it) >= 100) "%.0f".format(it) else "%.1f".format(it) },
-) {
-    val (helpBody, helpDetails) = rememberHelp(methodology, info)
-    val inWindow = windowed(points, range)
-    val windowPill = pill ?: directionality?.let { windowStateWord(inWindow.map { p -> p.second }, it, healthyRange) }
-    val band = windowBaseline(inWindow.map { it.second })
-    val latest = inWindow.lastOrNull()?.second
-    val shown = aggregate(points, range)
-    RedesignCard(modifier) {
-        MetricCardHeader(title, latest?.let(format), unit, windowPill, helpBody, helpDetails)
-        if (band != null) BaselineShiftBand(band, latest, format = format) else Text("Baseline builds after five readings in this range.", style = FTType.Caption, color = FT.TextMuted)
-        if (shown.size >= 2) {
-            DateTrendLine(points = shown, color = color, unit = unit, scale = scale, maxGapDays = gapFor(range), valueFormat = format, highlightColor = color, refLow = band?.low, refHigh = band?.high)
-        }
-    }
-}
-
-/**
- * Spec §1.3 Range Trend Card: one floating column per day (or week/month) from its low to its high. Weekly and monthly
- * columns span the mean of the daily lows to the mean of the daily highs.
- */
-@Composable
-fun RangeTrendCard(
-    title: String,
-    days: List<Pair<LocalDate, DayRange>>,
-    unit: String,
-    modifier: Modifier = Modifier,
-    range: TimeRange = GlobalTimeRange.selected,
-    pill: StateWord? = null,
-    methodology: String? = null,
-    info: String? = null,
-    color: Color = FT.DomainHeart,
-    below: (@Composable () -> Unit)? = null,
-) {
-    val (helpBody, helpDetails) = rememberHelp(methodology, info)
-    val shown = aggregateRanges(days, range)
-    val latest = days.maxByOrNull { it.first }?.second
-    RedesignCard(modifier) {
-        MetricCardHeader(title, latest?.let { "%.0f–%.0f".format(it.low, it.high) }, unit, pill, helpBody, helpDetails)
-        below?.invoke()
-        if (shown.isEmpty()) {
-            Text("No readings in this range yet.", style = FTType.Caption, color = FT.TextMuted)
-        } else {
-            FloatingColumns(shown, color)
-        }
-    }
-}
-
-@Composable
-private fun FloatingColumns(columns: List<Pair<LocalDate, DayRange>>, color: Color) {
-    val lo = columns.minOf { it.second.low }
-    val hi = columns.maxOf { it.second.high }
-    val span = (hi - lo).takeIf { it > 0.0 } ?: 1.0
-    Row(Modifier.fillMaxWidth()) {
-        Column(Modifier.height(110.dp), verticalArrangement = Arrangement.SpaceBetween) {
-            Text("%.0f".format(hi), style = FTType.Micro, color = FT.TextMuted)
-            Text("%.0f".format(lo), style = FTType.Micro, color = FT.TextMuted)
-        }
-        Canvas(Modifier.weight(1f).height(110.dp).padding(start = 8.dp)) {
-            val layout = barLayout(columns.size)
-            val w = layout.barWidth.coerceIn(3.dp.toPx(), 10.dp.toPx())
-            columns.forEachIndexed { i, (_, r) ->
-                val top = ((hi - r.high) / span).toFloat() * size.height
-                val bottom = ((hi - r.low) / span).toFloat() * size.height
-                drawRangeCapsule(color, layout.center(i), w, top, bottom, alpha = if (i == columns.lastIndex) 1f else 0.85f)
-            }
-        }
-    }
-    Text("${columns.first().first}  →  ${columns.last().first}", style = FTType.Micro, color = FT.TextMuted)
 }
 
 /** One line on a [DualAxisChart]. */
@@ -336,13 +190,13 @@ fun DualAxisChart(
     leftUnit: String = "kcal",
     bandLabel: String = "RANGE",
     rightUnit: String = "g",
-    height: androidx.compose.ui.unit.Dp = 150.dp,
+    height: Dp = 150.dp,
 ) {
     val all = (left + right).flatMap { it.points }
     if (all.size < 2) return
     val d0 = all.minOf { it.first }
     val d1 = all.maxOf { it.first }
-    val span = java.time.temporal.ChronoUnit.DAYS.between(d0, d1).coerceAtLeast(1).toFloat()
+    val span = ChronoUnit.DAYS.between(d0, d1).coerceAtLeast(1).toFloat()
     fun bounds(lines: List<AxisLine>, band: ClosedFloatingPointRange<Double>?): Pair<Double, Double>? {
         val v = lines.flatMap { l -> l.points.map { it.second } } + listOfNotNull(band?.start, band?.endInclusive)
         if (v.isEmpty()) return null
@@ -358,10 +212,10 @@ fun DualAxisChart(
             Text(rightUnit.uppercase() + (rb?.let { "  0–%.0f".format(it.second) } ?: ""), style = FTType.Micro, color = FT.TextMuted, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
         }
         Canvas(Modifier.fillMaxWidth().height(height)) {
-            fun x(d: LocalDate) = java.time.temporal.ChronoUnit.DAYS.between(d0, d).toFloat() / span * size.width
+            fun x(d: LocalDate) = ChronoUnit.DAYS.between(d0, d).toFloat() / span * size.width
             fun y(v: Double, b: Pair<Double, Double>) = size.height - ((v - b.first) / (b.second - b.first)).toFloat() * size.height
             if (leftBand != null && lb != null) {
-                drawRect(FT.Emerald.copy(alpha = 0.14f), Offset(0f, y(leftBand.endInclusive, lb)), Size(size.width, y(leftBand.start, lb) - y(leftBand.endInclusive, lb)))
+                drawRect(FT.Ok.copy(alpha = 0.14f), Offset(0f, y(leftBand.endInclusive, lb)), Size(size.width, y(leftBand.start, lb) - y(leftBand.endInclusive, lb)))
             }
             fun draw(lines: List<AxisLine>, b: Pair<Double, Double>?) {
                 if (b == null) return
@@ -379,47 +233,12 @@ fun DualAxisChart(
         FlowRow(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             (left + right).forEach { l ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    androidx.compose.foundation.layout.Box(Modifier.height(3.dp).width(12.dp).background(l.color))
+                    Box(Modifier.height(3.dp).width(12.dp).background(l.color))
                     Text(l.label, style = FTType.Micro, color = FT.TextSecondary)
                 }
             }
-            if (leftBand != null) Text(bandLabel, style = FTType.Micro, color = FT.Emerald)
+            if (leftBand != null) Text(bandLabel, style = FTType.Micro, color = FT.Ok)
         }
     }
 }
 
-/** One stacked column: its date and its parts, bottom to top. */
-data class StackedColumn(val date: LocalDate, val parts: List<Double>)
-
-/** Stacked columns (macros per kg, protein per meal); [colors] gives one colour per part, [labels] the key. */
-@Composable
-fun StackedColumns(
-    columns: List<StackedColumn>,
-    colors: List<Color>,
-    labels: List<String>,
-    modifier: Modifier = Modifier,
-    unit: String,
-    height: androidx.compose.ui.unit.Dp = 130.dp,
-) {
-    if (columns.isEmpty()) return
-    val top = columns.maxOf { it.parts.sum() }.takeIf { it > 0 } ?: return
-    Column(modifier.fillMaxWidth()) {
-        Text("$unit  0–%.1f".format(top), style = FTType.Micro, color = FT.TextMuted)
-        Canvas(Modifier.fillMaxWidth().height(height)) {
-            val layout = barLayout(columns.size)
-            val usable = size.height - FTBarSpec.TopPad.toPx()
-            columns.forEachIndexed { i, c ->
-                if (c.parts.sum() <= 0.0) drawBarStub(layout.left(i), layout.barWidth)
-                else drawStackedBar(c.parts, colors, layout.left(i), layout.barWidth, { v -> (v / top).toFloat() * usable }, cap = i == columns.lastIndex)
-            }
-        }
-        FlowRow(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            labels.forEachIndexed { i, l ->
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    androidx.compose.foundation.layout.Box(Modifier.height(8.dp).width(8.dp).background(colors[i % colors.size]))
-                    Text(l, style = FTType.Micro, color = FT.TextSecondary)
-                }
-            }
-        }
-    }
-}

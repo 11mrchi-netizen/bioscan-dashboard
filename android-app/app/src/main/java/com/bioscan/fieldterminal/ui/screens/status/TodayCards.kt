@@ -1,83 +1,54 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
+import com.bioscan.fieldterminal.data.model.MealRow
+import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
+import com.bioscan.fieldterminal.domain.GlycaemicBand
 import com.bioscan.fieldterminal.domain.HypnogramNight
 import com.bioscan.fieldterminal.domain.MINUTE_HR_MAX_GAP_MINUTES
+import com.bioscan.fieldterminal.domain.MetricState
 import com.bioscan.fieldterminal.domain.SleepStage
+import com.bioscan.fieldterminal.domain.StateWord
 import com.bioscan.fieldterminal.domain.clockLabel
+import com.bioscan.fieldterminal.domain.estimateMealResponses
 import com.bioscan.fieldterminal.domain.stageMinutes
-import com.bioscan.fieldterminal.ui.components.SegmentedToggle
-import java.time.LocalDate
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
-import com.bioscan.fieldterminal.domain.HeartRateDay
-import com.bioscan.fieldterminal.domain.minuteHrSummary
 import com.bioscan.fieldterminal.ui.components.FTSegment
 import com.bioscan.fieldterminal.ui.components.FTSegmentBar
-import com.bioscan.fieldterminal.ui.components.MetricCardHeader
-import com.bioscan.fieldterminal.ui.components.MinuteHeartRateChart
-import com.bioscan.fieldterminal.ui.components.RedesignCard
-import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import java.time.format.DateTimeFormatter
-import java.time.OffsetDateTime
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.text.style.TextOverflow
-import com.bioscan.fieldterminal.data.model.MealRow
-import com.bioscan.fieldterminal.domain.GlycaemicBand
-import com.bioscan.fieldterminal.domain.MetricState
-import com.bioscan.fieldterminal.domain.StateWord
-import com.bioscan.fieldterminal.domain.estimateMealResponses
 import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.MetricCardHeader
+import com.bioscan.fieldterminal.ui.components.RedesignCard
+import com.bioscan.fieldterminal.ui.components.SegmentedToggle
+import com.bioscan.fieldterminal.ui.theme.FTType
+import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Redesign (spec §4): the intraday cards that left the Health page now live on Today.
-
-private const val INTRADAY_HR_INFO =
-    "Your band's heart rate minute by minute for the newest day it has synced, from midnight to midnight. Minutes " +
-        "without a reading (band off the wrist, or no measurement) are left out: the line breaks there. Tap or drag the " +
-        "chart to read a minute."
-
-/** Trend Card: the newest day's minute-by-minute heart rate (moved from Health › Cardio). */
-@Composable
-internal fun IntradayHeartRateCard(day: HeartRateDay?) {
-    if (day == null) return
-    val summary = minuteHrSummary(day.points)
-    RedesignCard {
-        MetricCardHeader(
-            title = "HEART RATE · ${day.date.format(DateTimeFormatter.ofPattern("d MMM")).uppercase()}",
-            latest = day.points.lastOrNull()?.bpm?.toString(),
-            unit = "bpm",
-            helpBody = INTRADAY_HR_INFO,
-        )
-        MinuteHeartRateChart(points = day.points, color = FT.DomainHeart)
-        summary?.let {
-            Text(
-                "Worn ${it.wornMinutes / 60} h ${it.wornMinutes % 60} min · ${it.low}–${it.high} bpm · average ${it.average} bpm",
-                style = FTType.Caption,
-                color = FT.TextSecondary,
-            )
-        }
-    }
-}
 
 private const val HYPNOGRAM_INFO =
     "Last night through the night: which stage you were in minute by minute (awake, REM, light, deep), when you woke, and the sleep " +
@@ -94,7 +65,7 @@ private enum class HypnogramOverlay(val label: String) { None("STAGES"), HeartRa
 internal fun HypnogramCard(latest: SleepAnalysisRow?) {
     val date = latest?.date?.let { LocalDate.parse(it) }
     val night by produceState<HypnogramNight?>(initialValue = null, date) {
-        value = date?.let { runCatching { AnalysisRepository(SupabaseClientProvider.client).loadHypnogramNight(it) }.getOrNull() }
+        value = date?.let { catching { AnalysisRepository(SupabaseClientProvider.client).loadHypnogramNight(it) }.getOrNull() }
     }
     var overlay by rememberSaveable { mutableStateOf(HypnogramOverlay.None.name) }
     RedesignCard {
@@ -155,7 +126,7 @@ private fun HypnogramChart(night: HypnogramNight, showHeartRate: Boolean) {
                 val yc = lanes.indexOf(c.stage) * laneH + laneH / 2
                 drawLine(FT.GlassBorder, Offset(x(a.endMin), ya), Offset(x(c.startMin), yc), strokeWidth = 1f)
             }
-            night.cycles.forEach { drawLine(FT.TextMuted, Offset(x(it.endMin), 0f), Offset(x(it.endMin), size.height), strokeWidth = 1f, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(6f, 6f))) }
+            night.cycles.forEach { drawLine(FT.TextMuted, Offset(x(it.endMin), 0f), Offset(x(it.endMin), size.height), strokeWidth = 1f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))) }
             if (showHeartRate && hrHi > hrLo) {
                 night.heartRate.zipWithNext().filter { (a, c) -> c.minute - a.minute <= MINUTE_HR_MAX_GAP_MINUTES }.forEach { (a, c) ->
                     fun y(bpm: Int) = size.height - (bpm - hrLo).toFloat() / (hrHi - hrLo) * size.height

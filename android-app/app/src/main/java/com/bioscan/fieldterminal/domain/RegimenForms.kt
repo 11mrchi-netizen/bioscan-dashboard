@@ -1,5 +1,7 @@
 package com.bioscan.fieldterminal.domain
 
+import java.util.Locale
+
 // The form decides how an item is handled (migration 20261120_regimen_form_dose.sql): the unit one dose is counted in,
 // whether a unit can be split, and the route -- fixed by the form unless the form leaves it open (a liquid can be swallowed,
 // held under the tongue or put on the skin; an injection goes under the skin or into muscle). One dose is a count of the
@@ -65,7 +67,7 @@ fun unitsWords(qty: Double, doseAmount: Double?, unit: String?): String? {
     val n = Math.round(qty * count * 1000) / 1000.0
     val counted = u in setOf("capsule", "softgel", "tablet", "gummy", "patch", "spray", "scoop", "drop", "pill")
     // Counted units read as fractions (½ tablet); measured ones as decimals (6.25 g), as on a scale or a syringe.
-    val number = if (counted) formatSupplementQty(n) else String.format(java.util.Locale.US, "%.2f", n).trimEnd('0').trimEnd('.')
+    val number = if (counted) formatSupplementQty(n) else String.format(Locale.US, "%.2f", n).trimEnd('0').trimEnd('.')
     return "$number $u${if (counted && n > 1) "s" else ""}"
 }
 

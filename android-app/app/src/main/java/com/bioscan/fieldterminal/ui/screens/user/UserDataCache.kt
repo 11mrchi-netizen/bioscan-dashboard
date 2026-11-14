@@ -3,6 +3,7 @@ package com.bioscan.fieldterminal.ui.screens.user
 import com.bioscan.fieldterminal.data.AgingProfileOverview
 import com.bioscan.fieldterminal.data.AgingProfileRepository
 import com.bioscan.fieldterminal.data.ConditioningHistory
+import com.bioscan.fieldterminal.data.ReadCache
 import com.bioscan.fieldterminal.data.RunningHistory
 import com.bioscan.fieldterminal.data.SkillHistoryRepository
 import com.bioscan.fieldterminal.data.StrengthHistory
@@ -40,19 +41,19 @@ object UserDataCache {
 
     // The sport histories go through the read cache, kept on disk, so the sport pages open at once from the last data.
     suspend fun running(force: Boolean = false): RunningHistory =
-        if (force) skills.loadRunning() else com.bioscan.fieldterminal.data.ReadCache.get(
+        if (force) skills.loadRunning() else ReadCache.get(
             "skills.running", tables = setOf("exercise_sessions", "wearable_daily", "zepp_workout_detail"),
             serializer = RunningHistory.serializer(),
         ) { skills.loadRunning() }
 
     suspend fun strength(force: Boolean = false): StrengthHistory =
-        if (force) skills.loadStrength() else com.bioscan.fieldterminal.data.ReadCache.get(
+        if (force) skills.loadStrength() else ReadCache.get(
             "skills.strength", tables = setOf("exercise_sessions", "body_metrics"),
             serializer = StrengthHistory.serializer(),
         ) { skills.loadStrength() }
 
     suspend fun conditioning(force: Boolean = false): ConditioningHistory =
-        if (force) skills.loadConditioning() else com.bioscan.fieldterminal.data.ReadCache.get(
+        if (force) skills.loadConditioning() else ReadCache.get(
             "skills.conditioning", tables = null,
             serializer = ConditioningHistory.serializer(),
         ) { skills.loadConditioning() }

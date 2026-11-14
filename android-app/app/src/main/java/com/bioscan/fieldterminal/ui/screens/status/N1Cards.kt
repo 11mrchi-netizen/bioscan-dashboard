@@ -29,27 +29,23 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.ExperimentResultRow
 import com.bioscan.fieldterminal.data.ExperimentRow
-import com.bioscan.fieldterminal.data.model.TypicalityResultRow
-import com.bioscan.fieldterminal.domain.MetricState
 import com.bioscan.fieldterminal.domain.ScoreRule
 import com.bioscan.fieldterminal.domain.ScorecardResult
+import com.bioscan.fieldterminal.domain.ScorecardRules
 import com.bioscan.fieldterminal.domain.ScorecardVerdict
-import com.bioscan.fieldterminal.domain.StateWord
-import com.bioscan.fieldterminal.domain.TypicalityView
-import com.bioscan.fieldterminal.domain.WhyContext
 import com.bioscan.fieldterminal.domain.fourWordLabel
 import com.bioscan.fieldterminal.domain.scheduleSpan
 import com.bioscan.fieldterminal.domain.scorecardWord
 import com.bioscan.fieldterminal.domain.todayAssignment
 import com.bioscan.fieldterminal.ui.components.FTCard
-import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.FTChevron
 import com.bioscan.fieldterminal.ui.components.InfoDialog
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // App restructure, fix 6: Lab › N=1's cards, graphs first. Each first view is a title, one line of rows and the n; the
 // explanations sit behind the card's "?" or a tap on a row.
@@ -99,7 +95,7 @@ fun N1ExperimentsCard(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(e.name, style = FTType.Label, color = FT.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     Text(word, style = FTType.Micro, color = if (word.startsWith("CLEAR")) FT.TextPrimary else FT.TextSecondary)
-                    Text(if (open == e.id) "▴" else "▾", style = FTType.Label, color = FT.TextMuted)
+                    FTChevron(tint = FT.TextMuted, expanded = open == e.id)
                 }
                 progress?.let { f ->
                     Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(FT.GlassBorder)) {
@@ -189,7 +185,7 @@ private fun keepsWord(r: ScorecardResult?): String = when (r?.verdict) {
 @Composable
 private fun DifferenceRow(r: ScorecardResult) {
     val d = r.difference ?: return Box(Modifier.height(22.dp))
-    val negligible = if (r.rule == ScoreRule.BRIER) com.bioscan.fieldterminal.domain.ScorecardRules.NEGLIGIBLE_BRIER else com.bioscan.fieldterminal.domain.ScorecardRules.NEGLIGIBLE_LOG
+    val negligible = if (r.rule == ScoreRule.BRIER) ScorecardRules.NEGLIGIBLE_BRIER else ScorecardRules.NEGLIGIBLE_LOG
     val scale = maxOf(negligible * 5, abs(r.lo ?: d), abs(r.hi ?: d), abs(d)) * 1.1
     Canvas(Modifier.fillMaxWidth().height(22.dp).semantics { contentDescription = "${scorecardWord(r.verdict)}, difference %+.3f".format(d) }) {
         val mid = size.width / 2f
@@ -206,63 +202,3 @@ private fun DifferenceRow(r: ScorecardResult) {
     }
 }
 
-private val TYPICALITY_SIGNALS = mapOf("hrv" to "HRV", "rhr" to "RESTING HR", "sleep" to "SLEEP", "deep_rem" to "DEEP + REM", "steps" to "STEPS")
-
-// Fix 6 on Today: IS TODAY TYPICAL? as its pill and a strip of how far each signal that stood out sits from your usual
-// (in standard deviations, the typical band shaded); the sentences are in the pill's pop-up.
-@Composable
-fun TypicalityCompactCard(view: TypicalityView, row: TypicalityResultRow?) {
-    var open by remember { mutableStateOf(false) }
-    val today = row?.payload?.today
-    val word = when {
-        row == null -> StateWord(MetricState.Unavailable, "NOT ANALYSED YET")
-        row.state == "building" -> StateWord(MetricState.Building, "BUILDING")
-        today == null || today.state == "insufficient" -> StateWord(MetricState.Neutral, "NOT ENOUGH SIGNALS")
-        today.excluded -> StateWord(MetricState.Neutral, "ILLNESS: NOT JUDGED")
-        today.state == "typical" -> StateWord(MetricState.Optimal, "TYPICAL FOR YOU")
-        today.state == "elevated" -> StateWord(MetricState.Neutral, "DIFFERENT FROM USUAL")
-        else -> StateWord(MetricState.Warning, "UNUSUAL FOR YOU")
-    }
-    val popup = (listOf(view.headline) + view.lines + listOfNotNull(view.scorecard?.let { (w, s) -> "Scorecard: $w. $s" })).joinToString("\n\n")
-    FTCard(
-        title = "IS TODAY TYPICAL?",
-        info = "Compares today with your own recent typical days across several signals together. It is experimental: on real history it flags more ordinary days than its nominal share, so it is a prompt to look, not a finding, and it does not feed Today's Recovery.",
-        methodology = "typicality",
-        why = WhyContext("IS TODAY TYPICAL?", words = listOf("" to (word.word ?: "")), shown = mapOf("pop-up" to popup)),
-    ) {
-        FTStatePill(word, onClick = { open = true })
-        val drivers = today?.drivers.orEmpty()
-        if (drivers.isNotEmpty()) {
-            drivers.forEach { d ->
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(TYPICALITY_SIGNALS[d.signal] ?: d.signal.uppercase(), style = FTType.Micro, color = FT.TextSecondary, modifier = Modifier.weight(0.3f))
-                    Box(Modifier.weight(0.7f)) { ZRow(d.z) }
-                }
-            }
-            Row(Modifier.fillMaxWidth()) {
-                Box(Modifier.weight(0.3f))
-                Row(Modifier.weight(0.7f)) {
-                    Text("−3 SD", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
-                    Text("USUAL", style = FTType.Micro, color = FT.TextMuted)
-                    Text("+3 SD", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.End)
-                }
-            }
-        }
-    }
-    if (open) InfoDialog("IS TODAY TYPICAL?", popup, details = null) { open = false }
-}
-
-@Composable
-private fun ZRow(z: Double) {
-    Canvas(Modifier.fillMaxWidth().height(18.dp).semantics { contentDescription = "%+.1f standard deviations".format(z) }) {
-        val mid = size.width / 2f
-        val half = size.width / 2f - 6f
-        fun x(v: Double) = mid + (v / 3.0).toFloat().coerceIn(-1f, 1f) * half
-        val y = size.height / 2f
-        drawRect(FT.TextSecondary.copy(alpha = 0.16f), Offset(x(-2.0), 0f), Size(x(2.0) - x(-2.0), size.height))
-        drawLine(FT.TextMuted, Offset(mid, 0f), Offset(mid, size.height), strokeWidth = 1.5f)
-        drawLine(FT.TextPrimary, Offset(mid, y), Offset(x(z), y), strokeWidth = 3f)
-        drawCircle(FT.Surface, radius = 6f, center = Offset(x(z), y))
-        drawCircle(FT.TextPrimary, radius = 4f, center = Offset(x(z), y))
-    }
-}

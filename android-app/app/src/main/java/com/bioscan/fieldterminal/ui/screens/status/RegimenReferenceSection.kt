@@ -24,12 +24,14 @@ import com.bioscan.fieldterminal.domain.LABEL_SECTION_TITLES
 import com.bioscan.fieldterminal.domain.LabelMention
 import com.bioscan.fieldterminal.domain.halfLifeWords
 import com.bioscan.fieldterminal.domain.labelMentions
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.launch
 import java.time.OffsetDateTime
 import java.time.ZoneId
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Reference card for a medication, hormone or peptide (docs/regimen/README.md, phase 1b): looked up only when asked, from
 // RxNorm and the FDA label (openFDA), or PubMed when there is no label. The card shows its source, when it was fetched and
@@ -45,8 +47,9 @@ fun RegimenReferenceSection(supplementId: Long?, name: String, others: List<Pair
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(supplementId) {
-        if (supplementId != null) card = runCatching { repo.load(supplementId) }.getOrNull()
+    val guard = rememberLoadGuard(refreshOnUpdates = false)
+    LaunchedEffect(supplementId, guard.attempt) {
+        if (supplementId != null) guard.run { card = repo.load(supplementId) }
     }
 
     fun run(block: suspend () -> Unit) {
@@ -59,6 +62,11 @@ fun RegimenReferenceSection(supplementId: Long?, name: String, others: List<Pair
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("REFERENCE", style = FTType.LabelCaps, color = FT.TextSecondary)
+        // Without this the section would offer a new lookup as if nothing had been kept.
+        if (guard.error != null) {
+            LoadErrorLine(guard, "the reference kept for this item")
+            return@Column
+        }
         if (supplementId == null) {
             Caption("Save it first: then its FDA label (or, without one, PubMed studies) can be looked up and kept here.")
             return@Column
@@ -81,7 +89,7 @@ fun RegimenReferenceSection(supplementId: Long?, name: String, others: List<Pair
                 Action(if (busy) "LOOKING UP…" else "FIND ITS REFERENCE") { if (!busy && name.isNotBlank()) run { search = repo.search(name) } }
             }
         }
-        error?.let { Text("Couldn't look it up ($it).", style = FTType.Caption, color = FT.Critical) }
+        error?.let { Text("Couldn't look it up ($it).", style = FTType.Caption, color = FT.Bad) }
     }
 }
 
@@ -132,7 +140,7 @@ private fun CardView(c: RegimenReferenceRow, others: List<Pair<Long, String>>, u
     c.label?.let { label ->
         val mentions = remember(label, others) { labelMentions(label.sections, others) }
         if (mentions.isNotEmpty()) {
-            Text("THE LABEL NAMES YOUR", style = FTType.Micro, color = FT.Warning, modifier = Modifier.padding(top = 4.dp))
+            Text("THE LABEL NAMES YOUR", style = FTType.Micro, color = FT.Warn, modifier = Modifier.padding(top = 4.dp))
             mentions.forEach { MentionLine(it) }
         } else if (others.isNotEmpty()) {
             Caption("None of your other items is named on this label.")
@@ -179,7 +187,7 @@ private fun Caption(text: String) = Text(text, style = FTType.Caption, color = F
 
 @Composable
 private fun Action(text: String, muted: Boolean = false, onClick: () -> Unit) =
-    Text(text, style = FTType.LabelCaps, color = if (muted) FT.TextSecondary else FT.Emerald, modifier = Modifier.ftClickable(onClick = onClick).padding(vertical = 4.dp))
+    Text(text, style = FTType.LabelCaps, color = if (muted) FT.TextSecondary else FT.Ok, modifier = Modifier.ftClickable(onClick = onClick).padding(vertical = 4.dp))
 
 private fun labelDate(yyyymmdd: String): String =
     if (yyyymmdd.length >= 8) "${yyyymmdd.substring(6, 8)}/${yyyymmdd.substring(4, 6)}/${yyyymmdd.substring(0, 4)}" else yyyymmdd

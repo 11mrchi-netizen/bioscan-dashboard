@@ -4,7 +4,6 @@ import com.bioscan.fieldterminal.domain.BloodworkTrendState
 import com.bioscan.fieldterminal.domain.Confidence
 import com.bioscan.fieldterminal.domain.ConfidenceLevel
 import com.bioscan.fieldterminal.domain.MetricState
-import com.bioscan.fieldterminal.domain.comparison.PercentileBand
 
 // The one place threshold -> presentation-state decisions live (Analytical
 // Presentation Contract, 2026-10 amendment). Each mapping is deterministic and
@@ -28,16 +27,6 @@ fun confidenceLevel(score: Double): ConfidenceLevel = when {
     score >= 0.8 -> ConfidenceLevel.High
     score >= 0.5 -> ConfidenceLevel.Medium
     else -> ConfidenceLevel.Low
-}
-
-// A percentile band is a position in a population, not a health verdict:
-// only the top decile reads as Optimal; a low band is "Building", never
-// Warning/Critical (low percentile != something is wrong).
-fun percentileBandState(band: PercentileBand?): MetricState = when (band) {
-    PercentileBand.TOP_DECILE -> MetricState.Optimal
-    PercentileBand.ABOVE_AVERAGE, PercentileBand.AVERAGE -> MetricState.Neutral
-    PercentileBand.BELOW_AVERAGE, PercentileBand.BOTTOM_DECILE -> MetricState.Building
-    null -> MetricState.Unavailable
 }
 
 // Biological age minus chronological age, in years: <= -2 clearly younger

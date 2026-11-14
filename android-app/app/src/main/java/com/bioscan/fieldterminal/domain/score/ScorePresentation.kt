@@ -1,9 +1,14 @@
 package com.bioscan.fieldterminal.domain.score
 
+import com.bioscan.fieldterminal.domain.ScorecardResult
+import com.bioscan.fieldterminal.domain.ScorecardVerdict
 import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.exp
+import kotlin.math.floor
 import kotlin.math.roundToInt
 
 // Scoring system: the words and number formats the score screens use (docs/scoring-system/02-page-mockups.md).
@@ -37,8 +42,8 @@ fun formatJudgedValue(input: InputScore): String {
     val v = input.value
     val judged = when {
         input.spec.key !in RATIO_KEYS -> v
-        input.direction == InputDirection.SHORT -> kotlin.math.floor(v * 100) / 100
-        input.direction == InputDirection.OVER -> kotlin.math.ceil(v * 100) / 100
+        input.direction == InputDirection.SHORT -> floor(v * 100) / 100
+        input.direction == InputDirection.OVER -> ceil(v * 100) / 100
         else -> v
     }
     return formatInputValue(input.spec.key, judged)
@@ -110,8 +115,8 @@ fun referenceLine(input: InputScore): String? {
             val log = (kind as? InputKind.Baseline)?.log ?: (kind as InputKind.Stability).log
             if (spread == null) "your normal ${formatInputValue(key, ref)}"
             else {
-                val lo = if (log) ref * kotlin.math.exp(-spread) else ref - spread
-                val hi = if (log) ref * kotlin.math.exp(spread) else ref + spread
+                val lo = if (log) ref * exp(-spread) else ref - spread
+                val hi = if (log) ref * exp(spread) else ref + spread
                 "your normal ${formatInputValue(key, lo)} – ${formatInputValue(key, hi)}"
             }
         }
@@ -260,17 +265,17 @@ fun whatIsInput(key: String): String = when (key) {
  * The scorecard sentence for the scoring system's scores. The app's older composites were hidden when they read NO
  * BETTER ("so it is shown as its inputs"); these never are, so the sentence says what the verdict does instead.
  */
-fun qualitySentence(result: com.bioscan.fieldterminal.domain.ScorecardResult, isCharge: Boolean): String {
+fun qualitySentence(result: ScorecardResult, isCharge: Boolean): String {
     val best = result.best?.label?.let(::inSentence) ?: "any single input"
     return when (result.verdict) {
-        com.bioscan.fieldterminal.domain.ScorecardVerdict.EARNS_ITS_PLACE ->
+        ScorecardVerdict.EARNS_ITS_PLACE ->
             "Forecasts ${result.targetText} better than $best alone (${result.days} days)."
-        com.bioscan.fieldterminal.domain.ScorecardVerdict.NO_BETTER ->
+        ScorecardVerdict.NO_BETTER ->
             "Forecasts ${result.targetText} no better than $best alone (${result.days} days). Still shown; " +
                 (if (isCharge) "its weights are re-fitted monthly." else "read it alongside $best.")
-        com.bioscan.fieldterminal.domain.ScorecardVerdict.UNCLEAR ->
+        ScorecardVerdict.UNCLEAR ->
             "Not yet clearly better than $best alone at forecasting ${result.targetText} (${result.days} days scored)."
-        com.bioscan.fieldterminal.domain.ScorecardVerdict.NOT_YET ->
+        ScorecardVerdict.NOT_YET ->
             "Scored on ${result.days} of the ${result.need} days needed to compare it with its inputs."
     }
 }

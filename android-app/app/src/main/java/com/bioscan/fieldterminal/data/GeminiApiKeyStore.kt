@@ -10,7 +10,7 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-// Step 13: local, per-device storage for the user's own Gemini API key --
+// Local, per-device storage for the user's own Gemini API key --
 // never synced to Supabase (unlike the Google Calendar refresh token, which
 // has to live server-side for an Edge Function to use; this key is only ever
 // used for a direct client -> Gemini call, so there's no server-side reason

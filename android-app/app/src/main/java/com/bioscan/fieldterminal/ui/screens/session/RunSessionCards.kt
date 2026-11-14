@@ -36,18 +36,20 @@ import com.bioscan.fieldterminal.domain.RunDynamicsMarks
 import com.bioscan.fieldterminal.domain.RunMark
 import com.bioscan.fieldterminal.domain.SessionDetail
 import com.bioscan.fieldterminal.domain.SessionSplit
-import com.bioscan.fieldterminal.domain.TimePoint
-import com.bioscan.fieldterminal.domain.sessionAvgSpeedKmh
 import com.bioscan.fieldterminal.domain.analysis.SessionStateObject
 import com.bioscan.fieldterminal.domain.analysis.StateDimension
 import com.bioscan.fieldterminal.domain.heartRateZoneBreakdown
 import com.bioscan.fieldterminal.domain.heartRateZoneFor
 import com.bioscan.fieldterminal.domain.initialZoneMethod
 import com.bioscan.fieldterminal.domain.movingMinutes
+import com.bioscan.fieldterminal.domain.paceSeries
+import com.bioscan.fieldterminal.domain.sessionAvgSpeedKmh
+import com.bioscan.fieldterminal.domain.trail.GradeTimeSplit
 import com.bioscan.fieldterminal.domain.trail.elevationProfileWithOverlays
 import com.bioscan.fieldterminal.domain.trail.gradeTimeSplit
 import com.bioscan.fieldterminal.domain.zoneBounds
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTChevron
 import com.bioscan.fieldterminal.ui.components.HeartRateZoneBars
 import com.bioscan.fieldterminal.ui.components.HeartRateZoneMethodSwitch
 import com.bioscan.fieldterminal.ui.components.InfoHelpButton
@@ -59,21 +61,23 @@ import com.bioscan.fieldterminal.ui.components.TileMark
 import com.bioscan.fieldterminal.ui.components.TrailElevationChart
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.heartRateZoneColor
+import com.bioscan.fieldterminal.ui.screens.shoes.RunShoeBadge
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import kotlin.math.round
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // The run session page (the owner's structure, Oct 2026): SUMMARY, RUN DYNAMICS (collapsible sections), TRAIL, SPLITS;
 // the route stays in SessionDetailScreen. Every metric is a tile, two to a row (TileGrid). Rides, hikes and strength
 // keep SessionDetailScreen's own cards.
 
 private fun pace(minPerKm: Double): String = formatSplitPace((minPerKm * 60).roundToLong())
-private fun Double.roundToLong(): Long = kotlin.math.round(this).toLong()
+private fun Double.roundToLong(): Long = round(this).toLong()
 
 // ---- SUMMARY --------------------------------------------------------------------------------------------------------
 
 @Composable
-fun RunSummaryCard(header: ExerciseSessionDetailRow, detail: SessionDetail?, zepp: ZeppWorkoutSummary?) {
+fun RunSummaryCard(header: ExerciseSessionDetailRow, detail: SessionDetail?, zepp: ZeppWorkoutSummary?, onOpenShoe: (Long) -> Unit = {}) {
     val paused = detail?.pauses.orEmpty().sumOf { it.durationSec }
     val line = listOfNotNull(
         header.durationMin?.let { formatDuration(it) + if (paused >= 60) " (+${paused / 60} min paused)" else "" },
@@ -83,15 +87,18 @@ fun RunSummaryCard(header: ExerciseSessionDetailRow, detail: SessionDetail?, zep
     ).joinToString(" · ")
     val active = header.caloriesActive ?: detail?.caloriesKcal?.lastOrNull()?.value
     FTCard(title = "SUMMARY") {
-        // Distance big and right-aligned, with its context line under it (owner's layout).
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
-            header.distanceKm?.let { km ->
-                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("%.2f".format(km), style = FTType.DisplayMetric, color = FT.TextPrimary)
-                    Text("KM", style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.padding(bottom = 6.dp))
+        // Distance big on the left with its context line under it; the run's shoes on the right (owner's layout).
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f)) {
+                header.distanceKm?.let { km ->
+                    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("%.2f".format(km), style = FTType.DisplayMetric, color = FT.TextPrimary)
+                        Text("KM", style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.padding(bottom = 6.dp))
+                    }
                 }
+                if (line.isNotBlank()) Text(line, style = FTType.BodySmall, color = FT.TextSecondary)
             }
-            if (line.isNotBlank()) Text(line, style = FTType.BodySmall, color = FT.TextSecondary, textAlign = TextAlign.End)
+            RunShoeBadge(header.id, onOpenShoe)
         }
         TileGrid(
             listOfNotNull(
@@ -132,7 +139,7 @@ fun RunDynamicsCard(
     fun isOpen(s: DynamicsSection) = s.name !in folded
 
     val d = detail
-    val pace = remember(d) { d?.speedKmh.orEmpty().mapNotNull { p -> if (p.value > 0.5) TimePoint(p.offsetSeconds, 60.0 / p.value) else null } }
+    val pace = remember(d) { paceSeries(d?.speedKmh.orEmpty()) }
     val all = listOfNotNull(d?.heartRate, pace, d?.powerW, d?.cadenceSpm, d?.verticalRatioPct).filter { it.isNotEmpty() }
     val xRange = if (all.isNotEmpty()) all.minOf { it.first().offsetSeconds } to all.maxOf { it.last().offsetSeconds } else null
     val pauses = d?.pauses.orEmpty().map { it.startOffset to it.endOffset }
@@ -151,7 +158,7 @@ fun RunDynamicsCard(
     FTCard(title = "RUN DYNAMICS") {
         when {
             !hasTimeSeries && d == null -> Text("No time series for this session (logged before Health Connect and without a Zepp workout).", style = FTType.BodySmall, color = FT.TextSecondary)
-            loading -> Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = FT.Emerald) }
+            loading -> Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = FT.Ok) }
             error != null -> Text("Couldn't load the time series ($error).", style = FTType.BodySmall, color = FT.TextSecondary)
         }
 
@@ -276,8 +283,8 @@ fun RunDynamicsCard(
 private fun tileMark(mark: RunMark?, kind: String? = null, format: (Double) -> String): TileMark? {
     mark ?: return null
     val color = when (mark.tone) {
-        MarkTone.IMPROVED -> FT.Emerald
-        MarkTone.REGRESSED, MarkTone.CAUTION -> FT.Warning
+        MarkTone.IMPROVED -> FT.Ok
+        MarkTone.REGRESSED, MarkTone.CAUTION -> FT.Warn
         MarkTone.NEUTRAL -> FT.TextSecondary
         MarkTone.BUILDING -> FT.TextMuted
     }
@@ -306,7 +313,7 @@ private fun Section(section: DynamicsSection, isOpen: Boolean, onToggle: (Dynami
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(section.title, style = FTType.LabelCaps, color = FT.TextPrimary, modifier = Modifier.weight(1f))
-        Text(if (isOpen) "▴" else "▾", style = FTType.Label, color = FT.TextSecondary)
+        FTChevron(tint = FT.TextSecondary, expanded = isOpen)
     }
     tiles()
 }
@@ -352,7 +359,7 @@ private val GRADE_COLORS = listOf(FT.Category.Activity.c700, FT.Category.Activit
 
 // Uphill / flat / downhill as shares of moving time; the legend carries the words and percentages.
 @Composable
-private fun GradeSplitDonut(split: com.bioscan.fieldterminal.domain.trail.GradeTimeSplit) {
+private fun GradeSplitDonut(split: GradeTimeSplit) {
     val parts = listOf("UPHILL" to split.uphillSec, "FLAT" to split.flatSec, "DOWNHILL" to split.downhillSec)
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
         Canvas(Modifier.size(96.dp)) {
@@ -428,7 +435,7 @@ fun RunSplitsCard(splits: List<SessionSplit>) {
                 Text(
                     formatSplitPace(s.durationSec) + (s.avgHr?.let { "  ·  %.0f bpm".format(it) } ?: "") + (if (isFastest) "  ★" else ""),
                     style = if (isFastest) FTType.Telemetry else FTType.Value,
-                    color = if (isFastest) FT.Emerald else FT.TextPrimary,
+                    color = if (isFastest) FT.Ok else FT.TextPrimary,
                 )
             }
         }

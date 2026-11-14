@@ -1,47 +1,69 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class)
 package com.bioscan.fieldterminal.data
 
-import com.bioscan.fieldterminal.domain.score.scoreInputsKey
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.UseSerializers
 import android.content.Context
+import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
+import com.bioscan.fieldterminal.data.model.StoolAnalysisRow
+import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
+import com.bioscan.fieldterminal.domain.EveningCheckin
 import com.bioscan.fieldterminal.domain.HealthFlag
+import com.bioscan.fieldterminal.domain.LoadSpans
+import com.bioscan.fieldterminal.domain.WallClock
+import com.bioscan.fieldterminal.domain.drinkHydrationByDay
+import com.bioscan.fieldterminal.domain.health.isConcernOpen
+import com.bioscan.fieldterminal.domain.plannedDoneByDay
+import com.bioscan.fieldterminal.domain.score.ChargeCap
 import com.bioscan.fieldterminal.domain.score.ChargeStatus
+import com.bioscan.fieldterminal.domain.score.ChargeWeights
+import com.bioscan.fieldterminal.domain.score.Confounders
 import com.bioscan.fieldterminal.domain.score.DayScores
 import com.bioscan.fieldterminal.domain.score.DomainKey
 import com.bioscan.fieldterminal.domain.score.FuelTargets
-import com.bioscan.fieldterminal.domain.score.ScoreEngine
-import com.bioscan.fieldterminal.domain.score.ScoreSources
-import com.bioscan.fieldterminal.domain.score.Series
-import com.bioscan.fieldterminal.domain.score.assembleScoreSeries
-import com.bioscan.fieldterminal.domain.plannedDoneByDay
-import com.bioscan.fieldterminal.domain.score.ChargeWeights
+import com.bioscan.fieldterminal.domain.score.IllnessEpisode
+import com.bioscan.fieldterminal.domain.score.IllnessState
+import com.bioscan.fieldterminal.domain.score.KeptMorning
+import com.bioscan.fieldterminal.domain.score.LATE_SESSION_HOUR
+import com.bioscan.fieldterminal.domain.score.LONG_SESSION_MIN
 import com.bioscan.fieldterminal.domain.score.QUALITY_HISTORY_DAYS
+import com.bioscan.fieldterminal.domain.score.SCORE_MODEL_VERSION
+import com.bioscan.fieldterminal.domain.score.STRESSFUL_DAY
+import com.bioscan.fieldterminal.domain.score.ScoreEngine
+import com.bioscan.fieldterminal.domain.score.ScoreHistory
 import com.bioscan.fieldterminal.domain.score.ScoreKeys
 import com.bioscan.fieldterminal.domain.score.ScoreQuality
+import com.bioscan.fieldterminal.domain.score.ScoreSources
+import com.bioscan.fieldterminal.domain.score.Series
+import com.bioscan.fieldterminal.domain.score.SignalsRead
+import com.bioscan.fieldterminal.domain.score.SleepTarget
 import com.bioscan.fieldterminal.domain.score.acuteGutDays
+import com.bioscan.fieldterminal.domain.score.assembleScoreSeries
+import com.bioscan.fieldterminal.domain.score.bodySignals
+import com.bioscan.fieldterminal.domain.score.capsFrom
+import com.bioscan.fieldterminal.domain.score.chargeStatus
 import com.bioscan.fieldterminal.domain.score.defaultWeights
 import com.bioscan.fieldterminal.domain.score.fitChargeWeights
 import com.bioscan.fieldterminal.domain.score.history
+import com.bioscan.fieldterminal.domain.score.illnessState
+import com.bioscan.fieldterminal.domain.score.readSignals
+import com.bioscan.fieldterminal.domain.score.scoreInputsKey
 import com.bioscan.fieldterminal.domain.score.scoreQuality
-import com.bioscan.fieldterminal.domain.score.capsFrom
-import com.bioscan.fieldterminal.domain.score.ChargeCap
-import com.bioscan.fieldterminal.domain.score.chargeStatus
-import com.bioscan.fieldterminal.domain.score.KeptMorning
 import com.bioscan.fieldterminal.domain.score.settle
-import io.github.jan.supabase.postgrest.postgrest
-import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
-import com.bioscan.fieldterminal.data.model.StoolAnalysisRow
+import com.bioscan.fieldterminal.domain.score.sleepNeed
 import com.bioscan.fieldterminal.domain.stress.StressDay
 import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.Instant
 import java.time.LocalDate
-import java.time.OffsetDateTime
 import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.OffsetDateTime
 import java.time.ZoneId
 
 // Scoring system: loads what the scores read and scores this morning (docs/scoring-system/README.md). Every read is one
@@ -72,10 +94,10 @@ data class ScoresView(
     val stressDays: List<StressDay> = emptyList(),
     val exerciseWindows: List<Pair<Instant, Instant>> = emptyList(),
     /** The open illness on the scored morning, and the morning's read of the body's signals (domain/score/IllnessRead.kt). */
-    val illness: com.bioscan.fieldterminal.domain.score.IllnessState? = null,
-    val signals: com.bioscan.fieldterminal.domain.score.SignalsRead? = null,
+    val illness: IllnessState? = null,
+    val signals: SignalsRead? = null,
     /** Tonight's sleep target and when to be in bed for it (domain/score/SleepDebt.kt). */
-    val sleepTarget: com.bioscan.fieldterminal.domain.score.SleepTarget? = null,
+    val sleepTarget: SleepTarget? = null,
 )
 
 /** A scored morning and the key of what it was scored from (domain/score/ScoreKey.kt). */
@@ -109,25 +131,25 @@ class ScoresRepository(private val supabase: SupabaseClient) {
         val analysis = AnalysisRepository(supabase)
         val wearable = async { analysis.loadWearableDaily() }
         val sleep = async { analysis.loadSleepDaily() }
-        val wellbeing = async { runCatching { analysis.loadWellbeingDaily() }.getOrDefault(emptyList()) }
+        val wellbeing = async { catching { analysis.loadWellbeingDaily() }.getOrDefault(emptyList()) }
         val sessions = async { analysis.loadExerciseSessionsForTrainingLoad() }
-        val spans = async { runCatching { analysis.loadLoadSpans() }.getOrDefault(com.bioscan.fieldterminal.domain.LoadSpans.STANDARD) }
-        val planned = async { runCatching { analysis.loadPlannedOutcomes() }.getOrDefault(emptyList()) }
-        val stool = async { runCatching { analysis.loadStoolLog() }.getOrDefault(emptyList()) }
-        val stress = async { runCatching { ZeppStressRepository(supabase).loadStressDays(limit = 240) }.getOrDefault(emptyList()) }
+        val spans = async { catching { analysis.loadLoadSpans() }.getOrDefault(LoadSpans.STANDARD) }
+        val planned = async { catching { analysis.loadPlannedOutcomes() }.getOrDefault(emptyList()) }
+        val stool = async { catching { analysis.loadStoolLog() }.getOrDefault(emptyList()) }
+        val stress = async { catching { ZeppStressRepository(supabase).loadStressDays(limit = 240) }.getOrDefault(emptyList()) }
         // The night HR dip is enrichment: a failed or slow read leaves that one input out, never the scores.
-        val hrDip = async { runCatching { analysis.loadHrDip() }.getOrDefault(emptyMap()) }
+        val hrDip = async { catching { analysis.loadHrDip() }.getOrDefault(emptyMap()) }
         // Phone before sleep (Rhythm): read softly, like the HR dip; without it Rhythm is meal timing alone.
-        val phoneBed = async { runCatching { loadPhoneBedMinutes() }.getOrDefault(emptyMap()) }
-        val checkins = async { runCatching { EveningCheckinRepository(supabase).loadSince(today.minusDays(400)) }.getOrDefault(emptyList()) }
+        val phoneBed = async { catching { loadPhoneBedMinutes() }.getOrDefault(emptyMap()) }
+        val checkins = async { catching { EveningCheckinRepository(supabase).loadSince(today.minusDays(400)) }.getOrDefault(emptyList()) }
         // Logged drinks: read softly; without them alcohol and late caffeine fall back to the evening check-in.
-        val drinks = async { runCatching { DrinksRepository(supabase).logged(days = 400, zone = zone) }.getOrDefault(emptyList()) }
+        val drinks = async { catching { DrinksRepository(supabase).logged(days = 400, zone = zone) }.getOrDefault(emptyList()) }
         // The open illness and its check-ins: the ceiling follows how much it limits the person, not a flat 40.
-        val illnessEpisode = async { runCatching { loadIllnessEpisode(healthFlag) }.getOrNull() }
-        val nut = nutrition ?: runCatching { NutritionRepository(supabase).loadOverview() }.getOrNull()
+        val illnessEpisode = async { catching { loadIllnessEpisode(healthFlag) }.getOrNull() }
+        val nut = nutrition ?: catching { NutritionRepository(supabase).loadOverview() }.getOrNull()
         val goals = NutritionGoalsStore.getGoals(context)
         // FINAL mornings already kept stand unless rebuilt with something new (domain/score/ScoreSnapshots.kt).
-        val keptD = async { runCatching { loadKept(today.minusDays(SCORE_STRIP_DAYS)) }.getOrDefault(emptyMap()) }
+        val keptD = async { catching { loadKept(today.minusDays(SCORE_STRIP_DAYS)) }.getOrDefault(emptyMap()) }
 
         val w = wearable.await()
         val sessionRows = sessions.await()
@@ -145,7 +167,7 @@ class ScoresRepository(private val supabase: SupabaseClient) {
                 val water = nut?.hydrationHistory.orEmpty().mapNotNull { row ->
                     row.ml?.let { ml -> runCatching { LocalDate.parse(row.date) }.getOrNull()?.let { it to ml.toDouble() } }
                 }.toMap()
-                val fromDrinks = com.bioscan.fieldterminal.domain.drinkHydrationByDay(drinkRows, zone)
+                val fromDrinks = drinkHydrationByDay(drinkRows, zone)
                 (water.keys + fromDrinks.keys).associateWith { (water[it] ?: 0.0) + (fromDrinks[it] ?: 0.0) }
             },
             // The saved nutrition goal for every past day: the fuel plan's day-by-day targets are not kept for past days.
@@ -157,7 +179,7 @@ class ScoresRepository(private val supabase: SupabaseClient) {
             hrDip = hrDip.await(),
             phoneBedMin = phoneBed.await(),
             // Meal times are logged times: the local wall clock with a zero offset (domain/WallClock.kt), not real instants.
-            mealTimes = nut?.meals.orEmpty().mapNotNull { m -> com.bioscan.fieldterminal.domain.WallClock.instant(m.loggedAt, zone) },
+            mealTimes = nut?.meals.orEmpty().mapNotNull { m -> WallClock.instant(m.loggedAt, zone) },
             zone = zone,
         )
         val closedYesterday = sources.checkins.any { it.date == today.minusDays(1) }
@@ -177,14 +199,14 @@ class ScoresRepository(private val supabase: SupabaseClient) {
             val key = scoreInputsKey(
                 today, series, plannedDone,
                 caps = episodes.map { it.toString() } + gutDays.map { "gut $it" } +
-                    listOfNotNull(illness?.let { "illness-v2 ${it.label} ${it.start} ${it.checkIns}" }),
+                    listOfNotNull(illness?.let { "illness-v3 ${it.label} ${it.start} ${it.checkIns}" }),
                 closedYesterday = closedYesterday,
-                afterNoon = now.toLocalTime() >= java.time.LocalTime.NOON,
+                afterNoon = now.toLocalTime() >= LocalTime.NOON,
             )
             val lastSleep = sources.sleep.maxByOrNull { it.date }
             val exerciseWindows = sessionRows.mapNotNull { row ->
                 // Session starts are logged times (local digits); stress samples are real instants.
-                val start = com.bioscan.fieldterminal.domain.WallClock.instant(row.startTime, zone) ?: return@mapNotNull null
+                val start = WallClock.instant(row.startTime, zone) ?: return@mapNotNull null
                 val minutes = row.durationMin ?: return@mapNotNull null
                 start to start.plusSeconds((minutes * 60).toLong())
             }
@@ -200,7 +222,7 @@ class ScoresRepository(private val supabase: SupabaseClient) {
             val caps: (LocalDate) -> ChargeCap? = { morning ->
                 listOfNotNull(
                     healthCaps(morning),
-                    illness?.let { com.bioscan.fieldterminal.domain.score.illnessState(it, morning)?.cap },
+                    illness?.let { illnessState(it, morning)?.cap },
                     if (morning.minusDays(1) in gutDays) ChargeCap("Acute gut day") else null,
                 ).minByOrNull { it.ceiling }
             }
@@ -212,9 +234,9 @@ class ScoresRepository(private val supabase: SupabaseClient) {
             val weights = fitChargeWeights(defaultHistory.chargeInputs, series[ScoreKeys.HRV].orEmpty(), today)
             val engine = if (weights.personal) ScoreEngine(series, caps = caps, weights = weights.weights) else defaultEngine
             val history = if (weights.personal) engine.history(historyFrom, today) else defaultHistory
-            val quality = runCatching { scoreQuality(history, series, plannedDone, weights) }.getOrNull()
+            val quality = catching { scoreQuality(history, series, plannedDone, weights) }.getOrNull()
             // The scoring history for the nightly relationship engine (score_history): once a day per model version.
-            runCatching { uploadHistory(context, history, today) }
+            catching { uploadHistory(context, history, today) }
             val from = today.minusDays(SCORE_STRIP_DAYS - 1)
             val status = chargeStatus(today, closedYesterday, now)
             val kept = keptD.await()
@@ -229,18 +251,18 @@ class ScoresRepository(private val supabase: SupabaseClient) {
                 charge = fresh.charge.copy(previous = yesterday.charge.score),
                 domains = fresh.domains.mapValues { (k, d) -> d.copy(previous = yesterday.domains[k]?.score) },
             )
-            if (toKeep.isNotEmpty()) runCatching { supabase.postgrest.from("score_snapshots").upsert(toKeep) { onConflict = "user_id,day" } }
+            if (toKeep.isNotEmpty()) catching { supabase.postgrest.from("score_snapshots").upsert(toKeep) { onConflict = "user_id,day" } }
             val shown = past + (today to scores)
             val tonight = series[ScoreKeys.SLEEP_DEBT]?.get(today)?.let { debt ->
                 val hours = sources.sleep.mapNotNull { r -> r.hours?.let { h -> runCatching { LocalDate.parse(r.date) }.getOrNull()?.let { it to h } } }.toMap()
                 val wakes = sources.sleep.filter { runCatching { LocalDate.parse(it.date) }.getOrNull()?.let { d -> d.isAfter(today.minusDays(15)) } == true }
                     .mapNotNull { r -> r.wakeTime?.let { runCatching { Instant.parse(it) }.getOrNull() ?: runCatching { OffsetDateTime.parse(it).toInstant() }.getOrNull() } }
                     .map { it.atZone(zone).let { z -> z.hour * 60 + z.minute } }
-                com.bioscan.fieldterminal.domain.score.sleepTarget(com.bioscan.fieldterminal.domain.score.sleepNeed(hours, today.plusDays(1)), debt, wakes)
+                com.bioscan.fieldterminal.domain.score.sleepTarget(sleepNeed(hours, today.plusDays(1)), debt, wakes)
             }
-            val todayIllness = illness?.let { com.bioscan.fieldterminal.domain.score.illnessState(it, today) }
-            val signalsRead = com.bioscan.fieldterminal.domain.score.readSignals(
-                com.bioscan.fieldterminal.domain.score.bodySignals(series, today), todayIllness,
+            val todayIllness = illness?.let { illnessState(it, today) }
+            val signalsRead = readSignals(
+                bodySignals(series, today), todayIllness,
                 confoundersFor(today.minusDays(1), sources.checkins, sessionRows, zone),
             )
             KeyedScores(
@@ -267,10 +289,10 @@ class ScoresRepository(private val supabase: SupabaseClient) {
     }
 
     private suspend fun loadKept(since: LocalDate): Map<LocalDate, KeptMorning> =
-        supabase.postgrest.from("score_snapshots").select(columns = io.github.jan.supabase.postgrest.query.Columns.list("day,model_version,inputs,scores")) { filter { gte("day", since.toString()) } }
+        supabase.postgrest.from("score_snapshots").select(columns = Columns.list("day,model_version,inputs,scores")) { filter { gte("day", since.toString()) } }
             .decodeList<KeptMorning>().associateBy { it.day }
 
-    private suspend fun uploadHistory(context: Context, history: com.bioscan.fieldterminal.domain.score.ScoreHistory, today: LocalDate) {
+    private suspend fun uploadHistory(context: Context, history: ScoreHistory, today: LocalDate) {
         val prefs = context.getSharedPreferences("score_history", Context.MODE_PRIVATE)
         val stamp = "$today:${com.bioscan.fieldterminal.domain.score.SCORE_MODEL_VERSION}"
         if (prefs.getString("uploaded", null) == stamp) return
@@ -278,7 +300,7 @@ class ScoresRepository(private val supabase: SupabaseClient) {
         val rows = days.map { d ->
             fun dom(k: DomainKey) = history.domains[k]?.get(d)
             ScoreHistoryRow(
-                d.toString(), com.bioscan.fieldterminal.domain.score.SCORE_MODEL_VERSION, history.charge[d],
+                d.toString(), SCORE_MODEL_VERSION, history.charge[d],
                 dom(DomainKey.SLEEP), dom(DomainKey.RECOVERY), dom(DomainKey.LOAD), dom(DomainKey.FUEL), dom(DomainKey.BALANCE),
             )
         }
@@ -289,48 +311,48 @@ class ScoresRepository(private val supabase: SupabaseClient) {
 
     private suspend fun loadPhoneBedMinutes(): Map<LocalDate, Double> =
         ReadCache.kept("scores.phone_bed", tables = setOf("phone_usage_daily")) {
-            supabase.postgrest.from("phone_usage_daily").select(io.github.jan.supabase.postgrest.query.Columns.list("date,bed_window_min")) {
+            supabase.postgrest.from("phone_usage_daily").select(Columns.list("date,bed_window_min")) {
                 filter { gte("date", LocalDate.now().minusDays(400).toString()) }
             }.decodeList<PhoneBedRow>().mapNotNull { r -> r.bedWindowMin?.let { m -> runCatching { LocalDate.parse(r.date) }.getOrNull()?.let { it.toString() to m } } }.toMap()
         }.mapKeys { LocalDate.parse(it.key) }
 
     /** The open illness: the newest open systemic concern and its check-ins, else a legacy open illness without them. */
-    private suspend fun loadIllnessEpisode(flag: HealthFlag?): com.bioscan.fieldterminal.domain.score.IllnessEpisode? {
+    private suspend fun loadIllnessEpisode(flag: HealthFlag?): IllnessEpisode? {
         val health = HealthConcernsRepository(supabase)
-        val overview = runCatching { health.loadOverview() }.getOrNull()
+        val overview = catching { health.loadOverview() }.getOrNull()
         if (overview == null) {
             val since = flag?.takeIf { !it.isInjury }?.since ?: return null
-            return com.bioscan.fieldterminal.domain.score.IllnessEpisode(flag.label, since, emptyList())
+            return IllnessEpisode(flag.label, since, emptyList())
         }
         val open = overview.concerns
-            .filter { it.kind == "systemic" && !it.archived && com.bioscan.fieldterminal.domain.health.isConcernOpen(it.state) }
+            .filter { it.kind == "systemic" && !it.archived && isConcernOpen(it.state) }
             .mapNotNull { c -> c.currentEpisode?.start?.let { runCatching { LocalDate.parse(it) }.getOrNull() }?.let { c to it } }
             .maxByOrNull { it.second } ?: return null
         val (concern, start) = open
-        return com.bioscan.fieldterminal.domain.score.IllnessEpisode(concern.title, start, health.loadIllnessCheckIns(concern.concernId, start))
+        return IllnessEpisode(concern.title, start, health.loadIllnessCheckIns(concern.concernId, start))
     }
 }
 
 /** What the day before offers as a plainer explanation of the body's signals: drinks, a late or long session, felt stress. */
 internal fun confoundersFor(
     day: LocalDate,
-    checkins: List<com.bioscan.fieldterminal.domain.EveningCheckin>,
-    sessions: List<com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow>,
+    checkins: List<EveningCheckin>,
+    sessions: List<TrainingLoadSessionRow>,
     zone: ZoneId,
-): com.bioscan.fieldterminal.domain.score.Confounders {
+): Confounders {
     val evening = checkins.firstOrNull { it.date == day }
     val lateOrLong = sessions.any { row ->
         // Session starts are logged times (local digits with a zero offset, domain/WallClock.kt).
-        val start = com.bioscan.fieldterminal.domain.WallClock.zoned(row.startTime, zone) ?: return@any false
+        val start = WallClock.zoned(row.startTime, zone) ?: return@any false
         val minutes = row.durationMin ?: 0.0
         val end = start.plusSeconds((minutes * 60).toLong())
         (start.toLocalDate() == day || end.toLocalDate() == day) &&
-            (minutes >= com.bioscan.fieldterminal.domain.score.LONG_SESSION_MIN || (end.toLocalDate() == day && end.hour >= com.bioscan.fieldterminal.domain.score.LATE_SESSION_HOUR))
+            (minutes >= LONG_SESSION_MIN || (end.toLocalDate() == day && end.hour >= LATE_SESSION_HOUR))
     }
-    return com.bioscan.fieldterminal.domain.score.Confounders(
+    return Confounders(
         drinks = evening?.drinks,
         lateOrLongSession = lateOrLong,
-        stressfulDay = (evening?.stress ?: 0) >= com.bioscan.fieldterminal.domain.score.STRESSFUL_DAY,
+        stressfulDay = (evening?.stress ?: 0) >= STRESSFUL_DAY,
     )
 }
 

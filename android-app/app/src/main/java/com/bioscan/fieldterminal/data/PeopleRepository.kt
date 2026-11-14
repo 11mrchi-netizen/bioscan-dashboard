@@ -6,7 +6,7 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 
-// Phase M2 (Map tab rework). Backs the Encounter/Social pin detail's partner
+// Backs the Encounter/Social pin detail's partner
 // match/search/create flow -- see ROADMAP.md. `people` already has real RLS
 // (auth.uid() = user_id, column default auth.uid()) identical to every other
 // table this app writes to, so createPerson() needs no user_id handling.

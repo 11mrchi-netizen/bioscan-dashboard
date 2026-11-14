@@ -35,8 +35,8 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 /**
  * A rating chosen by sliding or tapping, never typed (`.ft-range`, in the metric's own hue): the label and the chosen
@@ -46,6 +46,10 @@ import kotlin.math.roundToInt
  * An optional rating starts unset (no thumb, "—") until touched, and a CLEAR under it sets it back to null, so "not
  * answered" never silently saves as 0. Snaps to whole steps with a light tick; screen readers get it as an adjustable
  * value.
+ *
+ * Every scale reads bad on the left, good on the right. A scale whose number grows worse (stress, soreness, discomfort,
+ * severity) passes [reversed]: the track is mirrored so its high end sits on the left, while the value it reports keeps
+ * its meaning (stress 8 is still 8), so stored data and scores are unchanged.
  */
 @Composable
 fun FTRatingSlider(
@@ -67,6 +71,7 @@ fun FTRatingSlider(
     // A long scale (an amount in steps) has no dot per step, and says what its ends are in its own words.
     ticks: Boolean = true,
     endLabels: Pair<String, String>? = null,
+    reversed: Boolean = false,
 ) {
     val haptic = LocalHapticFeedback.current
     val current by rememberUpdatedState(value)
@@ -74,7 +79,7 @@ fun FTRatingSlider(
     val steps = range.last - range.first
     fun pick(x: Float, width: Float, inset: Float) {
         val f = ((x - inset) / (width - 2 * inset)).coerceIn(0f, 1f)
-        val v = range.first + (f * steps).roundToInt()
+        val v = if (reversed) range.last - (f * steps).roundToInt() else range.first + (f * steps).roundToInt()
         if (v != current) {
             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             change(v)
@@ -120,7 +125,7 @@ fun FTRatingSlider(
             val w = size.width - 2 * inset
             val cy = size.height / 2
             val th = 7.dp.toPx()
-            fun x(v: Int) = inset + w * (v - range.first) / steps.coerceAtLeast(1)
+            fun x(v: Int) = inset + w * (if (reversed) range.last - v else v - range.first) / steps.coerceAtLeast(1)
             drawRoundRect(FT.GlassTrack, Offset(inset, cy - th / 2), Size(w, th), CornerRadius(th / 2))
             if (stepColor != null) {
                 // Each step owns the stretch half way to its neighbours, in its own colour; brighter once chosen.
@@ -140,7 +145,7 @@ fun FTRatingSlider(
                 )
             }
             if (ticks) for (v in range) {
-                val filled = value != null && v <= value
+                val filled = value != null && (if (reversed) v >= value else v <= value)
                 drawCircle(if (filled) Color.White.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.18f), 1.5.dp.toPx(), Offset(x(v), cy))
             }
             if (value != null) {
@@ -163,14 +168,19 @@ fun FTRatingSlider(
                     modifier = Modifier.align(Alignment.CenterHorizontally).ftClickable(role = Role.Button, onClickLabel = "Clear $label") { change(null) }.padding(horizontal = 10.dp, vertical = 4.dp))
             }
         } else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(endLabels?.first ?: lowWord?.let { "${range.first} · $it" } ?: "${range.first}", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
+            // The left label is always the bad end: the high end on a reversed scale.
+            val leftLabel = endLabels?.first ?: if (reversed) highWord?.let { "${range.last} · $it" } ?: "${range.last}"
+                else lowWord?.let { "${range.first} · $it" } ?: "${range.first}"
+            val rightLabel = endLabels?.second ?: if (reversed) lowWord?.let { "$it · ${range.first}" } ?: "${range.first}"
+                else highWord?.let { "$it · ${range.last}" } ?: "${range.last}"
+            Text(leftLabel, style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
             if (optional && value != null && enabled) {
                 Text("CLEAR", style = FTType.LabelCaps, color = FT.TextSecondary,
                     modifier = Modifier.ftClickable(role = Role.Button, onClickLabel = "Clear $label") { change(null) }.padding(horizontal = 10.dp, vertical = 4.dp))
             } else if (value == null) {
                 Text("slide or tap", style = FTType.Micro, color = FT.TextMuted)
             }
-            Text(endLabels?.second ?: highWord?.let { "$it · ${range.last}" } ?: "${range.last}", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
+            Text(rightLabel, style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
         }
     }
 }

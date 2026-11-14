@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data.model
 
+import com.bioscan.fieldterminal.domain.ScheduleJson
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -18,7 +19,7 @@ data class LogMealRow(
     @SerialName("meal_slot") val mealSlot: String? = null,
 )
 
-// Phase G3: replaces LogRunRow -- `exercise_sessions` covers any activity
+// Replaces LogRunRow -- `exercise_sessions` covers any activity
 // type, always with a real start_time (even migrated pre-Health-Connect
 // rows carry a nominal-but-real timestamp), so this needs no separate
 // nominal-time handling in domain/Log.kt the way the old date-only `runs`
@@ -48,6 +49,7 @@ data class LogStoolRow(
     @SerialName("occurred_at") val occurredAt: String,
     @SerialName("bristol_type") val bristolType: Int,
     val discomfort: Int? = null,
+    @SerialName("complete_evacuation") val completeEvacuation: String? = null,
 )
 
 // Handgrip dynamometer reading (best of the attempts, kg), one hand per row.
@@ -176,5 +178,5 @@ data class SupplementScheduleRow(
     @SerialName("every_n_days") val everyNDays: Int? = null,
     @SerialName("time_of_day") val timeOfDay: String? = null,
     val slots: List<String> = emptyList(),
-    val schedule: com.bioscan.fieldterminal.domain.ScheduleJson? = null,
+    val schedule: ScheduleJson? = null,
 )

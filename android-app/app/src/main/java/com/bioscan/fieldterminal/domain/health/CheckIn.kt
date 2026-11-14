@@ -1,6 +1,7 @@
 package com.bioscan.fieldterminal.domain.health
 
 import com.bioscan.fieldterminal.data.model.HealthObservationInsert
+import com.bioscan.fieldterminal.data.model.HealthObservationRow
 import com.bioscan.fieldterminal.data.model.HealthSignalInsert
 import com.bioscan.fieldterminal.data.model.NewHealthConcernRow
 import com.bioscan.fieldterminal.data.model.RegionRef
@@ -163,7 +164,7 @@ fun buildCheckIn(draft: CheckInDraft, now: ZonedDateTime, newId: () -> String = 
 }
 
 /** The retraction of one check-in: a new row that replaces it and withdraws it (the table never deletes). */
-fun retraction(original: com.bioscan.fieldterminal.data.model.HealthObservationRow, now: ZonedDateTime, newId: () -> String = { UUID.randomUUID().toString() }): HealthObservationInsert =
+fun retraction(original: HealthObservationRow, now: ZonedDateTime, newId: () -> String = { UUID.randomUUID().toString() }): HealthObservationInsert =
     HealthObservationInsert(
         id = newId(),
         observedAt = now.toOffsetDateTime().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),

@@ -15,11 +15,11 @@ private val FieldColorScheme = darkColorScheme(
     onBackground = FuturisticMaterialTokens.TextPrimary,
     onSurface = FuturisticMaterialTokens.TextPrimary,
     onSurfaceVariant = FuturisticMaterialTokens.TextSecondary,
-    primary = FuturisticMaterialTokens.Emerald,
+    primary = FuturisticMaterialTokens.Ok,
     onPrimary = FuturisticMaterialTokens.Base,
     secondary = FuturisticMaterialTokens.EmeraldHighlight,
     onSecondary = FuturisticMaterialTokens.Base,
-    error = FuturisticMaterialTokens.Critical,
+    error = FuturisticMaterialTokens.Bad,
     onError = FuturisticMaterialTokens.Base,
     outline = FuturisticMaterialTokens.GlassBorder,
 )

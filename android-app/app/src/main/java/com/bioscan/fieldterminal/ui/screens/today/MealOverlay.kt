@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AddEntryRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TodayFuel
+import com.bioscan.fieldterminal.domain.WallClock
 import com.bioscan.fieldterminal.domain.fuel.MealAdherence
 import com.bioscan.fieldterminal.domain.fuel.MealSlotKind
 import com.bioscan.fieldterminal.domain.fuel.Plate
@@ -29,14 +30,13 @@ import com.bioscan.fieldterminal.domain.fuel.plateChoices
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.Toasts
 import com.bioscan.fieldterminal.ui.screens.status.glycaemicWord
-import com.bioscan.fieldterminal.ui.components.describeLoadFailure
-import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Scoring system (docs/scoring-system/02-page-mockups.md §1): a planned meal from TODAY'S PLAN. What the plan aims for,
 // what the plan puts on it (the prepped breakfast or container, else the example plates), LOG THIS for any of them, and
@@ -59,9 +59,9 @@ fun MealOverlay(fuel: TodayFuel, kind: MealSlotKind, onClose: () -> Unit, onLogg
         fun log(plate: Plate) {
             val at = logTimeFor(meal, meals, ZonedDateTime.now())
             // Optimistic: the overlay closes at once; TODAY refreshes when the meal lands, or RETRY says it did not.
-            com.bioscan.fieldterminal.ui.components.Toasts.optimistic(apply = onClose, revert = {}, what = "Couldn't log ${kind.label.lowercase()}", save = {
+            Toasts.optimistic(apply = onClose, revert = {}, what = "Couldn't log ${kind.label.lowercase()}", save = {
                 AddEntryRepository(SupabaseClientProvider.client).addFood(
-                    loggedAt = com.bioscan.fieldterminal.domain.WallClock.write(at),
+                    loggedAt = WallClock.write(at),
                     description = plannedMealDescription(meal, plate),
                     calories = plate.kcal, proteinG = plate.proteinG, carbsG = plate.carbG, fatG = plate.fatG,
                     fiberG = plate.fibreG, sugarG = null, sodiumMg = null,
@@ -75,7 +75,7 @@ fun MealOverlay(fuel: TodayFuel, kind: MealSlotKind, onClose: () -> Unit, onLogg
         Text(mealTargetLine(meal), style = FTType.RowTitle, color = FT.TextPrimary)
         Text(meal.reason, style = FTType.BodySmall, color = FT.TextSecondary)
         fuel.adherence[meal.kind.name]?.let { (g, a) ->
-            if (a != MealAdherence.NOT_LOGGED) Text("Logged ${g.roundToInt()} g carbs · ${a.label}", style = FTType.LabelCaps, color = FT.Emerald)
+            if (a != MealAdherence.NOT_LOGGED) Text("Logged ${g.roundToInt()} g carbs · ${a.label}", style = FTType.LabelCaps, color = FT.Ok)
         }
         // The glucose-spiking band of what was logged for this meal (FUEL › Nutrition has the detail).
         fuel.glycaemic[meal.kind.name]?.let { band ->
@@ -102,7 +102,7 @@ fun MealOverlay(fuel: TodayFuel, kind: MealSlotKind, onClose: () -> Unit, onLogg
                 FTButton(label = if (saving) "SAVING..." else "LOG THIS", emphasis = FTButtonEmphasis.Primary, enabled = !saving, modifier = Modifier.fillMaxWidth()) { log(choice.plate) }
             }
         }
-        error?.let { Text("Couldn't log: $it", style = FTType.BodySmall, color = FT.Critical) }
+        error?.let { Text("Couldn't log: $it", style = FTType.BodySmall, color = FT.Bad) }
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             FTButton(label = "LOG SOMETHING ELSE", emphasis = FTButtonEmphasis.Secondary, enabled = !saving, modifier = Modifier.fillMaxWidth()) { onLogOther() }
             Text("Logged now, or at ${meal.time.format(HM)} if now is outside this meal's slot.", style = FTType.Caption, color = FT.TextMuted)

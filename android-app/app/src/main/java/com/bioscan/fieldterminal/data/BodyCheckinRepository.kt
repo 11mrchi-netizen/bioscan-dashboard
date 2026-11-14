@@ -112,7 +112,7 @@ class BodyCheckinRepository(private val supabase: SupabaseClient) {
             }
         } catch (e: Exception) {
             // No half-saved sitting: the check-in goes too (its measurements cascade), so SAVE can simply be pressed again.
-            runCatching { supabase.postgrest.from("body_checkins").delete { filter { eq("id", id) } } }
+            catching { supabase.postgrest.from("body_checkins").delete { filter { eq("id", id) } } }
             throw e
         }
         return id

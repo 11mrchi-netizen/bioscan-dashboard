@@ -259,6 +259,8 @@ interface WorkoutRef {
   realStartMs: number;
   // Moving time (the list entry's run_time), minutes: a session's duration, so a pause does not add training time.
   movingMin: number | null;
+  // Zepp's code for the shoes picked for this workout (the summary's gearId); null when none. Zepp sends no names.
+  gearId: string | null;
 }
 
 function numOrNull(v: unknown): number | null {
@@ -365,6 +367,7 @@ function extractWorkoutRefs(historyResponse: unknown): WorkoutRef[] {
       distanceSummaryM: summaryDistanceM(e),
       realStartMs: hasEnd && hasRun ? startSec * 1000 : 0,
       movingMin: hasRun ? runSec / 60 : null,
+      gearId: typeof e.gearId === "string" && e.gearId.trim() ? e.gearId.trim() : null,
     });
   }
   return refs;
@@ -754,6 +757,7 @@ async function extract(
         start_time: ref.startTimeIso,
         end_time: ref.endTimeIso,
         sport_type: ref.sportType,
+        gear_id: ref.gearId,
         raw: detailRawBody,
         decoded,
         hr_histogram: hrHistogram(decoded?.heartRate),

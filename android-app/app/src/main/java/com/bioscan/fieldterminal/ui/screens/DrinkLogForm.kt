@@ -267,6 +267,24 @@ internal fun DrinkLogForm(
             }
         }
 
+        // A product with no kind yet (a label just scanned, a barcode from a food database): it is shown with the question
+        // straight away. Without this the product was found and nothing appeared, since the card below needs a kind.
+        val unclassed = picked?.takeIf { kind == null }
+        if (unclassed != null) {
+            Column(Modifier.fillMaxWidth().ftGlass(RoundedCornerShape(FT.RadiusModule)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(unclassed.title, style = FTType.RowTitle, color = FT.TextPrimary)
+                Text(
+                    listOfNotNull(unclassed.nameZh?.takeIf { it != unclassed.name }, unclassed.kcal?.let { "${it.roundToInt()} kcal/100 ml" }, "numbers from ${sourceName(unclassed.source)}").joinToString(" · "),
+                    style = FTType.BodySmall, color = FT.TextSecondary,
+                )
+                DrinkLabel("WHAT KIND OF DRINK IS IT?")
+                TextChipRow(DRINK_KINDS.drop(1).map { it.second }, null, perRow = 3) { label ->
+                    DRINK_KINDS.firstOrNull { it.second == label }?.first?.let { kind = it }
+                }
+                Text("Asked once: after you log it, the next scan remembers.", style = FTType.Caption, color = FT.TextMuted)
+            }
+        }
+
         val k = kind
         val st = steps
         if (k != null && st != null) {

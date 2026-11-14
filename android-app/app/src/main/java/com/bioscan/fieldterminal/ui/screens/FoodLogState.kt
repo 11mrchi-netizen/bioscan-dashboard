@@ -28,6 +28,7 @@ import com.bioscan.fieldterminal.data.functionErrorMessage
 import com.bioscan.fieldterminal.data.model.FoodRow
 import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.data.withMicronutrients
+import com.bioscan.fieldterminal.domain.UnknownScanCheck
 import com.bioscan.fieldterminal.domain.normalizeBarcode
 import com.bioscan.fieldterminal.ui.components.UriListSaver
 import com.bioscan.fieldterminal.util.PendingCameraCapture
@@ -107,6 +108,7 @@ internal class FoodLogState(
     var photoForLabel by mutableStateOf(false)
     var barcodeInput by mutableStateOf("")
     var barcodeLooking by mutableStateOf(false)
+    private val unknownScan = UnknownScanCheck()
     var barcodeError by mutableStateOf<String?>(null)
     var showRecentMeals by mutableStateOf(false)
     var recentMeals by mutableStateOf<List<MealRow>?>(null)
@@ -247,7 +249,7 @@ internal class FoodLogState(
     }
 
     // Known product -> confirm sheet. Unknown barcode, or a product without calories -> scan its nutrition label.
-    fun runBarcodeLookup(raw: String = barcodeInput) {
+    fun runBarcodeLookup(raw: String = barcodeInput, scanned: Boolean = false) {
         val barcode = normalizeBarcode(raw) ?: raw.trim()
         if (barcode.isBlank()) return
         barcodeLooking = true
@@ -258,10 +260,14 @@ internal class FoodLogState(
             try {
                 val result = NutritionBarcodeLookupRepository(SupabaseClientProvider.client).lookup(barcode)
                 val food = result.food
-                if (food == null || result.needsLabel) {
+                if (food == null && scanned && !unknownScan.confirmed(barcode)) {
+                    barcodeError = UnknownScanCheck.askAgain(barcode)
+                } else if (food == null || result.needsLabel) {
+                    unknownScan.clear()
                     labelPhotos = emptyList()
                     labelTarget = LabelTarget(barcode, food?.nameZh ?: food?.name ?: "", food?.brand)
                 } else {
+                    unknownScan.clear()
                     showBarcodeProduct(food)
                 }
             } catch (e: Exception) {

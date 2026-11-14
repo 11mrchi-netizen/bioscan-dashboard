@@ -38,6 +38,7 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.DrinkMatch
 import com.bioscan.fieldterminal.domain.STANDARD_DRINK_G
+import com.bioscan.fieldterminal.domain.UnknownScanCheck
 import com.bioscan.fieldterminal.domain.UsualDrink
 import com.bioscan.fieldterminal.domain.WallClock
 import com.bioscan.fieldterminal.domain.drinkAmounts
@@ -121,6 +122,7 @@ internal fun DrinkLogForm(
 
     // A barcode no database has numbers for: its label is scanned, then the saved product is picked.
     var labelBarcode by remember { mutableStateOf<String?>(null) }
+    val unknownScan = remember { UnknownScanCheck() }
     var labelPhotos by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
 
@@ -156,7 +158,7 @@ internal fun DrinkLogForm(
         searching = false
     }
 
-    fun lookupBarcode(code: String) {
+    fun lookupBarcode(code: String, scanned: Boolean = false) {
         val barcode = normalizeBarcode(code) ?: code.trim()
         if (barcode.isBlank()) return
         busy = true
@@ -164,9 +166,13 @@ internal fun DrinkLogForm(
         scope.launch {
             try {
                 val found = NutritionBarcodeLookupRepository(SupabaseClientProvider.client).lookup(barcode)
-                if (found.food == null || found.needsLabel) {
+                if (found.food == null && scanned && !unknownScan.confirmed(barcode)) {
+                    error = UnknownScanCheck.askAgain(barcode)
+                } else if (found.food == null || found.needsLabel) {
+                    unknownScan.clear()
                     labelBarcode = barcode
                 } else {
+                    unknownScan.clear()
                     val match = repo.search(found.food.barcode ?: barcode, 1).firstOrNull()
                     if (match == null) error = "That product is in the catalog but has no drink numbers."
                     else pick(match, match.beverageClass, scanned = true)
@@ -207,7 +213,7 @@ internal fun DrinkLogForm(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 FieldTextField(query, { query = it }, "Name, brand or 中文 (e.g. oat latte, 珍珠奶茶)", modifier = Modifier.weight(1f))
                 FTButton(if (busy) "..." else "SCAN", enabled = !busy) {
-                    scope.launch { scanBarcode(context) { error = it }?.let(::lookupBarcode) }
+                    scope.launch { scanBarcode(context) { error = it }?.let { lookupBarcode(it, scanned = true) } }
                 }
             }
             if (searching) Text("Searching…", style = FTType.BodySmall, color = FT.TextMuted)

@@ -20,19 +20,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.TrainingCyclesRepository
 import com.bioscan.fieldterminal.data.model.TrainingBlockSummaryRow
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
+import com.bioscan.fieldterminal.ui.components.RefreshOnCacheUpdates
 import com.bioscan.fieldterminal.ui.components.TileHeader
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.theme.FTType
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -40,13 +37,12 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 @Composable
 fun TrainingBlocksScreen(onBack: () -> Unit) {
-    var blocks by remember { mutableStateOf<List<TrainingBlockSummaryRow>?>(null) }
-    val guard = rememberLoadGuard()
-    LaunchedEffect(guard.attempt) {
-        guard.run { blocks = TrainingCyclesRepository(SupabaseClientProvider.client).loadBlockSummaries() }
-    }
+    val page = remember { TrainingBlocksState() }
+    val guard = page.guard
+    RefreshOnCacheUpdates(guard)
+    LaunchedEffect(guard.attempt) { page.load() }
 
-    val b = blocks
+    val b = page.blocks
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
         TileHeader(onBack = onBack, title = "TRAINING BLOCKS", subtitle = "EVERY BLOCK · SESSIONS · OUTCOMES", accent = FT.DomainTraining)
         LazyColumn(

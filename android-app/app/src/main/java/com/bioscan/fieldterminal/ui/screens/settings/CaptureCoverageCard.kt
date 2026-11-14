@@ -11,44 +11,29 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.data.CaptureCoverageRepository
-import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.domain.StreamCoverage
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import kotlinx.coroutines.CancellationException
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Days logged per capture stream over the last 28 days.
 @Composable
 fun CaptureCoverageCard() {
-    val repo = remember { CaptureCoverageRepository(SupabaseClientProvider.client) }
-    var rows by remember { mutableStateOf<List<StreamCoverage>?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val page = remember { CaptureCoverageState() }
 
-    LaunchedEffect(Unit) {
-        try {
-            rows = repo.load()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            error = e.message ?: "Could not load coverage"
-        }
-    }
+    LaunchedEffect(Unit) { page.load() }
 
     FTCard(
         title = "DATA CAPTURE",
         info = "Days in the last 28 with at least one entry. Relationship and experiment analyses can only use the days you logged. " +
             "A day without a drink has no row, so alcohol shows days with a drink logged, not coverage.",
     ) {
-        error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
-        if (rows == null && error == null) Text("Loading…", style = FTType.BodySmall, color = FT.TextSecondary)
-        rows?.forEach { row ->
+        page.error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
+        if (page.rows == null && page.error == null) Text("Loading…", style = FTType.BodySmall, color = FT.TextSecondary)
+        page.rows?.forEach { row ->
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(row.label, style = FTType.Body, color = FT.TextPrimary)

@@ -4,20 +4,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import com.bioscan.fieldterminal.data.AnalysisRepository
-import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.ZeppStressRepository
-import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.domain.score.Series
-import com.bioscan.fieldterminal.domain.stress.StressDay
 import com.bioscan.fieldterminal.ui.components.ActivityHeatmap
 import com.bioscan.fieldterminal.ui.components.DayActivity
-import com.bioscan.fieldterminal.ui.components.parallel
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.components.RefreshOnCacheUpdates
 import com.bioscan.fieldterminal.ui.theme.FTType
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -30,24 +23,17 @@ private const val SELF_RATED = "Your own 1-10 rating from the morning check-in, 
 
 @Composable
 fun WellbeingScreen(onBack: () -> Unit) {
-    var wellbeing by remember { mutableStateOf<List<WellbeingAnalysisRow>?>(null) }
-    var stress by remember { mutableStateOf<List<StressDay>>(emptyList()) }
-    val guard = rememberLoadGuard()
-    LaunchedEffect(guard.attempt) {
-        guard.run {
-            parallel(
-                { wellbeing = AnalysisRepository(SupabaseClientProvider.client).loadWellbeingDaily() },
-                { stress = ZeppStressRepository(SupabaseClientProvider.client).loadStressDays() },
-            )
-        }
-    }
+    val page = remember { WellbeingState() }
+    val guard = page.guard
+    RefreshOnCacheUpdates(guard)
+    LaunchedEffect(guard.attempt) { page.load() }
     DetailScreen("WELLBEING", onBack, eyebrow = "BALANCE", domain = FT.Domain.Balance) {
-        val wb = wellbeing
+        val wb = page.wellbeing
         if (wb == null) {
             Loading(guard)
             return@DetailScreen
         }
-        val stressSeries = remember(stress) { stress.mapNotNull { d -> d.summary.avg?.let { d.date to it.toDouble() } }.toMap() }
+        val stressSeries = remember(page.stress) { page.stress.mapNotNull { d -> d.summary.avg?.let { d.date to it.toDouble() } }.toMap() }
         MetricPanel(
             "BODY STRESS · DAILY AVERAGE", stressSeries, "/ 100", Fmt.int, minSd = 3.0, color = FT.Metric.Stress, betterHigher = false,
             info = "Your band's stress score (0-100, from heart-rate variability through the day), daily average. It is the body's " +
@@ -66,18 +52,13 @@ private const val SEX_INFO = "Self-quantification only: counts and your own rati
 
 @Composable
 fun SexualHealthScreen(onBack: () -> Unit) {
-    var wellbeing by remember { mutableStateOf<List<WellbeingAnalysisRow>?>(null) }
-    var activity by remember { mutableStateOf<List<LogSexualActivityRow>?>(null) }
-    val guard = rememberLoadGuard()
-    LaunchedEffect(guard.attempt) {
-        guard.run {
-            val repo = AnalysisRepository(SupabaseClientProvider.client)
-            parallel({ wellbeing = repo.loadWellbeingDaily() }, { activity = repo.loadSexualActivityDaily() })
-        }
-    }
+    val page = remember { SexualHealthState() }
+    val guard = page.guard
+    RefreshOnCacheUpdates(guard)
+    LaunchedEffect(guard.attempt) { page.load() }
     DetailScreen("SEXUAL HEALTH", onBack, eyebrow = "RECOVERY", domain = FT.Domain.Cardio) {
-        val wb = wellbeing
-        val sa = activity
+        val wb = page.wellbeing
+        val sa = page.activity
         if (wb == null || sa == null) {
             Loading(guard)
             return@DetailScreen

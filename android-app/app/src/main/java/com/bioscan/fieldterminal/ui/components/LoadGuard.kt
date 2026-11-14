@@ -79,16 +79,20 @@ class LoadGuard {
 @Composable
 fun rememberLoadGuard(refreshOnUpdates: Boolean = true): LoadGuard {
     val guard = remember { LoadGuard() }
-    if (refreshOnUpdates) {
-        LaunchedEffect(guard) {
-            // A burst of refreshes landing together (a page reads several tables) reloads once.
-            ReadCache.updates.collectLatest {
-                delay(300)
-                guard.retry()
-            }
+    if (refreshOnUpdates) RefreshOnCacheUpdates(guard)
+    return guard
+}
+
+/** Loads [guard]'s page again when the read cache brings different data. For a guard owned by a state holder. */
+@Composable
+fun RefreshOnCacheUpdates(guard: LoadGuard) {
+    LaunchedEffect(guard) {
+        // A burst of refreshes landing together (a page reads several tables) reloads once.
+        ReadCache.updates.collectLatest {
+            delay(300)
+            guard.retry()
         }
     }
-    return guard
 }
 
 /**

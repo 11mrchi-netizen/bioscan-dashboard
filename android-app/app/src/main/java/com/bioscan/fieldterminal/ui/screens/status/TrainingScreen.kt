@@ -11,14 +11,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingOverview
 import com.bioscan.fieldterminal.data.TrainingRepository
 import com.bioscan.fieldterminal.data.model.ExerciseSessionRow
@@ -29,7 +27,6 @@ import com.bioscan.fieldterminal.ui.components.SkeletonSections
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.rememberCacheVersion
 import com.bioscan.fieldterminal.ui.theme.FTType
-import kotlinx.coroutines.CancellationException
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -41,27 +38,16 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 // are recognised from their tag or Zepp's trail sport, which the sync now writes as the tag.)
 @Composable
 private fun TrainingOverviewLoaded(content: @Composable (TrainingOverview) -> Unit) {
-    var overview by remember { mutableStateOf<TrainingOverview?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val page = remember { TrainingOverviewState() }
 
     val cacheVersion = rememberCacheVersion()
-    LaunchedEffect(cacheVersion) {
-        try {
-            overview = TrainingRepository(SupabaseClientProvider.client).loadOverview()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            error = e.message ?: "Unknown error"
-        }
-        isLoading = false
-    }
+    LaunchedEffect(cacheVersion) { page.load() }
 
-    val o = overview
+    val o = page.overview
     when {
-        isLoading -> SkeletonSections()
-        error != null || o == null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            Text("Failed to load: ${error ?: "no data"}", style = FTType.BodySmall, color = FT.Bad)
+        page.isLoading -> SkeletonSections()
+        page.error != null || o == null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
+            Text("Failed to load: ${page.error ?: "no data"}", style = FTType.BodySmall, color = FT.Bad)
         }
         else -> content(o)
     }

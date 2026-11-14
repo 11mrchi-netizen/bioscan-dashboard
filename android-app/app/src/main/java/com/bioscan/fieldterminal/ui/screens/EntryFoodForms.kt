@@ -326,7 +326,7 @@ private fun FoodLogState.BarcodeSection() {
                 val code = scanBarcode(context) { barcodeError = it }
                 if (code != null) {
                     barcodeInput = code
-                    runBarcodeLookup(code)
+                    runBarcodeLookup(code, scanned = true)
                 }
             }
         }

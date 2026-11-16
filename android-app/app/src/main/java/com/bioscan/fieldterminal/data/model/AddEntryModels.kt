@@ -24,38 +24,40 @@ data class ExistingHydrationRow(val ml: Int? = null)
 @Serializable
 data class NewHydrationRow(val date: String, val ml: Int)
 
-// personId/calendarEventTitle are only ever set by the Map tab's
-// "LOG ENCOUNTER" action (see ui/screens/MapScreen.kt) -- the Log tab's own
-// EncounterForm collects the rest (occurredAt onward, DAV-158/159) but never
-// these two, so they stay null on every Log-tab write.
+// The Map tab's "LOG ENCOUNTER" insert (see ui/screens/MapScreen.kt): a pin's partner and calendar event title with an
+// optional type and notes. The add sheet's EncounterForm writes EncounterEditRow instead.
 @Serializable
 data class NewEncounterRow(
     val date: String,
-    @SerialName("occurred_at") val occurredAt: String? = null,
     @SerialName("encounter_type") val encounterType: String? = null,
-    @SerialName("location_type") val locationType: String? = null,
-    @SerialName("duration_min") val durationMin: Int? = null,
-    val activities: List<String>? = null,
-    @SerialName("my_rating") val myRating: Int? = null,
     val notes: String? = null,
     @SerialName("person_id") val personId: Long? = null,
     @SerialName("calendar_event_title") val calendarEventTitle: String? = null,
 )
 
-// DAV-158/159. Update-only counterpart to NewEncounterRow that deliberately
-// omits personId/calendarEventTitle -- a real bug found live: reusing
-// NewEncounterRow (with those two defaulted to null) as the UPDATE payload
-// silently nulled out an already-linked encounter's person_id/calendar_event_title
-// on every edit, since Postgrest writes every field the DTO carries. This
-// type structurally can't touch those two columns.
+// What EncounterForm collects, written as it is on insert and on update. It deliberately omits calendarEventTitle --
+// a real bug found live (DAV-158/159): reusing NewEncounterRow as the UPDATE payload nulled an already-linked
+// encounter's calendar_event_title on every edit, since Postgrest writes every field the DTO carries. personId is here
+// because the form now shows and edits the partner (it is seeded from the saved row, so an edit keeps the link).
 @Serializable
 data class EncounterEditRow(
     val date: String,
     @SerialName("occurred_at") val occurredAt: String? = null,
+    @SerialName("person_id") val personId: Long? = null,
+    @SerialName("place_id") val placeId: String? = null,
     @SerialName("encounter_type") val encounterType: String? = null,
     @SerialName("location_type") val locationType: String? = null,
     @SerialName("duration_min") val durationMin: Int? = null,
     val activities: List<String>? = null,
+    val sexual: Boolean = false,
+    val format: List<String>? = null,
+    val positions: List<String>? = null,
+    val toys: List<String>? = null,
+    val protection: List<String>? = null,
+    @SerialName("ejaculation_location") val ejaculationLocation: List<String>? = null,
+    val rounds: Int? = null,
+    @SerialName("orgasm_count") val orgasmCount: Int? = null,
+    @SerialName("orgasm_intensity") val orgasmIntensity: Int? = null,
     @SerialName("my_rating") val myRating: Int? = null,
     val notes: String? = null,
 )

@@ -99,6 +99,8 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
     // Days are collapsed unless opened; the open set and the filter survive switching tabs (kept as a string so it is saveable).
     var expandedKeys by rememberSaveable { mutableStateOf("") }
     var gapsOnly by rememberSaveable { mutableStateOf(false) }
+    // The same feed as a month grid with filters (LogCalendar.kt).
+    var calendar by rememberSaveable { mutableStateOf(false) }
 
     val cacheVersion = rememberCacheVersion()
     LaunchedEffect(reloadKey, windowDays, cacheVersion) { page.load(windowDays) }
@@ -150,6 +152,8 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
                     val shown = if (gapsOnly) days.filter { it.hasGap } else days
                     val visible = shown.take(visibleDays)
                     LogToolbar(
+                        calendar = calendar,
+                        onToggleCalendar = { calendar = !calendar },
                         gapsOnly = gapsOnly,
                         onToggleGaps = { gapsOnly = !gapsOnly; visibleDays = LOG_PAGE_DAYS },
                         allOpen = visible.isNotEmpty() && visible.all { it.date.toString() in expanded },
@@ -157,7 +161,16 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
                             expandedKeys = if (visible.all { it.date.toString() in expanded }) "" else visible.joinToString(",") { it.date.toString() }
                         },
                     )
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    if (calendar) LogCalendar(
+                        days = days,
+                        loadedFrom = current.since,
+                        // A month before the loaded window widens the window to its first day.
+                        onNeedFrom = { from ->
+                            val needed = (java.time.temporal.ChronoUnit.DAYS.between(from, today) + 1).toInt()
+                            if (needed > windowDays) windowDays = needed
+                        },
+                        dayContent = { day -> LogDayCard(day = day, open = true, onToggle = {}, onEntryClick = { actionEntry = it }) },
+                    ) else LazyColumn(modifier = Modifier.fillMaxSize()) {
                         // Routine intelligence R5: gym visits with no session recorded (nothing shows when there are none).
                         item(key = "unlogged-visits") { UnloggedVisitsCard() }
                         if (visible.isEmpty()) {
@@ -279,21 +292,27 @@ private fun AddEntryFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun LogToolbar(gapsOnly: Boolean, onToggleGaps: () -> Unit, allOpen: Boolean, onToggleAll: () -> Unit) {
+private fun LogToolbar(calendar: Boolean, onToggleCalendar: () -> Unit, gapsOnly: Boolean, onToggleGaps: () -> Unit, allOpen: Boolean, onToggleAll: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            SubTabChip(label = "GAPS ONLY", selected = gapsOnly, onClick = onToggleGaps)
-            Box(Modifier.weight(1f))
+            SubTabChip(label = "CALENDAR", selected = calendar, onClick = onToggleCalendar)
+            // Gaps and expand-all are about the list of days; the calendar has its own filters.
+            if (!calendar) {
+                SubTabChip(label = "GAPS ONLY", selected = gapsOnly, onClick = onToggleGaps)
+                Box(Modifier.weight(1f))
+                Text(
+                    if (allOpen) "COLLAPSE ALL" else "EXPAND ALL",
+                    style = FTType.Label, color = FT.TextSecondary,
+                    modifier = Modifier.ftClickable(onClick = onToggleAll),
+                )
+            }
+        }
+        if (!calendar) {
             Text(
-                if (allOpen) "COLLAPSE ALL" else "EXPAND ALL",
-                style = FTType.Label, color = FT.TextSecondary,
-                modifier = Modifier.ftClickable(onClick = onToggleAll),
+                "SOLID = LOGGED · HALF = PARTIAL (MEALS UNDER 3) · DASHED = MISSING · FAINT = NOT EXPECTED OR NOT KNOWN",
+                style = FTType.Micro, color = FT.TextMuted,
             )
         }
-        Text(
-            "SOLID = LOGGED · HALF = PARTIAL (MEALS UNDER 3) · DASHED = MISSING · FAINT = NOT EXPECTED OR NOT KNOWN",
-            style = FTType.Micro, color = FT.TextMuted,
-        )
     }
 }
 

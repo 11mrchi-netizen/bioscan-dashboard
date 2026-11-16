@@ -15,6 +15,7 @@ import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
+import com.bioscan.fieldterminal.data.model.SexualActivityInstance
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -209,10 +210,15 @@ fun buildLogEntries(
         entries += LogEntry(
             id = e.id,
             source = LogSource.Encounter,
-            kind = LogEntryKind.Encounter,
+            kind = if (e.sexual) LogEntryKind.Intercourse else LogEntryKind.Encounter,
             timestamp = e.occurredAt?.let { parseTimestamp(it) } ?: LocalDateTime.of(LocalDate.parse(e.date), ENCOUNTER_NOMINAL_TIME),
-            headline = e.calendarEventTitle?.takeIf { it.isNotBlank() } ?: e.status.replaceFirstChar { it.uppercase() },
-            detail = e.myRating?.let { "Rating $it/5" },
+            headline = e.calendarEventTitle?.takeIf { it.isNotBlank() } ?: e.people?.name?.takeIf { it.isNotBlank() }
+                ?: e.status.replaceFirstChar { it.uppercase() },
+            detail = listOfNotNull(
+                e.rounds?.takeIf { e.sexual }?.let { "$it round${if (it == 1) "" else "s"}" },
+                e.orgasmCount?.takeIf { e.sexual && it > 0 }?.let { "$it orgasm${if (it == 1) "" else "s"}" },
+                e.myRating?.let { "Rating $it/5" },
+            ).joinToString(" · ").ifEmpty { null },
         )
     }
 
@@ -291,7 +297,7 @@ fun buildLogEntries(
         entries += LogEntry(
             id = sa.id,
             source = LogSource.Masturbation,
-            kind = if (sa.activityType == "intercourse") LogEntryKind.Intercourse else LogEntryKind.Masturbation,
+            kind = LogEntryKind.Masturbation,
             timestamp = LocalDateTime.of(LocalDate.parse(sa.date), SEXUAL_ACTIVITY_NOMINAL_TIME),
             headline = headline,
             detail = sa.notes,
@@ -300,6 +306,24 @@ fun buildLogEntries(
 
     return entries.sortedByDescending { it.timestamp }
 }
+
+// Partnered sex is stored per encounter (one row per partner); the Sexual Health cards and N=1 read one row per day and
+// type. This folds a day's sexual encounters into that shape: one instance per round, the first `orgasms` with orgasm.
+// An encounter with no round count is one round. Ids are negative: these rows exist only in memory.
+fun intercourseDayRows(encounters: List<LogEncounterRow>): List<LogSexualActivityRow> =
+    encounters.filter { it.sexual }.groupBy { it.date }.map { (date, day) ->
+        LogSexualActivityRow(
+            id = -day.first().id,
+            date = date,
+            activityType = "intercourse",
+            instances = day.flatMap { e ->
+                val orgasms = e.orgasmCount ?: 0
+                List(maxOf(e.rounds ?: 1, orgasms, 1)) { i ->
+                    SexualActivityInstance(orgasm = i < orgasms, orgasmIntensity = e.orgasmIntensity.takeIf { i < orgasms }, partnerId = e.personId)
+                }
+            },
+        )
+    }
 
 // Mirrors dedupeRunSessions from Training.kt but operates on LogExerciseRow
 // and applies to all exercise types (with a same-type guard so a run and a

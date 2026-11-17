@@ -336,3 +336,31 @@ fun FlowTile(label: String, selected: Boolean, modifier: Modifier = Modifier, mu
         Text(label.uppercase(), style = FTType.MonoCaption, color = if (selected) FT.PlatinumInk else FT.TextSecondary, textAlign = TextAlign.Center, maxLines = 2)
     }
 }
+
+/**
+ * A form split into steps inside a page that already has its frame (the add-entry and edit-entry forms, which are shown
+ * both from the + LOG menu and from the Log): "1 / 2 · MIND" on top, one step's fields, then BACK and NEXT, or SAVE on
+ * the last step. SAVE is offered from the first step once [canSave], so the later steps can be skipped.
+ */
+@Composable
+fun FormSteps(
+    labels: List<String>,
+    canSave: Boolean,
+    saving: Boolean,
+    onSave: () -> Unit,
+    content: @Composable (Int) -> Unit,
+) {
+    val start = LocalFlowStartPage.current.coerceIn(0, (labels.size - 1).coerceAtLeast(0))
+    var step by rememberSaveable { mutableIntStateOf(start) }
+    if (step > labels.lastIndex) step = labels.lastIndex.coerceAtLeast(0)
+    val last = step >= labels.lastIndex
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (labels.size > 1) Text("${step + 1} / ${labels.size} · ${labels[step]}", style = FTType.MonoCaption, color = FT.TextSecondary)
+        content(step)
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (step > 0) FTButton("BACK", enabled = !saving) { step -= 1 }
+            if (!last) FTButton("NEXT", modifier = Modifier.weight(1f), emphasis = if (canSave) FTButtonEmphasis.Secondary else FTButtonEmphasis.Primary) { step += 1 }
+            if (last || canSave) FTButton(if (saving) "SAVING…" else "SAVE", modifier = Modifier.weight(1f), enabled = canSave && !saving, emphasis = FTButtonEmphasis.Primary, onClick = onSave)
+        }
+    }
+}

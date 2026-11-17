@@ -96,5 +96,18 @@ class FlowFitTest {
     @Test fun healthCheckIn() = fits("health_check_in", 1) { com.bioscan.fieldterminal.ui.screens.health.HealthCheckInSheet(onDismiss = {}, onSaved = {}) }
     @Test fun healthNewBody() = fits("health_new_body", 5) { com.bioscan.fieldterminal.ui.screens.health.HealthCheckInSheet(onDismiss = {}, onSaved = {}, start = com.bioscan.fieldterminal.ui.screens.health.CheckInStart.NewBody) }
     @Test fun eveningCheckIn() = fits("evening_check_in", 2) { com.bioscan.fieldterminal.ui.screens.status.EveningCheckInSheet(java.time.LocalDate.of(2026, 11, 17), onDismiss = {}, onSaved = {}) }
+    // Add entry: the menu, then each form it opens.
+    private fun add(name: String, start: com.bioscan.fieldterminal.domain.AddEntryStart?, steps: Int = 1) =
+        fits(name, steps) { com.bioscan.fieldterminal.ui.screens.AddEntrySheet(onDismiss = {}, onSaved = {}, start = start) }
+    @Test fun addMenu() = add("add_menu", null)
+    @Test fun addFood() = add("add_food", com.bioscan.fieldterminal.domain.AddEntryStart.Fuel(com.bioscan.fieldterminal.domain.FuelSubType.Food), 3)
+    @Test fun addDrink() = add("add_drink", com.bioscan.fieldterminal.domain.AddEntryStart.Fuel(com.bioscan.fieldterminal.domain.FuelSubType.Drink))
+    @Test fun addSupplements() = add("add_supps", com.bioscan.fieldterminal.domain.AddEntryStart.Fuel(com.bioscan.fieldterminal.domain.FuelSubType.Supplements))
+    @Test fun addEncounter() = add("add_encounter", com.bioscan.fieldterminal.domain.AddEntryStart.Form(com.bioscan.fieldterminal.domain.AddEntryType.Encounter))
+    @Test fun addStool() = add("add_stool", com.bioscan.fieldterminal.domain.AddEntryStart.Form(com.bioscan.fieldterminal.domain.AddEntryType.Stool))
+    @Test fun addWellness() = add("add_wellness", com.bioscan.fieldterminal.domain.AddEntryStart.Form(com.bioscan.fieldterminal.domain.AddEntryType.Wellness), 2)
+    @Test fun addNote() = add("add_note", com.bioscan.fieldterminal.domain.AddEntryStart.Form(com.bioscan.fieldterminal.domain.AddEntryType.Note))
+    @Test fun addSexual() = add("add_sexual", com.bioscan.fieldterminal.domain.AddEntryStart.Form(com.bioscan.fieldterminal.domain.AddEntryType.SexualActivity), 3)
+    @Test fun addGrip() = add("add_grip", com.bioscan.fieldterminal.domain.AddEntryStart.Form(com.bioscan.fieldterminal.domain.AddEntryType.Grip))
     @Test fun illness() = fits("illness", 5) { IllnessSheet(onDismiss = {}, onSaved = {}) }
 }

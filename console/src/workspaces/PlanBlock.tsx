@@ -335,6 +335,8 @@ function ProgramStep({ d, cat, set }: { d: PlannerDraft; cat: PlannerCatalog; se
   const protocols = idx.ofKind('conditioning_protocol')
   const templates = idx.ofKind('template')
   const [moreProtocols, setMoreProtocols] = useState(false)
+  // With none of the main templates in the catalogue, every template is a main one (nothing hides behind a button).
+  const isMain = protocols.some(isMainProtocol) ? isMainProtocol : () => true
   const s = strengthOf(d, idx)
   const p = protocolOf(d, idx)
   const pairsProtocol = (x: ConditioningProtocolDef) => !!s && (s.compatible_conditioning.includes(x.key) || x.pairs_well_with.includes(s.key))
@@ -371,12 +373,12 @@ function ProgramStep({ d, cat, set }: { d: PlannerDraft; cat: PlannerCatalog; se
               <span className="pb-card-title">No conditioning in this block</span>
             </button>
             <div className="pb-cards">
-              {protocols.filter((x) => isMainProtocol(x) || x.key === d.protocolKey).map((x) => <ProtocolCard key={x.key} p={x} selected={d.protocolKey === x.key} hint={pairsProtocol(x)} onPick={() => set((y) => pickProtocol(y, idx, x.key))} />)}
+              {protocols.filter((x) => isMain(x) || x.key === d.protocolKey).map((x) => <ProtocolCard key={x.key} p={x} selected={d.protocolKey === x.key} hint={pairsProtocol(x)} onPick={() => set((y) => pickProtocol(y, idx, x.key))} />)}
             </div>
-            {protocols.some((x) => !isMainProtocol(x)) && (
-              <button className="btn-ghost mono" onClick={() => setMoreProtocols((v) => !v)}>{moreProtocols ? 'HIDE' : 'SHOW'} OTHER TEMPLATES ({protocols.filter((x) => !isMainProtocol(x)).length})</button>
+            {protocols.some((x) => !isMain(x)) && (
+              <button className="btn-ghost mono" onClick={() => setMoreProtocols((v) => !v)}>{moreProtocols ? 'HIDE' : 'SHOW'} OTHER TEMPLATES ({protocols.filter((x) => !isMain(x)).length})</button>
             )}
-            {moreProtocols && <div className="pb-cards">{protocols.filter((x) => !isMainProtocol(x) && x.key !== d.protocolKey).map((x) => <ProtocolCard key={x.key} p={x} selected={false} hint={pairsProtocol(x)} onPick={() => set((y) => pickProtocol(y, idx, x.key))} />)}</div>}
+            {moreProtocols && <div className="pb-cards">{protocols.filter((x) => !isMain(x) && x.key !== d.protocolKey).map((x) => <ProtocolCard key={x.key} p={x} selected={false} hint={pairsProtocol(x)} onPick={() => set((y) => pickProtocol(y, idx, x.key))} />)}</div>}
             {p && <ProtocolDetail p={p} idx={cat.index} />}
           </Section>
         </>
@@ -623,7 +625,7 @@ function DetailsStep({ d, cat, set }: { d: PlannerDraft; cat: PlannerCatalog; se
                   <tr key={e.key} className={missing ? 'pb-missing' : ''}>
                     <td>{e.name}</td>
                     <td className="mono">{e.entry?.oneRmKg != null ? `${fmt(Math.round(e.entry.oneRmKg * 10) / 10)} kg` : 'none'}</td>
-                    <td className="pb-muted">{e.manual ? 'typed here' : e.basedOn}</td>
+                    <td className="pb-muted">{e.manual ? `typed here (was: ${e.basedOn})` : e.basedOn}</td>
                     <td><Num value={manual.oneRmKg ?? null} step={0.5} width={80} placeholder="kg" onChange={(v) => set((x) => ({ ...x, manualMaxes: cleanMax({ ...x.manualMaxes, [e.key]: { ...x.manualMaxes[e.key], oneRmKg: v } }, e.key) }))} /></td>
                     <td className="mono">{e.entry?.maxReps ?? '—'}</td>
                     <td><Num value={manual.maxReps ?? null} step={1} width={64} placeholder="reps" onChange={(v) => set((x) => ({ ...x, manualMaxes: cleanMax({ ...x.manualMaxes, [e.key]: { ...x.manualMaxes[e.key], maxReps: v } }, e.key) }))} /></td>
@@ -732,7 +734,7 @@ function CustomExercise({ onAdd }: { onAdd: (name: string) => void }) {
   const [v, setV] = useState('')
   return (
     <span className="pb-row tight">
-      <input className="pb-input" style={{ width: 150 }} placeholder="Another exercise" value={v} onChange={(e) => setV(e.target.value)}
+      <input className="pb-input" style={{ width: 130 }} placeholder="Another exercise" value={v} onChange={(e) => setV(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter' && v.trim()) { onAdd(v.trim()); setV('') } }} />
       <button className="pb-chip small" disabled={!v.trim()} onClick={() => { onAdd(v.trim()); setV('') }}>USE</button>
     </span>

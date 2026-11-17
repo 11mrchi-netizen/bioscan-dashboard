@@ -60,8 +60,13 @@ import com.bioscan.fieldterminal.domain.training.generate.templateVariables
 import com.bioscan.fieldterminal.domain.training.movementKey
 import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTFlow
+import com.bioscan.fieldterminal.ui.components.FlowPage
+import com.bioscan.fieldterminal.ui.components.FlowPager
+import com.bioscan.fieldterminal.ui.components.rememberFlowState
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.FTChevron
 import com.bioscan.fieldterminal.ui.components.FTMultiDropdown
 import com.bioscan.fieldterminal.ui.components.FieldTextField
@@ -267,21 +272,13 @@ private fun FixedModules(state: TrainingPlannerState, p: Program.Fixed) {
     }
 }
 
-/** A sheet with a title, scrolling content and DONE. */
-@OptIn(ExperimentalMaterial3Api::class)
+/** A part of the plan opened from DETAILS (or a week of the calendar), full screen with DONE. */
 @Composable
 internal fun PlannerSheet(title: String, onDone: () -> Unit, content: @Composable () -> Unit) {
-    ModalBottomSheet(
-        onDismissRequest = onDone,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        shape = FT.SheetShape, containerColor = FT.Surface, contentColor = FT.TextPrimary,
-    ) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
-            Text(title, style = FTType.SectionTitle, color = FT.TextPrimary)
-            content()
-            FTButton("DONE", modifier = Modifier.fillMaxWidth().padding(top = 16.dp), emphasis = FTButtonEmphasis.Primary, onClick = onDone)
-        }
-    }
+    FTFlow(
+        title = title, pages = listOf(FlowPage("")), state = rememberFlowState(), onClose = onDone,
+        canSave = true, saveLabel = "DONE", onSave = onDone, wash = FT.DomainTraining,
+    ) { content() }
 }
 
 // ---------------- 3 · THE WEEK ----------------
@@ -549,7 +546,12 @@ private fun ReviewStep(state: TrainingPlannerState) {
     val block: GeneratedBlock? = remember(state.step, state.program, state.startDate, state.projectProgression, state.variables.toMap(), state.moduleChoices.toMap(), state.conditioningChoices.toMap(), state.weekdays.toMap(), state.manualMaxes.toMap(), state.strengthKey, state.protocolKey, state.layout, state.timeline) { state.generate() }
     if (block == null) { Body("Nothing to review yet.", muted = true); return }
     val fmt = DateTimeFormatter.ofPattern("d MMM yyyy")
-    FTCard(title = state.name.uppercase().ifBlank { "BLOCK" }, modifier = Modifier.padding(top = 8.dp)) {
+    // Three views of the block, one at a time so the step never scrolls: the summary (each part with EDIT), the calendar
+    // eight weeks at a time, and what needs attention with the projected max increases.
+    var view by remember { mutableStateOf("SUMMARY") }
+    val notes = block.warnings.size + block.progressions.size
+    SegmentedToggle(listOf("SUMMARY", "CALENDAR", "NOTES"), view, { if (it == "NOTES" && notes > 0) "NOTES · $notes" else it }, { view = it }, accentColor = FT.DomainTraining)
+    if (view == "SUMMARY") FTCard(title = state.name.uppercase().ifBlank { "BLOCK" }, modifier = Modifier.padding(top = 8.dp)) {
         ReviewLine("WHEN", "${state.startDate.format(fmt)} → ${block.endDate.format(fmt)} · ${block.calendarWeeks} weeks (${block.countedWeeks} counted)" +
             (state.targetEvent?.let { " · toward ${it.name}" } ?: "")) { state.editFromReview(PlannerStep.When) }
         ReviewLine("PROGRAM", when (val p = state.program) {
@@ -564,18 +566,19 @@ private fun ReviewStep(state: TrainingPlannerState) {
         val missing = state.missingMaxes()
         ReviewLine("DETAILS", if (missing.isEmpty()) "defaults, every max known" else "${missing.size} max${if (missing.size == 1) "" else "es"} missing", warn = missing.isNotEmpty()) { state.editFromReview(PlannerStep.Details) }
     }
-    FTCard(title = "CALENDAR", modifier = Modifier.padding(top = 12.dp)) {
+    if (view == "CALENDAR") FTCard(title = "CALENDAR", modifier = Modifier.padding(top = 12.dp)) {
         CompactCalendar(state, block)
     }
-    if (block.warnings.isNotEmpty()) {
+    if (view == "NOTES" && notes == 0) Body("Nothing needs attention.", muted = true)
+    if (view == "NOTES" && block.warnings.isNotEmpty()) {
         FTCard(title = "NEEDS ATTENTION", modifier = Modifier.padding(top = 12.dp)) {
-            block.warnings.take(12).forEach { Text("! $it", color = FT.Warn, style = FTType.Caption) }
-            if (block.warnings.size > 12) Body("and ${block.warnings.size - 12} more", muted = true)
+            block.warnings.take(6).forEach { Text("! $it", color = FT.Warn, style = FTType.Caption) }
+            if (block.warnings.size > 6) Body("and ${block.warnings.size - 6} more", muted = true)
         }
     }
-    if (block.progressions.isNotEmpty()) {
+    if (view == "NOTES" && block.progressions.isNotEmpty()) {
         FTCard(title = "PROJECTED MAX INCREASES", modifier = Modifier.padding(top = 12.dp)) {
-            block.progressions.groupBy { it.weekIndex }.forEach { (week, list) ->
+            block.progressions.groupBy { it.weekIndex }.entries.take(6).forEach { (week, list) ->
                 Text("Week $week: " + list.joinToString(", ") { "${it.exercise} ${"%.1f".format(it.fromKg)} → ${"%.1f".format(it.toKg)} kg" }, color = FT.TextSecondary, style = FTType.Caption)
             }
             Body("Projections only: confirm each increase when its block ends.", muted = true)
@@ -609,7 +612,10 @@ private fun CompactCalendar(state: TrainingPlannerState, block: GeneratedBlock) 
     }
     val byWeek = block.sessions.groupBy { it.weekIndex }
     val kinds = state.timeline
-    (1..block.calendarWeeks).forEach { w ->
+    // Eight weeks at a time: a long block pages instead of scrolling.
+    var part by remember { mutableStateOf(0) }
+    val parts = (1..block.calendarWeeks).chunked(8)
+    parts.getOrElse(part) { parts.first() }.forEach { w ->
         val list = byWeek[w].orEmpty()
         val kind = kinds.getOrNull(w - 1)
         val deload = list.firstOrNull()?.countsTowardBlock == false || kind == WeekKind.Deload
@@ -642,6 +648,7 @@ private fun CompactCalendar(state: TrainingPlannerState, block: GeneratedBlock) 
             }
         }
     }
+    if (parts.size > 1) FlowPager(part, parts.size, { part = it }, what = "· weeks ${parts[part].first()}–${parts[part].last()}")
     Text("S strength · L/H/W low, high intensity, work capacity · D deload · T test · tap a week to see it", style = FTType.Caption, color = FT.TextMuted, modifier = Modifier.padding(top = 6.dp))
     openWeek?.let { w ->
         val list = byWeek[w].orEmpty()

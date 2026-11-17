@@ -30,6 +30,7 @@ import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.screens.detail.Section
 import com.bioscan.fieldterminal.ui.screens.today.FullScreenOverlay
 import com.bioscan.fieldterminal.ui.theme.FTType
+import com.bioscan.fieldterminal.ui.components.FlowPager
 import kotlinx.coroutines.launch
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -105,6 +106,7 @@ fun RegistryReviewScreen(onClose: () -> Unit) {
     var reviews by remember { mutableStateOf<Map<Pair<String, Long>, RegistryReviewRow>>(emptyMap()) }
     var reload by remember { mutableIntStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
+    var index by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(reload) {
         try {
@@ -126,23 +128,27 @@ fun RegistryReviewScreen(onClose: () -> Unit) {
         )
         error?.let { Text(it, style = FTType.Caption, color = FT.Bad) }
         if (list == null) return@FullScreenOverlay
-        val sorted = list.sortedBy { stateOf(it) != ReviewState.UNREVIEWED }
-        for ((title, reg) in listOf("INTERACTIONS" to "interaction", "LABS TO WATCH" to "lab_watch", "EXPECTED EFFECTS" to "evidence")) {
-            val rows = sorted.filter { it.registry == reg }
-            if (rows.isEmpty()) continue
-            Text(title, style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.padding(top = 6.dp))
-            rows.forEach { e ->
-                ReviewCard(e, stateOf(e), reviews[e.registry to e.id],
-                    onVerdict = { verdict, note ->
-                        scope.launch {
-                            catching { repo.setVerdict(e.registry, e.id, e.version, verdict, note) }
-                                .onSuccess { reload++ }.onFailure { error = it.message }
-                        }
-                    },
-                    onClear = {
-                        scope.launch { catching { repo.clear(e.registry, e.id) }.onSuccess { reload++ }.onFailure { error = it.message } }
-                    })
-            }
+        // One claim at a time, unreviewed first: a verdict re-sorts the list, so the same place shows the next one to read.
+        val sorted = list.sortedWith(compareBy({ stateOf(it) != ReviewState.UNREVIEWED }, { listOf("interaction", "lab_watch", "evidence").indexOf(it.registry) }))
+        if (sorted.isEmpty()) { Text("Nothing to review.", style = FTType.BodySmall, color = FT.TextSecondary); return@FullScreenOverlay }
+        val i = index.coerceIn(0, sorted.size - 1)
+        val e = sorted[i]
+        FlowPager(i, sorted.size, { index = it }, what = "claims")
+        Text(
+            when (e.registry) { "interaction" -> "INTERACTION"; "lab_watch" -> "LAB TO WATCH"; else -> "EXPECTED EFFECT" },
+            style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.padding(top = 6.dp),
+        )
+        androidx.compose.runtime.key(e.registry, e.id) {
+            ReviewCard(e, stateOf(e), reviews[e.registry to e.id],
+                onVerdict = { verdict, note ->
+                    scope.launch {
+                        catching { repo.setVerdict(e.registry, e.id, e.version, verdict, note) }
+                            .onSuccess { reload++ }.onFailure { error = it.message }
+                    }
+                },
+                onClear = {
+                    scope.launch { catching { repo.clear(e.registry, e.id) }.onSuccess { reload++ }.onFailure { error = it.message } }
+                })
         }
     }
 }

@@ -48,6 +48,11 @@ import com.bioscan.fieldterminal.domain.trail.courseProfileFromGpx
 import com.bioscan.fieldterminal.ui.components.CourseSaver
 import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTFlow
+import com.bioscan.fieldterminal.ui.components.FlowPage
+import com.bioscan.fieldterminal.ui.components.FlowPager
+import com.bioscan.fieldterminal.ui.components.FlowQuestion
+import com.bioscan.fieldterminal.ui.components.rememberFlowState
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTConfirmDestructive
 import com.bioscan.fieldterminal.ui.components.FTDropdown
@@ -101,7 +106,6 @@ fun EventFormSheet(
     onSaved: (AthleteEvent) -> Unit,
     onDeleted: () -> Unit = {},
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val repo = remember { AthleteEventsRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -203,132 +207,147 @@ fun EventFormSheet(
         }
     }
 
-    ModalBottomSheet(
-        onDismissRequest = { if (!picking && !ExternalActivityGuard.active) onDismiss() },
-        sheetState = sheetState,
-        shape = FT.SheetShape,
-        containerColor = FT.Surface,
-        contentColor = FT.TextPrimary,
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Text(if (initial?.id == null) "ADD EVENT" else "EDIT EVENT", style = FTType.SectionTitle, color = FT.DomainTraining)
-            Text(
-                "A race, a long day or a hard day outside your training plan. Fuel and hydration plans are built around it.",
-                style = FTType.BodySmall, color = FT.TextSecondary,
-            )
-            Column { Label("NAME"); FieldTextField(name, { name = it }, "e.g. City half marathon") }
-            Column { Label("WHAT IT IS"); FTDropdown(EventKind.entries.map { it.key to it.label }, kind.key, "Kind") { kind = EventKind.of(it) } }
-            Column { Label("SPORT"); FTDropdown(EventSport.entries.map { it.key to it.label }, sport.key, "Sport") { sport = EventSport.of(it) } }
-            Column {
-                Label("PRIORITY")
-                SegmentedToggle(EventPriority.entries, priority, { it.key }, { priority = it }, accentColor = FT.DomainTraining)
-                Text("A: the goal race. B: important. C: fits around the plan.", style = FTType.Caption, color = FT.TextSecondary, modifier = Modifier.padding(top = 4.dp))
+    val draft = build()
+    val problems = validateEvent(draft)
+    var stationIndex by rememberSaveable { mutableStateOf(0) }
+    val flow = rememberFlowState()
+    // WHAT, WHEN and the COURSE are asked; aid stations (one to a page) and notes are the optional extras.
+    val pages = listOf(
+        FlowPage("WHAT", ready = name.isNotBlank()),
+        FlowPage("WHEN"),
+        FlowPage("COURSE"),
+        FlowPage("AID STATIONS", optional = true),
+        FlowPage(if (initial?.id == null) "NOTES" else "NOTES · DELETE", optional = true),
+    )
+    FTFlow(
+        title = if (initial?.id == null) "ADD EVENT" else "EDIT EVENT", pages = pages, state = flow, onClose = onDismiss,
+        canSave = problems.isEmpty(), saving = saving, wash = FT.DomainTraining,
+        error = error ?: problems.firstOrNull()?.takeIf { name.isNotBlank() && flow.page >= 2 },
+        onSave = {
+            saving = true
+            error = null
+            scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { saving = false }) {
+                val saved = repo.save(draft, if (courseFromFile != null) "gpx_file" else null)
+                onSaved(saved)
             }
-            DateField("DATE", date) { date = it }
-            Column {
-                Label("START")
-                SegmentedToggle(listOf(false, true), hasStart, { if (it) "SET A TIME" else "NO TIME YET" }, { hasStart = it }, accentColor = FT.DomainTraining)
-            }
-            if (hasStart) TimeField("START TIME", startTime) { startTime = it }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Column(Modifier.weight(1f)) { Label("TARGET TIME"); FieldTextField(target, { target = it }, "h:mm") }
-                Column(Modifier.weight(1f)) { Label("OR EXPECTED"); FieldTextField(expected, { expected = it }, "h:mm") }
-            }
-            Text("The target time when you have one; otherwise roughly how long it will take.", style = FTType.Caption, color = FT.TextSecondary)
-
-            Label("COURSE")
-            if (course.size >= 2) {
-                val km = course.last().distanceM / 1000
-                Text("%.1f km course, %d points.".format(km, course.size), style = FTType.BodySmall, color = FT.TextPrimary)
+        },
+    ) { page ->
+        when (page) {
+            0 -> {
+                FlowQuestion("What is it?", "A race, a long day or a hard day outside your plan. Fuel and hydration plans are built around it.")
+                Column { Label("NAME"); FieldTextField(name, { name = it }, "e.g. City half marathon") }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    FTButton("REPLACE GPX", modifier = Modifier.weight(1f)) { picking = true; gpxPicker.launch(arrayOf("*/*")) }
-                    FTButton("REMOVE", emphasis = FTButtonEmphasis.Tertiary, modifier = Modifier.weight(1f)) {
-                        course = emptyList<CoursePoint>(); courseFromFile = null; info = null
-                    }
+                    Column(Modifier.weight(1f)) { Label("WHAT IT IS"); FTDropdown(EventKind.entries.map { it.key to it.label }, kind.key, "Kind") { kind = EventKind.of(it) } }
+                    Column(Modifier.weight(1f)) { Label("SPORT"); FTDropdown(EventSport.entries.map { it.key to it.label }, sport.key, "Sport") { sport = EventSport.of(it) } }
                 }
-            } else {
-                FTButton("ATTACH GPX FILE") { picking = true; gpxPicker.launch(arrayOf("*/*")) }
+                Column {
+                    Label("PRIORITY")
+                    SegmentedToggle(EventPriority.entries, priority, { it.key }, { priority = it }, accentColor = FT.DomainTraining)
+                    Text("A: the goal race. B: important. C: fits around the plan.", style = FTType.Caption, color = FT.TextSecondary, modifier = Modifier.padding(top = 4.dp))
+                }
             }
-            info?.let { Text(it, style = FTType.Caption, color = FT.TextSecondary) }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Column(Modifier.weight(1f)) { Label("DISTANCE KM"); FieldTextField(distance, { distance = it }, "e.g. 21.1", keyboardType = KeyboardType.Decimal) }
-                Column(Modifier.weight(1f)) { Label("ASCENT M"); FieldTextField(ascent, { ascent = it }, "e.g. 250", keyboardType = KeyboardType.Number) }
+            1 -> {
+                DateField("DATE", date) { date = it }
+                Column {
+                    Label("START")
+                    SegmentedToggle(listOf(false, true), hasStart, { if (it) "SET A TIME" else "NO TIME YET" }, { hasStart = it }, accentColor = FT.DomainTraining)
+                }
+                if (hasStart) TimeField("START TIME", startTime) { startTime = it }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.weight(1f)) { Label("TARGET TIME"); FieldTextField(target, { target = it }, "h:mm") }
+                    Column(Modifier.weight(1f)) { Label("OR EXPECTED"); FieldTextField(expected, { expected = it }, "h:mm") }
+                }
+                Text("The target time when you have one; otherwise roughly how long it will take.", style = FTType.Caption, color = FT.TextSecondary)
             }
-            Column {
-                Label("PLACE")
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    FieldTextField(location, { location = it; if (course.isEmpty()) latLon = null }, "Town or start area", modifier = Modifier.weight(1f))
-                    FTButton("FIND", enabled = location.isNotBlank()) {
-                        scope.launchSafe(onError = { error = describeLoadFailure(it) }) {
-                            val found = GeocodingRepository().geocode(location.trim())
-                            if (found == null) error = "Couldn't find that place." else { latLon = found; info = "Place found: weather will be read there." }
+            2 -> {
+                if (course.size >= 2) {
+                    val km = course.last().distanceM / 1000
+                    Text("%.1f km course, %d points.".format(km, course.size), style = FTType.BodySmall, color = FT.TextPrimary)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FTButton("REPLACE GPX", modifier = Modifier.weight(1f)) { picking = true; gpxPicker.launch(arrayOf("*/*")) }
+                        FTButton("REMOVE", emphasis = FTButtonEmphasis.Tertiary, modifier = Modifier.weight(1f)) {
+                            course = emptyList<CoursePoint>(); courseFromFile = null; info = null
                         }
                     }
+                } else {
+                    FTButton("ATTACH GPX FILE", modifier = Modifier.fillMaxWidth()) { picking = true; gpxPicker.launch(arrayOf("*/*")) }
                 }
-                Text(
-                    when {
-                        latLon != null && course.isNotEmpty() -> "Weather is read at the course start."
-                        latLon != null -> "Weather is read at this place."
-                        else -> "Without a course or a place, weather uses your home location."
-                    },
-                    style = FTType.Caption, color = FT.TextSecondary, modifier = Modifier.padding(top = 4.dp),
-                )
+                info?.let { Text(it, style = FTType.Caption, color = FT.TextSecondary) }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.weight(1f)) { Label("DISTANCE KM"); FieldTextField(distance, { distance = it }, "e.g. 21.1", keyboardType = KeyboardType.Decimal) }
+                    Column(Modifier.weight(1f)) { Label("ASCENT M"); FieldTextField(ascent, { ascent = it }, "e.g. 250", keyboardType = KeyboardType.Number) }
+                }
+                Column {
+                    Label("PLACE")
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        FieldTextField(location, { location = it; if (course.isEmpty()) latLon = null }, "Town or start area", modifier = Modifier.weight(1f))
+                        FTButton("FIND", enabled = location.isNotBlank()) {
+                            scope.launchSafe(onError = { error = describeLoadFailure(it) }) {
+                                val found = GeocodingRepository().geocode(location.trim())
+                                if (found == null) error = "Couldn't find that place." else { latLon = found; info = "Place found: weather will be read there." }
+                            }
+                        }
+                    }
+                    Text(
+                        when {
+                            latLon != null && course.isNotEmpty() -> "Weather is read at the course start."
+                            latLon != null -> "Weather is read at this place."
+                            else -> "Without a course or a place, weather uses your home location."
+                        },
+                        style = FTType.Caption, color = FT.TextSecondary, modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
             }
-
-            Label("AID STATIONS")
-            stations.forEachIndexed { index, s ->
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FieldTextField(s.name, { s.name = it }, "Name", modifier = Modifier.weight(1.4f))
-                        FieldTextField(s.km, { s.km = it }, "km", keyboardType = KeyboardType.Decimal, modifier = Modifier.weight(0.8f))
-                        FieldTextField(s.cutoff, { s.cutoff = it }, "cutoff h:mm", modifier = Modifier.weight(1f))
+            3 -> {
+                // One station to a page: a long course's dozen stations never make a long list.
+                val i = stationIndex.coerceIn(0, (stations.size - 1).coerceAtLeast(0))
+                if (stations.isNotEmpty()) {
+                    FlowPager(i, stations.size, { stationIndex = it }, what = "stations")
+                    val s = stations[i]
+                    Column { Label("NAME"); FieldTextField(s.name, { s.name = it }, "Name") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(Modifier.weight(1f)) { Label("AT KM"); FieldTextField(s.km, { s.km = it }, "km", keyboardType = KeyboardType.Decimal) }
+                        Column(Modifier.weight(1f)) { Label("CUTOFF"); FieldTextField(s.cutoff, { s.cutoff = it }, "h:mm") }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         ToggleChip("WATER", s.water, Modifier.weight(1f)) { s.water = it }
                         ToggleChip("FOOD", s.food, Modifier.weight(1f)) { s.food = it }
                         ToggleChip("DROP BAG", s.dropBag, Modifier.weight(1f)) { s.dropBag = it }
-                        FTButton("×", emphasis = FTButtonEmphasis.Tertiary) { stations.removeAt(index) }
+                    }
+                } else {
+                    FlowQuestion("No aid stations yet.", "Add one for each stop on the course: fuel plans use what each one has.")
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FTButton("ADD AID STATION", modifier = Modifier.weight(1f)) {
+                        stations.add(AidStationDraft(name = "Aid ${stations.size + 1}")); stationIndex = stations.size - 1
+                    }
+                    if (stations.isNotEmpty()) FTButton("REMOVE", emphasis = FTButtonEmphasis.Tertiary) {
+                        stations.removeAt(i); stationIndex = (i - 1).coerceAtLeast(0)
                     }
                 }
             }
-            FTButton("ADD AID STATION", emphasis = FTButtonEmphasis.Tertiary) { stations.add(AidStationDraft(name = "Aid ${stations.size + 1}")) }
-
-            Column { Label("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Bib pick-up, kit, anything worth noting", singleLine = false) }
-
-            val draft = build()
-            val problems = validateEvent(draft)
-            (error ?: problems.firstOrNull()?.takeIf { name.isNotBlank() })?.let { Text(it, style = FTType.Caption, color = FT.Bad) }
-            FTButton(if (saving) "SAVING…" else "SAVE", enabled = problems.isEmpty() && !saving, emphasis = FTButtonEmphasis.Primary) {
-                saving = true
-                error = null
-                scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { saving = false }) {
-                    val saved = repo.save(draft, if (courseFromFile != null) "gpx_file" else null)
-                    onSaved(saved)
+            else -> {
+                Column { Label("NOTES"); FieldTextField(notes, { notes = it }, "Bib pick-up, kit, anything worth noting", singleLine = false) }
+                if (initial?.id != null) {
+                    if (confirmingDelete) {
+                        FTConfirmDestructive(
+                            message = "Delete this event? Its fuel plans go with it.",
+                            confirmLabel = "DELETE EVENT",
+                            busy = saving,
+                            onCancel = { confirmingDelete = false },
+                            onConfirm = {
+                                saving = true
+                                scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { saving = false }) {
+                                    repo.delete(initial.id)
+                                    onDeleted()
+                                }
+                            },
+                        )
+                    } else {
+                        FTButton("DELETE EVENT", emphasis = FTButtonEmphasis.Destructive) { confirmingDelete = true }
+                    }
                 }
             }
-            if (initial?.id != null) {
-                if (confirmingDelete) {
-                    FTConfirmDestructive(
-                        message = "Delete this event? Its fuel plans go with it.",
-                        confirmLabel = "DELETE EVENT",
-                        busy = saving,
-                        onCancel = { confirmingDelete = false },
-                        onConfirm = {
-                            saving = true
-                            scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { saving = false }) {
-                                repo.delete(initial.id)
-                                onDeleted()
-                            }
-                        },
-                    )
-                } else {
-                    FTButton("DELETE", emphasis = FTButtonEmphasis.Destructive) { confirmingDelete = true }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
         }
     }
 }

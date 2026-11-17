@@ -77,5 +77,8 @@ class FlowFitTest {
 
     private object Holder { val page = androidx.compose.runtime.mutableIntStateOf(0) }
 
+    @Test fun symptomCheck() = fits("symptom_check", 3) { com.bioscan.fieldterminal.ui.screens.health.SymptomCheckSheet(onDismiss = {}, onSaved = {}, onTrackIllness = { _, _ -> }, onTrackInjury = {}) }
+    @Test fun event() = fits("event", 5) { com.bioscan.fieldterminal.ui.screens.events.EventFormSheet(onDismiss = {}, onSaved = {}) }
+    @Test fun sweatTest() = fits("sweat_test", 3) { com.bioscan.fieldterminal.ui.screens.events.SweatTestSheet(onDismiss = {}, onSaved = {}) }
     @Test fun illness() = fits("illness", 5) { IllnessSheet(onDismiss = {}, onSaved = {}) }
 }

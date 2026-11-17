@@ -83,9 +83,21 @@ fun detectStays(fixes: List<Fix>, heartbeats: List<Long> = emptyList(), params: 
     return stays
 }
 
+// Whether a moving-activity transition starts a trip recording. Walking and running do not while the phone is at a known
+// stay: steps around the home or office are not a trip, and each one used to turn GPS on for ten minutes (about five
+// hours a day, two thirds of it within 300 m). Leaving the stay's geofence starts the trip instead. A recording that is
+// already running always takes the new activity, and a vehicle or bicycle starts one at once.
+fun startsTrip(activity: String, recording: Boolean, atKnownStay: Boolean): Boolean =
+    recording || !atKnownStay || activity !in setOf("walking", "running")
+
+// Whether a fix shows the phone has left the point a recording started from: farther than radiusM even after allowing for
+// the fix's own error (a cell-tower fix can be 500 m out). Until then the recording stays on balanced power.
+fun hasLeft(originLat: Double, originLon: Double, lat: Double, lon: Double, accuracyM: Double?, radiusM: Double = 150.0): Boolean =
+    haversineM(originLat, originLon, lat, lon) > radiusM + (accuracyM ?: 0.0)
+
 // TripRecordingService's fallback end of a trip when no STILL transition arrives: the last windowMs of fixes (at least three,
 // spanning most of the window) all lie within radiusM of the newest one.
-fun isSettled(fixes: List<Fix>, now: Long, windowMs: Long = 10 * 60_000L, radiusM: Double = 100.0): Boolean {
+fun isSettled(fixes: List<Fix>, now: Long, windowMs: Long = 5 * 60_000L, radiusM: Double = 100.0): Boolean {
     val recent = fixes.filter { now - it.ts in 0..windowMs }.sortedBy { it.ts }
     if (recent.size < 3 || recent.last().ts - recent.first().ts < windowMs * 4 / 5) return false
     val last = recent.last()

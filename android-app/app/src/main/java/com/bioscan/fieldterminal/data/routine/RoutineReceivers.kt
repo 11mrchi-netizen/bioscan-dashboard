@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
+import com.bioscan.fieldterminal.domain.routine.startsTrip
 import com.google.android.gms.location.ActivityTransition
 import com.google.android.gms.location.ActivityTransitionResult
 import com.google.android.gms.location.DetectedActivity
@@ -13,7 +14,8 @@ import com.google.android.gms.location.GeofencingEvent
 // Routine intelligence R2: the broadcasts that drive LocationCollector's state machine. All three are internal
 // (exported = false); Play services delivers through our own PendingIntents.
 
-// Activity transitions: every one is recorded; entering a moving activity starts a trip, entering STILL lets one settle.
+// Activity transitions: every one is recorded; entering a moving activity starts a trip (walking and running only away
+// from a known stay, domain/routine/StayPoints.kt startsTrip), entering STILL lets one settle.
 class RoutineTransitionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (!ActivityTransitionResult.hasResult(intent)) return
@@ -31,14 +33,14 @@ class RoutineTransitionReceiver : BroadcastReceiver() {
             if (!entered) continue
             if (e.activityType == DetectedActivity.STILL) {
                 TripRecordingService.settle(context)
-            } else {
+            } else if (startsTrip(activity, TripRecordingService.running, RoutineSettingsStore.stayCentre(context) != null)) {
                 TripRecordingService.start(context, activity)
             }
         }
     }
 }
 
-// Leaving the current stay: a trip has begun even if no transition said so yet (a slow walk is often missed at first).
+// Leaving the current stay: a trip has begun. From a known stay this is the only start of a trip on foot.
 class RoutineGeofenceReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val event = GeofencingEvent.fromIntent(intent) ?: return

@@ -119,6 +119,8 @@ internal fun DrinkLogForm(
     var abv by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    // Two steps (no page scrolls): FIND a drink, then its AMOUNT. Picking one goes on to the amount; CHANGE DRINK comes back.
+    var amountStep by remember { mutableStateOf(false) }
 
     // A barcode no database has numbers for: its label is scanned, then the saved product is picked.
     var labelBarcode by remember { mutableStateOf<String?>(null) }
@@ -134,6 +136,7 @@ internal fun DrinkLogForm(
         abv = match?.alcoholG?.takeIf { it > 0 }?.let { "%.1f".format(it / 0.789).trimEnd('0').trimEnd('.') } ?: ""
         val start = ml ?: drinkSizes(match, kind).firstOrNull { it.ml >= 200 }?.ml ?: 250.0
         steps = (start / STEP_ML).roundToInt().coerceIn(1, 100)
+        amountStep = kind != null
     }
 
     LaunchedEffect(Unit) {
@@ -207,7 +210,10 @@ internal fun DrinkLogForm(
         if (uris.isNotEmpty()) labelPhotos = labelPhotos + uris
     }
 
+    val k = kind
+    val st = steps
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        if (!(amountStep && k != null && st != null)) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             DrinkLabel("FIND A DRINK")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -217,7 +223,7 @@ internal fun DrinkLogForm(
                 }
             }
             if (searching) Text("Searching…", style = FTType.BodySmall, color = FT.TextMuted)
-            results.forEach { m ->
+            results.take(5).forEach { m ->
                 DrinkRow(
                     title = m.title,
                     detail = listOfNotNull(
@@ -254,7 +260,7 @@ internal fun DrinkLogForm(
                     Spacer(Modifier.weight(1f))
                     FTIcon(if (usualOpen) FTIcons.Minus else FTIcons.Plus, null, tint = FT.TextSecondary, size = FTIconSize.Inline)
                 }
-                if (usualOpen) usual.forEach { (u, match) ->
+                if (usualOpen) usual.take(5).forEach { (u, match) ->
                     DrinkRow(
                         title = match?.title ?: u.description,
                         detail = "${u.ml.roundToInt()} ml · ${u.times}× in 60 days",
@@ -279,15 +285,15 @@ internal fun DrinkLogForm(
                 )
                 DrinkLabel("WHAT KIND OF DRINK IS IT?")
                 TextChipRow(DRINK_KINDS.drop(1).map { it.second }, null, perRow = 3) { label ->
-                    DRINK_KINDS.firstOrNull { it.second == label }?.first?.let { kind = it }
+                    DRINK_KINDS.firstOrNull { it.second == label }?.first?.let { kind = it; amountStep = true }
                 }
                 Text("Asked once: after you log it, the next scan remembers.", style = FTType.Caption, color = FT.TextMuted)
             }
         }
 
-        val k = kind
-        val st = steps
-        if (k != null && st != null) {
+            error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
+        } else {
+            FTButton("‹ CHANGE DRINK", emphasis = FTButtonEmphasis.Tertiary) { amountStep = false }
             val ml = st * STEP_ML.toDouble()
             val abvValue = abv.toDoubleOrNull()?.takeIf { k == "alcohol" }
             val amounts = drinkAmounts(picked, ml, abvValue)
@@ -370,8 +376,6 @@ internal fun DrinkLogForm(
                     }
                 }
             }
-        } else {
-            error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
         }
     }
 

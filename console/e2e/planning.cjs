@@ -28,7 +28,14 @@ const T = {
   athlete_events: [{ id: 7, name: 'Spring half', priority: 'A', event_date: '2027-03-14', target_time_min: 95, expected_duration_min: null, status: 'planned' }],
   body_metrics: [{ date: '2026-11-15', weight_kg: 78.4 }],
   training_blocks: [], training_block_domains: [], planned_sessions: [],
+  meal_prep_weeks: [], breakfast_templates: [{ items: [{ food_id: 'staple:oats', grams: 70 }, { food_id: 'staple:greek_yoghurt', grams: 200 }, { food_id: 'staple:banana', grams: 118 }] }],
 }
+// The meal prep fixture week (fuel-core/fixtures/week.json), published for next Monday as the phone would.
+const prepWeek = JSON.parse(fs.readFileSync(path.join(__dirname, '../../supabase/functions/_shared/fuel-core/fixtures/week.json'), 'utf8'))
+const nextMonday = (() => { const d = new Date(`${today}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + ((8 - (d.getUTCDay() || 7)) % 7 || 7)); return d.toISOString().slice(0, 10) })()
+const shift = (Date.parse(`${nextMonday}T00:00:00Z`) - Date.parse(`${prepWeek.week_start}T00:00:00Z`)) / 864e5
+prepWeek.plan.days.forEach((d) => { const t = new Date(`${d.date}T12:00:00Z`); t.setUTCDate(t.getUTCDate() + shift); d.date = t.toISOString().slice(0, 10) })
+T.fuel_week_plans = [{ week_start: nextMonday, plan: prepWeek.plan, engine_version: '4', computed_at: new Date().toISOString() }]
 const writes = []
 
 function filterRows(table, sp) {
@@ -123,6 +130,38 @@ const check = (ok, what, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} 
     const blk = writes.find((w) => w.table === 'training_blocks').body
     check(blk.origin === 'generated' && blk.status === 'scheduled' && blk.choices.timeline[1] === 'test', 'the block row keeps the choices', JSON.stringify(blk.choices.timeline))
     check(planned.every((p) => p.start_time === '06:30' || p.start_time === '19:00'), 'sessions carry the session times')
+
+    // ---- MEAL PREP ----
+    await page.goto(`${BASE}#/meal-prep`)
+    await page.waitForSelector('.pb-steps', { timeout: 15000 })
+    await page.click('.pb-chip:has-text("NEXT WEEK")')
+    await page.waitForSelector('text=LUNCH AND DINNER')
+    await shot('prep_1_week')
+    await page.click('tr:nth-child(3) .pb-chip:has-text("CONTAINER") >> nth=1')
+    await page.click('.pb-step:has-text("PICK")')
+    for (const name of ['chicken breast', 'salmon', 'broccoli', 'leafy greens', 'cooked white rice', 'baked sweet potato']) {
+      await page.click(`.mp-food:has-text("${name}") >> nth=0`)
+    }
+    await shot('prep_2_pick')
+    await page.click('.pb-step:has-text("RECIPES")')
+    check((await page.locator('.mp-recipes .pb-card').count()) === 4, 'four recipes are built from the picks')
+    await shot('prep_3_recipes')
+    await page.click('.pb-step:has-text("CONTAINERS")')
+    const rows = await page.locator('.pb-section:has-text("THE CONTAINERS") tbody tr').count()
+    check(rows === 9, 'nine containers when one dinner is eaten out', rows)
+    await shot('prep_4_containers')
+    await page.click('.pb-step:has-text("EACH DAY")'); await shot('prep_5_days')
+    await page.click('.pb-step:has-text("SHOPPING")')
+    check((await page.textContent('.mp-shop')).includes('rice, dry'), 'shopping is in raw weights')
+    await shot('prep_6_shop')
+    await page.click('.pb-step:has-text("COOK")')
+    await page.click('button:has-text("MARK AS COOKED")')
+    await page.waitForSelector('text=COOKED · CONTAINERS FIXED')
+    await page.waitForTimeout(900)
+    await shot('prep_7_cook')
+    const saved = writes.filter((w) => w.table === 'meal_prep_weeks').pop()?.body
+    check(saved && saved.status === 'cooked' && saved.containers.length === 9 && saved.skipped.length === 1 && saved.recipes.length === 4, 'the cooked week is saved in the phone\'s row shape', JSON.stringify(saved && { s: saved.status, c: saved.containers?.length, k: saved.skipped }))
+    await page.click('.pb-step:has-text("BREAKFAST")'); await shot('prep_8_breakfast')
     check(errors.length === 0, 'no page errors', errors.join(' | '))
   } finally {
     await b.close(); server.kill()

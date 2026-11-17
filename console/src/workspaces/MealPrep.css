@@ -1,0 +1,20 @@
+/* MEAL PREP: shares the planner's frame (PlanBlock.css); these are its own parts. */
+.mp-weeks { margin-bottom: var(--sp-2); }
+.mp-save { font-size: 10px; letter-spacing: 0.06em; color: var(--color-text-muted); }
+.mp-save.saved { color: var(--color-emerald); }
+.mp-save.error { color: var(--color-critical); }
+.mp-cell { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.mp-pick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-3); }
+.mp-pick-col { display: flex; flex-direction: column; gap: 4px; }
+.mp-food { display: flex; flex-direction: column; gap: 2px; text-align: left; background: var(--color-glass); border: 1px solid var(--color-border); border-radius: 6px; padding: 6px 8px; color: var(--color-text-primary); font-size: 12px; }
+.mp-food span:last-child { font-size: 10px; }
+.mp-food:hover:not(:disabled) { border-color: var(--color-text-muted); }
+.mp-food.on { background: #EEF2F7; color: #0A0C0E; border-color: transparent; }
+.mp-food.on .pb-muted { color: #3A4450; }
+.mp-food:disabled { opacity: 0.45; cursor: default; }
+.mp-recipes { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--sp-3); }
+.mp-recipe-line { font-size: 12px; color: var(--color-text-secondary); }
+.mp-recipe-line b { color: var(--color-text-primary); margin-right: 4px; }
+.mp-shop { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.mp-shop li { display: flex; justify-content: space-between; gap: var(--sp-3); border-top: 1px solid var(--color-border); padding-top: 6px; }
+@media (max-width: 900px) { .mp-pick { grid-template-columns: 1fr; } }

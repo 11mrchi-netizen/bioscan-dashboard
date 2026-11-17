@@ -23,6 +23,7 @@ const NAV = [
 // Planning: the long-form work done here and carried out on the phone.
 const PLAN_NAV = [
   { to: 'plan-block', label: 'Plan block' },
+  { to: 'meal-prep',  label: 'Meal prep' },
 ]
 
 export function Shell() {

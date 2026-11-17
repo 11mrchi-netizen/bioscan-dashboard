@@ -109,5 +109,6 @@ class FlowFitTest {
     @Test fun addNote() = add("add_note", com.bioscan.fieldterminal.domain.AddEntryStart.Form(com.bioscan.fieldterminal.domain.AddEntryType.Note))
     @Test fun addSexual() = add("add_sexual", com.bioscan.fieldterminal.domain.AddEntryStart.Form(com.bioscan.fieldterminal.domain.AddEntryType.SexualActivity), 3)
     @Test fun addGrip() = add("add_grip", com.bioscan.fieldterminal.domain.AddEntryStart.Form(com.bioscan.fieldterminal.domain.AddEntryType.Grip))
+    @Test fun shoes() = fits("shoes", 2) { com.bioscan.fieldterminal.ui.screens.shoes.ShoeFormSheet(com.bioscan.fieldterminal.ui.screens.shoes.ShoeFormRequest(null, "a1b2c3d4e5", null), onDismiss = {}, onSaved = {}) }
     @Test fun illness() = fits("illness", 5) { IllnessSheet(onDismiss = {}, onSaved = {}) }
 }

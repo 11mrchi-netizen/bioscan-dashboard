@@ -131,13 +131,18 @@ fun FTFlow(
     error: String? = null,
     /** Replaces the bottom bar on a page that ends the flow its own way (a result page, a page of tiles). */
     bottomBar: (@Composable (Int) -> Unit)? = null,
+    /** A flow that walks its own steps (the body check-in's sites): back goes here first; true when it went back. */
+    onBack: (() -> Boolean)? = null,
+    /** Replaces "2 / 4 · WHAT" under the title (a flow with its own step count). */
+    subtitle: String? = null,
     content: @Composable ColumnScope.(Int) -> Unit,
 ) {
     state.clamp(pages.size)
+    val goBack: () -> Unit = { if (onBack?.invoke() != true && !state.back()) onClose() }
     val frame = @Composable {
         Box(Modifier.fillMaxSize().background(FT.Base).ftDomainWash(wash)) {
             Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
-                FlowHeader(title, pages, state, onClose)
+                FlowHeader(title, pages, state, subtitle, goBack, onClose)
                 key(state.page) {
                     // A fresh scroll per page: a page always opens at its top (and is built not to need it at all).
                     val scroll = rememberScrollState()
@@ -153,22 +158,24 @@ fun FTFlow(
             }
         }
     }
-    BackHandler(enabled = !LocalInlineFlows.current) { if (!state.back()) onClose() }
+    BackHandler(enabled = !LocalInlineFlows.current, onBack = goBack)
     if (LocalInlineFlows.current) frame() else {
-        Dialog(onDismissRequest = { if (!state.back()) onClose() }, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        Dialog(onDismissRequest = goBack, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
             frame()
         }
     }
 }
 
 @Composable
-private fun FlowHeader(title: String, pages: List<FlowPage>, state: FlowState, onClose: () -> Unit) {
+private fun FlowHeader(title: String, pages: List<FlowPage>, state: FlowState, subtitle: String?, goBack: () -> Unit, onClose: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            FTIconButton(FTIcons.Back, if (state.page == 0) "Close" else "Back", { if (!state.back()) onClose() })
+            FTIconButton(FTIcons.Back, "Back", goBack)
             Column(Modifier.weight(1f).padding(start = 4.dp)) {
                 Text(title, style = FTType.LabelCaps, color = FT.TextPrimary, maxLines = 1)
-                if (pages.size > 1) {
+                if (subtitle != null) {
+                    Text(subtitle, style = FTType.MonoCaption, color = FT.TextSecondary, maxLines = 1)
+                } else if (pages.size > 1) {
                     Text("${state.page + 1} / ${pages.size} · ${pages[state.page].label}", style = FTType.MonoCaption, color = FT.TextSecondary, maxLines = 1)
                 }
             }

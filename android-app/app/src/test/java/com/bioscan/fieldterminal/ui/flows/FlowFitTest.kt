@@ -80,5 +80,17 @@ class FlowFitTest {
     @Test fun symptomCheck() = fits("symptom_check", 3) { com.bioscan.fieldterminal.ui.screens.health.SymptomCheckSheet(onDismiss = {}, onSaved = {}, onTrackIllness = { _, _ -> }, onTrackInjury = {}) }
     @Test fun event() = fits("event", 5) { com.bioscan.fieldterminal.ui.screens.events.EventFormSheet(onDismiss = {}, onSaved = {}) }
     @Test fun sweatTest() = fits("sweat_test", 3) { com.bioscan.fieldterminal.ui.screens.events.SweatTestSheet(onDismiss = {}, onSaved = {}) }
+    @Test fun bodyCheckIn() = fits("body_check_in", 5) { com.bioscan.fieldterminal.ui.screens.status.BodyCheckInSheet(onDismiss = {}, onSaved = {}) }
+
+    // A long run with a schedule of five blocks: what you took runs over two pages.
+    private val debrief = com.bioscan.fieldterminal.data.DebriefTarget(
+        sessionId = 1, eventId = null, title = "LONG RUN · 2 h 30", date = java.time.LocalDate.of(2026, 11, 15), type = "run", durationMin = 150.0,
+        schedule = com.bioscan.fieldterminal.data.FuelScheduleRow(
+            kind = "session", refKey = "x", durationMin = 150,
+            blocks = (1..5).map { com.bioscan.fieldterminal.domain.fuel.FuelBlock("b$it", "Gel $it", "gel", startMin = 20 * it, intervalMin = 0, count = 1, carbsG = 25.0) },
+        ),
+        existing = null,
+    )
+    @Test fun fuelDebrief() = fits("fuel_debrief", 6) { com.bioscan.fieldterminal.ui.screens.fuel.FuelDebriefSheet(debrief, onDismiss = {}, onSaved = {}) }
     @Test fun illness() = fits("illness", 5) { IllnessSheet(onDismiss = {}, onSaved = {}) }
 }

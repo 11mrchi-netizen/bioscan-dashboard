@@ -48,7 +48,6 @@ import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
-import com.bioscan.fieldterminal.ui.screens.fuel.RunFuelEntry
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.util.PendingCameraCapture
 import com.bioscan.fieldterminal.util.createCameraCaptureUri
@@ -109,7 +108,7 @@ internal fun FuelForm(
                 externalActivityActive = externalActivityActive,
             )
             FuelSubType.Supplements -> SupplementsForm(saving, preselectBundle = supplementBundle, onSave = { takenAt, items, source, quantities, sites -> onSubmit { it.addSupplementsTaken(takenAt, items, source, quantities, sites) } })
-            FuelSubType.Endurance -> RunFuelEntry(onSaved = onCanonicalSaved)
+            FuelSubType.Endurance -> com.bioscan.fieldterminal.ui.screens.fuel.RunFuelFlow(onDismiss = { subType = FuelSubType.Food }, onSaved = onCanonicalSaved)
         }
     }
 }

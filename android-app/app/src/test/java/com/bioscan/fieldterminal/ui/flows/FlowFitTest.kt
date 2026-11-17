@@ -92,5 +92,6 @@ class FlowFitTest {
         existing = null,
     )
     @Test fun fuelDebrief() = fits("fuel_debrief", 6) { com.bioscan.fieldterminal.ui.screens.fuel.FuelDebriefSheet(debrief, onDismiss = {}, onSaved = {}) }
+    @Test fun regimenNew() = fits("regimen", 6) { com.bioscan.fieldterminal.ui.screens.status.SupplementFormSheet(existing = null, onDismiss = {}, onSaved = {}) }
     @Test fun illness() = fits("illness", 5) { IllnessSheet(onDismiss = {}, onSaved = {}) }
 }

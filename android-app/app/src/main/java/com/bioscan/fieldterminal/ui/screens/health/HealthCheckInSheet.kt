@@ -48,6 +48,10 @@ import com.bioscan.fieldterminal.domain.health.shortDate
 import com.bioscan.fieldterminal.domain.localDateIn
 import com.bioscan.fieldterminal.ui.components.BodyMap
 import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTFlow
+import com.bioscan.fieldterminal.ui.components.FlowPage
+import com.bioscan.fieldterminal.ui.components.FlowPickGrid
+import com.bioscan.fieldterminal.ui.components.rememberFlowState
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTRatingSlider
 import com.bioscan.fieldterminal.ui.components.FieldTextField
@@ -83,7 +87,6 @@ fun HealthCheckInSheet(
     /** Open straight on one concern (from its page). */
     focusConcernId: String? = null,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
     val repo = remember { HealthConcernsRepository(SupabaseClientProvider.client) }
     val vocab = remember { HealthConcernsRepository.vocab(context) }
@@ -125,91 +128,81 @@ fun HealthCheckInSheet(
         }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, shape = FT.SheetShape, containerColor = FT.Surface, contentColor = FT.TextPrimary) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(20.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            val current = step
-            if (current != null) {
-                NewProblemStep(
-                    vocab = vocab,
-                    general = current == CheckInStart.NewGeneral,
-                    concerns = concerns.filter { it.archivedAt == null },
-                    sessions = sessions,
-                    onCancel = { step = null },
-                    onAdd = { problems += it; step = null },
-                )
-                return@Column
-            }
+    val current = step
+    if (current != null) {
+        NewProblemStep(
+            vocab = vocab,
+            general = current == CheckInStart.NewGeneral,
+            concerns = concerns.filter { it.archivedAt == null },
+            sessions = sessions,
+            onCancel = { step = null },
+            onAdd = { problems += it; step = null },
+        )
+        return
+    }
 
-            Text("HEALTH CHECK-IN", style = FTType.SectionTitle, color = FT.DomainHeart)
-            Text(today.format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.ENGLISH)), style = FTType.RowTitle, color = FT.TextPrimary)
-            Text(
-                if (active.isEmpty()) "Anything bothering you today? A symptom-free day counts too: comparisons need good days as well as bad ones."
-                else "One tap per concern. THAT'S EVERYTHING marks anything else as symptom-free today.",
-                style = FTType.BodySmall, color = FT.TextSecondary,
-            )
-
-            active.forEach { c ->
-                val o = overview[c.id]
-                val a = answers[c.id]
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(c.title.uppercase(), style = FTType.LabelCaps, color = FT.TextPrimary)
-                    if (o?.lastSeverity != null) Text("Last: ${o.lastSeverity}/10 on ${shortDate(o.lastObserved)}", style = FTType.Caption, color = FT.TextMuted)
-                    TextChipRow(CHANGE_LABELS, a?.change?.name?.uppercase(), perRow = 4) { picked ->
-                        if (picked == null) answers.remove(c.id) else {
-                            val change = ConcernChange.entries.first { it.name.uppercase() == picked }
-                            answers[c.id] = ConcernAnswer(
-                                concernId = c.id, change = change,
-                                severity = if (change == ConcernChange.Gone) null else a?.severity ?: o?.lastSeverity ?: 3,
-                                impact = a?.impact, symptom = c.symptoms.firstOrNull() ?: "sym.pain",
-                            )
-                        }
-                    }
-                    if (a != null && a.change != ConcernChange.Gone) {
-                        Text("SEVERITY 0-10", style = FTType.Micro, color = FT.TextMuted)
-                        FTRatingSlider("SEVERITY", a.severity, 0..10, FT.Metric.Soreness, { v -> answers[c.id] = a.copy(severity = v) }, lowWord = "none", highWord = "worst", reversed = true)
-                        Text("TRAINING", style = FTType.Micro, color = FT.TextMuted)
-                        TextChipRow(IMPACT_LABELS, a.impact?.let { IMPACT_LABELS[it] }, perRow = 2) { picked -> answers[c.id] = a.copy(impact = picked?.let { IMPACT_LABELS.indexOf(it) }) }
-                    }
+    // One page per open concern (one tap each), then ANYTHING NEW? with the new problems, the gap recall and THAT'S
+    // EVERYTHING. With nothing open it is the one page, and NOTHING saves it in a tap.
+    val pages = active.map { FlowPage(it.title.uppercase()) } + FlowPage("ANYTHING NEW?")
+    val empty = answers.isEmpty() && problems.isEmpty()
+    FTFlow(
+        title = "HEALTH CHECK-IN", pages = pages, state = rememberFlowState(), onClose = onDismiss,
+        canSave = !saving, saving = saving, saveLabel = if (empty) "NOTHING" else "SAVE", wash = FT.Domain.Cardio,
+        error = error?.let { "Couldn't save: $it" },
+        onSave = {
+            if (empty) save(CheckInDraft(nothingElse = true, recallFrom = recallFrom))
+            else save(CheckInDraft(answers = answers.values.toList(), problems = problems.toList(), nothingElse = nothingElse, recallFrom = recallFrom))
+        },
+    ) { page ->
+        if (page == 0) Text(today.format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.ENGLISH)), style = FTType.RowTitle, color = FT.TextPrimary)
+        val c = active.getOrNull(page)
+        if (c != null) {
+            val o = overview[c.id]
+            val a = answers[c.id]
+            Text("One tap per concern. THAT'S EVERYTHING, on the last page, marks anything else as symptom-free today.", style = FTType.BodySmall, color = FT.TextSecondary)
+            Text(c.title.uppercase(), style = FTType.LabelCaps, color = FT.TextPrimary)
+            if (o?.lastSeverity != null) Text("Last: ${o.lastSeverity}/10 on ${shortDate(o.lastObserved)}", style = FTType.Caption, color = FT.TextMuted)
+            TextChipRow(CHANGE_LABELS, a?.change?.name?.uppercase(), perRow = 4) { picked ->
+                if (picked == null) answers.remove(c.id) else {
+                    val change = ConcernChange.entries.first { it.name.uppercase() == picked }
+                    answers[c.id] = ConcernAnswer(
+                        concernId = c.id, change = change,
+                        severity = if (change == ConcernChange.Gone) null else a?.severity ?: o?.lastSeverity ?: 3,
+                        impact = a?.impact, symptom = c.symptoms.firstOrNull() ?: "sym.pain",
+                    )
                 }
             }
-
-            problems.forEachIndexed { i, p ->
-                val label = p.newConcern?.title ?: concerns.firstOrNull { it.id == p.concernId }?.title ?: "New"
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("+ ${label.uppercase()} · ${p.signals.joinToString { "${vocab.symptom(it.symptom)?.label ?: it.symptom} ${it.severity}/10" }}", style = FTType.BodySmall, color = FT.TextPrimary, modifier = Modifier.weight(1f))
-                    FTButton(label = "REMOVE", emphasis = FTButtonEmphasis.Tertiary) { problems.removeAt(i) }
-                }
+            if (a != null && a.change != ConcernChange.Gone) {
+                FTRatingSlider("SEVERITY", a.severity, 0..10, FT.Metric.Soreness, { v -> answers[c.id] = a.copy(severity = v) }, lowWord = "none", highWord = "worst", reversed = true)
+                Text("TRAINING", style = FTType.Micro, color = FT.TextMuted)
+                TextChipRow(IMPACT_LABELS, a.impact?.let { IMPACT_LABELS[it] }, perRow = 2) { picked -> answers[c.id] = a.copy(impact = picked?.let { IMPACT_LABELS.indexOf(it) }) }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                FTButton(label = "+ BODY", modifier = Modifier.weight(1f)) { step = CheckInStart.NewBody }
-                FTButton(label = "+ GENERAL", modifier = Modifier.weight(1f)) { step = CheckInStart.NewGeneral }
+            return@FTFlow
+        }
+        Text(
+            if (active.isEmpty()) "Anything bothering you today? A symptom-free day counts too: comparisons need good days as well as bad ones."
+            else "Anything new since?",
+            style = FTType.BodySmall, color = FT.TextSecondary,
+        )
+        problems.forEachIndexed { i, p ->
+            val label = p.newConcern?.title ?: concerns.firstOrNull { it.id == p.concernId }?.title ?: "New"
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("+ ${label.uppercase()} · ${p.signals.joinToString { "${vocab.symptom(it.symptom)?.label ?: it.symptom} ${it.severity}/10" }}", style = FTType.BodySmall, color = FT.TextPrimary, modifier = Modifier.weight(1f))
+                FTButton(label = "REMOVE", emphasis = FTButtonEmphasis.Tertiary) { problems.removeAt(i) }
             }
-
-            val gapFrom = recallStart(lastCheckin, today)
-            if (gapFrom != null) {
-                TextChipRow(listOf("NOTHING SINCE ${shortDate(gapFrom.toString()).uppercase()}"), if (recallFrom != null) "NOTHING SINCE ${shortDate(gapFrom.toString()).uppercase()}" else null, perRow = 1) { picked ->
-                    recallFrom = if (picked != null) gapFrom else null
-                }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            FTButton(label = "+ BODY", modifier = Modifier.weight(1f)) { step = CheckInStart.NewBody }
+            FTButton(label = "+ GENERAL", modifier = Modifier.weight(1f)) { step = CheckInStart.NewGeneral }
+        }
+        val gapFrom = recallStart(lastCheckin, today)
+        if (gapFrom != null) {
+            TextChipRow(listOf("NOTHING SINCE ${shortDate(gapFrom.toString()).uppercase()}"), if (recallFrom != null) "NOTHING SINCE ${shortDate(gapFrom.toString()).uppercase()}" else null, perRow = 1) { picked ->
+                recallFrom = if (picked != null) gapFrom else null
             }
-            if (active.isNotEmpty() || problems.isNotEmpty()) {
-                TextChipRow(listOf("THAT'S EVERYTHING"), if (nothingElse) "THAT'S EVERYTHING" else null, perRow = 1) { picked -> nothingElse = picked != null }
-            }
-
-            error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Bad) }
-            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (answers.isEmpty() && problems.isEmpty()) {
-                    FTButton(label = if (saving) "SAVING..." else "NOTHING", emphasis = FTButtonEmphasis.Primary, enabled = !saving, modifier = Modifier.weight(1f)) {
-                        save(CheckInDraft(nothingElse = true, recallFrom = recallFrom))
-                    }
-                } else {
-                    FTButton(label = if (saving) "SAVING..." else "SAVE", emphasis = FTButtonEmphasis.Primary, enabled = !saving, modifier = Modifier.weight(1f)) {
-                        save(CheckInDraft(answers = answers.values.toList(), problems = problems.toList(), nothingElse = nothingElse, recallFrom = recallFrom))
-                    }
-                }
-            }
+        }
+        if (active.isNotEmpty() || problems.isNotEmpty()) {
+            TextChipRow(listOf("THAT'S EVERYTHING"), if (nothingElse) "THAT'S EVERYTHING" else null, perRow = 1) { picked -> nothingElse = picked != null }
         }
     }
 }
@@ -249,71 +242,25 @@ private fun NewProblemStep(
         if (!titleEdited) title = vocab.defaultTitle(if (isGeneral) null else r?.code, r?.side, symptom)
     }
 
-    Text("SOMETHING NEW", style = FTType.SectionTitle, color = FT.DomainHeart)
-    SegmentedToggle(options = listOf(false, true), selected = isGeneral, labelOf = { if (it) "GENERAL" else "BODY" }, onSelect = { isGeneral = it; symptom = null }, accentColor = FT.DomainHeart)
-
-    if (!isGeneral) {
-        BodyMap(selected = r, onTap = { region = it })
-        Text(r?.let { vocab.regionLabel(it.code, it.side) } ?: "Tap where it bothers you.", style = FTType.RowTitle, color = if (r != null) FT.TextPrimary else FT.TextSecondary)
-    }
-    val symptomOptions = if (isGeneral) vocab.systemicSymptoms else vocab.localSymptoms
-    Text("WHAT IS IT", style = FTType.Micro, color = FT.TextMuted)
-    TextChipRow(symptomOptions.map { it.label }, symptomOptions.firstOrNull { it.code == symptom }?.label, perRow = 3) { picked ->
-        symptom = symptomOptions.firstOrNull { it.label == picked }?.code
-    }
-    FTRatingSlider("SEVERITY", severity, 0..10, FT.Metric.Soreness, { severity = it }, lowWord = "none", highWord = "worst", reversed = true)
-    Text("TRAINING", style = FTType.Micro, color = FT.TextMuted)
-    TextChipRow(IMPACT_LABELS, impact?.let { IMPACT_LABELS[it] }, perRow = 2) { picked -> impact = picked?.let { IMPACT_LABELS.indexOf(it) } }
-
-    // Conditional follow-ups: at most two, chosen by the region and the symptom.
-    vocab.followupsFor(if (isGeneral) null else r?.code, symptom).forEach { q ->
-        Text(q.text.uppercase(), style = FTType.Micro, color = FT.TextMuted)
-        when (q.type) {
-            "yes_no" -> TextChipRow(listOf("NO", "YES"), answers[q.id]?.let { if (it == "true") "YES" else "NO" }, perRow = 2) { picked ->
-                if (picked == null) answers.remove(q.id) else answers[q.id] = (picked == "YES").toString()
-            }
-            "choice" -> TextChipRow(q.options.map { it.uppercase() }, answers[q.id]?.uppercase(), perRow = q.options.size.coerceAtMost(3)) { picked ->
-                if (picked == null) answers.remove(q.id) else answers[q.id] = picked.lowercase()
-            }
-            "number" -> FieldTextField(temperature, { temperature = it }, "e.g. 38.2", keyboardType = KeyboardType.Decimal)
-        }
-    }
-
-    if (!isGeneral) {
-        Text("STARTED WITH A SPECIFIC EVENT (A KNOCK, A TWIST)?", style = FTType.Micro, color = FT.TextMuted)
-        TextChipRow(listOf("NO", "YES"), if (onset) "YES" else "NO", perRow = 2) { onset = it == "YES" }
-        if (onset) FieldTextField(mechanism, { mechanism = it }, "What happened (optional)")
-        if (sessions.isNotEmpty()) {
-            Text("DURING OR AFTER A SESSION?", style = FTType.Micro, color = FT.TextMuted)
-            val labels = sessions.map { "${it.type.uppercase()} ${shortDate(it.startTime)}" }
-            TextChipRow(labels, sessionId?.let { id -> sessions.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { labels[it] } }, perRow = 2) { picked ->
-                sessionId = picked?.let { sessions[labels.indexOf(it)].id }
-            }
-            if (sessionId != null) TextChipRow(TIMING.map { it.second }, TIMING.firstOrNull { it.first == timing }?.second, perRow = 3) { picked ->
-                timing = TIMING.firstOrNull { it.second == picked }?.first
-            }
-        }
-    }
-
-    if (matches.isNotEmpty()) {
-        Text("ADD TO", style = FTType.Micro, color = FT.TextMuted)
-        val options = matches.map { it.title } + "NEW CONCERN"
-        TextChipRow(options, matches.firstOrNull { it.id == attachTo }?.title ?: "NEW CONCERN", perRow = 1) { picked ->
-            attachTo = matches.firstOrNull { it.title == picked }?.id
-        }
-    }
-    if (attachTo == null) {
-        Text("NAME IT (YOUR WORDS, NO DIAGNOSIS NEEDED)", style = FTType.Micro, color = FT.TextMuted)
-        FieldTextField(title, { title = it; titleEdited = true }, "e.g. Right knee, outside")
-    }
-
     val sym = symptom
     val sev = severity
     val ready = sym != null && sev != null && (isGeneral || r != null)
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        FTButton(label = "BACK", modifier = Modifier.weight(1f)) { onCancel() }
-        FTButton(label = "ADD", emphasis = FTButtonEmphasis.Primary, enabled = ready, modifier = Modifier.weight(1f)) {
-            if (sym == null || sev == null) return@FTButton
+    val followups = vocab.followupsFor(if (isGeneral) null else r?.code, symptom)
+    val symptomOptions = if (isGeneral) vocab.systemicSymptoms else vocab.localSymptoms
+    // WHERE (body map, or general), WHAT, HOW BAD, the follow-ups when there are any, how it started (body), NAME.
+    val pages = buildList {
+        add(FlowPage("WHERE", ready = isGeneral || r != null))
+        add(FlowPage("WHAT", ready = symptom != null))
+        add(FlowPage("HOW BAD", ready = severity != null))
+        if (followups.isNotEmpty()) add(FlowPage("A FEW QUESTIONS"))
+        if (!isGeneral) add(FlowPage("HOW IT STARTED"))
+        add(FlowPage("NAME"))
+    }
+    FTFlow(
+        title = "SOMETHING NEW", pages = pages, state = rememberFlowState(), onClose = onCancel,
+        canSave = ready, saveLabel = "ADD", wash = FT.Domain.Cardio,
+        onSave = save@{
+            if (sym == null || sev == null) return@save
             val signal = NewSignal(
                 symptom = sym, region = if (isGeneral) null else r?.code, side = if (isGeneral) null else r?.side, severity = sev,
                 details = answers.toMap(), temperatureC = temperature.replace(',', '.').toDoubleOrNull()?.takeIf { it in 34.0..43.0 },
@@ -332,6 +279,64 @@ private fun NewProblemStep(
                     sessionId = sessionId, timing = timing,
                 ),
             )
+        },
+    ) { page ->
+        when (pages.getOrNull(page)?.label) {
+            "WHERE" -> {
+                SegmentedToggle(options = listOf(false, true), selected = isGeneral, labelOf = { if (it) "GENERAL" else "BODY" }, onSelect = { isGeneral = it; symptom = null }, accentColor = FT.DomainHeart)
+                if (!isGeneral) {
+                    BodyMap(selected = r, onTap = { region = it }, height = 340.dp)
+                    Text(r?.let { vocab.regionLabel(it.code, it.side) } ?: "Tap where it bothers you.", style = FTType.RowTitle, color = if (r != null) FT.TextPrimary else FT.TextSecondary)
+                } else {
+                    Text("Not in one place: fever, tiredness, a cold. Pick what it is next.", style = FTType.BodySmall, color = FT.TextSecondary)
+                }
+            }
+            "WHAT" -> FlowPickGrid(symptomOptions.map { it.code to it.label }, setOfNotNull(symptom), { code -> symptom = if (symptom == code) null else code }, columns = 3, perPage = 18, single = true)
+            "HOW BAD" -> {
+                FTRatingSlider("SEVERITY", severity, 0..10, FT.Metric.Soreness, { severity = it }, lowWord = "none", highWord = "worst", reversed = true)
+                Text("TRAINING", style = FTType.Micro, color = FT.TextMuted)
+                TextChipRow(IMPACT_LABELS, impact?.let { IMPACT_LABELS[it] }, perRow = 2) { picked -> impact = picked?.let { IMPACT_LABELS.indexOf(it) } }
+            }
+            "A FEW QUESTIONS" -> followups.forEach { q ->
+                Text(q.text.uppercase(), style = FTType.Micro, color = FT.TextMuted)
+                when (q.type) {
+                    "yes_no" -> TextChipRow(listOf("NO", "YES"), answers[q.id]?.let { if (it == "true") "YES" else "NO" }, perRow = 2) { picked ->
+                        if (picked == null) answers.remove(q.id) else answers[q.id] = (picked == "YES").toString()
+                    }
+                    "choice" -> TextChipRow(q.options.map { it.uppercase() }, answers[q.id]?.uppercase(), perRow = q.options.size.coerceAtMost(3)) { picked ->
+                        if (picked == null) answers.remove(q.id) else answers[q.id] = picked.lowercase()
+                    }
+                    "number" -> FieldTextField(temperature, { temperature = it }, "e.g. 38.2", keyboardType = KeyboardType.Decimal)
+                }
+            }
+            "HOW IT STARTED" -> {
+                Text("STARTED WITH A SPECIFIC EVENT (A KNOCK, A TWIST)?", style = FTType.Micro, color = FT.TextMuted)
+                TextChipRow(listOf("NO", "YES"), if (onset) "YES" else "NO", perRow = 2) { onset = it == "YES" }
+                if (onset) FieldTextField(mechanism, { mechanism = it }, "What happened (optional)")
+                if (sessions.isNotEmpty()) {
+                    Text("DURING OR AFTER A SESSION?", style = FTType.Micro, color = FT.TextMuted)
+                    val labels = sessions.take(6).map { "${it.type.uppercase()} ${shortDate(it.startTime)}" }
+                    TextChipRow(labels, sessionId?.let { id -> sessions.indexOfFirst { it.id == id }.takeIf { it in labels.indices }?.let { labels[it] } }, perRow = 2) { picked ->
+                        sessionId = picked?.let { sessions[labels.indexOf(it)].id }
+                    }
+                    if (sessionId != null) TextChipRow(TIMING.map { it.second }, TIMING.firstOrNull { it.first == timing }?.second, perRow = 3) { picked ->
+                        timing = TIMING.firstOrNull { it.second == picked }?.first
+                    }
+                }
+            }
+            else -> {
+                if (matches.isNotEmpty()) {
+                    Text("ADD TO", style = FTType.Micro, color = FT.TextMuted)
+                    val options = matches.take(4).map { it.title } + "NEW CONCERN"
+                    TextChipRow(options, matches.firstOrNull { it.id == attachTo }?.title ?: "NEW CONCERN", perRow = 1) { picked ->
+                        attachTo = matches.firstOrNull { it.title == picked }?.id
+                    }
+                }
+                if (attachTo == null) {
+                    Text("NAME IT (YOUR WORDS, NO DIAGNOSIS NEEDED)", style = FTType.Micro, color = FT.TextMuted)
+                    FieldTextField(title, { title = it; titleEdited = true }, "e.g. Right knee, outside")
+                }
+            }
         }
     }
 }

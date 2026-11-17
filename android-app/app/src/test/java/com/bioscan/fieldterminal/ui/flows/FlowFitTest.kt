@@ -93,5 +93,8 @@ class FlowFitTest {
     )
     @Test fun fuelDebrief() = fits("fuel_debrief", 6) { com.bioscan.fieldterminal.ui.screens.fuel.FuelDebriefSheet(debrief, onDismiss = {}, onSaved = {}) }
     @Test fun regimenNew() = fits("regimen", 6) { com.bioscan.fieldterminal.ui.screens.status.SupplementFormSheet(existing = null, onDismiss = {}, onSaved = {}) }
+    @Test fun healthCheckIn() = fits("health_check_in", 1) { com.bioscan.fieldterminal.ui.screens.health.HealthCheckInSheet(onDismiss = {}, onSaved = {}) }
+    @Test fun healthNewBody() = fits("health_new_body", 5) { com.bioscan.fieldterminal.ui.screens.health.HealthCheckInSheet(onDismiss = {}, onSaved = {}, start = com.bioscan.fieldterminal.ui.screens.health.CheckInStart.NewBody) }
+    @Test fun eveningCheckIn() = fits("evening_check_in", 2) { com.bioscan.fieldterminal.ui.screens.status.EveningCheckInSheet(java.time.LocalDate.of(2026, 11, 17), onDismiss = {}, onSaved = {}) }
     @Test fun illness() = fits("illness", 5) { IllnessSheet(onDismiss = {}, onSaved = {}) }
 }

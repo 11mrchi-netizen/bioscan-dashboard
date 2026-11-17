@@ -23,14 +23,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AnalysisRepository
-import com.bioscan.fieldterminal.data.LabWatchRepository
 import com.bioscan.fieldterminal.data.LabsOverview
-import com.bioscan.fieldterminal.data.LabsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.BloodworkMarkerEvaluation
 import com.bioscan.fieldterminal.domain.LabMarkerTheme
-import com.bioscan.fieldterminal.domain.LabWatch
 import com.bioscan.fieldterminal.domain.MarkerComparison
 import com.bioscan.fieldterminal.domain.MarkerDirection
 import com.bioscan.fieldterminal.domain.PersonalRange
@@ -59,48 +55,30 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 // markers again (BLOODWORK (RCV)); the RCV reading of each marker now sits on its row here, and the second card is gone.
 @Composable
 fun LabsScreen() {
-    var overview by remember { mutableStateOf<LabsOverview?>(null) }
-    // Category 9: each marker's change between its last two draws against its own noise threshold (RCV), by name. A
-    // failed read leaves the rows without it.
-    var rcv by remember { mutableStateOf<Map<String, BloodworkMarkerEvaluation>>(emptyMap()) }
-    var isLoading by remember { mutableStateOf(true) }
+    val page = remember { LabsState() }
     var reloadKey by remember { mutableIntStateOf(0) }
     var showAddSheet by remember { mutableStateOf(false) }
     var showUploadSheet by remember { mutableStateOf(false) }
 
-    var error by remember { mutableStateOf<String?>(null) }
-    // Lab watch: markers worth watching for what the regimen holds. Enrichment: a failed read hides it.
-    var watches by remember { mutableStateOf<List<LabWatch>>(emptyList()) }
 
     val cacheVersion = rememberCacheVersion()
-    LaunchedEffect(reloadKey, cacheVersion) {
-        isLoading = overview == null
-        error = null
-        try {
-            overview = LabsRepository(SupabaseClientProvider.client).loadOverview()
-            rcv = catching { loadRcv() }.getOrDefault(emptyMap())
-            watches = catching { LabWatchRepository(SupabaseClientProvider.client).watches() }.getOrDefault(watches)
-        } catch (e: Exception) {
-            error = e.message ?: "Unknown error"
-        }
-        isLoading = false
-    }
+    LaunchedEffect(reloadKey, cacheVersion) { page.load() }
 
-    if (watches.isNotEmpty()) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(top = 16.dp)) { LabWatchSection(watches) }
+    if (page.watches.isNotEmpty()) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(top = 16.dp)) { LabWatchSection(page.watches) }
     }
     when {
-        isLoading -> SkeletonSections()
-        error != null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Bad)
+        page.isLoading -> SkeletonSections()
+        page.error != null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
+            Text("Failed to load: ${page.error}", style = FTType.BodySmall, color = FT.Bad)
         }
-        overview?.latestDraw == null -> Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
+        page.overview?.latestDraw == null -> Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
             AddResultButtons(onAddClick = { showAddSheet = true }, onUploadClick = { showUploadSheet = true })
             Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
                 Text("No lab draws logged yet.", style = FTType.Body, color = FT.TextSecondary)
             }
         }
-        else -> LabsContent(overview!!, rcv, onAddClick = { showAddSheet = true }, onUploadClick = { showUploadSheet = true })
+        else -> LabsContent(page.overview!!, page.rcv, onAddClick = { showAddSheet = true }, onUploadClick = { showUploadSheet = true })
     }
 
     if (showAddSheet) {
@@ -303,7 +281,7 @@ private fun RcvLine(m: BloodworkMarkerEvaluation?, modifier: Modifier = Modifier
     }
 }
 
-private suspend fun loadRcv(): Map<String, BloodworkMarkerEvaluation> {
+internal suspend fun loadRcv(): Map<String, BloodworkMarkerEvaluation> {
     val repo = AnalysisRepository(SupabaseClientProvider.client)
     val draws = repo.loadLabDraws()
     val results = repo.loadLabResults()

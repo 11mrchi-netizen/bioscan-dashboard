@@ -21,17 +21,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.data.NutrientBreakdownData
-import com.bioscan.fieldterminal.data.NutrientBreakdownRepository
-import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.domain.NUTRIENT_REFERENCE
 import com.bioscan.fieldterminal.domain.NutrientCategory
 import com.bioscan.fieldterminal.domain.NutrientInfo
 import com.bioscan.fieldterminal.domain.nutrientDisplayName
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
+import com.bioscan.fieldterminal.ui.components.RefreshOnCacheUpdates
 import com.bioscan.fieldterminal.ui.components.drawZonedTrack
 import com.bioscan.fieldterminal.ui.components.drawZonedValue
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.components.zoneEdges
 import com.bioscan.fieldterminal.ui.components.zonedFraction
 import com.bioscan.fieldterminal.ui.screens.detail.Chip
@@ -68,15 +65,11 @@ private const val BREAKDOWN_INFO =
 fun NutrientBreakdownScreen(onBack: () -> Unit) {
     var timeRange by remember { mutableStateOf(TimeRange.Today) }
     var valueMode by remember { mutableStateOf(ValueMode.Total) }
-    var data by remember { mutableStateOf<NutrientBreakdownData?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
+    val page = remember { NutrientBreakdownState() }
 
-    val guard = rememberLoadGuard()
-    LaunchedEffect(timeRange, guard.attempt) {
-        isLoading = true
-        guard.run { data = NutrientBreakdownRepository(SupabaseClientProvider.client).loadNutrients(timeRange.days) }
-        isLoading = false
-    }
+    val guard = page.guard
+    RefreshOnCacheUpdates(guard)
+    LaunchedEffect(timeRange, guard.attempt) { page.load(timeRange.days) }
 
     DetailScreen("NUTRIENT BREAKDOWN", onBack, eyebrow = "FUEL", domain = FT.Domain.Fuel, ranged = false) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -85,10 +78,10 @@ fun NutrientBreakdownScreen(onBack: () -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             ValueMode.entries.forEach { m -> Chip(m.label, m == valueMode) { valueMode = m } }
         }
-        val d = data
+        val d = page.data
         when {
-            guard.error != null && !isLoading -> LoadErrorCard(guard)
-            isLoading || d == null -> Loading(guard)
+            guard.error != null && !page.isLoading -> LoadErrorCard(guard)
+            page.isLoading || d == null -> Loading(guard)
             d.nutrients.isEmpty() -> EmptyLine("No nutrient data logged for this period.")
             else -> {
                 val divisor = if (valueMode == ValueMode.Average) d.daysCovered.toDouble() else 1.0

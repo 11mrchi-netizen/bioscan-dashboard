@@ -22,12 +22,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.HealthConcernsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.model.ConcernStateDto
-import com.bioscan.fieldterminal.data.model.FindingDto
-import com.bioscan.fieldterminal.data.model.HealthConcernRow
-import com.bioscan.fieldterminal.data.model.HealthObservationRow
-import com.bioscan.fieldterminal.data.model.TrialReadDto
-import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.domain.health.IMPACT_LABELS
 import com.bioscan.fieldterminal.domain.health.concernStateWord
 import com.bioscan.fieldterminal.domain.health.durationText
@@ -49,12 +43,11 @@ import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import com.bioscan.fieldterminal.ui.components.PinnedPage
+import com.bioscan.fieldterminal.ui.components.RefreshOnCacheUpdates
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
-import com.bioscan.fieldterminal.ui.components.parallel
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.theme.FTType
 import java.time.LocalDate
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -72,29 +65,16 @@ fun ConcernScreen(concernId: String, onBack: () -> Unit, onOpenSession: (Long) -
     val repo = remember { HealthConcernsRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
     var tab by rememberSaveable { mutableStateOf(ConcernTab.Overview) }
-    var concern by remember { mutableStateOf<HealthConcernRow?>(null) }
-    var state by remember { mutableStateOf<ConcernStateDto?>(null) }
-    var findings by remember { mutableStateOf<List<FindingDto>>(emptyList()) }
-    var trials by remember { mutableStateOf<List<TrialReadDto>>(emptyList()) }
-    var lastEntry by remember { mutableStateOf<HealthObservationRow?>(null) }
+    val page = remember { ConcernState() }
     var checkIn by remember { mutableStateOf(false) }
     var trialSheet by remember { mutableStateOf(false) }
     var confirmArchive by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<String?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
-    val guard = rememberLoadGuard()
+    val guard = page.guard
+    RefreshOnCacheUpdates(guard)
 
-    LaunchedEffect(guard.attempt) {
-        guard.run {
-            parallel(
-                { concern = repo.loadConcerns().firstOrNull { it.id == concernId } },
-                { state = repo.loadConcernState(concernId) },
-                { findings = repo.loadFindings(concernId) },
-                { trials = repo.loadTrialReads().filter { it.concernId == concernId } },
-                { lastEntry = softLoad { repo.loadLatestObservations(20).firstOrNull { it.concernId == concernId } } },
-            )
-        }
-    }
+    LaunchedEffect(guard.attempt) { page.load(concernId) }
 
     fun act(done: String, block: suspend () -> Unit) {
         scope.launchSafe(onError = { message = "Couldn't save: ${it.message}" }) { block(); repo.refresh(); message = done; guard.retry() }
@@ -104,18 +84,18 @@ fun ConcernScreen(concernId: String, onBack: () -> Unit, onOpenSession: (Long) -
     LaunchedEffect(tab) { scroll.scrollTo(0) }
     PinnedPage(
         onBack = onBack,
-        title = (concern?.title ?: state?.title ?: "CONCERN").uppercase(),
+        title = (page.concern?.title ?: page.state?.title ?: "CONCERN").uppercase(),
         subtitle = "STATE · EPISODES · CONTEXT · PATTERNS",
         accent = FT.DomainHeart,
         rail = { SubTabRow(items = ConcernTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
         scrollState = scroll,
     ) {
-        val c = concern
+        val c = page.concern
         if (c == null) {
             if (guard.error != null) LoadErrorCard(guard) else Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = FT.DomainHeart) }
             return@PinnedPage
         }
-        val s = state
+        val s = page.state
         Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             message?.let { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
             if (s == null) {
@@ -197,7 +177,7 @@ fun ConcernScreen(concernId: String, onBack: () -> Unit, onOpenSession: (Long) -
                             FTButton(label = "STARTED TODAY", modifier = Modifier.weight(1f)) { act("Marked.") { repo.addMark(c.id, "start", LocalDate.now()) } }
                             FTButton(label = "OVER TODAY", modifier = Modifier.weight(1f)) { act("Marked.") { repo.addMark(c.id, "end", LocalDate.now()) } }
                         }
-                        lastEntry?.let { e ->
+                        page.lastEntry?.let { e ->
                             FTButton(label = "UNDO LAST CHECK-IN (${shortDate(e.localDate)})", emphasis = FTButtonEmphasis.Tertiary) { act("Withdrawn; it stays in the history as withdrawn.") { repo.retract(e) } }
                         }
                         if (confirmArchive) {
@@ -235,7 +215,7 @@ fun ConcernScreen(concernId: String, onBack: () -> Unit, onOpenSession: (Long) -
                 }
                 ConcernTab.Patterns -> {
                     if (c.onsetType == "acute") Text("A single event is tracked and timed but not searched for patterns. If it keeps coming back, change its kind under MANAGE.", style = FTType.BodySmall, color = FT.TextSecondary)
-                    val sorted = findings.sortedBy { findingRank(it.status) }
+                    val sorted = page.findings.sortedBy { findingRank(it.status) }
                     val (main, rest) = sorted.partition { it.status in setOf("persistent", "possible", "observed", "emerging", "faded") }
                     main.forEach { FindingCard(it, onOpenSession) }
                     if (rest.isNotEmpty()) {
@@ -249,11 +229,11 @@ fun ConcernScreen(concernId: String, onBack: () -> Unit, onOpenSession: (Long) -
                             rest.firstOrNull { it.status == "insufficient" }?.let { Text(it.nextStep.text, style = FTType.Caption, color = FT.TextMuted, modifier = Modifier.padding(top = 6.dp)) }
                         }
                     }
-                    if (findings.isEmpty() && s != null) Text("Patterns appear after the next analysis run.", style = FTType.BodySmall, color = FT.TextSecondary)
+                    if (page.findings.isEmpty() && s != null) Text("Patterns appear after the next analysis run.", style = FTType.BodySmall, color = FT.TextSecondary)
                 }
                 ConcernTab.Trials -> {
-                    trials.forEach { TrialCard(it, onLogged = { guard.retry() }) }
-                    if (trials.isEmpty()) Text("No trial yet. A trial changes one thing for a few weeks and compares before and after; it shows what happened, not what the change did.", style = FTType.BodySmall, color = FT.TextSecondary)
+                    page.trials.forEach { TrialCard(it, onLogged = { guard.retry() }) }
+                    if (page.trials.isEmpty()) Text("No trial yet. A trial changes one thing for a few weeks and compares before and after; it shows what happened, not what the change did.", style = FTType.BodySmall, color = FT.TextSecondary)
                     FTButton(label = "START A TRIAL", emphasis = FTButtonEmphasis.Primary) { trialSheet = true }
                 }
             }
@@ -261,5 +241,5 @@ fun ConcernScreen(concernId: String, onBack: () -> Unit, onOpenSession: (Long) -
     }
 
     if (checkIn) HealthCheckInSheet(onDismiss = { checkIn = false }, onSaved = { checkIn = false; guard.retry() }, focusConcernId = concernId)
-    if (trialSheet) concern?.let { c -> TrialSheet(c.id, c.title, onDismiss = { trialSheet = false }, onSaved = { trialSheet = false; guard.retry() }) }
+    if (trialSheet) page.concern?.let { c -> TrialSheet(c.id, c.title, onDismiss = { trialSheet = false }, onSaved = { trialSheet = false; guard.retry() }) }
 }

@@ -38,10 +38,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.routine.AppWeekTotal
 import com.bioscan.fieldterminal.data.routine.RoutinePageData
-import com.bioscan.fieldterminal.data.routine.RoutinePageRepository
 import com.bioscan.fieldterminal.domain.routine.CalendarState
 import com.bioscan.fieldterminal.domain.routine.DailyLine
 import com.bioscan.fieldterminal.domain.routine.LogStatus
@@ -63,14 +61,12 @@ import com.bioscan.fieldterminal.domain.routine.scheduleWords
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTChevron
-import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.rememberCacheVersion
 import com.bioscan.fieldterminal.ui.screens.detail.HistorySpec
 import com.bioscan.fieldterminal.ui.screens.detail.MetricHistoryOverlay
 import com.bioscan.fieldterminal.ui.screens.settings.PlacesCard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import kotlinx.coroutines.CancellationException
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -135,31 +131,21 @@ private fun formatOf(key: String): LineFormat = when {
 
 @Composable
 fun RoutinePage(onOpenDay: (LocalDate) -> Unit) {
-    var data by remember { mutableStateOf<RoutinePageData?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val page = remember { RoutinePageState() }
     var history by remember { mutableStateOf<DailyLine?>(null) }
     var calendar by remember { mutableStateOf<RoutineActivity?>(null) }
     var reload by remember { mutableIntStateOf(0) }
     val cacheVersion = rememberCacheVersion()
-    LaunchedEffect(reload, cacheVersion) {
-        try {
-            data = RoutinePageRepository(SupabaseClientProvider.client).load()
-            error = null
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            error = describeLoadFailure(e)
-        }
-    }
+    LaunchedEffect(reload, cacheVersion) { page.load() }
 
     Column(Modifier.padding(horizontal = 22.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        error?.let {
+        page.error?.let {
             Text("Couldn't load: $it", style = FTType.BodySmall, color = FT.Bad)
             FTButton("RETRY") { reload++ }
         }
-        val d = data
+        val d = page.data
         if (d == null) {
-            if (error == null) Text("Loading…", style = FTType.BodySmall, color = FT.TextSecondary)
+            if (page.error == null) Text("Loading…", style = FTType.BodySmall, color = FT.TextSecondary)
         } else {
             RoutinePageContent(d, onOpenDay, onOpenHistory = { history = it }, onOpenCalendar = { calendar = it })
         }
@@ -167,9 +153,9 @@ fun RoutinePage(onOpenDay: (LocalDate) -> Unit) {
 
     history?.let { l ->
         val f = formatOf(l.key)
-        MetricHistoryOverlay(HistorySpec(l.label, l.series, f.unit, f.format, lineColor(l.key)), data?.today?.minusDays(1) ?: LocalDate.now()) { history = null }
+        MetricHistoryOverlay(HistorySpec(l.label, l.series, f.unit, f.format, lineColor(l.key)), page.data?.today?.minusDays(1) ?: LocalDate.now()) { history = null }
     }
-    calendar?.let { a -> data?.let { d -> PracticeCalendarSheet(a, d.logs, d.today) { calendar = null } } }
+    calendar?.let { a -> page.data?.let { d -> PracticeCalendarSheet(a, d.logs, d.today) { calendar = null } } }
 }
 
 /** The page's cards from loaded [d] ([placesEditor]: the PLACES naming list, which loads its own rows). */

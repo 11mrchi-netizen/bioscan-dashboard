@@ -96,7 +96,7 @@ class LogRepository(private val supabase: SupabaseClient) {
         }
         val encounters = async {
             supabase.postgrest.from("encounters")
-                .select(columns = Columns.list("id,date,status,occurred_at,encounter_type,notes,calendar_event_title,my_rating")) {
+                .select(columns = Columns.list("id,date,status,occurred_at,encounter_type,notes,calendar_event_title,my_rating,sexual,rounds,orgasm_count,people(name)")) {
                     filter { gte("date", fromDate) }
                     order("date", Order.DESCENDING)
                     limit(FETCH_CAP_PER_SOURCE)
@@ -145,7 +145,8 @@ class LogRepository(private val supabase: SupabaseClient) {
         val sexualActivity = async {
             supabase.postgrest.from("sexual_activity_daily")
                 .select(columns = Columns.list("id,date,activity_type,instances,notes")) {
-                    filter { gte("date", fromDate) }
+                    // Partnered sex is an encounter now; the old intercourse day rows were copied there and are not read.
+                    filter { gte("date", fromDate); eq("activity_type", "masturbation") }
                     order("date", Order.DESCENDING)
                     limit(FETCH_CAP_PER_SOURCE)
                 }.decodeList<LogSexualActivityRow>()

@@ -27,12 +27,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.data.AnalysisRepository
-import com.bioscan.fieldterminal.data.BodyCheckinRepository
 import com.bioscan.fieldterminal.data.ScaleCompositionPoint
-import com.bioscan.fieldterminal.data.ScaleReadingRepository
-import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.UserProfileRepository
 import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
 import com.bioscan.fieldterminal.data.model.UserProfileRow
@@ -52,8 +47,8 @@ import com.bioscan.fieldterminal.domain.trendStateWord
 import com.bioscan.fieldterminal.domain.weightChangeSplit
 import com.bioscan.fieldterminal.ui.components.FTChip
 import com.bioscan.fieldterminal.ui.components.FTChipRow
+import com.bioscan.fieldterminal.ui.components.RefreshOnCacheUpdates
 import com.bioscan.fieldterminal.ui.components.TrendSeries
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.components.rememberRange
 import com.bioscan.fieldterminal.ui.screens.detail.ChartRange
 import com.bioscan.fieldterminal.ui.screens.detail.EmptyLine
@@ -109,22 +104,12 @@ private const val POTENTIAL_INFO =
 
 @Composable
 fun BodyTabContent() {
-    var bodyMetrics by remember { mutableStateOf<List<BodyMetricsAnalysisRow>?>(null) }
-    var checkins by remember { mutableStateOf<List<BodyCheckinRecord>>(emptyList()) }
-    var heightCm by remember { mutableStateOf<Double?>(null) }
-    var profile by remember { mutableStateOf<UserProfileRow?>(null) }
-    var scaleSeries by remember { mutableStateOf<List<ScaleCompositionPoint>>(emptyList()) }
-    val guard = rememberLoadGuard()
+    val page = remember { BodyTabState() }
+    val guard = page.guard
+    RefreshOnCacheUpdates(guard)
 
     // Body metrics carry the tab; a failed read of the rest leaves its section empty rather than failing the tab.
-    LaunchedEffect(guard.attempt) {
-        guard.run { bodyMetrics = AnalysisRepository(SupabaseClientProvider.client).loadBodyMetrics() }
-        val repo = BodyCheckinRepository(SupabaseClientProvider.client)
-        checkins = catching { repo.loadHistory() }.getOrElse { checkins }
-        heightCm = catching { repo.latestHeightCm() }.getOrNull() ?: heightCm
-        profile = catching { UserProfileRepository(SupabaseClientProvider.client).loadProfile() }.getOrNull() ?: profile
-        scaleSeries = catching { ScaleReadingRepository(SupabaseClientProvider.client).loadCompositionSeries() }.getOrElse { scaleSeries }
-    }
+    LaunchedEffect(guard.attempt) { page.load() }
 
     var range by rememberRange("me:body", ChartRange.M3)
     var showRegimen by rememberSaveable { mutableStateOf(true) }
@@ -139,14 +124,14 @@ fun BodyTabContent() {
                 FTChip("REGIMEN", showRegimen, { showRegimen = !showRegimen }, role = Role.Switch)
             }),
         )
-        val b = bodyMetrics
+        val b = page.bodyMetrics
         if (b == null) {
             Loading(guard)
             return@Column
         }
         CompositionLocalProvider(LocalRangeDays provides range.days,
             LocalRegimenMarkers provides if (showRegimen) markers else emptyList()) {
-            BodyPage(b, checkins, profile?.heightCm ?: heightCm, profile, scaleSeries)
+            BodyPage(b, page.checkins, page.profile?.heightCm ?: page.heightCm, page.profile, page.scaleSeries)
         }
     }
 }

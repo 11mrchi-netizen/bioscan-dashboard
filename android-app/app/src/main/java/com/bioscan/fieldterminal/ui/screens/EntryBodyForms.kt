@@ -21,68 +21,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// + LOG: the body and how it feels: encounters, grip, stool, the weekly OSTRC questions, wellbeing, a note.
-
-// DAV-158: DateTimeField instead of the old date-only DateField -- encounters
-// previously had no time-of-day in storage at all (see the fake
-// ENCOUNTER_NOMINAL_TIME fallback in domain/Log.kt), just a bare DATE column.
-// DAV-159: location/duration/activities/rating restore real columns
-// (`encounters.location_type`/`duration_min`/`activities`/`my_rating`) that
-// already existed in the schema but had no UI anywhere. Of the schema's three
-// separate rating columns (my_rating/physical_rating/connection_rating,
-// confirmed unused in every real row), only my_rating is surfaced here --
-// "exactly one rating system" per this ticket's acceptance criterion.
-@Composable
-internal fun EncounterForm(
-    saving: Boolean,
-    initialDateTime: LocalDateTime = LocalDateTime.now(),
-    initialType: String = "",
-    initialLocationType: String = "",
-    initialDurationMin: Int? = null,
-    initialActivities: String = "",
-    initialMyRating: Int? = null,
-    initialNotes: String = "",
-    onSave: (
-        date: String,
-        occurredAt: String,
-        encounterType: String?,
-        locationType: String?,
-        durationMin: Int?,
-        activities: List<String>?,
-        myRating: Int?,
-        notes: String?,
-    ) -> Unit,
-) {
-    var dateTime by remember { mutableStateOf(initialDateTime) }
-    var encounterType by remember { mutableStateOf(initialType) }
-    var locationType by remember { mutableStateOf(initialLocationType) }
-    var durationMin by remember { mutableStateOf(initialDurationMin?.toString() ?: "") }
-    var activities by remember { mutableStateOf(initialActivities) }
-    var myRating by remember { mutableStateOf(initialMyRating) }
-    var notes by remember { mutableStateOf(initialNotes) }
-
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        DateTimeField("WHEN", dateTime, { dateTime = it })
-        Column { FormLabel("TYPE (OPTIONAL)"); FieldTextField(encounterType, { encounterType = it }, "e.g. date, call, hangout") }
-        Column { FormLabel("LOCATION (OPTIONAL)"); FieldTextField(locationType, { locationType = it }, "e.g. their place, restaurant") }
-        Column { FormLabel("DURATION MIN (OPTIONAL)"); FieldTextField(durationMin, { durationMin = it }, "e.g. 90", keyboardType = KeyboardType.Number) }
-        Column { FormLabel("ACTIVITIES (OPTIONAL)"); FieldTextField(activities, { activities = it }, "comma-separated, e.g. dinner, movie") }
-        Column { FormLabel("RATING 1-5 (OPTIONAL)"); IntChipRow(1..5, myRating) { myRating = it } }
-        Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Notes...", singleLine = false) }
-        SaveButton(saving, true) {
-            onSave(
-                dateTime.toLocalDate().toString(),
-                dateTime.toAppIso(),
-                encounterType.trim().ifBlank { null },
-                locationType.trim().ifBlank { null },
-                durationMin.toIntOrNull(),
-                activities.split(",").map { it.trim() }.filter { it.isNotBlank() }.ifEmpty { null },
-                myRating,
-                notes.trim().ifBlank { null },
-            )
-        }
-    }
-}
+// + LOG: the body and how it feels: grip, stool, the weekly OSTRC questions, wellbeing, a note.
 
 // Handgrip strength: the best of the attempts on a hand dynamometer, one row per hand. Logged for the record; it is shown on the
 // Healthspan card but not scored until a cited norm table exists.

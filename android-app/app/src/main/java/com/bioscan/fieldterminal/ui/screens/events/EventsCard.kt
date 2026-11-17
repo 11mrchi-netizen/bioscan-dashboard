@@ -17,10 +17,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.data.AthleteEventsRepository
-import com.bioscan.fieldterminal.data.EventSuggestion
-import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.draftEventFrom
 import com.bioscan.fieldterminal.domain.events.AthleteEvent
 import com.bioscan.fieldterminal.ui.components.FTButton
@@ -31,8 +27,6 @@ import com.bioscan.fieldterminal.ui.components.NullableEventSaver
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.rememberCacheVersion
 import com.bioscan.fieldterminal.ui.theme.FTType
-import kotlinx.coroutines.CancellationException
-import java.time.LocalDate
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Training › Plan's EVENTS card: what is coming up outside the training block (races, long days, matches), ADD EVENT,
@@ -40,40 +34,26 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 // that recorded them.
 @Composable
 fun EventsCard(onOpenEvent: (Long) -> Unit) {
-    val repo = remember { AthleteEventsRepository(SupabaseClientProvider.client) }
-    var events by remember { mutableStateOf<List<AthleteEvent>?>(null) }
-    var suggestions by remember { mutableStateOf<List<EventSuggestion>>(emptyList()) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val page = remember { EventsState() }
     var attempt by remember { mutableIntStateOf(0) }
     // Saveable: the event form can open the file picker, and the app may be restored while it is open.
     var adding by rememberSaveable(stateSaver = NullableEventSaver) { mutableStateOf<AthleteEvent?>(null) }
     var addingBlank by rememberSaveable { mutableStateOf(false) }
 
     val cacheVersion = rememberCacheVersion()
-    LaunchedEffect(attempt, cacheVersion) {
-        error = null
-        try {
-            catching { repo.linkCompletedEvents() }
-            events = repo.loadUpcoming(LocalDate.now())
-            suggestions = catching { repo.loadSuggestions() }.getOrDefault(emptyList())
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            error = e.message ?: "Couldn't load events."
-        }
-    }
+    LaunchedEffect(attempt, cacheVersion) { page.load() }
 
     FTCard(
         title = "EVENTS",
         info = "Races, long days, matches and other hard days outside your training plan. Fuel and hydration plans are built " +
             "around them, and a finished event is linked to the session that recorded it.",
     ) {
-        error?.let {
+        page.error?.let {
             Text("Couldn't load events: $it", style = FTType.BodySmall, color = FT.Bad)
             FTButton("RETRY", emphasis = FTButtonEmphasis.Tertiary) { attempt++ }
         }
-        val list = events.orEmpty()
-        if (events != null && list.isEmpty()) Text("No events planned.", style = FTType.BodySmall, color = FT.TextSecondary)
+        val list = page.events.orEmpty()
+        if (page.events != null && list.isEmpty()) Text("No events planned.", style = FTType.BodySmall, color = FT.TextSecondary)
         list.forEach { e ->
             Row(
                 Modifier.fillMaxWidth().ftClickable(onClickLabel = "Open ${e.name}") { e.id?.let(onOpenEvent) }.padding(vertical = 6.dp),
@@ -88,7 +68,7 @@ fun EventsCard(onOpenEvent: (Long) -> Unit) {
                 FTChevron(tint = FT.TextSecondary)
             }
         }
-        suggestions.take(3).forEach { s ->
+        page.suggestions.take(3).forEach { s ->
             Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("FROM YOUR CALENDAR", style = FTType.LabelCaps, color = FT.TextSecondary)
                 Text("${s.calendarEvent.title.orEmpty()} · ${s.start.toLocalDate()}", style = FTType.BodySmall, color = FT.TextPrimary)

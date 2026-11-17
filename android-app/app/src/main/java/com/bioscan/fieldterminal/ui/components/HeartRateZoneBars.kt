@@ -17,13 +17,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.domain.HeartRateZone
 import com.bioscan.fieldterminal.domain.HeartRateZoneBreakdown
 import com.bioscan.fieldterminal.domain.ZoneBounds
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Run session page: time in zones as horizontal bars (was a donut). Z0 (below zone 1) to Z5 on the left, each zone's
 // bpm range written on its bar, the share of the time at the bar's end. Every zone has a row, so an empty one reads
@@ -59,7 +60,7 @@ fun HeartRateZoneBars(breakdown: List<HeartRateZoneBreakdown>, bounds: ZoneBound
                     Box(Modifier.fillMaxWidth((secs.toFloat() / top).coerceIn(0f, 1f)).height(22.dp).clip(shape).background(heartRateZoneColor(zone).copy(alpha = 0.75f), shape))
                     Text("${bounds.rangeText(zone)} bpm", style = FTType.Micro, color = FT.TextPrimary, modifier = Modifier.padding(start = 8.dp))
                 }
-                Text("$pct%", style = FTType.MonoCaption, color = FT.TextPrimary, modifier = Modifier.width(38.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+                Text("$pct%", style = FTType.MonoCaption, color = FT.TextPrimary, modifier = Modifier.width(38.dp), textAlign = TextAlign.End)
             }
         }
     }

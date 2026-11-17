@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.domain.training.generate
 
-import com.bioscan.fieldterminal.domain.training.definition.CompositionDef
 import com.bioscan.fieldterminal.domain.training.definition.ConditioningProtocolDef
 import com.bioscan.fieldterminal.domain.training.definition.SlotDef
 import com.bioscan.fieldterminal.domain.training.definition.StrengthModuleDef
@@ -47,18 +46,12 @@ fun templateModuleKeys(t: TemplateDef, variables: Map<String, String>): List<Str
 
 fun templateDayPositions(t: TemplateDef): List<Int> = t.grid.flatMap { w -> w.days.filter { it.cells.any { c -> c.ref != "rest" } }.map { it.day } }.distinct().sorted()
 
-fun composedDayPositions(strength: StrengthModuleDef?, protocol: ConditioningProtocolDef?): List<Int> =
-    ((strength?.dayPositions.orEmpty()) + (protocol?.defaultLayout.orEmpty().filter { it.kind != "rest" }.map { it.day })).distinct().sorted()
-
 // Slots that take an exercise: every slot the module's sessions use, optional ones included
 // (the screen shows them as optional).
 fun slotsToChoose(m: StrengthModuleDef): List<SlotDef> {
     val used = m.sessions.flatMap { it.slots }.toSet() + m.variants.flatMap { v -> v.weeks.flatMap { w -> w.sessions.flatMap { s -> s.items.map { it.slot } } } }
     return m.slots.filter { it.id in used }
 }
-
-fun compositionStrengthOptions(c: CompositionDef): List<String> = c.strength.chooseFrom
-fun compositionProtocolOptions(c: CompositionDef): List<String> = c.conditioning.chooseFrom
 
 // The main strength programs a lifter chooses between first; each has several versions chosen
 // afterwards. Groups come from the template key and family, not from a hand-kept list of titles.

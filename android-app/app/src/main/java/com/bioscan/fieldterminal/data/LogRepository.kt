@@ -1,32 +1,33 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.data
 
-import kotlinx.serialization.UseSerializers
-import kotlinx.serialization.Serializable
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
 import com.bioscan.fieldterminal.data.model.LogExerciseRow
+import com.bioscan.fieldterminal.data.model.LogGripRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
-import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
 import com.bioscan.fieldterminal.data.model.LogOstrcRow
+import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
 import com.bioscan.fieldterminal.data.model.LogSleepRow
-import com.bioscan.fieldterminal.data.model.LogGripRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
-import com.bioscan.fieldterminal.data.model.SupplementScheduleRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
+import com.bioscan.fieldterminal.data.model.SupplementScheduleRow
 import com.bioscan.fieldterminal.domain.LogEntry
 import com.bioscan.fieldterminal.domain.LogMark
 import com.bioscan.fieldterminal.domain.buildLogEntries
 import com.bioscan.fieldterminal.domain.logCoverage
-import java.time.LocalDate
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
+import java.time.LocalDate
 
 // The feed loads a window of days, not a number of rows. It used to take the newest 60 rows of every table, which on this
 // account reached back only two days for supplements (about 10 a day) and ten for meals (about 6 a day), so everything
@@ -87,7 +88,7 @@ class LogRepository(private val supabase: SupabaseClient) {
         }
         val stool = async {
             supabase.postgrest.from("stool_log")
-                .select(columns = Columns.list("id,occurred_at,bristol_type,discomfort")) {
+                .select(columns = Columns.list("id,occurred_at,bristol_type,discomfort,complete_evacuation")) {
                     filter { gte("occurred_at", fromTimestamp) }
                     order("occurred_at", Order.DESCENDING)
                     limit(FETCH_CAP_PER_SOURCE)
@@ -164,7 +165,7 @@ class LogRepository(private val supabase: SupabaseClient) {
                 supabase.postgrest.from("supplements")
                     .select(columns = Columns.list("id,status,start_date,end_date,every_n_days,time_of_day,slots,schedule"))
                     .decodeList<SupplementScheduleRow>()
-            } catch (e: kotlinx.coroutines.CancellationException) {
+            } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 emptyList()

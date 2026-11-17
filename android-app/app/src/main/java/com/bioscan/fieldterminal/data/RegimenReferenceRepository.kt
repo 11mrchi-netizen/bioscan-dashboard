@@ -1,17 +1,10 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.LenientJson
 import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.okhttp.OkHttp
-import io.ktor.client.request.header
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -25,7 +18,6 @@ import kotlinx.serialization.json.put
 // the person asks (regimen-reference-lookup: RxNorm, openFDA labels, PubMed); the one card picked is kept per item, so the
 // app never holds a catalogue, only what the roster uses. Refreshing replaces the card.
 
-private const val FUNCTIONS_BASE_URL = "https://ugfrglbcoivkprjqvjzz.supabase.co/functions/v1"
 
 @Serializable
 data class RxConceptDto(val rxcui: String, val name: String, val tty: String? = null)
@@ -96,7 +88,7 @@ data class RegimenReferenceRow(
     val payload: JsonObject,
     @SerialName("retrieved_at") val retrievedAt: String,
 ) {
-    private val json get() = Json { ignoreUnknownKeys = true }
+    private val json get() = LenientJson
     val label: CompactLabelDto? get() = if (source == "fda_label") runCatching { json.decodeFromJsonElement(CompactLabelDto.serializer(), payload) }.getOrNull() else null
     val studies: PubmedPayload? get() = if (source == "pubmed") runCatching { json.decodeFromJsonElement(PubmedPayload.serializer(), payload) }.getOrNull() else null
 }
@@ -107,12 +99,7 @@ class RegimenReferenceRepository(private val supabase: SupabaseClient) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     private suspend fun call(body: JsonObject): JsonObject {
-        val token = supabase.auth.currentAccessTokenOrNull() ?: throw IllegalStateException("Not signed in")
-        val response = client.post("$FUNCTIONS_BASE_URL/regimen-reference-lookup") {
-            header("Authorization", "Bearer $token")
-            contentType(ContentType.Application.Json)
-            setBody(body.toString())
-        }
+        val response = supabase.postFunction("regimen-reference-lookup", body.toString())
         val obj = json.parseToJsonElement(response.bodyAsText()).jsonObject
         obj["error"]?.let { throw IllegalStateException((obj["detail"] ?: obj["message"] ?: it).toString().trim('"')) }
         return obj
@@ -169,9 +156,5 @@ class RegimenReferenceRepository(private val supabase: SupabaseClient) {
 
     suspend fun remove(supplementId: Long) {
         supabase.postgrest.from("regimen_references").delete { filter { eq("supplement_id", supplementId) } }
-    }
-
-    private companion object {
-        val client = HttpClient(OkHttp)
     }
 }

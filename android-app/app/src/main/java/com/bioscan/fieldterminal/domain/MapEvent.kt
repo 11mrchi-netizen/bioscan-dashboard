@@ -1,6 +1,6 @@
 package com.bioscan.fieldterminal.domain
 
-// Phase M1 (Map tab rework). Replaces the single-event NextSession -- every
+// Replaces the single-event NextSession -- every
 // calendar event in the next 24h becomes one of these, not just the one
 // training-colored session. Framework-free, per this project's domain-layer
 // purity convention; Health Connect and Calendar/Drive specifics stay in
@@ -24,7 +24,7 @@ data class MapPin(val event: MapEvent, val lat: Double, val lon: Double, val isH
 
 const val TRAINING_COLOR_ID = "8"
 
-// Phase M2. Flamingo (colorId '4') reconciles this project's own previously
+// Flamingo (colorId '4') reconciles this project's own previously
 // unresolved discrepancy (ROADMAP.md, P4/Push Notifications) between two
 // candidate encounter-detection signals -- colorId '4' vs. a "Meet " title
 // prefix. Here they're not competing: color gates which events are in scope

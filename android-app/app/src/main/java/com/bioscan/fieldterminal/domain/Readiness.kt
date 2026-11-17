@@ -1,6 +1,7 @@
 package com.bioscan.fieldterminal.domain
 
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 
 // Analysis review phase G: the HRV "condition" band that used to live here (a z-score of today's HRV against up to the 7
 // days before, LOW / REDUCED / NORMAL / PRIMED) is retired; the expected band (ExpectedBand.kt, the analysis-run
@@ -21,7 +22,7 @@ fun isStatusCurrentlyRelevant(
 ): Boolean {
     if (status in activeStatuses) return true
     if (status in endedStatuses && endDate != null) {
-        val daysSince = java.time.temporal.ChronoUnit.DAYS.between(endDate, today)
+        val daysSince = ChronoUnit.DAYS.between(endDate, today)
         return daysSince <= cutoffDays
     }
     return false

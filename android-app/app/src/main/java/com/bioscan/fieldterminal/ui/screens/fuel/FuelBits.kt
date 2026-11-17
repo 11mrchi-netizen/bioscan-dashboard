@@ -14,8 +14,8 @@ import com.bioscan.fieldterminal.domain.fuel.CarbCode
 import com.bioscan.fieldterminal.domain.fuel.DayClass
 import com.bioscan.fieldterminal.ui.components.NutrientColor
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // The carbohydrate code as a chip: one hue (Fuel's domain accent) in three steps plus the word, never red / amber /
 // green, which the contract keeps for status. The word carries the meaning; the fill only repeats it.

@@ -7,6 +7,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import kotlin.math.abs
+import kotlin.math.ln
 
 // Scoring system: CHARGE and the five domain scores for one morning (docs/scoring-system/README.md).
 //
@@ -23,7 +24,8 @@ import kotlin.math.abs
 // 3: sleep debt is carried night to night (SleepDebt.kt) instead of a 7-night sum.
 // 4: Rhythm's phone input is the measured minutes on the phone before sleep.
 // 5: the evening check-in's 1-5 stress is put on the morning's 0-10 scale before the two share felt stress.
-const val SCORE_MODEL_VERSION = "6"
+// 7: an illness is capped by its gravity (severity, training answer, fever, above or below the neck), not its being open.
+const val SCORE_MODEL_VERSION = "7"
 const val RANK_WINDOW_DAYS = 180
 const val MIN_RANK_HISTORY = 28
 const val CAP_CEILING = 40.0
@@ -131,7 +133,7 @@ fun ansStateOf(series: Map<String, Series>, day: LocalDate, threshold: Double = 
         val v = series[key]?.get(day) ?: return null
         if (log && v <= 0) return null
         val (med, sd) = baselineOf(series[key].orEmpty(), day, 60, 14, log, minSd) ?: return null
-        return ((if (log) kotlin.math.ln(v) else v) - med) / sd
+        return ((if (log) ln(v) else v) - med) / sd
     }
     val hrv = zOf(ScoreKeys.HRV, log = true, minSd = 0.03) ?: return null
     val rhr = zOf(ScoreKeys.RHR, log = false, minSd = 1.0) ?: return null

@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -35,21 +34,22 @@ import com.bioscan.fieldterminal.data.PantryItem
 import com.bioscan.fieldterminal.data.PantryRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.flagTexts
+import com.bioscan.fieldterminal.domain.OBSERVED_WINDOW_DAYS
 import com.bioscan.fieldterminal.domain.PantryFindingKind
 import com.bioscan.fieldterminal.domain.RateBasis
 import com.bioscan.fieldterminal.domain.StockEventKind
-import com.bioscan.fieldterminal.domain.OBSERVED_WINDOW_DAYS
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTConfirmDestructive
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.PinnedPage
+import com.bioscan.fieldterminal.ui.components.SkeletonSections
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private val label = FTType.LabelCaps
 private val body = FTType.BodySmall
@@ -88,8 +88,8 @@ fun PantryScreen(onBack: () -> Unit) {
             )
             val list = items
             when {
-                error != null && list == null -> Text("Failed to load: $error", style = body, color = FT.Critical)
-                list == null -> com.bioscan.fieldterminal.ui.components.SkeletonSections()
+                error != null && list == null -> Text("Failed to load: $error", style = body, color = FT.Bad)
+                list == null -> SkeletonSections()
                 list.isEmpty() -> Text("No supplements with a linked product yet. Add ingredients to a supplement (or verify it by barcode) to track its stock here.", style = body, color = FT.TextSecondary)
                 else -> {
                     val attention = list.filter { it.assessment.findings.any { f -> f.kind != PantryFindingKind.NoStock } }
@@ -162,7 +162,7 @@ private fun StockLines(item: PantryItem) {
             PantryFindingKind.ProviderFlag -> "SOURCE FLAG"
             PantryFindingKind.NoStock -> ""
         }
-        Text("! $name: ${it.reason}", style = body.copy(fontWeight = FontWeight.SemiBold), color = FT.Warning)
+        Text("! $name: ${it.reason}", style = body.copy(fontWeight = FontWeight.SemiBold), color = FT.Warn)
     }
 }
 
@@ -256,7 +256,7 @@ private fun PantryDetailSheet(item: PantryItem, repo: PantryRepository, onDismis
                             repo.addEvent(item.productId, StockEventKind.Purchase, n!! * per!!, exp, price.toDoubleOrNull())
                         }
                     }
-                    if (!expOk) Text("Use the format YYYY-MM-DD for the expiry date.", style = body, color = FT.Warning)
+                    if (!expOk) Text("Use the format YYYY-MM-DD for the expiry date.", style = body, color = FT.Warn)
                 }
                 StockMode.Count -> {
                     val remaining = item.assessment.remainingServings
@@ -281,7 +281,7 @@ private fun PantryDetailSheet(item: PantryItem, repo: PantryRepository, onDismis
                 }
                 null -> {}
             }
-            error?.let { Text("Couldn't save ($it).", style = body, color = FT.Critical) }
+            error?.let { Text("Couldn't save ($it).", style = body, color = FT.Bad) }
 
             if (item.events.isNotEmpty()) {
                 Text("STOCK HISTORY", style = label, color = FT.TextSecondary)
@@ -325,7 +325,7 @@ private fun ProviderFactsCard(item: PantryItem) {
         return
     }
     val p = f.product
-    Text("SuppCo · retrieved ${f.retrievedAt.take(10)} · data: supp.co", style = body.copy(fontWeight = FontWeight.SemiBold), color = FT.TextPrimary)
+    Text("SuppCo · retrieved ${retrievedDay(f.retrievedAt)} · data: supp.co", style = body.copy(fontWeight = FontWeight.SemiBold), color = FT.TextPrimary)
     listOfNotNull(
         p.format?.let { "Format: $it" },
         p.servingSize.raw?.let { "Serving size: $it" },
@@ -338,6 +338,6 @@ private fun ProviderFactsCard(item: PantryItem) {
     ).forEach { Text(it, style = body, color = FT.TextSecondary) }
     val flags = p.flagTexts()
     if (flags.isEmpty()) Text("No recall, warning letter, failed test or off-market flag reported at that date.", style = body, color = FT.TextSecondary)
-    else flags.forEach { Text("! $it", style = body.copy(fontWeight = FontWeight.SemiBold), color = FT.Warning) }
+    else flags.forEach { Text("! $it", style = body.copy(fontWeight = FontWeight.SemiBold), color = FT.Warn) }
     Text("To refresh, open this supplement in the editor and verify it by barcode.", style = body, color = FT.TextSecondary)
 }

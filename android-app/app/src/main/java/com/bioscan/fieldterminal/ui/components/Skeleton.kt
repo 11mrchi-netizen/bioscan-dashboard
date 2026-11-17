@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -29,10 +30,11 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 @Composable
 fun SkeletonSections(count: Int = 3) {
-    val pulse by rememberInfiniteTransition(label = "skeleton").animateFloat(
+    // With reduced motion the placeholder holds still at its middle value.
+    val pulse = if (FTMotion.reduced) 0.65f else rememberInfiniteTransition(label = "skeleton").animateFloat(
         initialValue = 0.45f, targetValue = 0.9f,
         animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse), label = "pulse",
-    )
+    ).value
     Column(Modifier.fillMaxWidth().semantics { contentDescription = "Loading" }, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         repeat(count) { i ->
             val shape = RoundedCornerShape(FT.RadiusModule)
@@ -50,7 +52,7 @@ fun SkeletonSections(count: Int = 3) {
 
 @Composable
 private fun Bar(width: Float, height: Dp) {
-    androidx.compose.foundation.layout.Box(
+    Box(
         Modifier.fillMaxWidth(width).height(height).background(FT.GlassTrack, RoundedCornerShape(6.dp)),
     )
 }

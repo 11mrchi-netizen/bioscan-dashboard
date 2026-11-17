@@ -5,6 +5,7 @@ import com.bioscan.fieldterminal.domain.analysis.Provenance
 import com.bioscan.fieldterminal.domain.comparison.METRIC_DIRECTIONALITY
 import com.bioscan.fieldterminal.domain.stress.STRESS_RHYTHM_MODEL_VERSION
 import com.bioscan.fieldterminal.domain.stress.StressRhythmResult
+import kotlin.math.abs
 
 // 09.2 Dynamic Recovery (DAV-238-241). A longitudinal state model, not a
 // single opaque readiness score -- every contributor keeps its own
@@ -70,7 +71,7 @@ fun recoveryBalance(contributors: List<RecoveryContributor>): RecoveryBalance? {
 
 fun recoveryStateOf(balance: RecoveryBalance?): EvalState = when {
     balance == null -> EvalState.Building
-    balance.up >= RECOVERY_SPLIT_SHARE && balance.down >= RECOVERY_SPLIT_SHARE && kotlin.math.abs(balance.net) < RECOVERY_LEAN -> EvalState.Unstable
+    balance.up >= RECOVERY_SPLIT_SHARE && balance.down >= RECOVERY_SPLIT_SHARE && abs(balance.net) < RECOVERY_LEAN -> EvalState.Unstable
     balance.net >= RECOVERY_LEAN -> EvalState.ShiftUp
     balance.net <= -RECOVERY_LEAN -> EvalState.ShiftDown
     else -> EvalState.Stable

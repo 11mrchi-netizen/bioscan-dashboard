@@ -1,14 +1,15 @@
 package com.bioscan.fieldterminal.data
 
 import android.content.Context
+import android.util.Log
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkerParameters
 import androidx.work.WorkManager
+import androidx.work.WorkerParameters
 import java.time.Duration
 
 // Mirrors HealthConnectSyncWorker.kt's shape exactly -- same WorkManager pattern
@@ -18,9 +19,9 @@ class ZeppSyncWorker(context: Context, params: WorkerParameters) : CoroutineWork
         val repo = ZeppRepository(SupabaseClientProvider.client)
         val result = repo.sync()
 
-        android.util.Log.d("ZeppSyncWorker", "Zepp sync: $result")
+        Log.d("ZeppSyncWorker", "Zepp sync: $result")
         // Keep the Zepp workout list in step with the plan; a failure here never fails the data sync.
-        android.util.Log.d("ZeppSyncWorker", repo.pushUpcoming())
+        Log.d("ZeppSyncWorker", repo.pushUpcoming())
 
         return when (result) {
             is ZeppSyncResult.Failed -> if (runAttemptCount < 5) Result.retry() else Result.failure()

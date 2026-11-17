@@ -3,7 +3,7 @@ package com.bioscan.fieldterminal.domain
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
-// Phase A4 (Analysis Layer). Evaluation Method Spec, Category 6 (Training
+// Evaluation Method Spec, Category 6 (Training
 // load & running performance): retires ACWR in favor of the Banister-
 // derived CTL/ATL/TSB Performance Management Chart. This app's own Android
 // TrainingRepository never had ACWR to begin with -- only index.html's web

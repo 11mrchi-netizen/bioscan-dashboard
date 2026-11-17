@@ -114,15 +114,6 @@ fun ladderHint(ladder: String, nWithData: Int): String = when (ladder) {
     else -> "${3 - nWithData.coerceAtMost(3)} more with data before anything can be read from it."
 }
 
-fun observedLabel(observed: String): String = when (observed) {
-    "as_expected" -> "in the expected direction"
-    "opposite" -> "the opposite way"
-    "unexpected_change" -> "a change where none was expected"
-    "no_difference" -> "no clear difference"
-    "too_few" -> "too few events"
-    else -> "unclear"
-}
-
 // ---- from "ready to test properly" to a registered experiment ----
 
 /** Either the formal-experiment outcome the intervention's main expectation maps to, or why it can't be tested formally yet. */

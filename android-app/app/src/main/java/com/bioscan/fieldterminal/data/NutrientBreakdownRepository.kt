@@ -7,6 +7,7 @@ import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import java.time.LocalDate
 import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 
 data class NutrientBreakdownData(
     val nutrients: Map<String, Double>,
@@ -19,7 +20,7 @@ class NutrientBreakdownRepository(private val supabase: SupabaseClient) {
         val cutoff = LocalDate.now().minusDays(days.toLong() - 1)
             .atStartOfDay()
             .atOffset(ZoneOffset.UTC)
-            .format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+            .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
 
         val rows = supabase.postgrest.from("nutrient_intake")
             .select(columns = Columns.list("nutrient,amount,unit,logged_at,source_type,source_id")) {

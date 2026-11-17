@@ -1,16 +1,16 @@
 package com.bioscan.fieldterminal.ui.components
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -33,10 +33,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Bar graphs and diverging scales, as design/tokens/charts-bars-and-scales.md specifies them. Every bar chart in the
 // app draws through these helpers so the geometry is one rule set:
@@ -181,64 +181,6 @@ fun barAlpha(i: Int, selected: Int?, projected: Boolean = false): Float = when {
     projected -> FTBarSpec.PROJECTED_ALPHA
     selected == null || selected == i -> 1f
     else -> FTBarSpec.DIMMED_ALPHA
-}
-
-/**
- * A plain magnitude bar chart (§1, §2): one bar per value from zero, in [color]; null values are stubs. A tap selects a
- * bar ([selected], [onSelect]); the readout row under the plot carries the numbers ([readoutLeft] in the metric hue,
- * [readoutRight] muted). [reference] draws the one dashed line, [band] a goal band.
- */
-@Composable
-fun FTBarChart(
-    values: List<Double?>,
-    color: Color,
-    modifier: Modifier = Modifier,
-    height: Dp = FTBarSpec.CardHeight,
-    vMax: Double? = null,
-    reference: Double? = null,
-    band: Pair<Double, Double>? = null,
-    selected: Int? = null,
-    onSelect: ((Int?) -> Unit)? = null,
-    projectedFrom: Int? = null,
-    readoutLeft: String? = null,
-    readoutRight: String? = null,
-    description: String = "",
-) {
-    val present = values.filterNotNull()
-    if (present.isEmpty()) {
-        FTBarsEmpty(height, modifier)
-        return
-    }
-    val top = (vMax ?: listOfNotNull(present.max(), reference, band?.second).max()).coerceAtLeast(1e-9)
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Canvas(
-            Modifier.fillMaxWidth().height(height).semantics { contentDescription = description }.then(
-                if (onSelect != null) with(Inspect) {
-                    Modifier.inspect(values) { px, w, isTap ->
-                        val i = BarLayout(w, values.size, 0f).indexAt(px)
-                        onSelect(if (values.getOrNull(i) == null) selected else if (isTap && i == selected) null else i)
-                    }
-                } else Modifier,
-            ),
-        ) {
-            val usable = size.height - FTBarSpec.TopPad.toPx()
-            fun y(v: Double) = size.height - (v / top).toFloat().coerceIn(0f, 1f) * usable
-            band?.let { (lo, hi) -> drawGoalBand(y(hi), y(lo), color) }
-            val single = present.size == 1 && values.size == 1
-            val layout = barLayout(values.size)
-            values.forEachIndexed { i, v ->
-                val width = if (single) min(layout.barWidth, size.width * 0.4f) else layout.barWidth
-                val left = if (single) (size.width - width) / 2 else layout.left(i)
-                if (v == null) drawBarStub(left, width) else {
-                    val projected = projectedFrom != null && i >= projectedFrom
-                    val latest = !projected && i == (projectedFrom?.minus(1) ?: values.lastIndex)
-                    drawBar(color, left, y(v), width, alpha = barAlpha(i, selected, projected), cap = latest || i == selected)
-                }
-            }
-            reference?.let { drawReferenceLine(y(it), color) }
-        }
-        if (readoutLeft != null || readoutRight != null) BarReadout(readoutLeft, readoutRight, color)
-    }
 }
 
 /** §1.1: the readout row under a bar plot, the current value in the metric hue and a muted context stat. */
@@ -388,6 +330,20 @@ fun FTDivergingScale(
     }
 }
 
-/** A legend dot for a bar or series colour. */
-@Composable
-fun FTLegendDot(color: Color, modifier: Modifier = Modifier) = Box(modifier.size(8.dp).background(color, CircleShape).padding(0.dp))
+/**
+ * A bar chart's y-axis: 0, half and the top of the scale, each at its height (the top under the bars' top pad), in a
+ * gutter of [width] left of the bars. Three labelled values, as the chart rules ask.
+ */
+@androidx.compose.runtime.Composable
+fun BarYAxis(top: Double, format: (Double) -> String, height: Dp, width: Dp = 40.dp) {
+    BoxWithConstraints(Modifier.width(width).height(height)) {
+        val usable = maxHeight - FTBarSpec.TopPad
+        for (f in listOf(1.0, 0.5, 0.0)) {
+            val y = (FTBarSpec.TopPad + usable * (1 - f).toFloat() - 7.dp).coerceIn(0.dp, maxHeight - 12.dp)
+            Text(
+                format(top * f), style = FTType.Micro, color = FT.TextMuted,
+                modifier = Modifier.padding(top = y),
+            )
+        }
+    }
+}

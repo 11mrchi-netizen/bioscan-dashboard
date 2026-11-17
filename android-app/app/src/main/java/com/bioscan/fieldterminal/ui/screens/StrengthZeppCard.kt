@@ -30,8 +30,8 @@ import com.bioscan.fieldterminal.ui.components.FTConfirmDestructive
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // A strength workout's exercises against Zepp's version (domain/StrengthImport.kt). Exercises the Zepp import wrote
 // follow Zepp by themselves; exercises changed in the app stay as they are, and when Zepp's version moves on this card

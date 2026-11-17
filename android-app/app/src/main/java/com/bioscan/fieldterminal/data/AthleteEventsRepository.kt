@@ -1,8 +1,8 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.data
 
-import kotlinx.serialization.UseSerializers
 import com.bioscan.fieldterminal.data.model.CalendarEventRow
+import com.bioscan.fieldterminal.domain.WallClock
 import com.bioscan.fieldterminal.domain.events.AidStation
 import com.bioscan.fieldterminal.domain.events.AthleteEvent
 import com.bioscan.fieldterminal.domain.events.EventKind
@@ -20,6 +20,9 @@ import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.builtins.ListSerializer
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -179,7 +182,7 @@ class AthleteEventsRepository(private val supabase: SupabaseClient) {
     /** Open events from [from] for [days] days, soonest first. */
     // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun loadUpcoming(from: LocalDate, days: Long = 400): List<AthleteEvent> =
-        ReadCache.get("events.upcoming.$from.$days", tables = setOf("athlete_events", "exercise_sessions"), serializer = kotlinx.serialization.builtins.ListSerializer(com.bioscan.fieldterminal.domain.events.AthleteEvent.serializer())) { fetchLoadUpcoming(from, days) }
+        ReadCache.get("events.upcoming.$from.$days", tables = setOf("athlete_events", "exercise_sessions"), serializer = ListSerializer(AthleteEvent.serializer())) { fetchLoadUpcoming(from, days) }
 
     private suspend fun fetchLoadUpcoming(from: LocalDate, days: Long = 400): List<AthleteEvent> =
         supabase.postgrest.from("athlete_events")
@@ -245,7 +248,7 @@ class AthleteEventsRepository(private val supabase: SupabaseClient) {
             .decodeList<SessionTimesRow>()
             .mapNotNull { s ->
                 // Session starts are logged times (local digits, zero offset): domain/WallClock.kt.
-                com.bioscan.fieldterminal.domain.WallClock.zoned(s.startTime, zone)
+                WallClock.zoned(s.startTime, zone)
                     ?.let { EventSessionCandidate(s.id, s.type, it, s.durationMin ?: 0.0) }
             }
         var linked = 0
@@ -264,7 +267,7 @@ class AthleteEventsRepository(private val supabase: SupabaseClient) {
      */
     // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun loadSuggestions(days: Long = 365): List<EventSuggestion> =
-        ReadCache.get("events.suggestions.$days.${java.time.LocalDate.now()}", tables = setOf("athlete_events", "calendar_events", "exercise_sessions"), serializer = kotlinx.serialization.builtins.ListSerializer(EventSuggestion.serializer())) { fetchLoadSuggestions(days) }
+        ReadCache.get("events.suggestions.$days.${java.time.LocalDate.now()}", tables = setOf("athlete_events", "calendar_events", "exercise_sessions"), serializer = ListSerializer(EventSuggestion.serializer())) { fetchLoadSuggestions(days) }
 
     private suspend fun fetchLoadSuggestions(days: Long = 365): List<EventSuggestion> {
         val now = Instant.now()
@@ -295,7 +298,7 @@ class AthleteEventsRepository(private val supabase: SupabaseClient) {
 fun draftEventFrom(suggestion: EventSuggestion): AthleteEvent {
     val row = suggestion.calendarEvent
     val end = row.endTime?.let { runCatching { OffsetDateTime.parse(it).atZoneSameInstant(suggestion.start.zone) }.getOrNull() }
-    val minutes = end?.let { java.time.Duration.between(suggestion.start, it).toMinutes().toDouble() }?.takeIf { it > 0 }
+    val minutes = end?.let { Duration.between(suggestion.start, it).toMinutes().toDouble() }?.takeIf { it > 0 }
     return AthleteEvent(
         name = row.title?.trim().orEmpty().ifBlank { "Race" },
         kind = EventKind.RACE,

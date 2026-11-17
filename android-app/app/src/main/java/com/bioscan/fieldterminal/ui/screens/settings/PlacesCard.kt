@@ -25,14 +25,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.routine.MobilityDailyRow
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.routine.LocationCollector
+import com.bioscan.fieldterminal.data.routine.MobilityDailyRow
 import com.bioscan.fieldterminal.data.routine.PlaceRow
 import com.bioscan.fieldterminal.data.routine.PlacesRepository
 import com.bioscan.fieldterminal.data.routine.TripRow
+import com.bioscan.fieldterminal.data.routine.parseTimestamp
 import com.bioscan.fieldterminal.domain.routine.DEFAULT_PLACE_RADIUS_M
 import com.bioscan.fieldterminal.domain.routine.MANUAL_PLACE_RADII_M
 import com.bioscan.fieldterminal.domain.routine.PlaceCategory
+import com.bioscan.fieldterminal.domain.routine.homeWorkProblem
 import com.bioscan.fieldterminal.domain.routine.parseCoordinates
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
@@ -42,6 +45,8 @@ import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.theme.FTType
+import kotlinx.coroutines.CancellationException
+import java.util.Locale
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Routine intelligence R3 (docs/routine-intelligence/01-research-and-plan.md, section 10): name the places the phone has
@@ -82,9 +87,9 @@ fun PlacesCard(showDay: Boolean = true) {
             "around the place (a point rounded to about 100 m). ADD PLACE names a place from its coordinates: it takes over " +
             "the visits already recorded inside its circle.",
     ) {
-        error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
-        com.bioscan.fieldterminal.domain.routine.homeWorkProblem(places.map { it.toPlace() }, places.firstOrNull { it.source == "home_setting" }?.id)
-            ?.let { Text("$it Tap a place below to label it, or use Lab › ROUTINE › OPEN DAY MAP to see where each one is.", style = FTType.BodySmall, color = FT.Warning) }
+        error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
+        homeWorkProblem(places.map { it.toPlace() }, places.firstOrNull { it.source == "home_setting" }?.id)
+            ?.let { Text("$it Tap a place below to label it, or use Lab › ROUTINE › OPEN DAY MAP to see where each one is.", style = FTType.BodySmall, color = FT.Warn) }
 
         if (showDay) {
             mobility?.let { m -> MobilitySummary(m) }
@@ -106,7 +111,7 @@ fun PlacesCard(showDay: Boolean = true) {
                     scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { adding = false; reload++ }) {
                         repo.addPlace(label, category, lat, lon, radius)
                         // Commute flags follow the new place's category on the trips the worker rebuilds (the last 48 h).
-                        runCatching { repo.refreshTrips() }.onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+                        catching { repo.refreshTrips() }.onFailure { if (it is CancellationException) throw it }
                     }
                 },
             )
@@ -135,9 +140,9 @@ fun PlacesCard(showDay: Boolean = true) {
                     place = p,
                     suggestion = suggestion,
                     onCancel = { editing = null },
-                    onSave = { label, category ->
+                    onSave = { label, category, stop ->
                         scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { editing = null; reload++ }) {
-                            repo.saveLabel(p.id, label, category)
+                            repo.saveLabel(p.id, label, category, stop)
                         }
                     },
                 )
@@ -147,7 +152,7 @@ fun PlacesCard(showDay: Boolean = true) {
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text(p.label ?: "Unlabelled place", style = FTType.Body, color = if (p.label == null) FT.Warning else FT.TextPrimary)
+                        Text(p.label ?: "Unlabelled place", style = FTType.Body, color = if (p.label == null) FT.Warn else FT.TextPrimary)
                         Text("%.1f h · %d×".format(hours, visits), style = FTType.Telemetry, color = FT.TextSecondary)
                     }
                     val line = listOfNotNull(
@@ -176,8 +181,8 @@ private fun MobilitySummary(m: MobilityDailyRow) {
 private fun CommuteRow(label: String, trips: List<TripRow>) {
     if (trips.isEmpty()) return
     val minutes = trips.mapNotNull { t ->
-        val s = com.bioscan.fieldterminal.data.routine.parseTimestamp(t.startAt)
-        val e = com.bioscan.fieldterminal.data.routine.parseTimestamp(t.endAt)
+        val s = parseTimestamp(t.startAt)
+        val e = parseTimestamp(t.endAt)
         if (s == null || e == null) null else (e.toEpochMilli() - s.toEpochMilli()) / 60_000.0
     }.sorted()
     if (minutes.isEmpty()) return
@@ -190,7 +195,7 @@ private fun CommuteRow(label: String, trips: List<TripRow>) {
 private fun StatusLine(label: String, value: String, ok: Boolean? = null) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = FTType.Body, color = FT.TextPrimary)
-        Text(value, style = FTType.Telemetry, color = when (ok) { true -> FT.Emerald; false -> FT.Warning; null -> FT.TextSecondary })
+        Text(value, style = FTType.Telemetry, color = when (ok) { true -> FT.Ok; false -> FT.Warn; null -> FT.TextSecondary })
     }
 }
 
@@ -200,13 +205,24 @@ internal fun PlaceEditor(
     place: PlaceRow,
     suggestion: Pair<String?, PlaceCategory?>?,
     onCancel: () -> Unit,
-    onSave: (String?, PlaceCategory?) -> Unit,
+    onSave: (String?, PlaceCategory?, Boolean) -> Unit,
+    showStop: Boolean = true,
 ) {
     var label by remember(place.id) { mutableStateOf(place.label ?: "") }
     var category by remember(place.id) { mutableStateOf(PlaceCategory.of(place.category)) }
+    var stop by remember(place.id) { mutableStateOf(place.isStop) }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         FieldTextField(value = label, onValueChange = { label = it }, placeholder = "Name (Home, Office, Gym…)")
         Chips(PlaceCategory.entries, category, { it.label }) { category = it }
+        if (showStop) {
+            // A restaurant or a shop: named once, it should not collect every later stay within 150 m.
+            Chips(listOf(false, true), stop, { if (it) "ONE-OFF STOP" else "A PLACE I GO BACK TO" }) { stop = it ?: stop }
+            Text(
+                if (stop) "Its visits so far keep this name; the next stay nearby starts a place of its own."
+                else "Later stays within its circle join it.",
+                style = FTType.Caption, color = FT.TextSecondary,
+            )
+        }
         if (suggestion != null) {
             FTButton("USE SUGGESTION", modifier = Modifier.fillMaxWidth(), emphasis = FTButtonEmphasis.Tertiary) {
                 suggestion.first?.let { label = it }
@@ -215,7 +231,7 @@ internal fun PlaceEditor(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             FTButton("CANCEL", modifier = Modifier.weight(1f), onClick = onCancel)
-            FTButton("SAVE", modifier = Modifier.weight(1f), emphasis = FTButtonEmphasis.Primary) { onSave(label, category) }
+            FTButton("SAVE", modifier = Modifier.weight(1f), emphasis = FTButtonEmphasis.Primary) { onSave(label, category, stop) }
         }
     }
 }
@@ -269,7 +285,7 @@ private fun AddPlaceEditor(
                 else -> "No coordinates found in that text."
             },
             style = FTType.BodySmall,
-            color = if (coords.isNotBlank() && point == null && note == null) FT.Warning else FT.TextSecondary,
+            color = if (coords.isNotBlank() && point == null && note == null) FT.Warn else FT.TextSecondary,
         )
         FTButton(if (locating) "LOCATING…" else "USE CURRENT LOCATION", modifier = Modifier.fillMaxWidth(), emphasis = FTButtonEmphasis.Tertiary) {
             if (locating) return@FTButton
@@ -279,7 +295,7 @@ private fun AddPlaceEditor(
                 if (fix == null) {
                     note = "No location: grant precise location in Data capture, or paste coordinates."
                 } else {
-                    coords = "%.6f, %.6f".format(java.util.Locale.ROOT, fix.latitude, fix.longitude)
+                    coords = "%.6f, %.6f".format(Locale.ROOT, fix.latitude, fix.longitude)
                     note = "Here, to about %.0f m.".format(fix.accuracy)
                 }
             }

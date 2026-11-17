@@ -1,6 +1,6 @@
 package com.bioscan.fieldterminal.domain
 
-// Phase A3 (Analysis Layer). Training Cycle Framing doc, section 3: this is
+// Training Cycle Framing doc, section 3: this is
 // a pure re-labeling layer on top of the Evaluation Method Spec's own
 // per-stream states -- it never recomputes anything Layer 2 already
 // produced, it only decides how a SHIFT_DOWN (or any other state) should be

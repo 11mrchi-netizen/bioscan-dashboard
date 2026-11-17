@@ -1,10 +1,13 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.WallClock
 import com.bioscan.fieldterminal.domain.fuel.CalendarSessionInput
 import com.bioscan.fieldterminal.domain.fuel.DemandHistory
 import com.bioscan.fieldterminal.domain.fuel.PlannedDay
 import com.bioscan.fieldterminal.domain.fuel.PlannedSessionInput
+import com.bioscan.fieldterminal.domain.fuel.RecentRun
 import com.bioscan.fieldterminal.domain.fuel.RecordedSessionInput
+import com.bioscan.fieldterminal.domain.fuel.StoredLink
 import com.bioscan.fieldterminal.domain.fuel.isTrainingSession
 import com.bioscan.fieldterminal.domain.fuel.resolvePlannedDays
 import com.bioscan.fieldterminal.domain.fuel.trimpPerMinute
@@ -36,6 +39,7 @@ private data class PlannedSessionTimesRow(
     val domain: String? = null,
     val title: String,
     @SerialName("gcal_event_id") val gcalEventId: String? = null,
+    @SerialName("exercise_session_id") val exerciseSessionId: Long? = null,
 )
 
 @Serializable
@@ -73,27 +77,37 @@ class PlannedDayRepository(private val supabase: SupabaseClient) {
     suspend fun load(from: LocalDate = LocalDate.now(), days: Int = 3, now: ZonedDateTime = ZonedDateTime.now()): List<PlannedDay> = coroutineScope {
         val zone = now.zone
         val to = from.plusDays(days.toLong())
-        val eventsD = async { runCatching { AthleteEventsRepository(supabase).loadAll().filter { !it.date.isBefore(from) && it.date.isBefore(to) } }.getOrDefault(emptyList()) }
-        val plannedD = async { runCatching { planned(from, to) }.getOrDefault(emptyList()) }
-        val calendarD = async { runCatching { calendar(from, to, zone) }.getOrDefault(emptyList()) }
+        val eventsD = async { catching { AthleteEventsRepository(supabase).loadAll().filter { !it.date.isBefore(from) && it.date.isBefore(to) } }.getOrDefault(emptyList()) }
+        val plannedD = async { catching { planned(from, to) }.getOrDefault(emptyList()) }
+        val calendarD = async { catching { calendar(from, to, zone) }.getOrDefault(emptyList()) }
         val recordedD = async { recorded(from.minusDays(HISTORY_DAYS), zone) }
-        val anchorsD = async { runCatching { ZoneAnchorsRepository(supabase).load().anchorsFor(from) }.getOrNull() }
-        val weightD = async { runCatching { latestWeight() }.getOrNull() }
+        val anchorsD = async { catching { ZoneAnchorsRepository(supabase).load().anchorsFor(from) }.getOrNull() }
+        val weightD = async { catching { latestWeight() }.getOrNull() }
         // Before the migration that adds it, the table is missing: no overrides.
-        val overridesD = async { runCatching { CalendarOverridesRepository(supabase).load() }.getOrDefault(emptyMap()) }
+        val overridesD = async { catching { CalendarOverridesRepository(supabase).load() }.getOrDefault(emptyMap()) }
+        val linksRepo = SessionPlanLinksRepository(supabase)
+        val storedD = async { linksRepo.load() }
 
         val recorded = recordedD.await()
         val anchors = anchorsD.await()
         val history = demandHistory(recorded, anchors?.restingHr, anchors?.maxHr, weightD.await())
-        resolvePlannedDays(
-            from, days, eventsD.await(), plannedD.await(), calendarD.await(),
-            recorded.filter { !it.start.toLocalDate().isBefore(from) }, history, now, overridesD.await(),
+        val events = eventsD.await()
+        val planned = plannedD.await()
+        // The links events and the training plan already carry, then the stored answers over them.
+        val links = events.mapNotNull { e -> e.exerciseSessionId?.let { it to StoredLink(it, "event:${e.id}", manual = true, planTitle = e.name) } }.toMap() +
+            planned.mapNotNull { p -> p.exerciseSessionId?.let { it to StoredLink(it, "planned:${p.id}", manual = true, planTitle = p.title) } }.toMap() +
+            storedD.await()
+        val resolved = resolvePlannedDays(
+            from, days, events, planned, calendarD.await(),
+            recorded.filter { !it.start.toLocalDate().isBefore(from) }, history, now, overridesD.await(), links,
         )
+        catching { linksRepo.keepFinished(resolved, now.toLocalDate()) }
+        resolved
     }
 
     private suspend fun planned(from: LocalDate, to: LocalDate): List<PlannedSessionInput> =
         supabase.postgrest.from("planned_sessions")
-            .select(Columns.list("id,scheduled_date,start_time,duration_min,domain,title,gcal_event_id")) {
+            .select(Columns.list("id,scheduled_date,start_time,duration_min,domain,title,gcal_event_id,exercise_session_id")) {
                 filter {
                     gte("scheduled_date", from.toString())
                     lt("scheduled_date", to.toString())
@@ -104,7 +118,7 @@ class PlannedDayRepository(private val supabase: SupabaseClient) {
             .map { r ->
                 PlannedSessionInput(
                     r.id, LocalDate.parse(r.scheduledDate), r.startTime?.let { runCatching { LocalTime.parse(it) }.getOrNull() },
-                    r.durationMin, r.domain, r.title, r.gcalEventId,
+                    r.durationMin, r.domain, r.title, r.gcalEventId, r.exerciseSessionId,
                 )
             }
 
@@ -145,7 +159,7 @@ class PlannedDayRepository(private val supabase: SupabaseClient) {
             }
             out.mapNotNull { r ->
                 // Session starts are logged times (local digits, zero offset), unlike calendar events above, which are real UTC.
-                val s = com.bioscan.fieldterminal.domain.WallClock.zoned(r.startTime, zone) ?: return@mapNotNull null
+                val s = WallClock.zoned(r.startTime, zone) ?: return@mapNotNull null
                 RecordedSessionInput(r.id, r.type, s, r.durationMin ?: 0.0, r.caloriesActive, r.avgHr, r.rpe, r.distanceKm, r.elevationGainM)
             }
         }
@@ -178,6 +192,6 @@ fun demandHistory(recorded: List<RecordedSessionInput>, restingHr: Double?, maxH
     // Runs of the last 120 days with a distance, for timing calendar runs at the person's pace.
     val since = recorded.maxOfOrNull { it.start }?.minusDays(120)
     val runs = training.filter { it.type == "run" && (it.distanceKm ?: 0.0) > 0 && (since == null || it.start.isAfter(since)) }
-        .map { com.bioscan.fieldterminal.domain.fuel.RecentRun(it.distanceKm!!, it.ascentM ?: 0.0, it.durationMin) }
+        .map { RecentRun(it.distanceKm!!, it.ascentM ?: 0.0, it.durationMin) }
     return DemandHistory(kcal, trimp, restingHr, maxHr, weightKg, runs)
 }

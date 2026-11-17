@@ -57,7 +57,7 @@ class ProtocolsRepository(private val supabase: SupabaseClient) {
                     interventionIds.mapIndexed { i, iid -> NewProtocolMember(id, iid, if (i == 0) "primary" else "supporting", i) },
                 )
             } catch (e: Exception) {
-                runCatching { supabase.postgrest.from("protocols").delete { filter { eq("id", id) } } }
+                catching { supabase.postgrest.from("protocols").delete { filter { eq("id", id) } } }
                 throw e
             }
         }

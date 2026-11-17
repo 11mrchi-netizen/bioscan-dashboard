@@ -54,5 +54,3 @@ fun readMetric(
 fun Series.window(day: LocalDate, days: Int): List<Pair<LocalDate, Double?>> =
     (days - 1 downTo 0).map { i -> day.minusDays(i.toLong()).let { d -> d to this[d] } }
 
-/** Pairs of (date, value) to a [Series], keeping the last value when a date repeats. */
-fun List<Pair<LocalDate, Double>>.toSeries(): Series = associate { it.first to it.second }

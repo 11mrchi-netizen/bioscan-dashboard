@@ -22,7 +22,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.FuelScheduleRepository
@@ -40,16 +39,18 @@ import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTDropdown
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.util.UUID
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // The pre-race fuel schedule (docs/race-fuel-rework/plan.md): what to take, in which form, how much and how often, for a race
 // or a long run. Seeded from the planner or started empty, edited block by block, saved as you go. Water and water with
@@ -80,7 +81,8 @@ fun FuelScheduleCard(
     refKey: String,
     durationMin: Int,
     toleratedGPerHour: Double,
-    seed: (() -> List<FuelBlock>)?,
+    /** The planner's first schedule, offered as START FROM THE PLAN (it may read the weather, so it suspends). */
+    seed: (suspend () -> List<FuelBlock>)?,
     modifier: Modifier = Modifier,
 ) {
     val repo = remember { FuelScheduleRepository(SupabaseClientProvider.client) }
@@ -92,6 +94,7 @@ fun FuelScheduleCard(
     var error by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<FuelBlock?>(null) }
     var isNew by remember { mutableStateOf(false) }
+    var seeding by remember { mutableStateOf(false) }
 
     LaunchedEffect(kind, refKey) {
         try {
@@ -130,8 +133,20 @@ fun FuelScheduleCard(
                     style = FTType.BodySmall, color = FT.TextSecondary,
                 )
                 seed?.let { s ->
-                    FTButton("START FROM THE PLAN", emphasis = FTButtonEmphasis.Primary, modifier = Modifier.fillMaxWidth()) {
-                        blocks.clear(); blocks.addAll(s()); persist("plan")
+                    FTButton(if (seeding) "BUILDING…" else "START FROM THE PLAN", enabled = !seeding, emphasis = FTButtonEmphasis.Primary, modifier = Modifier.fillMaxWidth()) {
+                        seeding = true
+                        scope.launch {
+                            try {
+                                val seeded = s()
+                                blocks.clear(); blocks.addAll(seeded); persist("plan")
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                error = describeLoadFailure(e)
+                            } finally {
+                                seeding = false
+                            }
+                        }
                     }
                 }
                 FTButton("START EMPTY", modifier = Modifier.fillMaxWidth()) { persist("manual") }
@@ -156,7 +171,7 @@ fun FuelScheduleCard(
                         style = FTType.LabelCaps, color = FT.TextPrimary,
                     )
                     Text("${expandSchedule(blocks.toList()).size} intakes over ${clock(durationMin)}", style = FTType.MonoCaption, color = FT.TextSecondary)
-                    scheduleWarnings(blocks.toList(), durationMin, toleratedGPerHour).forEach { Text("· $it", style = FTType.Caption, color = FT.Warning) }
+                    scheduleWarnings(blocks.toList(), durationMin, toleratedGPerHour).forEach { Text("· $it", style = FTType.Caption, color = FT.Warn) }
                 }
                 FTButton("ADD A BLOCK", emphasis = FTButtonEmphasis.Primary, modifier = Modifier.fillMaxWidth()) {
                     editing = FuelBlock(UUID.randomUUID().toString().take(8), "", FuelForm.GEL.key, startMin = 30, intervalMin = 30, count = 1)
@@ -164,7 +179,7 @@ fun FuelScheduleCard(
                 }
             }
         }
-        error?.let { Text(it, style = FTType.Caption, color = FT.Critical) }
+        error?.let { Text(it, style = FTType.Caption, color = FT.Bad) }
     }
 
     editing?.let { b ->
@@ -205,9 +220,12 @@ internal fun FuelBlockSheet(initial: FuelBlock, isNew: Boolean, onDismiss: () ->
     var catalog by remember { mutableStateOf<List<FuelingProduct>>(emptyList()) }
     var supplements by remember { mutableStateOf<List<SupplementFuelOption>>(emptyList()) }
 
-    LaunchedEffect(Unit) {
-        catalog = runCatching { FuelingRepository(SupabaseClientProvider.client).loadProducts() }.getOrDefault(emptyList())
-        supplements = runCatching { FuelScheduleRepository(SupabaseClientProvider.client).supplementOptions() }.getOrDefault(emptyList())
+    val catalogGuard = rememberLoadGuard(refreshOnUpdates = false)
+    LaunchedEffect(catalogGuard.attempt) {
+        catalogGuard.run {
+            catalog = FuelingRepository(SupabaseClientProvider.client).loadProducts()
+            supplements = FuelScheduleRepository(SupabaseClientProvider.client).supplementOptions()
+        }
     }
 
     // A form's usual shape, applied when the form is picked on a block with nothing entered yet.
@@ -249,8 +267,15 @@ internal fun FuelBlockSheet(initial: FuelBlock, isNew: Boolean, onDismiss: () ->
     val startMin = start.trim().toIntOrNull()
     val intervalMin = every.trim().toIntOrNull()
     val n = count.trim().toIntOrNull()
-    val valid = label.isNotBlank() && startMin != null && startMin >= -240 && n != null && n in 1..200 &&
-        (n == 1 || (intervalMin != null && intervalMin in 1..600))
+    // A block with no name is called after its form ("Gel"): the name is never what stops a save.
+    val name = label.trim().ifBlank { form.label.lowercase().replaceFirstChar { it.uppercase() } }
+    val problem = when {
+        startMin == null || startMin < -240 -> "FIRST AT needs minutes from the start, from -240."
+        n == null || n !in 1..200 -> "HOW MANY needs a number from 1 to 200."
+        n > 1 && (intervalMin == null || intervalMin !in 1..600) -> "EVERY needs minutes between intakes, 1 to 600."
+        else -> null
+    }
+    val valid = problem == null
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, shape = FT.SheetShape, containerColor = FT.Surface, contentColor = FT.TextPrimary) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -261,13 +286,14 @@ internal fun FuelBlockSheet(initial: FuelBlock, isNew: Boolean, onDismiss: () ->
                     FuelForm.entries.firstOrNull { it.label == picked }?.let { form = it; applyDefaults(it) }
                 }
             }
+            LoadErrorLine(catalogGuard, "your products")
             if (options.isNotEmpty()) {
                 Column {
                     SheetLabel("FROM YOUR CATALOG (OPTIONAL)")
                     FTDropdown(options, selectedKey, "Pick a product to fill the amounts") { pick(it) }
                 }
             }
-            Column { SheetLabel("NAME"); FieldTextField(label, { label = it }, "e.g. Maurten gel") }
+            Column { SheetLabel("NAME (OPTIONAL)"); FieldTextField(label, { label = it }, "e.g. Maurten gel") }
             Text("In ONE intake:", style = FTType.Caption, color = FT.TextSecondary)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Column(Modifier.weight(1f)) { SheetLabel("CARBS G"); FieldTextField(carbs, { carbs = it }, "0", keyboardType = KeyboardType.Decimal) }
@@ -284,13 +310,14 @@ internal fun FuelBlockSheet(initial: FuelBlock, isNew: Boolean, onDismiss: () ->
             }
             Text("Minutes from the start; a minus sign is before it (a pre-workout at -30).", style = FTType.Caption, color = FT.TextSecondary)
             if (valid) {
-                val preview = FuelBlock(initial.id, label, form.key, startMin!!, intervalMin ?: 0, n!!, num(carbs) ?: 0.0, num(fluid) ?: 0.0, num(sodium) ?: 0.0, num(caffeine) ?: 0.0)
+                val preview = FuelBlock(initial.id, name, form.key, startMin!!, intervalMin ?: 0, n!!, num(carbs) ?: 0.0, num(fluid) ?: 0.0, num(sodium) ?: 0.0, num(caffeine) ?: 0.0)
                 Text("${n} intake${if (n == 1) "" else "s"}, ${amount(preview.carbsG * n)} g carbs, ${amount(preview.fluidMl * n)} ml, last at ${clock(preview.endMin)}", style = FTType.LabelCaps, color = FT.TextPrimary)
             }
+            problem?.let { Text(it, style = FTType.Caption, color = FT.Warn) }
             FTButton("SAVE BLOCK", enabled = valid, emphasis = FTButtonEmphasis.Primary, modifier = Modifier.fillMaxWidth()) {
                 onSave(
                     FuelBlock(
-                        id = initial.id, label = label.trim(), form = form.key, startMin = startMin!!, intervalMin = if (n!! > 1) intervalMin!! else 0, count = n,
+                        id = initial.id, label = name, form = form.key, startMin = startMin!!, intervalMin = if (n!! > 1) intervalMin!! else 0, count = n,
                         carbsG = num(carbs) ?: 0.0, fluidMl = num(fluid) ?: 0.0, sodiumMg = num(sodium) ?: 0.0, caffeineMg = num(caffeine) ?: 0.0,
                         fuelingProductId = fuelingId, supplementProductId = supplementId,
                     ),

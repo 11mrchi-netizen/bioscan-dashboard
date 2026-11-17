@@ -47,5 +47,3 @@ fun followUpsDue(
     }
 }
 
-/** One dedupe key per event and outcome, so a follow-up is shown at most once. */
-fun followUpKey(e: PromptEvent, w: PromptWindow) = "event_followup:${e.id}:${w.outcomeId}"

@@ -1,6 +1,5 @@
 package com.bioscan.fieldterminal.data.model
 
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 // Response of the supplement-dsld-lookup edge function (DAV-359). Every field

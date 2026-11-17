@@ -59,6 +59,8 @@ function beverageClassFromCategories(categoriesTags: string[] | undefined): stri
   const has = (needle: string) => categoriesTags.some((t) => t.includes(needle));
   if (has("waters")) return "water";
   if (has("coffees")) return "coffee";
+  // Herbal teas and infusions are caffeine-free: their own class, checked before tea.
+  if (has("herbal-teas") || has("infusions") || has("tisanes")) return "infusion";
   if (has("teas")) return "tea";
   if (has("plant-based-milk") || has("plant-milks")) return "plant_milk";
   if (has("milks") || has("dairy-drinks")) return "milk";

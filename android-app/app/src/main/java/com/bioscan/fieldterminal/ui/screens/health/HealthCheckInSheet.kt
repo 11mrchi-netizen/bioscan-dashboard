@@ -26,6 +26,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.HealthConcernsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.ConcernOverviewDto
 import com.bioscan.fieldterminal.data.model.HealthConcernRow
 import com.bioscan.fieldterminal.data.model.RecentSessionRow
@@ -44,20 +45,23 @@ import com.bioscan.fieldterminal.domain.health.checkInDate
 import com.bioscan.fieldterminal.domain.health.isConcernOpen
 import com.bioscan.fieldterminal.domain.health.recallStart
 import com.bioscan.fieldterminal.domain.health.shortDate
+import com.bioscan.fieldterminal.domain.localDateIn
 import com.bioscan.fieldterminal.ui.components.BodyMap
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
+import com.bioscan.fieldterminal.ui.components.FTRatingSlider
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Health concerns (plan §5.1): the quick check-in. A normal day is one tap (NOTHING); a day with an active concern is a
 // tap per concern (GONE / BETTER / SAME / WORSE, severity prefilled with the last one); something new goes through the
@@ -99,16 +103,16 @@ fun HealthCheckInSheet(
     var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
-        runCatching { concerns = repo.loadConcerns() }
-        runCatching { overview = repo.loadOverview()?.concerns?.associateBy { it.concernId } ?: emptyMap() }
-        runCatching { lastCheckin = repo.lastCheckinDate() }
-        runCatching { sessions = repo.loadRecentSessions() }
+        catching { concerns = repo.loadConcerns() }
+        catching { overview = repo.loadOverview()?.concerns?.associateBy { it.concernId } ?: emptyMap() }
+        catching { lastCheckin = repo.lastCheckinDate() }
+        catching { sessions = repo.loadRecentSessions() }
     }
 
     // Concerns asked about: open ones, the focused one, and new ones without a published state yet.
     val active = concerns.filter { c ->
         c.archivedAt == null && (c.id == focusConcernId || overview[c.id]?.let { isConcernOpen(it.state) || (it.state == "unobserved" && it.currentEpisode != null) }
-            ?: (c.legacySource == null && c.createdAt?.take(10)?.let { LocalDate.parse(it) >= today.minusDays(14) } == true))
+            ?: (c.legacySource == null && c.createdAt?.let { localDateIn(it, ZoneId.systemDefault()) }?.let { it >= today.minusDays(14) } == true))
     }
 
     fun save(draft: CheckInDraft) {
@@ -165,7 +169,7 @@ fun HealthCheckInSheet(
                     }
                     if (a != null && a.change != ConcernChange.Gone) {
                         Text("SEVERITY 0-10", style = FTType.Micro, color = FT.TextMuted)
-                        com.bioscan.fieldterminal.ui.components.FTRatingSlider("SEVERITY", a.severity, 0..10, FT.Metric.Soreness, { v -> answers[c.id] = a.copy(severity = v) }, lowWord = "none", highWord = "worst")
+                        FTRatingSlider("SEVERITY", a.severity, 0..10, FT.Metric.Soreness, { v -> answers[c.id] = a.copy(severity = v) }, lowWord = "none", highWord = "worst", reversed = true)
                         Text("TRAINING", style = FTType.Micro, color = FT.TextMuted)
                         TextChipRow(IMPACT_LABELS, a.impact?.let { IMPACT_LABELS[it] }, perRow = 2) { picked -> answers[c.id] = a.copy(impact = picked?.let { IMPACT_LABELS.indexOf(it) }) }
                     }
@@ -194,7 +198,7 @@ fun HealthCheckInSheet(
                 TextChipRow(listOf("THAT'S EVERYTHING"), if (nothingElse) "THAT'S EVERYTHING" else null, perRow = 1) { picked -> nothingElse = picked != null }
             }
 
-            error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Critical) }
+            error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Bad) }
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (answers.isEmpty() && problems.isEmpty()) {
                     FTButton(label = if (saving) "SAVING..." else "NOTHING", emphasis = FTButtonEmphasis.Primary, enabled = !saving, modifier = Modifier.weight(1f)) {
@@ -257,7 +261,7 @@ private fun NewProblemStep(
     TextChipRow(symptomOptions.map { it.label }, symptomOptions.firstOrNull { it.code == symptom }?.label, perRow = 3) { picked ->
         symptom = symptomOptions.firstOrNull { it.label == picked }?.code
     }
-    com.bioscan.fieldterminal.ui.components.FTRatingSlider("SEVERITY", severity, 0..10, FT.Metric.Soreness, { severity = it }, lowWord = "none", highWord = "worst")
+    FTRatingSlider("SEVERITY", severity, 0..10, FT.Metric.Soreness, { severity = it }, lowWord = "none", highWord = "worst", reversed = true)
     Text("TRAINING", style = FTType.Micro, color = FT.TextMuted)
     TextChipRow(IMPACT_LABELS, impact?.let { IMPACT_LABELS[it] }, perRow = 2) { picked -> impact = picked?.let { IMPACT_LABELS.indexOf(it) } }
 

@@ -1,8 +1,6 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class)
 package com.bioscan.fieldterminal.data
 
-import kotlinx.serialization.UseSerializers
-import kotlinx.serialization.Serializable
 import com.bioscan.fieldterminal.data.model.BeverageItemRow
 import com.bioscan.fieldterminal.data.model.HydrationDailyRow
 import com.bioscan.fieldterminal.data.model.MealRow
@@ -12,6 +10,8 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.LocalDate
 
 @Serializable
@@ -69,7 +69,7 @@ class NutritionRepository(private val supabase: SupabaseClient) {
             .decodeList<HydrationDailyRow>()
             .firstOrNull()
 
-        val hydrationHistory = runCatching {
+        val hydrationHistory = catching {
             supabase.postgrest.from("hydration_daily")
                 .select(columns = Columns.list("date,ml")) {
                     order("date", Order.DESCENDING)

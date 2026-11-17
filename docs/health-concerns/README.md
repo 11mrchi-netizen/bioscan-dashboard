@@ -72,3 +72,23 @@ The `private.fold_exercise_session` replacement was applied by the owner in the 
 - Console `Recovery.tsx` still bands HRV with the old `injuries` only.
 - Deferred, as planned: prediction, risk scores, rehabilitation plans, randomised injury experiments, footwear, descent
   and weather exposures, photo and voice logging.
+
+## Illness, infections and the symptom check (10 Nov 2026)
+
+Owner brief: Health was injury-first; infections and other illnesses need their own way in, the small things (a
+headache, a stuffed nose) a quick questionnaire apart from injuries, and the score should weigh how grave an illness is.
+
+| Part | Where | Notes |
+|---|---|---|
+| Schema | `migrations/20261110102027_health_illness_checks.sql` (applied) | `health_concerns.category` (injury / infection / illness; null reads from `kind`) and `illness_type`; observation scope `check` (no concern, covers no concern: unlike a sweep it makes nothing symptom-free); `health_observations.assessment` (the questionnaire's answers and result, append-only like the row); 16 symptoms in vocabulary 1.1.0 (sneezing, sinus pressure, loss of smell, chest tightness, short of breath, earache, eye irritation, chills, heartburn, bloating, diarrhoea, constipation, stomach cramps, vomiting, rash, burning when peeing). |
+| Engine | `analysis-core/healthSeries.ts` | A `check` signal never joins a concern by region and is not listed as unassigned. **Takes effect when `analysis-run` is redeployed**; until then the app keeps a check's body region in the signal's details, so nothing is matched by region either way. Also fixed: the vocabulary test read the migration under its old name. |
+| + ILLNESS | `domain/health/Illness.kt`, `ui/screens/health/IllnessSheet.kt` | Kind (cold, flu-like, COVID-19, stomach bug, sinus, throat, ear, chest, urinary, skin or eye infection, allergy, migraine, other), started (today to a week ago: a start mark), symptoms (the kind's usual first), how bad, training, temperature, a test and its result, a clinician and what they said, medication, note. The sheet shows how CHARGE will read it before saving. |
+| SYMPTOM CHECK | `domain/health/SymptomCheck.kt`, `ui/screens/health/SymptomCheckSheet.kt` | 9 areas; how strong, since when, which way; the area's yes/no questions, red flags first (URGENT: call 119; CLINICIAN: worth a view), others supporting 30 patterns, each shown with the answers behind it and one thing worth doing. Prefilled from last night's sleep and the last 3 days' training. Deterministic: the same answers always give the same result. Saved when the result shows; TRACK AS ILLNESS (its signals join the new illness) or TRACK AS INJURY when the answers point there. WHY? on the result asks the assistant (opt-in, off by default) for a second opinion. |
+| Score | `domain/score/IllnessRead.kt` | Gravity, not openness: mild 85, moderate 65, severe 40, nothing left none (docs/scoring-system/README.md, "Caps"). The "neck check" (above versus below the neck) decides mild against moderate. |
+| Health tab | `ui/screens/health/ConcernsTab.kt` | CHECK IN, + INJURY, + ILLNESS, SYMPTOM CHECK; open concerns as INJURIES & PAIN and ILLNESSES & INFECTIONS; SMALL THINGS · 14 DAYS. The + menu has ILLNESS and SYMPTOM CHECK too. |
+
+Tests: `SymptomCheckTest` (7), `IllnessTest` (3), `IllnessReadTest` (rewritten for gravity), core `healthEpisodes.test.ts` (one more).
+
+Not done: the server's safety prompts and episode rules are unchanged for illnesses (an illness still ends after 3
+symptom-free days); a symptom check cannot yet be turned into an injury with its region (TRACK AS INJURY opens the body
+map); the questionnaire's rules are not in the analysis engine, and the checks are not on the evidence board.

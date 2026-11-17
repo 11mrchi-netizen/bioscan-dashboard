@@ -14,13 +14,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.PlexMono
 
 // Session Detail's PERFORMANCE card used to print Average/Min-Max as three
 // plain StatLines -- this replaces them with one visual: a track spanning
@@ -71,7 +68,7 @@ private fun Text(value: String, color: Color, modifier: Modifier, bold: Boolean 
         value,
         style = if (bold) FTType.Telemetry else FTType.MonoCaption,
         color = color,
-        textAlign = if (alignEnd) androidx.compose.ui.text.style.TextAlign.End else androidx.compose.ui.text.style.TextAlign.Start,
+        textAlign = if (alignEnd) TextAlign.End else TextAlign.Start,
         modifier = modifier,
     )
 }

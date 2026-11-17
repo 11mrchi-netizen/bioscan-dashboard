@@ -10,7 +10,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonTransformingSerializer
 import kotlinx.serialization.json.intOrNull
 
-// Phase G3. Unlike HealthConnectSyncModels.kt's daily upserts, one combined
+// Unlike HealthConnectSyncModels.kt's daily upserts, one combined
 // row is safe here: the conflict key (user_id, health_connect_record_id) is
 // stable per session, and every re-sync of the same session re-reads the
 // same underlying Health Connect data (see HealthConnectExerciseSyncRepository's
@@ -107,7 +107,7 @@ data class StrengthSetDto(
     @SerialName("detected_reps") val detectedReps: Int? = null,
 )
 
-// Phase G4: the full row for SessionDetailScreen's summary card, plus
+// The full row for SessionDetailScreen's summary card, plus
 // health_connect_record_id/end_time -- neither of which the edit/log-feed
 // rows above need, but the detail screen does (end_time to bound the
 // on-demand Health Connect read; health_connect_record_id, null for

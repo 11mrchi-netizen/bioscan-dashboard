@@ -1,7 +1,5 @@
 package com.bioscan.fieldterminal.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +19,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -40,16 +37,14 @@ private val MAX_TEXT_HEIGHT = 420.dp
 @Composable
 fun InfoHelpButton(title: String, body: String, modifier: Modifier = Modifier, details: String? = null) {
     var open by remember { mutableStateOf(false) }
+    // A 48 dp target around the small glass "?" (the icon family's Help mark), so a card header stays compact.
     Box(
         modifier = modifier
-            .size(20.dp)
-            .clip(CircleShape)
-            .background(FT.Glass)
-            .border(FT.BorderWidth, FT.GlassBorder, CircleShape)
-            .ftClickable(shape = CircleShape, role = Role.Button, onClickLabel = "Explain") { open = true },
+            .size(48.dp)
+            .ftClickable(shape = CircleShape, role = Role.Button, onClickLabel = "Explain $title") { open = true },
         contentAlignment = Alignment.Center,
     ) {
-        Text("?", style = FTType.Label, color = FT.TextSecondary)
+        FTIcon(FTIcons.Help, contentDescription = "About $title", tint = FT.TextSecondary, size = FTIconSize.Row)
     }
     if (open) {
         InfoDialog(title, body, details) { open = false }

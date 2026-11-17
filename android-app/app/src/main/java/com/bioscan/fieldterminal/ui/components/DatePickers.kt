@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -36,13 +35,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Themed date / time picker. Every add-entry form defaults its date to "now"
 // but lets it be changed (added 2026-09-15 per direct user request). It used
@@ -210,8 +209,8 @@ private fun CalendarPanel(date: LocalDate, onPick: (LocalDate) -> Unit) {
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            NavGlyph("«") { shown = shown.minusYears(1) }
-            NavGlyph("‹") { shown = shown.minusMonths(1) }
+            FTIconButton(FTIcons.DoubleBack, "Previous year", { shown = shown.minusYears(1) })
+            FTIconButton(FTIcons.Back, "Previous month", { shown = shown.minusMonths(1) })
             Text(
                 shown.format(MONTH_TITLE).uppercase(),
                 style = FTType.Telemetry,
@@ -219,8 +218,8 @@ private fun CalendarPanel(date: LocalDate, onPick: (LocalDate) -> Unit) {
                 textAlign = TextAlign.Center,
                 modifier = Modifier.weight(1f),
             )
-            NavGlyph("›") { shown = shown.plusMonths(1) }
-            NavGlyph("»") { shown = shown.plusYears(1) }
+            FTIconButton(FTIcons.ChevronRight, "Next month", { shown = shown.plusMonths(1) })
+            FTIconButton(FTIcons.DoubleForward, "Next year", { shown = shown.plusYears(1) })
         }
         Row(modifier = Modifier.fillMaxWidth()) {
             for (name in listOf("MO", "TU", "WE", "TH", "FR", "SA", "SU")) {
@@ -248,17 +247,6 @@ private fun CalendarPanel(date: LocalDate, onPick: (LocalDate) -> Unit) {
     }
 }
 
-@Composable
-private fun NavGlyph(glyph: String, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(44.dp)
-            .ftClickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(glyph, style = FTType.MetricMedium, color = FT.TextSecondary)
-    }
-}
 
 @Composable
 private fun DayCell(day: Int, selected: Boolean, isToday: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
@@ -271,8 +259,8 @@ private fun DayCell(day: Int, selected: Boolean, isToday: Boolean, modifier: Mod
             .then(
                 when {
                     selected -> Modifier
-                        .background(FT.Emerald.copy(alpha = 0.14f), shape)
-                        .border(FT.BorderWidth, FT.Emerald, shape)
+                        .background(FT.Ok.copy(alpha = 0.14f), shape)
+                        .border(FT.BorderWidth, FT.Ok, shape)
                     isToday -> Modifier.border(FT.BorderWidth, FT.TextSecondary.copy(alpha = 0.6f), shape)
                     else -> Modifier
                 },
@@ -283,7 +271,7 @@ private fun DayCell(day: Int, selected: Boolean, isToday: Boolean, modifier: Mod
         Text(
             "$day",
             style = if (selected) FTType.Telemetry else FTType.Value,
-            color = if (selected) FT.Emerald else FT.TextPrimary,
+            color = if (selected) FT.Ok else FT.TextPrimary,
         )
     }
 }

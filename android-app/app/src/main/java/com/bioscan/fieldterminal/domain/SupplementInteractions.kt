@@ -3,7 +3,7 @@ package com.bioscan.fieldterminal.domain
 import kotlin.math.abs
 import kotlin.math.min
 
-// Analysis Layer 3 / Phase 6. Pairwise supplement/drug interactions from the
+// Pairwise supplement/drug interactions from the
 // shared, curated `interaction_records` registry, checked against the roster.
 // Pure and offline, sibling of SupplementEvidence.kt: same rule that an
 // unreviewed entry is always labelled, never shown as established fact.

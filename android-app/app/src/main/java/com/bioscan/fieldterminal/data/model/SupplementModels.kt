@@ -1,5 +1,7 @@
 package com.bioscan.fieldterminal.data.model
 
+import com.bioscan.fieldterminal.domain.DoseStepsJson
+import com.bioscan.fieldterminal.domain.ScheduleJson
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -27,8 +29,8 @@ data class SupplementRow(
     @SerialName("dose_amount") val doseAmount: Double? = null,
     @SerialName("dose_unit") val doseUnit: String? = null,
     val slots: List<String> = emptyList(),
-    val schedule: com.bioscan.fieldterminal.domain.ScheduleJson? = null,
-    @SerialName("dose_steps") val doseSteps: com.bioscan.fieldterminal.domain.DoseStepsJson? = null,
+    val schedule: ScheduleJson? = null,
+    @SerialName("dose_steps") val doseSteps: DoseStepsJson? = null,
     /** The prescriber's syringe units (U-100) for one dose, for injectables. */
     @SerialName("syringe_units") val syringeUnits: Double? = null,
     /** A tablet that can be split in half. */

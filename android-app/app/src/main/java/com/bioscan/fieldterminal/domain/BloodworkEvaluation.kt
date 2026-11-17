@@ -4,7 +4,7 @@ import java.time.LocalDate
 import kotlin.math.abs
 import kotlin.math.sqrt
 
-// Phase A4 (Analysis Layer). Evaluation Method Spec, Category 9
+// Evaluation Method Spec, Category 9
 // (Bloodwork): with roughly one draw a year, the only comparison this
 // category is entitled to make is a two-point delta against a real,
 // marker-specific noise threshold (Reference Change Value) -- never a

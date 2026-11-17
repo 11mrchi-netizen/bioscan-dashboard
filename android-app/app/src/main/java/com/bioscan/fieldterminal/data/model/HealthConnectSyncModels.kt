@@ -3,7 +3,7 @@ package com.bioscan.fieldterminal.data.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// Phase G2. One minimal, single-metric row class per upsert call --
+// One minimal, single-metric row class per upsert call --
 // deliberately NOT one shared "god row" with every wearable_daily/
 // body_metrics column as nullable fields. kotlinx.serialization encodes
 // nulls explicitly by default, and Postgrest's upsert applies every column
@@ -67,7 +67,7 @@ data class SleepUpsertRow(
 @Serializable
 data class RespiratoryRateUpsertRow(val date: String, @SerialName("respiratory_rate") val respiratoryRate: Double)
 
-// Analysis Layer 3 / R1: which origin wrote a daily field (side table, one row per user/date/field; user_id is filled
+// Which origin wrote a daily field (side table, one row per user/date/field; user_id is filled
 // by the column default like every other upsert row here).
 @Serializable
 data class DailyFieldProvenanceRow(

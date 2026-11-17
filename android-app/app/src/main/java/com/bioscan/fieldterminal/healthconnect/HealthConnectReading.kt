@@ -10,8 +10,8 @@ import kotlin.reflect.KClass
 // Shared pagination loop for every Health Connect sync repository -- reads
 // every record of one type in [since, until], following pageToken until
 // Health Connect reports none left. Factored out of
-// HealthConnectDailySyncRepository (Phase G2) once HealthConnectExerciseSyncRepository
-// (Phase G3) needed the exact same loop.
+// HealthConnectDailySyncRepository once HealthConnectExerciseSyncRepository
+// needed the exact same loop.
 suspend fun <T : Record> HealthConnectClient.readAllRecords(type: KClass<T>, since: Instant, until: Instant): List<T> {
     val results = mutableListOf<T>()
     var pageToken: String? = null

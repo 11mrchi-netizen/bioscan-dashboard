@@ -1,13 +1,13 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain.fuel
 
-import kotlinx.serialization.UseSerializers
-import kotlinx.serialization.Serializable
 import com.bioscan.fieldterminal.domain.TRAINING_COLOR_ID
 import com.bioscan.fieldterminal.domain.events.AthleteEvent
 import com.bioscan.fieldterminal.domain.events.EventKind
 import com.bioscan.fieldterminal.domain.events.EventPriority
 import com.bioscan.fieldterminal.domain.events.EventStatus
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
@@ -19,8 +19,9 @@ import kotlin.math.abs
 //   1. events (races, long days: domain/events), which win over anything else at the same time;
 //   2. planned sessions of a training block;
 //   3. calendar training events (colour 8) that neither of those already covers;
-//   4. recorded sessions, which replace the planned item they are (same type family, any hour of the day: closest first)
-//      once they exist, are an extra session only when nothing planned is left for them, and are all a past day keeps.
+//   4. recorded sessions, which replace the planned item they are once they exist (a stored answer first, else the
+//      cheapest scored pairing of the day: SessionMatching.kt), are an extra session only when no plan fits them, and
+//      are all a past day keeps.
 // Each item gets an intensity class and an energy estimate (SessionDemand.kt). Walks are left out: they are part of the
 // everyday baseline the activity factor already counts.
 
@@ -43,8 +44,21 @@ data class PlannedItem(
     val eventId: Long? = null,
     val eventKind: EventKind? = null,
     val eventPriority: EventPriority? = null,
+    /** The planned distance (from the event or the calendar entry's text), or a recording's own. */
+    val distanceKm: Double? = null,
+    /** A recording only: the plan it was (that plan item's [sourceId]) and its title, null when it was not planned. */
+    val planRef: String? = null,
+    val planTitle: String? = null,
+    /** A recording only: how sure the match is (0-1), and whether it is stored (kept) or the person's own answer. */
+    val matchConfidence: Double? = null,
+    val matchStored: Boolean = false,
+    val matchManual: Boolean = false,
 ) {
     val end: ZonedDateTime? get() = start?.plusSeconds((durationMin * 60).toLong())
+    /** The recorded session's id, for a recording. */
+    val sessionId: Long? get() = if (source == PlanSource.RECORDED) sourceId.removePrefix("session:").toLongOrNull() else null
+    /** A match to check: an automatic one under [LOW_MATCH_CONFIDENCE]. */
+    val matchUncertain: Boolean get() = recorded && planRef != null && !matchManual && (matchConfidence ?: 1.0) < LOW_MATCH_CONFIDENCE
 }
 
 /**
@@ -69,7 +83,13 @@ data class CalendarOverride(val eventId: String, val kind: OverrideKind, val dur
 const val REVIEW_OVER_MIN = 240.0
 
 @Serializable
-data class PlannedDay(val date: LocalDate, val items: List<PlannedItem>, val reviews: List<CalendarReview> = emptyList()) {
+data class PlannedDay(
+    val date: LocalDate,
+    val items: List<PlannedItem>,
+    val reviews: List<CalendarReview> = emptyList(),
+    /** Every plan of the day before recordings replaced any (what a recording could be matched to by hand). */
+    val plans: List<PlannedItem> = emptyList(),
+) {
     val trainingMin: Double get() = items.sumOf { it.durationMin }
     val sessionKcal: Double get() = items.sumOf { it.kcal ?: 0.0 }
     val hardest: Intensity? get() = items.maxByOrNull { it.intensity.ordinal }?.intensity
@@ -84,6 +104,8 @@ data class PlannedSessionInput(
     val domain: String?,
     val title: String,
     val gcalEventId: String? = null,
+    /** The recording the training plan has already linked it to (planned_sessions.exercise_session_id). */
+    val exerciseSessionId: Long? = null,
 )
 
 data class CalendarSessionInput(
@@ -123,10 +145,6 @@ fun isTrainingSession(type: String, durationMin: Double): Boolean = type != "wal
 
 private const val DEFAULT_PLANNED_MIN = 60.0
 private const val SAME_SESSION_MIN = 120L
-/** Matching a recording to a plan: a planned item with no time counts as this far away, and a compatible but different
- *  type (a planned run recorded as a hike) as this much further than the same type. */
-private const val UNTIMED_GAP_MIN = 12 * 60L
-private const val TYPE_MISMATCH_MIN = 24 * 60L
 
 /** The session type a calendar title implies (the app's own emoji convention, domain/NextSession.kt), "run" by default. */
 fun typeFromCalendarTitle(title: String): String = when {
@@ -149,7 +167,9 @@ private fun startsClose(a: ZonedDateTime?, b: ZonedDateTime?, minutes: Long = SA
 
 /**
  * The planned days from [from] for [days] days, merged as described at the top of this file. [now] decides what is past:
- * a day before today keeps only what was recorded; today keeps what is planned until a recording replaces it.
+ * a day before today keeps only what was recorded; today keeps what is planned until a recording replaces it. [links]
+ * are the stored answers for recordings (SessionMatching.kt): they come before any scoring, and may point at a plan of
+ * another day of the range (a Saturday long run done on Sunday), which then leaves its own day.
  */
 fun resolvePlannedDays(
     from: LocalDate,
@@ -161,29 +181,82 @@ fun resolvePlannedDays(
     history: DemandHistory,
     now: ZonedDateTime,
     overrides: Map<String, CalendarOverride> = emptyMap(),
+    links: Map<Long, StoredLink> = emptyMap(),
 ): List<PlannedDay> {
     val zone = now.zone
     val today = now.toLocalDate()
-    return (0 until days).map { offset ->
-        val date = from.plusDays(offset.toLong())
-        resolveDay(date, today, zone, events, planned, calendar, recorded, history, overrides)
+    val dates = (0 until days).map { from.plusDays(it.toLong()) }
+    val planDays = dates.associateWith { planDay(it, zone, events, planned, calendar, history, overrides) }
+    val open = planDays.mapValues { it.value.first.toMutableList() }
+    val done = dates.associateWith { date ->
+        if (date.isAfter(today)) emptyList()
+        else recorded.filter { it.start.withZoneSameInstant(zone).toLocalDate() == date && isTrainingSession(it.type, it.durationMin) }.sortedBy { it.start }
+    }
+
+    // 1. Stored answers, across the range. A link whose plan is gone is re-scored, unless the person gave it.
+    val matches = mutableMapOf<Long, PlanMatch>()
+    val answered = mutableMapOf<Long, StoredLink>()
+    done.values.flatten().forEach { r ->
+        val link = links[r.id] ?: return@forEach
+        if (link.planRef == null) { answered[r.id] = link; return@forEach }
+        val hit = open.entries.firstNotNullOfOrNull { (d, l) -> l.firstOrNull { it.sourceId == link.planRef }?.let { d to it } }
+        if (hit != null) {
+            open.getValue(hit.first).remove(hit.second)
+            matches[r.id] = PlanMatch(hit.second, link.confidence ?: 1.0, stored = true, manual = link.manual)
+        } else if (link.manual) {
+            answered[r.id] = link
+        }
+    }
+    // 2. The rest, scored within each day.
+    dates.forEach { date ->
+        val left = done.getValue(date).filter { it.id !in matches && it.id !in answered }
+        assignMatches(open.getValue(date), left, zone).forEach { (id, m) ->
+            matches[id] = m
+            open.getValue(date).remove(m.plan)
+        }
+    }
+    // 3. The days: what is still planned (none on a past day) and what was recorded.
+    return dates.map { date ->
+        val (plans, reviews) = planDays.getValue(date)
+        val items = (if (date.isBefore(today)) mutableListOf() else open.getValue(date).toMutableList())
+        done.getValue(date).forEach { r -> items += recordedItem(r, matches[r.id], answered[r.id], zone, history) }
+        PlannedDay(date, items.sortedBy { it.start?.toEpochSecond() ?: Long.MAX_VALUE }, reviews, plans)
     }
 }
 
-private fun resolveDay(
+/** A recording as a plan item: the plan's title, and an event's class (a race is still a race); otherwise its own evidence. */
+private fun recordedItem(r: RecordedSessionInput, match: PlanMatch?, answer: StoredLink?, zone: ZoneId, history: DemandHistory): PlannedItem {
+    val start = r.start.withZoneSameInstant(zone)
+    val plan = match?.plan
+    val own = intensityForRecorded(r.rpe, r.avgHr, history.restingHr, history.maxHr)
+    val base = plan?.let { if (it.source == PlanSource.EVENT) Classified(it.intensity, it.intensityReason) else null }
+    val c = finalIntensity(r.type, r.durationMin, base, own, plan?.let { Classified(it.intensity, it.intensityReason) }, intensityForTypical(r.type, history.trimpPerMinByType))
+    val kcal = r.caloriesActive?.takeIf { it > 0 } ?: estimateSessionKcal(r.type, r.durationMin, c.intensity, history.weightKg, history.kcalPerMinByType)
+    val title = plan?.title ?: answer?.planTitle ?: r.type.replaceFirstChar { it.uppercase() }
+    return PlannedItem(
+        PlanSource.RECORDED, "session:${r.id}", title, r.type, start, r.durationMin,
+        c.intensity, c.reason, kcal, recorded = true,
+        eventId = plan?.eventId, eventKind = plan?.eventKind, eventPriority = plan?.eventPriority,
+        distanceKm = r.distanceKm,
+        planRef = plan?.sourceId ?: answer?.planRef, planTitle = plan?.title ?: answer?.planTitle,
+        matchConfidence = match?.confidence ?: answer?.let { 1.0 },
+        matchStored = match?.stored == true || answer != null,
+        matchManual = match?.manual == true || answer?.manual == true,
+    )
+}
+
+/** A day's plans (events, planned sessions, calendar training) and the calendar entries to ask about. */
+private fun planDay(
     date: LocalDate,
-    today: LocalDate,
     zone: ZoneId,
     events: List<AthleteEvent>,
     planned: List<PlannedSessionInput>,
     calendar: List<CalendarSessionInput>,
-    recorded: List<RecordedSessionInput>,
     history: DemandHistory,
     overrides: Map<String, CalendarOverride>,
-): PlannedDay {
+): Pair<List<PlannedItem>, List<CalendarReview>> {
     val items = mutableListOf<PlannedItem>()
     val reviews = mutableListOf<CalendarReview>()
-
     events.filter { it.date == date && it.status != EventStatus.CANCELLED && it.status != EventStatus.DNS }.forEach { e ->
         val duration = e.plannedDurationMin ?: DEFAULT_PLANNED_MIN
         val type = e.sport.sessionTypes.first()
@@ -192,6 +265,7 @@ private fun resolveDay(
             PlanSource.EVENT, "event:${e.id}", e.name, type, e.start?.withZoneSameInstant(zone), duration, c.intensity, c.reason,
             estimateSessionKcal(type, duration, c.intensity, history.weightKg, history.kcalPerMinByType),
             eventId = e.id, eventKind = e.kind, eventPriority = e.priority,
+            distanceKm = e.distanceKm ?: e.course.lastOrNull()?.distanceM?.div(1000),
         )
     }
 
@@ -212,6 +286,13 @@ private fun resolveDay(
         .forEach { c ->
             val start = c.start.withZoneSameInstant(zone)
             if (items.any { startsClose(it.start, start, 60) && it.start != null }) return@forEach
+            // An event of the day with no start time is this entry ("Long Run" in the calendar, "Almost 30km" as the
+            // event): the event takes the entry's start, so a recording finds it, and the session is counted once.
+            val untimed = items.indexOfFirst { it.source == PlanSource.EVENT && it.start == null && compatibleTypes(it.type, typeFromCalendarTitle(c.title)) }
+            if (untimed >= 0) {
+                items[untimed] = items[untimed].copy(start = start)
+                return@forEach
+            }
             val override = overrides[c.eventId]
             if (override?.kind == OverrideKind.IGNORE) return@forEach
             val type = typeFromCalendarTitle(c.title)
@@ -227,7 +308,8 @@ private fun resolveDay(
                 return@forEach
             }
             // The entry's text (distance, intervals, sets) beats its clock length: training entries are often placeholders.
-            val read = estimateCalendarWorkout(parseCalendarWorkout(c.title, c.description, type), type, history.recentRuns)
+            val parsed = parseCalendarWorkout(c.title, c.description, type)
+            val read = estimateCalendarWorkout(parsed, type, history.recentRuns)
             val duration = read?.durationMin
                 ?: c.end?.let { Duration.between(c.start, it).toMinutes().toDouble() }?.takeIf { it in 5.0..1440.0 } ?: DEFAULT_PLANNED_MIN
             val titled = intensityForTitle(c.title)
@@ -240,60 +322,10 @@ private fun resolveDay(
             items += PlannedItem(
                 PlanSource.CALENDAR, "calendar:${c.eventId}", c.title.trim().ifBlank { "Training" }, type, start, duration, k.intensity, k.reason,
                 estimateSessionKcal(type, duration, k.intensity, history.weightKg, history.kcalPerMinByType),
+                distanceKm = parsed.distanceKm,
             )
         }
 
-    if (!date.isAfter(today)) {
-        val done = recorded.filter { it.start.withZoneSameInstant(zone).toLocalDate() == date && isTrainingSession(it.type, it.durationMin) }
-            .sortedBy { it.start }
-        // Which planned item each recording is. A session done later than planned (a morning run done at lunch, or in
-        // the evening) is still that session: any compatible planned item of the day can be matched, whatever the hour.
-        // Pairs are taken closest first across the whole day (exact type before a compatible one, then the nearer start),
-        // so two recordings never swap plans; a recording becomes an extra session only when no planned item is left for it.
-        val open = items.filter { !it.recorded }
-        val pairs = done.flatMap { r ->
-            val start = r.start.withZoneSameInstant(zone)
-            open.filter { compatible(it.type, r.type) }.map { p ->
-                val gap = p.start?.let { abs(Duration.between(it, start).toMinutes()) } ?: UNTIMED_GAP_MIN
-                Triple(r, p, (if (p.type == r.type) 0L else TYPE_MISMATCH_MIN) + gap)
-            }
-        }.sortedBy { it.third }
-        val matchOf = mutableMapOf<Long, PlannedItem>()
-        val taken = mutableSetOf<PlannedItem>()
-        for ((r, p, _) in pairs) {
-            if (r.id in matchOf || p in taken) continue
-            matchOf[r.id] = p
-            taken += p
-        }
-        done.forEach { r ->
-            val start = r.start.withZoneSameInstant(zone)
-            val match = matchOf[r.id]
-            val own = intensityForRecorded(r.rpe, r.avgHr, history.restingHr, history.maxHr)
-            val base = match?.let {
-                // An event keeps its class (a race is still a race); otherwise the recording's own evidence wins.
-                if (it.source == PlanSource.EVENT) Classified(it.intensity, it.intensityReason) else null
-            }
-            val c = finalIntensity(r.type, r.durationMin, base, own, match?.let { Classified(it.intensity, it.intensityReason) }, intensityForTypical(r.type, history.trimpPerMinByType))
-            val kcal = r.caloriesActive?.takeIf { it > 0 } ?: estimateSessionKcal(r.type, r.durationMin, c.intensity, history.weightKg, history.kcalPerMinByType)
-            val item = PlannedItem(
-                PlanSource.RECORDED, "session:${r.id}", match?.title ?: r.type.replaceFirstChar { it.uppercase() }, r.type, start, r.durationMin,
-                c.intensity, c.reason, kcal, recorded = true,
-                eventId = match?.eventId, eventKind = match?.eventKind, eventPriority = match?.eventPriority,
-            )
-            if (match != null) items[items.indexOf(match)] = item else items += item
-        }
-        // A past day is what happened: planned items that were never recorded drop out.
-        if (date.isBefore(today)) items.removeAll { !it.recorded }
-    }
-
-    return PlannedDay(date, items.sortedBy { it.start?.toEpochSecond() ?: Long.MAX_VALUE }, reviews)
+    return items to reviews
 }
 
-private fun compatible(plannedType: String, recordedType: String): Boolean = when (plannedType) {
-    recordedType -> true
-    "run" -> recordedType in setOf("run", "hike", "other")
-    "hike" -> recordedType in setOf("hike", "walk", "run")
-    "other" -> recordedType != "walk"
-    "strength" -> recordedType in setOf("strength", "other")
-    else -> false
-}

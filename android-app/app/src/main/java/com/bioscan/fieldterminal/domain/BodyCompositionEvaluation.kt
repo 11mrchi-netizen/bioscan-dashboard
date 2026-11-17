@@ -5,7 +5,7 @@ import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 import kotlin.math.pow
 
-// Phase A2 (Analysis Layer). Evaluation Method Spec, Category 5 (Body
+// Evaluation Method Spec, Category 5 (Body
 // composition): two different treatments for two different noise profiles.
 // Weight -- signal is real, noise is water -- gets a time-aware EMA so a
 // skipped day doesn't distort the trend. Body fat % (BIA) -- noise can
@@ -87,30 +87,3 @@ fun evaluateWeightTrend(weightDaily: List<Pair<LocalDate, Double>>, asOf: LocalD
     return WeightEvaluation(state, Confidence(sorted.size, WEIGHT_MIN_MEASUREMENTS), emaToday, rateKgPerWeek, emaSeries)
 }
 
-private const val BODY_FAT_MIN_INTERVAL_DAYS = 30
-private const val BODY_FAT_DEFAULT_LSC = 1.5 // percentage points, consumer BIA default per the spec
-
-data class BodyFatEvaluation(val state: EvalState, val confidence: Confidence, val latest: Double?, val previous: Double?, val delta: Double?)
-
-// Only ever compares two readings >=30 days apart, and only calls a change
-// when it exceeds LSC -- everything inside LSC renders STABLE regardless of
-// what the raw number did, per the spec's own hard gate.
-fun evaluateBodyFat(bodyFatDaily: List<Pair<LocalDate, Double>>, asOf: LocalDate = LocalDate.now(), lsc: Double = BODY_FAT_DEFAULT_LSC): BodyFatEvaluation {
-    // Confidence here means "a validly-spaced comparison pair found," not
-    // raw reading count -- a real on-device check caught the count-based
-    // version displaying a confusing "3/2" when 3 real readings existed but
-    // none were >=30 days apart, which reads like a broken fraction. 0/1 or
-    // 1/1 reads clearly: whether one qualifying pair exists yet, since one
-    // is all that's ever needed.
-    val sorted = bodyFatDaily.filter { !it.first.isAfter(asOf) }.sortedBy { it.first }
-    if (sorted.isEmpty()) return BodyFatEvaluation(EvalState.NoData, Confidence(0, 1), null, null, null)
-
-    val latest = sorted.last()
-    val prior = sorted.dropLast(1).lastOrNull { ChronoUnit.DAYS.between(it.first, latest.first) >= BODY_FAT_MIN_INTERVAL_DAYS }
-        ?: return BodyFatEvaluation(EvalState.Building, Confidence(0, 1), latest.second, null, null)
-
-    val delta = latest.second - prior.second
-    val state = if (abs(delta) <= lsc) EvalState.Stable else if (delta > 0) EvalState.ShiftUp else EvalState.ShiftDown
-
-    return BodyFatEvaluation(state, Confidence(1, 1), latest.second, prior.second, delta)
-}

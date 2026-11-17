@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
 import java.time.LocalDate
 import kotlin.math.abs
+import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.sign
@@ -126,7 +127,7 @@ fun scoreInput(spec: InputSpec, series: Series, day: LocalDate): InputScore? {
                 softDeadZone(raw, kind.deadZone) < 0 -> InputDirection.BELOW
                 else -> InputDirection.NORMAL
             }
-            val reference = if (kind.log) kotlin.math.exp(med) else med
+            val reference = if (kind.log) exp(med) else med
             InputScore(spec, value, reference, sd, z, ScoreScale.fromZ(z, kind.upside), direction)
         }
         is InputKind.Stability -> {
@@ -140,7 +141,7 @@ fun scoreInput(spec: InputSpec, series: Series, day: LocalDate): InputScore? {
                 raw > 0 -> InputDirection.ABOVE
                 else -> InputDirection.BELOW
             }
-            val reference = if (kind.log) kotlin.math.exp(med) else med
+            val reference = if (kind.log) exp(med) else med
             InputScore(spec, value, reference, sd, top - off, ScoreScale.fromZ(top - off, upside = false), direction)
         }
         is InputKind.AtLeast -> {

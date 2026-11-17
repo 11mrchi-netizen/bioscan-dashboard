@@ -12,3 +12,5 @@
 dump*.xml
 emulator.log
 /.kotlin
+/home-sdk
+/tv/build

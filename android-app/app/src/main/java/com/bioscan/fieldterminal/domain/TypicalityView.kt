@@ -2,7 +2,7 @@ package com.bioscan.fieldterminal.domain
 
 import com.bioscan.fieldterminal.data.model.TypicalityResultRow
 
-// Analysis Layer 3 / Phase 4. Words for the published "is today typical for you" result (supabase/functions/_shared/
+// Words for the published "is today typical for you" result (supabase/functions/_shared/
 // analysis-core/typicality.ts). A state, never a score. Shown as a quiet drill-down: on the real history the engine flags more
 // ordinary days than its nominal share, so it does not feed Today's Recovery (docs/analysis-layer-3/README.md, Phase 4).
 data class TypicalityView(

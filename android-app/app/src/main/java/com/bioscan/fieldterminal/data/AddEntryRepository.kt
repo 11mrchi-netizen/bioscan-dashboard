@@ -6,32 +6,34 @@ import com.bioscan.fieldterminal.data.model.ExerciseSessionDetails
 import com.bioscan.fieldterminal.data.model.ExistingHydrationRow
 import com.bioscan.fieldterminal.data.model.FullExerciseSessionRow
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
+import com.bioscan.fieldterminal.data.model.LogGripRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
-import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
 import com.bioscan.fieldterminal.data.model.LogOstrcRow
+import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
+import com.bioscan.fieldterminal.data.model.LogSleepDetailRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
+import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import com.bioscan.fieldterminal.data.model.NewEncounterRow
+import com.bioscan.fieldterminal.data.model.NewGripRow
 import com.bioscan.fieldterminal.data.model.NewHydrationRow
-import com.bioscan.fieldterminal.data.model.NewSexualActivityRow
 import com.bioscan.fieldterminal.data.model.NewMealRow
-import com.bioscan.fieldterminal.data.model.SexualActivityInstance
 import com.bioscan.fieldterminal.data.model.NewNoteRow
 import com.bioscan.fieldterminal.data.model.NewOstrcRow
-import com.bioscan.fieldterminal.data.model.LogSleepDetailRow
-import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
+import com.bioscan.fieldterminal.data.model.NewRecoverySessionRow
+import com.bioscan.fieldterminal.data.model.NewSexualActivityRow
 import com.bioscan.fieldterminal.data.model.NewStoolRow
 import com.bioscan.fieldterminal.data.model.NewSupplementLogRow
-import com.bioscan.fieldterminal.data.model.LogGripRow
-import com.bioscan.fieldterminal.data.model.NewGripRow
-import com.bioscan.fieldterminal.data.model.NewRecoverySessionRow
 import com.bioscan.fieldterminal.data.model.NewWellbeingRow
 import com.bioscan.fieldterminal.data.model.NutrientIntakeRow
+import com.bioscan.fieldterminal.data.model.SexualActivityInstance
 import com.bioscan.fieldterminal.data.model.SupplementLogEditRow
 import com.bioscan.fieldterminal.data.model.SupplementNutrientRow
 import com.bioscan.fieldterminal.domain.LogSource
+import com.bioscan.fieldterminal.domain.fuel.MealSlotKind
+import com.bioscan.fieldterminal.domain.fuel.mealSlotOf
 import com.bioscan.fieldterminal.domain.nutrientContribution
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
@@ -41,6 +43,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.time.LocalDate
+import java.time.ZoneOffset
 
 // Step 12 (Phase D) + the 2026-09-15 follow-up pass: the "+" add-entry
 // flow's writes. Every add*/update* now takes its date/timestamp as an
@@ -57,13 +61,13 @@ import kotlinx.serialization.json.put
 class AddEntryRepository(private val supabase: SupabaseClient) {
 
     /** The meal labels already used on [date] (logged times are local digits with a zero offset), except [exceptId]. */
-    suspend fun mealSlotsOn(date: java.time.LocalDate, exceptId: Long? = null): Set<com.bioscan.fieldterminal.domain.fuel.MealSlotKind> =
+    suspend fun mealSlotsOn(date: LocalDate, exceptId: Long? = null): Set<MealSlotKind> =
         supabase.postgrest.from("meals").select(Columns.list("id,meal_slot")) {
             filter {
-                gte("logged_at", date.atStartOfDay().atOffset(java.time.ZoneOffset.UTC).toString())
-                lt("logged_at", date.plusDays(1).atStartOfDay().atOffset(java.time.ZoneOffset.UTC).toString())
+                gte("logged_at", date.atStartOfDay().atOffset(ZoneOffset.UTC).toString())
+                lt("logged_at", date.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC).toString())
             }
-        }.decodeList<MealSlotRow>().filter { it.id != exceptId }.mapNotNull { com.bioscan.fieldterminal.domain.fuel.mealSlotOf(it.mealSlot) }.toSet()
+        }.decodeList<MealSlotRow>().filter { it.id != exceptId }.mapNotNull { mealSlotOf(it.mealSlot) }.toSet()
 
     suspend fun addFood(
         loggedAt: String,
@@ -113,7 +117,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         ) { onConflict = "user_id,date" }
     }
 
-    // personId/calendarEventTitle (Phase M3) are only ever passed by the Map
+    // personId/calendarEventTitle are only ever passed by the Map
     // tab's "LOG ENCOUNTER" action -- defaulted null so that call site
     // (date/encounterType/notes only) is unchanged. occurredAt/locationType/
     // durationMin/activities/myRating (DAV-158/159) default null too, for
@@ -146,9 +150,9 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         )
     }
 
-    suspend fun addStool(occurredAt: String, bristolType: Int, discomfort: Int?) {
+    suspend fun addStool(occurredAt: String, bristolType: Int, discomfort: Int?, completeEvacuation: String? = null) {
         supabase.postgrest.from("stool_log").insert(
-            NewStoolRow(occurredAt = occurredAt, bristolType = bristolType, discomfort = discomfort)
+            NewStoolRow(occurredAt = occurredAt, bristolType = bristolType, discomfort = discomfort, completeEvacuation = completeEvacuation)
         )
     }
 
@@ -172,7 +176,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         ) { onConflict = "user_id,date" }
     }
 
-    // Analysis Layer 3 / R2 (log agent). Partial write: only the scores that were stated go to the row, so "energy 7" cannot
+    // Partial write: only the scores that were stated go to the row, so "energy 7" cannot
     // null out the mood or arousal already logged for the day (addWellbeing upserts the whole row).
     suspend fun mergeWellbeing(date: String, energy: Int?, mood: Int?, stress: Int?, soreness: Int?) {
         val fields = buildJsonObject {
@@ -208,7 +212,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         addSupplementsTaken(takenAt, listOf(Triple(row.id, row.name, row.dose)), quantities = mapOf(row.id to quantity))
     }
 
-    // Phase A4 (Category 8). severity_score is a stored generated column --
+    // severity_score is a stored generated column --
     // never written here, matching NewOstrcRow's own shape (q1-q4 + notes
     // only).
     suspend fun addOstrc(checkDate: String, bodyArea: String, q1: Int, q2: Int, q3: Int, q4: Int, notes: String?) {
@@ -235,7 +239,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         if (items.isEmpty()) return
         // product_id is optional provenance: a failed roster lookup must never
         // block recording that the supplement was taken.
-        val links = runCatching { loadProductLinks(items.map { it.first }) }.getOrDefault(emptyMap())
+        val links = catching { loadProductLinks(items.map { it.first }) }.getOrDefault(emptyMap())
         val productIdBySupp = links.mapNotNull { (id, l) -> l.productId?.let { id to it } }.toMap()
         // Label servings consumed per dose (DAV-361): feeds pantry consumption and
         // scales the ingredient contribution. Missing link row = the default of 1.
@@ -436,9 +440,9 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         ) { filter { eq("id", id) } }
     }
 
-    suspend fun updateStool(id: Long, occurredAt: String, bristolType: Int, discomfort: Int?) {
+    suspend fun updateStool(id: Long, occurredAt: String, bristolType: Int, discomfort: Int?, completeEvacuation: String? = null) {
         supabase.postgrest.from("stool_log").update(
-            NewStoolRow(occurredAt = occurredAt, bristolType = bristolType, discomfort = discomfort)
+            NewStoolRow(occurredAt = occurredAt, bristolType = bristolType, discomfort = discomfort, completeEvacuation = completeEvacuation)
         ) { filter { eq("id", id) } }
     }
 
@@ -520,7 +524,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         "id,date,status,occurred_at,encounter_type,location_type,duration_min,activities,my_rating,notes,calendar_event_title,person_id",
         id,
     )
-    suspend fun fetchStool(id: Long) = fetchById<LogStoolRow>("stool_log", "id,occurred_at,bristol_type,discomfort", id)
+    suspend fun fetchStool(id: Long) = fetchById<LogStoolRow>("stool_log", "id,occurred_at,bristol_type,discomfort,complete_evacuation", id)
     suspend fun fetchGrip(id: Long) = fetchById<LogGripRow>("grip_strength_log", "id,occurred_at,hand,kg", id)
     suspend fun fetchNote(id: Long) = fetchById<LogNoteRow>("notes", "id,occurred_at,text", id)
     suspend fun fetchWellbeing(id: Long) = fetchById<LogWellbeingRow>("wellbeing_daily", "id,date,energy,mood,stress,soreness,morning_erection_quality,arousal_level", id)

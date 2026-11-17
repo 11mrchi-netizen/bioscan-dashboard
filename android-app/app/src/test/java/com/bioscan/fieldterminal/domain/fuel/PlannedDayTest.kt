@@ -84,6 +84,23 @@ class PlannedDayTest {
     }
 
     @Test
+    fun anUntimedEventAndItsCalendarEntryAreOneSessionAndTheRecordingIsTheEvent() {
+        // The 7 November case: an event with no start time and the same run in the calendar were counted as two.
+        val long = AthleteEvent(id = 2, name = "Almost 30km", kind = EventKind.LONG_SESSION, sport = EventSport.TRAIL_RUN, priority = EventPriority.C,
+            date = today, targetTimeMin = 300.0)
+        val cal = listOf(CalendarSessionInput("g9", "🏃 Long Run — 27.4km", at(today, 7), at(today, 12), "8"))
+        val planned = resolve(events = listOf(long), calendar = cal)[0]
+        assertEquals(1, planned.items.size)
+        assertEquals(at(today, 7), planned.items.single().start)
+        val run = RecordedSessionInput(21, "run", at(today, 9, 46), 322.0, caloriesActive = 2900.0)
+        val done = resolve(events = listOf(long), calendar = cal, recorded = listOf(run), n = at(today, 16))[0]
+        val item = done.items.single()
+        assertTrue(item.recorded)
+        assertEquals(2L, item.eventId)
+        assertEquals(2900.0, done.sessionKcal, 0.0)
+    }
+
+    @Test
     fun aCancelledEventIsNotPlannedFor() {
         val race = AthleteEvent(id = 7, name = "X", kind = EventKind.RACE, sport = EventSport.RUN, date = today, targetTimeMin = 45.0, status = EventStatus.CANCELLED)
         assertTrue(resolve(events = listOf(race))[0].isRest)

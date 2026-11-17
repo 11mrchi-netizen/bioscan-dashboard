@@ -389,7 +389,8 @@ class HealthspanTest {
     // The score is for the User profile page only. Anything else importing it would reintroduce a cross-metric score.
     @Test
     fun onlyTheProfileScreensUseHealthspan() {
-        val allowed = setOf("Healthspan.kt", "HealthspanRepository.kt", "HealthspanCard.kt", "UserProfileScreen.kt", "AgingProfileScreen.kt")
+        // HealthspanFactorTrend is the page a factor on the profile's Healthspan card opens.
+        val allowed = setOf("Healthspan.kt", "HealthspanRepository.kt", "HealthspanCard.kt", "HealthspanFactorTrend.kt", "UserProfileScreen.kt", "AgingProfileScreen.kt")
         val token = Regex("""\bHealthspan(Summary|Card|Repository|Inputs|Factor)\b|\bhealthspanSummary\(""")
         val root = File("src/main/java")
         assertTrue("run from the app module", root.isDirectory)

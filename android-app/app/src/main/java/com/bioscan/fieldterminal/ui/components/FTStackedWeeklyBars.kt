@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -20,9 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -32,8 +31,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.domain.StackedWeek
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private val WEEK_FMT = DateTimeFormatter.ofPattern("d MMM")
 
@@ -59,19 +59,23 @@ fun FTStackedWeeklyBars(
     var selected by remember(weeks) { mutableStateOf<Int?>(null) }
     val shown = selected ?: weeks.lastIndex
     val top = maxOf(weeks.maxOf { it.total }, average?.maxOrNull() ?: 0.0).takeIf { it > 0 } ?: 1.0
+    // This week is still filling: faded and read as "so far", so it is not taken for a drop.
+    val partial = !weeks.last().weekStart.plusDays(6).isBefore(LocalDate.now())
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("WEEK OF ${WEEK_FMT.format(weeks[shown].weekStart).uppercase()}", style = FTType.Label, color = FT.TextMuted, modifier = Modifier.weight(1f))
+            Text("WEEK OF ${WEEK_FMT.format(weeks[shown].weekStart).uppercase()}" + if (partial && shown == weeks.lastIndex) " · SO FAR" else "", style = FTType.Label, color = FT.TextMuted, modifier = Modifier.weight(1f))
             Text("${valueFormat(weeks[shown].total)} $unit", style = FTType.Value, color = FT.TextPrimary)
         }
         Text(
             parts.indices.reversed().joinToString("  ·  ") { "${parts[it].label} ${valueFormat(weeks[shown].parts.getOrElse(it) { 0.0 })}" },
             style = FTType.Micro, color = FT.TextSecondary,
         )
+        Row(Modifier.fillMaxWidth()) {
+        BarYAxis(top, valueFormat, height)
         Canvas(
             modifier = Modifier
-                .fillMaxWidth()
+                .weight(1f)
                 .height(height)
                 .pointerInput(weeks) { detectTapGestures { selected = BarLayout(size.width.toFloat(), weeks.size, 0f).indexAt(it.x) } }
                 .pointerInput(weeks) { detectHorizontalDragGestures { change, _ -> selected = BarLayout(size.width.toFloat(), weeks.size, 0f).indexAt(change.position.x) } },
@@ -85,7 +89,7 @@ fun FTStackedWeeklyBars(
                     return@forEachIndexed
                 }
                 drawStackedBar(w.parts, parts.map { it.color }, x, layout.barWidth, { v -> (v / top).toFloat() * usable },
-                    alpha = barAlpha(i, selected), cap = i == shown)
+                    alpha = barAlpha(i, selected, projected = partial && i == weeks.lastIndex && selected != i), cap = i == shown)
             }
             if (average != null && average.size == weeks.size) {
                 val path = Path()
@@ -96,10 +100,11 @@ fun FTStackedWeeklyBars(
                 drawPath(path, FT.TextPrimary.copy(alpha = 0.85f), style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round))
             }
         }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        }
+        Row(modifier = Modifier.fillMaxWidth().padding(start = 40.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(WEEK_FMT.format(weeks.first().weekStart).uppercase(), style = FTType.Micro, color = FT.TextMuted)
             Text(
-                "SCALE 0-${valueFormat(top)} $unit" + if (average != null) "  ·  LINE: ${averageLabel.uppercase()}" else "",
+                unit.uppercase() + (if (average != null) "  ·  LINE: ${averageLabel.uppercase()}" else "") + if (partial) "  ·  FADED: SO FAR" else "",
                 style = FTType.Micro, color = FT.TextMuted,
             )
             Text(WEEK_FMT.format(weeks.last().weekStart).uppercase(), style = FTType.Micro, color = FT.TextMuted)

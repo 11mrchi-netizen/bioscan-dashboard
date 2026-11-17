@@ -5,7 +5,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
-// Phase G2. Generic, framework-free helpers for turning a list of
+// Generic, framework-free helpers for turning a list of
 // timestamped Health Connect readings into one value per local calendar
 // date -- the same "compute in the domain layer, keep data/repository code
 // thin" convention every other domain file in this app already follows.
@@ -13,7 +13,7 @@ import java.time.ZoneId
 // device's local day," so this fills that gap once, reused across every
 // metric in HealthConnectDailySyncRepository rather than reimplemented per
 // metric.
-// `origin` (Analysis Layer 3 / R1) is the Health Connect dataOrigin package that wrote the reading, when the caller
+// `origin` is the Health Connect dataOrigin package that wrote the reading, when the caller
 // knows it; the aggregation helpers below ignore it.
 data class TimedValue(val at: Instant, val value: Double, val origin: String? = null)
 

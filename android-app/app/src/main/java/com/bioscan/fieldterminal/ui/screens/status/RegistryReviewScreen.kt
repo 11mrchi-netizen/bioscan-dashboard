@@ -1,7 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -19,20 +18,22 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.EvidenceReviewItem
 import com.bioscan.fieldterminal.data.InteractionReviewItem
+import com.bioscan.fieldterminal.data.LabWatchReviewItem
 import com.bioscan.fieldterminal.data.RegistryReviewRepository
 import com.bioscan.fieldterminal.data.RegistryReviewRow
 import com.bioscan.fieldterminal.data.ReviewState
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.reviewState
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.screens.detail.Section
 import com.bioscan.fieldterminal.ui.screens.today.FullScreenOverlay
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.launch
 import java.time.OffsetDateTime
 import java.time.ZoneId
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Review of the shared registries (evidence_records: what an ingredient is expected to do; interaction_records: pairs to
 // watch). Every row was seeded from a cited source and marked unreviewed. Here the owner reads each claim with its
@@ -86,7 +87,7 @@ private fun InteractionReviewItem.entry() = Entry(
     url = citationUrl(pmidDoi, sourceUrl),
 )
 
-private fun com.bioscan.fieldterminal.data.LabWatchReviewItem.entry() = Entry(
+private fun LabWatchReviewItem.entry() = Entry(
     "lab_watch", id, version, reviewStatus,
     title = "${substanceAliases.firstOrNull()?.replaceFirstChar { it.uppercase() } ?: "?"} → $markerLabel" +
         (minDailyAmount?.let { " (from ${com.bioscan.fieldterminal.domain.formatAmount(it)} ${amountUnit.orEmpty()} a day)" } ?: ""),
@@ -123,7 +124,7 @@ fun RegistryReviewScreen(onClose: () -> Unit) {
                 "Confirm it if the source says what the claim says; dispute it with a note if not.",
             style = FTType.Caption, color = FT.TextMuted,
         )
-        error?.let { Text(it, style = FTType.Caption, color = FT.Critical) }
+        error?.let { Text(it, style = FTType.Caption, color = FT.Bad) }
         if (list == null) return@FullScreenOverlay
         val sorted = list.sortedBy { stateOf(it) != ReviewState.UNREVIEWED }
         for ((title, reg) in listOf("INTERACTIONS" to "interaction", "LABS TO WATCH" to "lab_watch", "EXPECTED EFFECTS" to "evidence")) {
@@ -134,12 +135,12 @@ fun RegistryReviewScreen(onClose: () -> Unit) {
                 ReviewCard(e, stateOf(e), reviews[e.registry to e.id],
                     onVerdict = { verdict, note ->
                         scope.launch {
-                            runCatching { repo.setVerdict(e.registry, e.id, e.version, verdict, note) }
+                            catching { repo.setVerdict(e.registry, e.id, e.version, verdict, note) }
                                 .onSuccess { reload++ }.onFailure { error = it.message }
                         }
                     },
                     onClear = {
-                        scope.launch { runCatching { repo.clear(e.registry, e.id) }.onSuccess { reload++ }.onFailure { error = it.message } }
+                        scope.launch { catching { repo.clear(e.registry, e.id) }.onSuccess { reload++ }.onFailure { error = it.message } }
                     })
             }
         }
@@ -162,11 +163,11 @@ private fun ReviewCard(e: Entry, state: ReviewState, review: RegistryReviewRow?,
         e.citation?.let { c ->
             Text(
                 "Source: $c" + if (e.url != null) "  ›" else "",
-                style = FTType.Caption, color = if (e.url != null) FT.Emerald else FT.TextMuted,
+                style = FTType.Caption, color = if (e.url != null) FT.Ok else FT.TextMuted,
                 modifier = Modifier.ftClickable(enabled = e.url != null) { e.url?.let { runCatching { uri.openUri(it) } } },
             )
         }
-        if (state == ReviewState.DISPUTED) review?.note?.let { Text("Your note: $it", style = FTType.Caption, color = FT.Warning) }
+        if (state == ReviewState.DISPUTED) review?.note?.let { Text("Your note: $it", style = FTType.Caption, color = FT.Warn) }
         if (disputing) {
             FieldTextField(note, { note = it }, "What the source actually says", singleLine = false)
             Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -185,7 +186,7 @@ private fun ReviewCard(e: Entry, state: ReviewState, review: RegistryReviewRow?,
 
 @Composable
 private fun Act(text: String, muted: Boolean = false, onClick: () -> Unit) =
-    Text(text, style = FTType.LabelCaps, color = if (muted) FT.TextSecondary else FT.Emerald,
+    Text(text, style = FTType.LabelCaps, color = if (muted) FT.TextSecondary else FT.Ok,
         modifier = Modifier.ftClickable(onClick = onClick).padding(vertical = 6.dp))
 
 private fun reviewDay(ts: String): String = runCatching {

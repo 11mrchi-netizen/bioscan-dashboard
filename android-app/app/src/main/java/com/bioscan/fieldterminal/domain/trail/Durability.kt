@@ -1,6 +1,7 @@
 package com.bioscan.fieldterminal.domain.trail
 
 import com.bioscan.fieldterminal.domain.TimePoint
+import kotlin.math.abs
 
 // DAV-142. Early-vs-late comparisons, per doc 04's comparability rule
 // (matched grade within +-3pp, length within 2x) so a "degradation" number
@@ -23,7 +24,7 @@ fun findComparableSegmentPair(segments: List<TerrainSegment>, direction: Segment
 
     val earlyLength = early.endDistanceM - early.startDistanceM
     val lateLength = late.endDistanceM - late.startDistanceM
-    val gradeDiff = kotlin.math.abs(early.averageGradePercent - late.averageGradePercent)
+    val gradeDiff = abs(early.averageGradePercent - late.averageGradePercent)
     val lengthRatio = maxOf(earlyLength, lateLength) / minOf(earlyLength, lateLength)
 
     return if (gradeDiff <= COMPARABLE_GRADE_TOLERANCE_PP && lengthRatio <= COMPARABLE_LENGTH_RATIO_MAX) early to late else null

@@ -1,10 +1,12 @@
 package com.bioscan.fieldterminal.util
 
+import android.os.Trace
+import android.util.Log
 import io.ktor.client.plugins.api.createClientPlugin
 import io.ktor.http.contentLength
 import io.ktor.util.AttributeKey
 
-// Performance pass: the cheapest possible measurement. Everything logs to logcat under the tag "perf" and only in debug
+// The cheapest possible measurement. Everything logs to logcat under the tag "perf" and only in debug
 // builds (MainActivity switches it on from BuildConfig.DEBUG), so release builds pay nothing.
 //
 //   adb logcat -s perf
@@ -18,7 +20,7 @@ object Perf {
 
     // Swappable so JVM tests can capture lines without android.util.Log (which is not available off-device).
     @Volatile
-    var sink: (String) -> Unit = { line -> runCatching { android.util.Log.d("perf", line) } }
+    var sink: (String) -> Unit = { line -> runCatching { Log.d("perf", line) } }
 
     fun mark(label: String) {
         if (enabled) sink("nav $label")
@@ -36,12 +38,12 @@ object Perf {
         if (!enabled) return block()
         val t0 = System.nanoTime()
         // Directly before the try, so the finally's endSection always pairs with it. Only reached on a device (enabled is off in JVM tests).
-        android.os.Trace.beginSection(tag.take(120))
+        Trace.beginSection(tag.take(120))
         try {
             return block()
         } finally {
             val ms = (System.nanoTime() - t0) / 1_000_000.0
-            android.os.Trace.endSection()
+            Trace.endSection()
             emit("timed $tag ms=${"%.1f".format(ms)}")
         }
     }

@@ -2,6 +2,7 @@ package com.bioscan.fieldterminal.domain
 
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 import kotlin.math.roundToInt
 
@@ -97,7 +98,7 @@ fun fitnessAgeOn(
     val week = (0..6).mapNotNull { restingHr[asOf.minusDays(it.toLong())] }.sorted()
     if (week.size < 4) return null
     val rhr = if (week.size % 2 == 1) week[week.size / 2] else (week[week.size / 2 - 1] + week[week.size / 2]) / 2
-    val age = java.time.temporal.ChronoUnit.DAYS.between(birth, asOf) / 365.25
+    val age = ChronoUnit.DAYS.between(birth, asOf) / 365.25
     val c = if (isMale) NES_MEN else NES_WOMEN
     val hrMax = maxHr ?: (208 - 0.7 * age)
     val pa = paIndex(sessions, asOf, rhr, hrMax)

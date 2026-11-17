@@ -26,8 +26,8 @@ import com.bioscan.fieldterminal.data.AgingProfileOverview
 import com.bioscan.fieldterminal.data.AgingProfileRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.domain.DataAvailability
-import com.bioscan.fieldterminal.domain.aging.BiologicalAgeResult
 import com.bioscan.fieldterminal.domain.DisplayValue
+import com.bioscan.fieldterminal.domain.aging.BiologicalAgeResult
 import com.bioscan.fieldterminal.ui.components.DotPlot
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTDataState
@@ -37,10 +37,12 @@ import com.bioscan.fieldterminal.ui.components.InfoHelpButton
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.ageAccelerationState
+import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.screens.status.FitnessAgeSection
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.format.DateTimeFormatter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // DAV-232 (09A Aging Profile, Phase 1). Overview / Dimensions / History /
 // Explainability, per DAV-232's own structure -- scoped to PhenoAge +
@@ -53,15 +55,14 @@ fun AgingProfileScreen(onBack: () -> Unit) {
     LaunchedEffect(guard.attempt) {
         guard.run { overview = AgingProfileRepository(SupabaseClientProvider.client).loadOverview() }
     }
-
-    Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
+    Column(modifier = Modifier.fillMaxSize().background(FT.Base).ftPlatinumWash()) {
         TileHeader(onBack = onBack, title = "AGING PROFILE", subtitle = "BIOLOGICAL AGE · DIMENSIONS · HISTORY", accent = FT.DomainUser)
 
         val current = overview
         when {
             current == null && guard.error != null -> LoadErrorCard(guard)
             current == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = FT.Emerald)
+                CircularProgressIndicator(color = FT.Ok)
             }
             current.chronologicalAgeYears == null -> Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
                 FTDataState(DataAvailability.Unavailable, "Set your date of birth in Setup › Profile & goals to see your Aging Profile.")
@@ -73,6 +74,7 @@ fun AgingProfileScreen(onBack: () -> Unit) {
                 OverviewCard(current)
                 DimensionsCard(current)
                 HistoryCard(current)
+                FitnessAgeSection()
             }
         }
     }
@@ -82,7 +84,7 @@ fun AgingProfileScreen(onBack: () -> Unit) {
 private fun OverviewCard(overview: AgingProfileOverview) {
     FTCard(title = "OVERVIEW") {
         BioAgeHero(overview)
-        StatLineHelp("Chronological age", "${overview.chronologicalAgeYears} yr", "Chronological age", "Your real age, from date of birth (Setup › Profile & goals). Every biological-age model is compared against this.")
+        AgeStatLine("Chronological age", "${overview.chronologicalAgeYears} yr", "Chronological age", "Your real age, from date of birth (Setup › Profile & goals). Every biological-age model is compared against this.")
     }
 }
 
@@ -116,7 +118,7 @@ private fun BioAgeHeroCell(result: BiologicalAgeResult, help: String, modifier: 
                 Text(
                     "%+.1f yrs vs. real age".format(it),
                     style = FTType.Label,
-                    color = if (it <= 0) FT.Emerald else FT.Warning,
+                    color = if (it <= 0) FT.Ok else FT.Warn,
                 )
             }
         } else {
@@ -162,7 +164,7 @@ private fun HistoryCard(overview: AgingProfileOverview) {
                 points = available.map { it.observedAt to it.biologicalAge!! },
                 refLow = null,
                 refHigh = null,
-                dotColor = { FT.Emerald },
+                dotColor = { FT.Ok },
             )
         }
         overview.phenoAgeHistory.filter { !it.isAvailable }.forEach { incomplete ->
@@ -196,7 +198,7 @@ private fun ResultLine(result: BiologicalAgeResult, help: String) {
                 Text(
                     "%+.1f yr vs. chronological".format(result.ageAcceleration),
                     style = FTType.MonoCaption,
-                    color = if (result.ageAcceleration!! < 0) FT.Emerald else FT.Warning,
+                    color = if (result.ageAcceleration!! < 0) FT.Ok else FT.Warn,
                 )
             } else {
                 Text(
@@ -211,7 +213,7 @@ private fun ResultLine(result: BiologicalAgeResult, help: String) {
 }
 
 @Composable
-private fun StatLineHelp(label: String, value: String, helpTitle: String, helpBody: String) {
+private fun AgeStatLine(label: String, value: String, helpTitle: String, helpBody: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(label, style = FTType.Body, color = FT.TextSecondary)

@@ -48,7 +48,7 @@ export interface ObservationRow {
   observed_at: string
   local_date: string
   concern_id: string | null
-  scope: 'concern' | 'sweep' | 'session'
+  scope: 'concern' | 'sweep' | 'session' | 'check'
   symptom_free: boolean
   recall: 'now' | 'today' | 'since_last'
   recall_from: string | null
@@ -110,11 +110,12 @@ export function currentObservations(rows: ObservationRow[]): ObservationRow[] {
 }
 
 /** Which concern a signal belongs to: its own assignment, else the check-in's concern, else the one concern whose region
- *  and side it names (an unassigned signal in a sweep). Null when none or several match. */
+ *  and side it names (an unassigned signal in a sweep). Null when none or several match. A symptom check's signal
+ *  ('check' scope: a small ache logged through the questionnaire) joins a concern only when the person gives it one. */
 export function signalConcern(sig: SignalRow, obs: ObservationRow, concerns: ConcernRow[]): string | null {
   if (sig.concern_id) return sig.concern_id
   if (obs.concern_id) return obs.concern_id
-  if (!sig.region) return null
+  if (!sig.region || obs.scope === 'check') return null
   const hits = concerns.filter((c) => c.regions.some((r) => r.code === sig.region && (!r.side || !sig.side || r.side === sig.side || sig.side === 'both')))
   return hits.length === 1 ? hits[0].id : null
 }
@@ -165,7 +166,8 @@ export function buildConcernSeries(
     for (const s of sigs) {
       const cid = signalConcern(s, o, concerns)
       if (cid === null || !series.has(cid)) {
-        unassigned.push({ date: o.local_date, signal: s })
+        // A symptom check is listed by the app on its own; it is not a signal waiting for a concern.
+        if (o.scope !== 'check') unassigned.push({ date: o.local_date, signal: s })
         continue
       }
       const list = byConcern.get(cid) ?? []

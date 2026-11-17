@@ -5,9 +5,13 @@ import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.model.StoolAnalysisRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
+import com.bioscan.fieldterminal.domain.CHECKIN_LATE_CAFFEINE_MG
 import com.bioscan.fieldterminal.domain.DailyNutrition
 import com.bioscan.fieldterminal.domain.EveningCheckin
 import com.bioscan.fieldterminal.domain.LoadSpans
+import com.bioscan.fieldterminal.domain.LoggedDrink
+import com.bioscan.fieldterminal.domain.STANDARD_DRINK_G
+import com.bioscan.fieldterminal.domain.WallClock
 import com.bioscan.fieldterminal.domain.dailySessionLoadMap
 import com.bioscan.fieldterminal.domain.stress.StressDay
 import com.bioscan.fieldterminal.domain.trainingLoadSeries
@@ -55,7 +59,7 @@ data class ScoreSources(
     /** Each night's heart-rate dip from the waking day, in percent (v_hr_dip), keyed by the wake date. */
     val hrDip: Map<LocalDate, Double> = emptyMap(),
     /** Logged drinks (beverage meal items): their caffeine and alcohol feed late caffeine and alcohol. */
-    val drinks: List<com.bioscan.fieldterminal.domain.LoggedDrink> = emptyList(),
+    val drinks: List<LoggedDrink> = emptyList(),
     /** Minutes on the phone in the hour before that night's sleep, by phone day (04:00 to 04:00; phone_usage_daily). */
     val phoneBedMin: Map<LocalDate, Double> = emptyMap(),
     val zone: ZoneId = ZoneId.systemDefault(),
@@ -239,10 +243,10 @@ fun assembleScoreSeries(src: ScoreSources, today: LocalDate = LocalDate.now(src.
     for (d in drinkDays.keys + checkinOf.keys) {
         val logged = drinkDays[d]
         val c = checkinOf[d]
-        val alcohol = listOfNotNull(logged?.alcoholG?.div(com.bioscan.fieldterminal.domain.STANDARD_DRINK_G), c?.drinks?.toDouble()).maxOrNull()
+        val alcohol = listOfNotNull(logged?.alcoholG?.div(STANDARD_DRINK_G), c?.drinks?.toDouble()).maxOrNull()
         val caffeine = listOfNotNull(
             logged?.caffeineAfter14Mg,
-            c?.caffeineAfter14?.let { if (it) com.bioscan.fieldterminal.domain.CHECKIN_LATE_CAFFEINE_MG else 0.0 },
+            c?.caffeineAfter14?.let { if (it) CHECKIN_LATE_CAFFEINE_MG else 0.0 },
         ).maxOrNull()
         b.put(ScoreKeys.DRINKS, d.plusDays(1), alcohol)
         b.put(ScoreKeys.LATE_CAFFEINE, d.plusDays(1), caffeine)
@@ -259,7 +263,7 @@ fun assembleScoreSeries(src: ScoreSources, today: LocalDate = LocalDate.now(src.
     // Each entry with its local day and instant.
     // Stool times are logged times: the local wall clock with a zero offset (domain/WallClock.kt), not real instants.
     val stoolByDay: Map<LocalDate, List<Pair<StoolAnalysisRow, Instant>>> = src.stool
-        .mapNotNull { row -> com.bioscan.fieldterminal.domain.WallClock.instant(row.occurredAt, zone)?.let { at -> row to at } }
+        .mapNotNull { row -> WallClock.instant(row.occurredAt, zone)?.let { at -> row to at } }
         .groupBy { (_, at) -> at.atZone(zone).toLocalDate() }
     val firstTime = stoolByDay.mapValues { (_, entries) -> entries.minOf { it.second }.atZone(zone).toLocalTime().toSecondOfDay() / 60.0 }
     for ((d, entries) in stoolByDay) {
@@ -307,7 +311,7 @@ const val ACUTE_LIQUID_STOOLS = 2
 /** The days with an acute gut episode (the day itself, not the morning after). */
 fun acuteGutDays(checkins: List<EveningCheckin>, stool: List<StoolAnalysisRow>, zone: ZoneId): Set<LocalDate> {
     val nausea = checkins.filter { it.gutSymptoms?.contains("nausea") == true }.map { it.date }
-    val liquid = stool.mapNotNull { row -> com.bioscan.fieldterminal.domain.WallClock.date(row.occurredAt)?.takeIf { row.bristolType == 7 } }
+    val liquid = stool.mapNotNull { row -> WallClock.date(row.occurredAt)?.takeIf { row.bristolType == 7 } }
         .groupingBy { it }.eachCount().filterValues { it >= ACUTE_LIQUID_STOOLS }.keys
     return (nausea + liquid).toSet()
 }

@@ -27,6 +27,7 @@ import com.bioscan.fieldterminal.data.model.FindingDto
 import com.bioscan.fieldterminal.data.model.HealthConcernRow
 import com.bioscan.fieldterminal.data.model.HealthObservationRow
 import com.bioscan.fieldterminal.data.model.TrialReadDto
+import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.domain.health.IMPACT_LABELS
 import com.bioscan.fieldterminal.domain.health.concernStateWord
 import com.bioscan.fieldterminal.domain.health.durationText
@@ -54,10 +55,9 @@ import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.components.parallel
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
-import com.bioscan.fieldterminal.ui.components.softLoad
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Health concerns (plan §5.3-5.6): one concern's page. OVERVIEW leads with the state and why, then the timeline,
 // episodes, recurrence, recovery and training impact; CONTEXT puts training and recovery on the same days and, per
@@ -128,7 +128,7 @@ fun ConcernScreen(concernId: String, onBack: () -> Unit, onOpenSession: (Long) -
                         s?.stateReason?.let { Text(it, style = FTType.Body, color = FT.TextPrimary, modifier = Modifier.padding(top = 6.dp)) }
                         s?.lastObserved?.let { Text("Last check-in ${shortDate(it)}", style = FTType.Caption, color = FT.TextMuted) }
                         if (c.regions.isNotEmpty()) BodyMap(marks = c.regions.map { BodyMark(it.code, it.side, concernColor(s?.state ?: "active")) }, height = 160.dp)
-                        s?.safety?.forEach { Text(it.text, style = FTType.BodySmall, color = FT.Warning, modifier = Modifier.padding(top = 4.dp)) }
+                        s?.safety?.forEach { Text(it.text, style = FTType.BodySmall, color = FT.Warn, modifier = Modifier.padding(top = 4.dp)) }
                         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             FTButton(label = "CHECK IN", emphasis = FTButtonEmphasis.Primary, modifier = Modifier.weight(1f)) { checkIn = true }
                         }

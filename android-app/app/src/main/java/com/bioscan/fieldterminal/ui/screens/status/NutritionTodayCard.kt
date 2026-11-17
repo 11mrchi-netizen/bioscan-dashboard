@@ -31,15 +31,15 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.NutrientColor
 import com.bioscan.fieldterminal.ui.components.drawZonedTrack
 import com.bioscan.fieldterminal.ui.components.drawZonedValue
+import com.bioscan.fieldterminal.ui.components.stateTreatment
 import com.bioscan.fieldterminal.ui.components.zoneEdges
 import com.bioscan.fieldterminal.ui.components.zonedFraction
-import com.bioscan.fieldterminal.ui.components.stateTreatment
 import com.bioscan.fieldterminal.ui.screens.fuel.TodayFuelSummary
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalTime
 import java.util.Locale
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private const val NUTRITION_TODAY_INFO =
     "How close today is to its targets. Each bar is what you have logged against the day's target; the tick is what the " +

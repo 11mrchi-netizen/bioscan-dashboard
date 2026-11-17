@@ -7,7 +7,7 @@ object NotificationKind {
     const val SUPPLEMENT_DUE = "supplement_due"
     const val CHECKIN_MORNING = "checkin_morning"
     const val CHECKIN_EVENING = "checkin_evening"
-    // Analysis Layer 3 / R2: prompts that feed the sparsest capture streams (wellbeing scores; drinks, supplements, recovery).
+    // Prompts that feed the sparsest capture streams (wellbeing scores; drinks, supplements, recovery).
     const val WELLBEING_CHECKIN = "wellbeing_checkin"
     const val EVENING_LOG = "evening_log"
     // Analysis review phase B: the structured evening check-in (drinks, caffeine after 14:00, late meal, stress) at 22:25.
@@ -25,9 +25,11 @@ object NotificationKind {
     const val EVENT_RATING = "event_rating"
     const val EVENT_DRAW = "event_draw"
     const val EVENT_FOLLOWUP = "event_followup"
+    // Routine R7 (domain/routine/Practices.kt): each scheduled practice with its reminder on, at its own time.
+    const val PRACTICE_DUE = "practice_due"
     val ALL = listOf(
         SUPPLEMENT_DUE, CHECKIN_MORNING, CHECKIN_EVENING, WELLBEING_CHECKIN, EVENING_LOG, EVENING_CHECKIN, BODY_CHECKIN, FUEL_SESSION, FUEL_EVENT, HEALTH_CHECKIN,
-        EVENT_RATING, EVENT_DRAW, EVENT_FOLLOWUP,
+        EVENT_RATING, EVENT_DRAW, EVENT_FOLLOWUP, PRACTICE_DUE,
     )
 }
 

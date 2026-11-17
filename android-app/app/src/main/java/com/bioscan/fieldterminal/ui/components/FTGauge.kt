@@ -23,12 +23,12 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.domain.score.DomainKey
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // The v1 radial gauge (design/tokens/gauge.html, `ftGauge`): a ring of N ticks, the lit ones coloured along a gradient
 // from the first stop to the last, a glowing cap on the last lit tick, and a blurred radar sweep inside the ring that

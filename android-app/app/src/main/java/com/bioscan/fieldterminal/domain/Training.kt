@@ -2,11 +2,13 @@ package com.bioscan.fieldterminal.domain
 
 import com.bioscan.fieldterminal.data.model.ExerciseSessionRow
 import com.bioscan.fieldterminal.data.model.Vo2MaxRow
+import java.time.Duration
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.temporal.ChronoUnit
+import kotlin.math.abs
 
-// Phase G3: generalized from run-only (the old `runs` table, one RunRow per
+// Generalized from run-only (the old `runs` table, one RunRow per
 // row) to any exercise type (`exercise_sessions`). These functions only
 // ever cared about distance/duration, never "is this specifically a run" --
 // the endurance-vs-strength type filtering now happens once in
@@ -208,8 +210,8 @@ fun dedupeRunSessions(
                 val repStart = OffsetDateTime.parse(rep.startTime)
                 val repDuration = rep.durationMin ?: 0.0
                 val sameDay = repStart.toLocalDate() == sessionStart.toLocalDate()
-                val startDiffMin = kotlin.math.abs(java.time.Duration.between(repStart, sessionStart).toMinutes())
-                val durationDiffMin = kotlin.math.abs(repDuration - sessionDuration)
+                val startDiffMin = abs(Duration.between(repStart, sessionStart).toMinutes())
+                val durationDiffMin = abs(repDuration - sessionDuration)
                 val durationTolerance = maxOf(SAME_RUN_DURATION_TOLERANCE_MIN, minOf(repDuration, sessionDuration) * 0.2)
                 sameDay && startDiffMin <= SAME_RUN_START_TOLERANCE_MIN && durationDiffMin <= durationTolerance
             }

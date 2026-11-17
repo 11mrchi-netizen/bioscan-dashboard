@@ -29,11 +29,13 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.BodyCheckinDraft
 import com.bioscan.fieldterminal.data.BodyCheckinRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.BodyCheckinRecord
 import com.bioscan.fieldterminal.domain.BodyMeasurement
 import com.bioscan.fieldterminal.domain.BodySlot
 import com.bioscan.fieldterminal.domain.MeasureMethod
 import com.bioscan.fieldterminal.domain.activeSlots
+import com.bioscan.fieldterminal.domain.latestFrame
 import com.bioscan.fieldterminal.domain.maxReadings
 import com.bioscan.fieldterminal.domain.median
 import com.bioscan.fieldterminal.domain.minReadings
@@ -49,9 +51,9 @@ import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.LocalDateTime
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // The monthly body check-in (domain/BodyCheckin.kt, docs/body-checkin/README.md), one step per screen so it can be done with a
 // tape in one hand: the conditions, grip, the tape sites from the neck down, then the skinfolds in rounds. Each site
@@ -82,11 +84,11 @@ fun BodyCheckInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
     // Wrist and ankle (frame size for muscle potential): on until both are recorded once, then only when asked.
     var frame by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
-        history = runCatching { repo.loadHistory() }.getOrElse { emptyList() }
-        knownHeight = runCatching { repo.latestHeightCm() }.getOrNull()
+        history = catching { repo.loadHistory() }.getOrElse { emptyList() }
+        knownHeight = catching { repo.latestHeightCm() }.getOrNull()
         // Last time's caliper, unless the person already typed one.
         if (caliper.isEmpty()) caliper = history.lastOrNull()?.caliper.orEmpty()
-        frame = com.bioscan.fieldterminal.domain.latestFrame(history) == null
+        frame = latestFrame(history) == null
     }
     val last = history.lastOrNull()
 
@@ -260,7 +262,7 @@ fun BodyCheckInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                     }
                     Label("NOTES (OPTIONAL)")
                     FieldTextField(notes, { notes = it }, "e.g. new tape, late night before", singleLine = false)
-                    error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Critical) }
+                    error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Bad) }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         FTButton("BACK", modifier = Modifier.weight(1f)) { back() }
                         FTButton(
@@ -324,7 +326,7 @@ private fun MeasureStep(
     } else {
         FieldTextField(text, { text = it }, "${unit.uppercase()} (${"%.0f".format(slot.site.range.start)}–${"%.0f".format(slot.site.range.endInclusive)})", keyboardType = KeyboardType.Decimal)
         if (text.isNotBlank() && parsed == null) {
-            Text("Outside ${"%.0f".format(slot.site.range.start)}–${"%.0f".format(slot.site.range.endInclusive)} $unit for this site: check the reading.", style = FTType.Caption, color = FT.Warning)
+            Text("Outside ${"%.0f".format(slot.site.range.start)}–${"%.0f".format(slot.site.range.endInclusive)} $unit for this site: check the reading.", style = FTType.Caption, color = FT.Warn)
         }
         FTButton("ENTER READING", enabled = parsed != null, emphasis = FTButtonEmphasis.Primary, modifier = Modifier.fillMaxWidth()) { parsed?.let(onReading) }
     }

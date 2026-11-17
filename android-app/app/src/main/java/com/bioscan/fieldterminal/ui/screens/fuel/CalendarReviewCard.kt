@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -31,9 +32,9 @@ import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.screens.events.EventFormSheet
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Fuel › Plan's WHAT IS THIS? (fuel planning phase 11): training-colour calendar entries over four hours that the rules
 // cannot read are left out of the plan and asked about here: make it an event, count it as a long session of a length
@@ -45,7 +46,7 @@ private val WHEN: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d MMM HH:
 fun CalendarReviewCard(reviews: List<CalendarReview>, onAnswered: () -> Unit, modifier: Modifier = Modifier) {
     if (reviews.isEmpty()) return
     // Kept by entry id across a restore (the event form can open the file picker).
-    var makingId by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
+    var makingId by rememberSaveable { mutableStateOf<String?>(null) }
     val making = reviews.firstOrNull { it.eventId == makingId }
     FTCard(
         title = "WHAT IS THIS?",
@@ -102,6 +103,6 @@ private fun ReviewRow(r: CalendarReview, onMakeEvent: () -> Unit, onAnswered: ()
                 FTButton("BACK", emphasis = FTButtonEmphasis.Tertiary, modifier = Modifier.weight(1f)) { counting = false }
             }
         }
-        error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Critical) }
+        error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Bad) }
     }
 }

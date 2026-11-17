@@ -1,19 +1,11 @@
 package com.bioscan.fieldterminal.data
 
 import android.util.Base64
+import com.bioscan.fieldterminal.domain.LenientJson
 import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.okhttp.OkHttp
-import io.ktor.client.request.header
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
 // Photo logging v3 (2026-11): the estimate lists the meal's foods one by one (grams, preparation, assumptions, confidence,
 // micronutrients) for the lookup to match as they are, takes a note and a weighed total, and asks up to three questions.
@@ -23,7 +15,6 @@ import kotlinx.serialization.json.Json
 // -- no per-item database-matching step. Images are sent inline as base64
 // and never written anywhere by this repository or the function it calls;
 // they exist only for the duration of the one request.
-private const val FUNCTIONS_BASE_URL = "https://ugfrglbcoivkprjqvjzz.supabase.co/functions/v1"
 
 class NutritionImageEstimateException(message: String) : Exception(message)
 
@@ -94,8 +85,7 @@ private data class ImageEstimateResponse(
 data class NutritionImageEstimateResult(val estimateId: Long, val estimate: NutritionMealEstimate)
 
 class NutritionImageEstimateRepository(private val supabase: SupabaseClient) {
-    companion object { private val client = functionsClient(60_000) }
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = LenientJson
 
     suspend fun estimate(
         images: List<ByteArray>,
@@ -105,8 +95,6 @@ class NutritionImageEstimateRepository(private val supabase: SupabaseClient) {
         answers: List<PhotoAnswer> = emptyList(),
     ): NutritionImageEstimateResult {
         require(images.isNotEmpty()) { "At least one photo is required" }
-        val token = supabase.auth.currentAccessTokenOrNull()
-            ?: throw NutritionImageEstimateException("Not signed in")
 
         val requestBody = ImageEstimateRequest(
             images = images.map { Base64.encodeToString(it, Base64.NO_WRAP) },
@@ -115,11 +103,7 @@ class NutritionImageEstimateRepository(private val supabase: SupabaseClient) {
             totalWeightG = totalWeightG?.takeIf { it > 0 },
             answers = answers,
         )
-        val response = client.post("$FUNCTIONS_BASE_URL/nutrition-estimate-image") {
-            header("Authorization", "Bearer $token")
-            contentType(ContentType.Application.Json)
-            setBody(json.encodeToString(requestBody))
-        }
+        val response = supabase.postFunction("nutrition-estimate-image", json.encodeToString(requestBody), 60_000)
 
         val parsed = json.decodeFromString<ImageEstimateResponse>(response.bodyAsText())
         if (parsed.error != null) throw NutritionImageEstimateException(parsed.message ?: parsed.error)

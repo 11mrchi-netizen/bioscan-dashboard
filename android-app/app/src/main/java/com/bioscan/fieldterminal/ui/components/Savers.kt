@@ -1,6 +1,13 @@
 package com.bioscan.fieldterminal.ui.components
 
+import android.net.Uri
 import androidx.compose.runtime.saveable.Saver
+import com.bioscan.fieldterminal.domain.AddEntryStart
+import com.bioscan.fieldterminal.domain.AddEntryTarget
+import com.bioscan.fieldterminal.domain.decodeStart
+import com.bioscan.fieldterminal.domain.decodeTarget
+import com.bioscan.fieldterminal.domain.encodeStart
+import com.bioscan.fieldterminal.domain.encodeTarget
 import com.bioscan.fieldterminal.domain.events.AidStation
 import com.bioscan.fieldterminal.domain.events.AthleteEvent
 import com.bioscan.fieldterminal.domain.events.EventKind
@@ -94,14 +101,14 @@ val NullableEventSaver: Saver<AthleteEvent?, String> = Saver(
     restore = { s -> if (s.isEmpty()) null else runCatching { decodeEvent(s) }.getOrNull() },
 )
 
-val AddEntryStartSaver: Saver<com.bioscan.fieldterminal.domain.AddEntryStart?, String> =
-    Saver(save = { com.bioscan.fieldterminal.domain.encodeStart(it) }, restore = { com.bioscan.fieldterminal.domain.decodeStart(it) })
+val AddEntryStartSaver: Saver<AddEntryStart?, String> =
+    Saver(save = { encodeStart(it) }, restore = { decodeStart(it) })
 
-val AddEntryTargetSaver: Saver<com.bioscan.fieldterminal.domain.AddEntryTarget?, String> =
-    Saver(save = { com.bioscan.fieldterminal.domain.encodeTarget(it) }, restore = { com.bioscan.fieldterminal.domain.decodeTarget(it) })
+val AddEntryTargetSaver: Saver<AddEntryTarget?, String> =
+    Saver(save = { encodeTarget(it) }, restore = { decodeTarget(it) })
 
 /** Photo Uris as their strings (a list of Uris is not Bundle-safe as a Serializable). */
-val UriListSaver: Saver<List<android.net.Uri>, ArrayList<String>> = Saver(
+val UriListSaver: Saver<List<Uri>, ArrayList<String>> = Saver(
     save = { list -> ArrayList(list.map { it.toString() }) },
-    restore = { saved -> saved.map { android.net.Uri.parse(it) } },
+    restore = { saved -> saved.map { Uri.parse(it) } },
 )

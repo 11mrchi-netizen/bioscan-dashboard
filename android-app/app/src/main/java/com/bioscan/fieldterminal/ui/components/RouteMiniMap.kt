@@ -12,23 +12,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.bioscan.fieldterminal.domain.KmMarker
 import com.bioscan.fieldterminal.domain.RoutePoint
 import com.bioscan.fieldterminal.domain.routeKmMarkers
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.XYTileSource
-import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Phase G5. Same osmdroid + CARTO Dark Matter setup as MapScreen.kt's
+// Same osmdroid + CARTO Dark Matter setup as MapScreen.kt's
 // OsmMapView (Step 14 follow-up), kept as its own small component rather
 // than generalizing that one: this view takes a session's plain RoutePoint
 // lat/lon list, not the Map tab's GpxPoint/weather/directions concerns, and
@@ -39,14 +37,10 @@ fun RouteMiniMap(points: List<RoutePoint>, cartoKey: String, modifier: Modifier 
     if (points.size < 2) return
 
     AndroidView(
-        modifier = modifier.fillMaxWidth().height(200.dp),
+        modifier = modifier.fillMaxWidth().height(200.dp).clipToBounds(),
+        onRelease = { it.onDetach() },
         factory = { ctx ->
-            Configuration.getInstance().apply {
-                userAgentValue = ctx.packageName
-                osmdroidBasePath = ctx.filesDir
-                osmdroidTileCache = ctx.cacheDir
-            }
-            MapView(ctx).apply {
+            stableMapView(ctx).apply {
                 setTileSource(
                     XYTileSource(
                         "CartoDarkMatter",
@@ -57,9 +51,6 @@ fun RouteMiniMap(points: List<RoutePoint>, cartoKey: String, modifier: Modifier 
                         arrayOf("https://basemaps.cartocdn.com/rastertiles/dark_all/"),
                     ),
                 )
-                setMultiTouchControls(true)
-                zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
-
                 val geoPoints = points.map { GeoPoint(it.lat, it.lon) }
                 overlays.add(
                     Polyline(this).apply {
@@ -72,18 +63,10 @@ fun RouteMiniMap(points: List<RoutePoint>, cartoKey: String, modifier: Modifier 
                 val kms = routeKmMarkers(points)
                 val every = if (kms.size > 20) 5 else 1
                 kms.filter { it.km % every == 0 }.forEach { overlays.add(kmMarker(this, it)) }
-                overlays.add(dotMarker(this, geoPoints.first(), FT.Emerald.toArgb()))
-                overlays.add(dotMarker(this, geoPoints.last(), FT.Critical.toArgb()))
+                overlays.add(dotMarker(this, geoPoints.first(), FT.Ok.toArgb()))
+                overlays.add(dotMarker(this, geoPoints.last(), FT.Bad.toArgb()))
 
-                post {
-                    val box = BoundingBox.fromGeoPoints(geoPoints)
-                    val latPad = (box.latNorth - box.latSouth).coerceAtLeast(0.001) * 0.2
-                    val lonPad = (box.lonEast - box.lonWest).coerceAtLeast(0.001) * 0.2
-                    zoomToBoundingBox(
-                        BoundingBox(box.latNorth + latPad, box.lonEast + lonPad, box.latSouth - latPad, box.lonWest - lonPad),
-                        false,
-                    )
-                }
+                fitTo(geoPoints, pad = 0.2, minSpanDeg = 0.001)
             }
         },
     )

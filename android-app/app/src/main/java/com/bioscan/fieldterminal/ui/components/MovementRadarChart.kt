@@ -14,10 +14,10 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // v11: 5-axis radar chart for Zepp movement evaluation scores (0-100).
 // Axis order matches Zepp app radar clockwise from top:

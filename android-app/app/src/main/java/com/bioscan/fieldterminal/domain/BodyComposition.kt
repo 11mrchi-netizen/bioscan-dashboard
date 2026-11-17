@@ -1,5 +1,8 @@
 package com.bioscan.fieldterminal.domain
 
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
+
 // Body composition from a scale weigh-in (weight + one impedance value) plus profile (height, age, sex).
 // Only equations checked against their published source live here; see docs/body-composition/README.md.
 //
@@ -108,17 +111,17 @@ fun katchMcArdleKcal(fatFreeKg: Double): Double = 370.0 + 21.6 * fatFreeKg
 data class WeightChangeSplit(val deltaWeightKg: Double, val deltaFatKg: Double, val deltaFatFreeKg: Double, val spanDays: Long)
 
 fun weightChangeSplit(
-    readings: List<Triple<java.time.LocalDate, Double, CompositionSplit>>,
+    readings: List<Triple<LocalDate, Double, CompositionSplit>>,
     windowDays: Long,
-    asOf: java.time.LocalDate,
+    asOf: LocalDate,
 ): WeightChangeSplit? {
     val inWindow = readings.filter { !it.first.isAfter(asOf) && !it.first.isBefore(asOf.minusDays(windowDays)) }.sortedBy { it.first }
     if (inWindow.size < 4) return null
-    val span = java.time.temporal.ChronoUnit.DAYS.between(inWindow.first().first, inWindow.last().first)
+    val span = ChronoUnit.DAYS.between(inWindow.first().first, inWindow.last().first)
     if (span < windowDays / 2) return null
     val start = inWindow.take(2)
     val end = inWindow.takeLast(2)
-    fun mean(rows: List<Triple<java.time.LocalDate, Double, CompositionSplit>>, f: (Triple<java.time.LocalDate, Double, CompositionSplit>) -> Double) = rows.map(f).average()
+    fun mean(rows: List<Triple<LocalDate, Double, CompositionSplit>>, f: (Triple<LocalDate, Double, CompositionSplit>) -> Double) = rows.map(f).average()
     return WeightChangeSplit(
         deltaWeightKg = mean(end) { it.second } - mean(start) { it.second },
         deltaFatKg = mean(end) { it.third.fatKg } - mean(start) { it.third.fatKg },

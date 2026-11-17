@@ -50,22 +50,24 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
-import com.bioscan.fieldterminal.ui.screens.settings.PlacesCard
+import com.bioscan.fieldterminal.ui.components.rememberCacheVersion
 import com.bioscan.fieldterminal.ui.screens.routine.ModeBar
 import com.bioscan.fieldterminal.ui.screens.routine.ModeLegend
+import com.bioscan.fieldterminal.ui.screens.routine.RoutineTimeSection
 import com.bioscan.fieldterminal.ui.screens.routine.clock
 import com.bioscan.fieldterminal.ui.screens.routine.clockOfMinute
 import com.bioscan.fieldterminal.ui.screens.routine.hm
 import com.bioscan.fieldterminal.ui.screens.routine.modeLine
+import com.bioscan.fieldterminal.ui.screens.settings.PlacesCard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Routine intelligence R5 (docs/routine-intelligence/01-research-and-plan.md, section 10): Lab › ROUTINE. The week by
-// place, the commute with other ways to make it, and the phone. Views of what was recorded, not findings: what goes with
+// Routine intelligence R5 (docs/routine-intelligence/01-research-and-plan.md, section 10): Lab › ROUTINE. Practices, logged
+// time and the week's time (R7), then the week by place, the commute with other ways to make it, and the phone. Views of what was recorded, not findings: what goes with
 // what lives on N=1's evidence board, under the contract's rules.
 @Composable
 fun RoutineTab(onOpenDay: (LocalDate) -> Unit = {}) {
@@ -80,7 +82,7 @@ fun RoutineTab(onOpenDay: (LocalDate) -> Unit = {}) {
     var apps by remember { mutableStateOf<List<AppWeekTotal>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    val cacheVersion = rememberCacheVersion()
     LaunchedEffect(cacheVersion, reload) {
         scope.launchSafe(onError = { error = describeLoadFailure(it) }) {
             val yesterday = LocalDate.now().minusDays(1)
@@ -97,7 +99,9 @@ fun RoutineTab(onOpenDay: (LocalDate) -> Unit = {}) {
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(18.dp), modifier = Modifier.padding(horizontal = 22.dp, vertical = 16.dp)) {
-        error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+        error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
+        // Routine R7: practices, logged time and the week's time (ui/screens/routine/PracticesCards.kt).
+        RoutineTimeSection()
         FTButton("OPEN DAY MAP", modifier = Modifier.fillMaxWidth(), emphasis = FTButtonEmphasis.Primary) { onOpenDay(LocalDate.now()) }
         WeekCard(strip, onOpenDay)
         // Naming places is what turns the week and the commute into categories, so it sits here as well as in Setup.
@@ -112,9 +116,9 @@ fun RoutineTab(onOpenDay: (LocalDate) -> Unit = {}) {
 }
 
 private fun groupColor(g: StripGroup): Color = when (g) {
-    StripGroup.HOME -> FT.Emerald
+    StripGroup.HOME -> FT.Ok
     StripGroup.WORK -> FT.DomainMap // was DomainTraining, which is Emerald: Home and Work looked the same
-    StripGroup.TRANSIT -> FT.Warning
+    StripGroup.TRANSIT -> FT.Warn
     StripGroup.OTHER -> FT.DomainLabs
     StripGroup.UNKNOWN -> FT.GlassBorder
 }
@@ -220,7 +224,7 @@ private fun CommuteCard(
     ) {
         val problem = homeWorkProblem(places.map { it.toPlace() }, places.firstOrNull { it.source == "home_setting" }?.id)
         if (problem != null) {
-            Text(problem, style = FTType.BodySmall, color = FT.Warning)
+            Text(problem, style = FTType.BodySmall, color = FT.Warn)
             val setup = places.firstOrNull { it.source == "home_setting" }
             if (home == null && setup != null) {
                 FTButton("MAKE THE SETUP PLACE HOME", modifier = Modifier.fillMaxWidth(), emphasis = FTButtonEmphasis.Primary) { onFixHome(setup) }

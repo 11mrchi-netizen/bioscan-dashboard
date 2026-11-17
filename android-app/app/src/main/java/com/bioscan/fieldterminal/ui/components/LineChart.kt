@@ -15,21 +15,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.text.drawText
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.domain.TimePoint
 import com.bioscan.fieldterminal.domain.movingOffset
+import com.bioscan.fieldterminal.domain.smoothForChart
 import com.bioscan.fieldterminal.ui.theme.FTType
+import kotlin.math.abs
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Phase G5. This app's first general-purpose line/area chart primitive --
+// This app's first general-purpose line/area chart primitive --
 // generalizes the old Step-14 RouteCanvas's bounding-box -> single-scale ->
 // local xFor/yFor-closure pattern (previously specific to lat/lon) to a
 // plain (offsetSeconds, value) domain, so any Health Connect time series can
@@ -57,7 +59,7 @@ fun LineChart(
     modifier: Modifier = Modifier,
     filled: Boolean = false,
     xRange: Pair<Long, Long>? = null,
-    valueFormat: (Double) -> String = { if (kotlin.math.abs(it) >= 100) "%.0f".format(it) else "%.1f".format(it) },
+    valueFormat: (Double) -> String = { if (abs(it) >= 100) "%.0f".format(it) else "%.1f".format(it) },
     // Session detail's HR zone toggle: when set, each segment between
     // consecutive points is drawn in segmentColor(startValue) instead of one
     // solid `color` -- every other caller leaves this null and gets today's
@@ -75,7 +77,11 @@ fun LineChart(
     invertY: Boolean = false,
     // Chart frame: unit header (see DateTrendLine).
     unit: String? = null,
+    // Per-second watch data is jittery (a GPS wobble, a missed beat): the line is the rolling median over this many
+    // seconds (centred) then a short mean, so it reads as the effort rather than the sensor. 0 draws the samples as they are.
+    smoothSeconds: Long = 30,
 ) {
+    val points = remember(points, smoothSeconds) { smoothForChart(points, smoothSeconds) }
     val stops = pauses.filter { (from, to) -> to > from }.sortedBy { it.first }
     // A sample inside a pause would sit on the mark; leave it out.
     val shown = if (stops.isEmpty()) points else points.filterNot { p -> stops.any { (from, to) -> p.offsetSeconds > from && p.offsetSeconds < to } }
@@ -111,17 +117,11 @@ fun LineChart(
                 .fillMaxWidth()
                 .height(96.dp)
                 .chartInspect(Triple(shown, xMin, xMax)) { x, width, isTap ->
-                    val nearest = shown.indices.minBy { kotlin.math.abs(xFor(xs[it], width) - x) }
+                    val nearest = shown.indices.minBy { abs(xFor(xs[it], width) - x) }
                     selected = if (isTap && selected == nearest) null else nearest
                 },
         ) {
-            val line = Path().apply {
-                shown.forEachIndexed { i, p ->
-                    val x = xFor(xs[i], size.width)
-                    val y = yFor(p.value.toFloat(), size.height)
-                    if (i == 0) moveTo(x, y) else lineTo(x, y)
-                }
-            }
+            val line = smoothedPath(shown.mapIndexed { i, p -> Offset(xFor(xs[i], size.width), yFor(p.value.toFloat(), size.height)) })
 
             if (filled) {
                 val fill = Path().apply {

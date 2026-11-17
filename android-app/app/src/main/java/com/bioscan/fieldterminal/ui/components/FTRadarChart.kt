@@ -6,7 +6,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -14,24 +16,41 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.domain.MetricState
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.sqrt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // One spoke of the radar. `value` is already a 0..100 radius supplied upstream; null means the axis could
 // not be assessed -- it is drawn as a dashed spoke with no marker and a "—" label, and left OUT of the polygon (never
 // plotted at zero, which would read as a bad result instead of a missing one). `valueLabel`, when set,
 // replaces the number in the axis label (for axes whose radius is a position, not a score).
-data class RadarAxis(val label: String, val value: Double?, val color: Color, val valueLabel: String? = null)
+// `state`, when set, also sets the vertex's shape (filled dot = optimal, ring = neutral, triangle = attention), so the
+// verdict never rests on colour alone; the list beside the chart shows the same state as a pill.
+data class RadarAxis(
+    val label: String,
+    val value: Double?,
+    val color: Color,
+    val valueLabel: String? = null,
+    val state: MetricState? = null,
+    val description: String? = null,
+)
+
+/** A ring drawn heavier and labelled with its value (the Healthspan 25 and 50 lines). */
+data class RadarRing(val value: Double, val label: String)
 
 // N-gon radar (the User tab's Healthspan factors). Rings at 25/50/75/100, an accent-filled polygon through
 // the scored axes, a coloured vertex per axis, tap an axis to select it. Generic in N; knows nothing about
@@ -44,6 +63,7 @@ fun FTRadarChart(
     onSelect: (Int) -> Unit = {},
     accent: Color = FT.DomainUser,
     height: Dp = 280.dp,
+    markedRings: List<RadarRing> = emptyList(),
 ) {
     val measurer = rememberTextMeasurer()
     val n = axes.size
@@ -51,6 +71,9 @@ fun FTRadarChart(
         modifier = modifier
             .fillMaxWidth()
             .height(height)
+            .semantics {
+                contentDescription = axes.joinToString("; ") { a -> a.description ?: "${a.label} ${a.valueLabel ?: a.value?.let { "%.0f".format(it) } ?: "not assessed"}" }
+            }
             .pointerInput(n) {
                 if (n < 3) return@pointerInput
                 detectTapGestures { tap ->
@@ -82,7 +105,18 @@ fun FTRadarChart(
             val path = Path()
             for (i in 0 until n) point(i, ring).let { if (i == 0) path.moveTo(it.x, it.y) else path.lineTo(it.x, it.y) }
             path.close()
-            drawPath(path, FT.GlassBorder, style = Stroke(width = if (ring == 1f) 1.5.dp.toPx() else 1.dp.toPx()))
+            val marked = markedRings.any { abs(it.value / 100.0 - ring) < 0.001 }
+            drawPath(
+                path, if (marked) FT.TextMuted.copy(alpha = 0.55f) else FT.GlassBorder,
+                style = Stroke(width = if (ring == 1f || marked) 1.5.dp.toPx() else 1.dp.toPx()),
+            )
+        }
+        // A marked ring that is not one of the four grid rings is drawn too.
+        markedRings.filter { r -> listOf(25.0, 50.0, 75.0, 100.0).none { abs(it - r.value) < 0.001 } }.forEach { r ->
+            val path = Path()
+            for (i in 0 until n) point(i, (r.value / 100.0).toFloat()).let { if (i == 0) path.moveTo(it.x, it.y) else path.lineTo(it.x, it.y) }
+            path.close()
+            drawPath(path, FT.TextMuted.copy(alpha = 0.55f), style = Stroke(width = 1.5.dp.toPx()))
         }
         val dash = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 5.dp.toPx()))
         for (i in 0 until n) {
@@ -117,12 +151,40 @@ fun FTRadarChart(
             if (v != null) {
                 val p = point(i, (v / 100.0).toFloat().coerceIn(0f, 1f))
                 if (selected) drawCircle(axis.color.copy(alpha = 0.3f), radius = 11.dp.toPx(), center = p)
-                drawCircle(FT.Surface, radius = 6.dp.toPx(), center = p)
-                drawCircle(axis.color, radius = 4.5.dp.toPx(), center = p)
+                drawVertex(axis, p)
             }
             // An axis with no value has no marker: anywhere on the spoke would read as a score. Its spoke is dashed and its
             // label says "—".
             drawAxisLabel(measurer, axis, selected, point(i, 1f), center, labelPad)
+        }
+        // The marked rings' values, just left of the top spoke (clear of its vertex), so a vertex can be read against them.
+        markedRings.forEach { r ->
+            val p = point(0, (r.value / 100.0).toFloat())
+            val layout = measurer.measure(r.label, FTType.Micro.copy(color = FT.TextMuted))
+            val tl = Offset(p.x - layout.size.width - 5.dp.toPx(), p.y - layout.size.height / 2f)
+            drawRoundRect(FT.Surface.copy(alpha = 0.85f), tl - Offset(2.dp.toPx(), 0f), Size(layout.size.width + 4.dp.toPx(), layout.size.height.toFloat()), CornerRadius(3.dp.toPx()))
+            drawText(layout, topLeft = tl)
+        }
+    }
+}
+
+private fun DrawScope.drawVertex(axis: RadarAxis, p: Offset) {
+    val r = 4.5.dp.toPx()
+    when (axis.state) {
+        MetricState.Neutral -> {
+            drawCircle(FT.Surface, radius = 6.dp.toPx(), center = p)
+            drawCircle(axis.color, radius = r, center = p, style = Stroke(width = 2.dp.toPx()))
+        }
+        MetricState.Warning, MetricState.Critical -> {
+            val t = Path().apply {
+                moveTo(p.x, p.y - r * 1.35f); lineTo(p.x + r * 1.2f, p.y + r * 0.85f); lineTo(p.x - r * 1.2f, p.y + r * 0.85f); close()
+            }
+            drawCircle(FT.Surface, radius = 7.dp.toPx(), center = p)
+            drawPath(t, axis.color, style = Fill)
+        }
+        else -> {
+            drawCircle(FT.Surface, radius = 6.dp.toPx(), center = p)
+            drawCircle(axis.color, radius = r, center = p)
         }
     }
 }
@@ -135,13 +197,13 @@ private fun labelText(axis: RadarAxis): String = when {
 }
 
 private fun DrawScope.drawAxisLabel(measurer: TextMeasurer, axis: RadarAxis, selected: Boolean, tip: Offset, center: Offset, pad: Float) {
-    val style = (if (selected) FTType.CaptionStrong else FTType.Micro)
+    val style = (if (selected) FTType.CaptionStrong else FTType.Caption)
         .copy(color = if (axis.value == null) FT.TextMuted else if (selected) FT.TextPrimary else FT.TextSecondary, textAlign = TextAlign.Center)
     val layout = measurer.measure(labelText(axis), style)
     // Push the label outward along the spoke, keeping it on the canvas.
     val dx = tip.x - center.x
     val dy = tip.y - center.y
-    val len = kotlin.math.sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
+    val len = sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
     val ox = tip.x + dx / len * pad - layout.size.width * (0.5f - 0.5f * dx / len)
     val oy = tip.y + dy / len * pad - layout.size.height * (0.5f - 0.5f * dy / len)
     val x = ox.coerceIn(0f, size.width - layout.size.width)

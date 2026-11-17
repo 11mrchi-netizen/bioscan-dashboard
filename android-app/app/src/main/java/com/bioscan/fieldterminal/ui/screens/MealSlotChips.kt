@@ -14,11 +14,12 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AddEntryRepository
 import com.bioscan.fieldterminal.data.FuelSettingsStore
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.fuel.MealSlotKind
 import com.bioscan.fieldterminal.domain.fuel.suggestMealSlot
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDateTime
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Which planned meal a logged meal was (meals.meal_slot). Pre-selected from the person's meal times and the labels already
 // used that day (domain/fuel/MealSuggestions.kt suggestMealSlot: a late breakfast stays breakfast); a tap changes it, and a
@@ -38,7 +39,7 @@ fun MealSlotChips(dateTime: LocalDateTime, selected: MealSlotKind?, onSelect: (M
     var picked by remember { mutableStateOf(selected != null) }
     val date = dateTime.toLocalDate()
     LaunchedEffect(date, exceptMealId) {
-        logged = runCatching { AddEntryRepository(SupabaseClientProvider.client).mealSlotsOn(date, exceptMealId) }.getOrDefault(emptySet())
+        logged = catching { AddEntryRepository(SupabaseClientProvider.client).mealSlotsOn(date, exceptMealId) }.getOrDefault(emptySet())
     }
     val suggestion = suggestMealSlot(dateTime.toLocalTime(), times, logged)
     LaunchedEffect(suggestion, picked) { if (!picked) onSelect(suggestion) }

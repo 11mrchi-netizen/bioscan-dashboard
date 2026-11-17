@@ -8,6 +8,7 @@ import com.bioscan.fieldterminal.data.ReadCache
 import com.bioscan.fieldterminal.data.ScoresView
 import com.bioscan.fieldterminal.data.TodayFuel
 import com.bioscan.fieldterminal.data.TodayPreviews
+import com.bioscan.fieldterminal.data.catching
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -107,7 +108,7 @@ object TodayStore {
 
     /** Writes the page to disk (to a temporary file first, so a crash mid-write never leaves half a page). Never throws. */
     suspend fun writeDisk(context: Context, kept: KeptToday) = withContext(Dispatchers.IO) {
-        runCatching {
+        catching {
             val tmp = File(context.filesDir, "$FILE.tmp")
             tmp.writeText(encode(kept))
             tmp.renameTo(File(context.filesDir, FILE))

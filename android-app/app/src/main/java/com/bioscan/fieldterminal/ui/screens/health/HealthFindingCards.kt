@@ -12,11 +12,13 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.HealthConcernsRepository
@@ -31,13 +33,16 @@ import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.InfoHelpButton
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Health concerns (plan §3.8, §5.5-5.6): a finding answers five things in a fixed order (what, evidence, what else could
 // explain it, how uncertain, next step) with its evidence links; a trial shows its hypothesis, the before and after, and
@@ -149,10 +154,13 @@ fun TrialSheet(concernId: String, concernTitle: String, onDismiss: () -> Unit, o
             TextChipRow(OUTCOMES.map { it.second }, OUTCOMES.first { it.first == outcome }.second, perRow = 2) { picked ->
                 OUTCOMES.firstOrNull { it.second == picked }?.let { outcome = it.first }
             }
-            Text("LENGTH", style = FTType.Micro, color = FT.TextMuted)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("LENGTH", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
+                InfoHelpButton(title = "LENGTH",
+                    body = "Compared with the same number of weeks before it starts (at least four). Check in on good days too, or the read will say there is not enough to compare.")
+            }
             TextChipRow(listOf("4 WEEKS", "6 WEEKS", "8 WEEKS"), "$weeks WEEKS", perRow = 3) { picked -> picked?.let { weeks = it.substringBefore(' ').toInt() } }
-            Text("Compared with the same number of weeks before it starts (at least four). Check in on good days too, or the read will say there is not enough to compare.", style = FTType.Caption, color = FT.TextMuted)
-            error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Critical) }
+            error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Bad) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 FTButton(label = "CANCEL", modifier = Modifier.weight(1f)) { onDismiss() }
                 FTButton(label = if (saving) "SAVING..." else "START TODAY", emphasis = FTButtonEmphasis.Primary, enabled = !saving && name.isNotBlank() && hypothesis.length >= 3, modifier = Modifier.weight(1f)) {
@@ -176,10 +184,14 @@ fun HealthN1Section() {
     var findings by remember { mutableStateOf<List<FindingDto>>(emptyList()) }
     var trials by remember { mutableStateOf<List<TrialReadDto>>(emptyList()) }
     var reload by remember { mutableStateOf(0) }
-    androidx.compose.runtime.LaunchedEffect(reload) {
-        findings = runCatching { repo.loadAllFindings() }.getOrDefault(emptyList()).filter { it.status == "possible" || it.status == "persistent" }
-        trials = runCatching { repo.loadTrialReads() }.getOrDefault(emptyList())
+    val guard = rememberLoadGuard(refreshOnUpdates = false)
+    LaunchedEffect(reload, guard.attempt) {
+        guard.run {
+            findings = repo.loadAllFindings().filter { it.status == "possible" || it.status == "persistent" }
+            trials = repo.loadTrialReads()
+        }
     }
+    LoadErrorLine(guard, "health patterns and trials")
     if (findings.isEmpty() && trials.isEmpty()) return
     Text("HEALTH PATTERNS AND TRIALS", style = FTType.LabelCaps, color = FT.DomainHeart)
     findings.forEach { FindingCard(it) }

@@ -27,8 +27,8 @@ import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.TimeField
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalTime
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Fuel planning settings (data/FuelSettingsStore.kt): meal times, training low, the carbohydrate rate the gut tolerates,
 // caffeine and sodium. Body weight comes from Fuel › Body and the home location (for weather) from Setup › Connected services.

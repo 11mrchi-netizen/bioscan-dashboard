@@ -33,9 +33,7 @@ import com.bioscan.fieldterminal.domain.CycleJson
 import com.bioscan.fieldterminal.domain.DoseStepJson
 import com.bioscan.fieldterminal.domain.DoseStepsJson
 import com.bioscan.fieldterminal.domain.FORM_RULES
-import com.bioscan.fieldterminal.domain.Splitting
-import com.bioscan.fieldterminal.domain.formRule
-import com.bioscan.fieldterminal.domain.routeFor
+import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.domain.REGIMEN_ROUTES
 import com.bioscan.fieldterminal.domain.REGIMEN_SLOTS
 import com.bioscan.fieldterminal.domain.REGIMEN_UNITS
@@ -43,19 +41,26 @@ import com.bioscan.fieldterminal.domain.RegimenKind
 import com.bioscan.fieldterminal.domain.RegimenSpec
 import com.bioscan.fieldterminal.domain.ScheduleJson
 import com.bioscan.fieldterminal.domain.ScheduleType
+import com.bioscan.fieldterminal.domain.Splitting
+import com.bioscan.fieldterminal.domain.doseTextOn
+import com.bioscan.fieldterminal.domain.formRule
 import com.bioscan.fieldterminal.domain.formatAmount
 import com.bioscan.fieldterminal.domain.regimenSpec
+import com.bioscan.fieldterminal.domain.routeFor
 import com.bioscan.fieldterminal.domain.scheduleWords
 import com.bioscan.fieldterminal.domain.spec
 import com.bioscan.fieldterminal.domain.words
-import com.bioscan.fieldterminal.domain.doseTextOn
+import com.bioscan.fieldterminal.ui.components.FTIconButton
+import com.bioscan.fieldterminal.ui.components.FTIconSize
+import com.bioscan.fieldterminal.ui.components.FTIcons
+import com.bioscan.fieldterminal.ui.components.FTSwitch
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
@@ -64,6 +69,7 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // The regimen form's fields (domain/Regimen.kt): what it is, one dose as a number and a unit, how it is taken, the times
 // of day, how often, an optional on/off cycle and optional planned dose steps. SupplementFormSheet holds the name, the
@@ -292,11 +298,11 @@ fun RegimenFields(state: RegimenEditorState) {
                         }
                         Spacer(Modifier.weight(1f))
                         if (state.steps.size > 1) {
-                            Text("✕", style = FTType.MonoCaption, color = FT.Critical, modifier = Modifier.ftClickable { state.steps.removeAt(i) }.padding(6.dp))
+                            FTIconButton(FTIcons.Close, "Remove this step", { state.steps.removeAt(i) }, size = FTIconSize.Row)
                         }
                     }
                 }
-                Text("+ ADD A STEP", style = FTType.MonoCaption, color = FT.Emerald,
+                Text("+ ADD A STEP", style = FTType.MonoCaption, color = FT.Ok,
                     modifier = Modifier.ftClickable { state.steps.add(state.steps.size - 1, EditableStep("", "4")) })
                 Hint("Starting ${state.stepsStart}. Each day's reminder and log carry that day's dose; the history records each change.")
             }
@@ -308,9 +314,11 @@ fun RegimenFields(state: RegimenEditorState) {
 @Composable
 fun RegimenHistory(supplementId: Long) {
     var rows by remember { mutableStateOf<List<SupplementChangeRow>?>(null) }
-    LaunchedEffect(supplementId) {
-        rows = runCatching { SupplementsRepository(SupabaseClientProvider.client).loadChanges(supplementId) }.getOrElse { emptyList() }
+    val guard = rememberLoadGuard(refreshOnUpdates = false)
+    LaunchedEffect(supplementId, guard.attempt) {
+        guard.run { rows = SupplementsRepository(SupabaseClientProvider.client).loadChanges(supplementId) }
     }
+    LoadErrorLine(guard, "this item's history")
     val list = rows ?: return
     if (list.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -331,7 +339,7 @@ private fun changeDay(ts: String): String = runCatching {
 /** A snapshot (supplement_snapshot() in the migration) read back as a spec, for the words. */
 internal fun snapshotSpec(o: JsonObject): RegimenSpec {
     fun str(k: String) = (o[k] as? JsonPrimitive)?.takeIf { it.isString }?.content
-    val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+    val json = LenientJson
     return regimenSpec(
         timeOfDay = str("time_of_day") ?: "morning",
         everyNDays = (o["every_n_days"] as? JsonPrimitive)?.intOrNull,
@@ -381,7 +389,7 @@ private fun Switch(text: String, on: Boolean, onChange: (Boolean) -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(text, style = FTType.BodySmall, color = FT.TextPrimary, modifier = Modifier.weight(1f))
-        com.bioscan.fieldterminal.ui.components.FTSwitch(checked = on, onCheckedChange = null)
+        FTSwitch(checked = on, onCheckedChange = null)
     }
 }
 
@@ -435,6 +443,6 @@ fun DoseCountField(state: RegimenEditorState) {
         }
         // Said as it is typed, not only on SAVE.
         val wrong = state.amount.replace(',', '.').toDoubleOrNull()?.let(state::splitsWrong) == true
-        hint?.let { if (wrong) Text(it, style = FTType.Caption, color = FT.Warning) else Hint(it) }
+        hint?.let { if (wrong) Text(it, style = FTType.Caption, color = FT.Warn) else Hint(it) }
     }
 }

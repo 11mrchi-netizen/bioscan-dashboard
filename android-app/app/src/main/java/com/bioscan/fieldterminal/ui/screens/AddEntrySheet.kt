@@ -1,28 +1,16 @@
 package com.bioscan.fieldterminal.ui.screens
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.shape.CircleShape
+import android.content.Context
+import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
@@ -33,120 +21,68 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import com.bioscan.fieldterminal.data.AddEntryRepository
-import com.bioscan.fieldterminal.data.ExerciseLibraryRepository
-import com.bioscan.fieldterminal.data.CronometerEnrichment
-import com.bioscan.fieldterminal.data.CronometerItemInput
-import com.bioscan.fieldterminal.data.NutritionBarcodeLookupRepository
-import com.bioscan.fieldterminal.data.NutritionCronometerLookupRepository
-import com.bioscan.fieldterminal.data.BarcodeLookupFood
-import com.bioscan.fieldterminal.data.withMicronutrients
-import com.bioscan.fieldterminal.data.NutritionImageEstimateRepository
-import com.bioscan.fieldterminal.data.NutritionMealEstimate
-import com.bioscan.fieldterminal.data.NutritionMealSaveRepository
-import com.bioscan.fieldterminal.data.NutritionRepository
-import com.bioscan.fieldterminal.data.NutritionTextEstimateRepository
-import com.bioscan.fieldterminal.data.functionErrorMessage
-import java.time.LocalTime
-import com.bioscan.fieldterminal.data.MealItemSource
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.SupplementsRepository
-import com.bioscan.fieldterminal.data.model.ExerciseLibraryMatch
-import com.bioscan.fieldterminal.data.model.ExerciseSessionDetails
 import com.bioscan.fieldterminal.data.model.FullExerciseSessionRow
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
-import com.bioscan.fieldterminal.data.model.StrengthExerciseDto
-import com.bioscan.fieldterminal.data.model.StrengthSetDto
+import com.bioscan.fieldterminal.data.model.LogGripRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
 import com.bioscan.fieldterminal.data.model.LogOstrcRow
 import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
-import com.bioscan.fieldterminal.data.model.NewPersonRow
-import com.bioscan.fieldterminal.data.model.PersonRow
-import com.bioscan.fieldterminal.data.model.SexualActivityInstance
-import com.bioscan.fieldterminal.data.PeopleRepository
 import com.bioscan.fieldterminal.data.model.LogSleepDetailRow
-import com.bioscan.fieldterminal.data.model.MealRow
-import com.bioscan.fieldterminal.data.model.LogGripRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
-import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
-import com.bioscan.fieldterminal.data.model.SupplementRow
-import com.bioscan.fieldterminal.domain.SUPPLEMENT_QTY_STEP
-import com.bioscan.fieldterminal.domain.formatSupplementQty
+import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import com.bioscan.fieldterminal.domain.AddEntryChoice
-import com.bioscan.fieldterminal.domain.editedDetails
 import com.bioscan.fieldterminal.domain.AddEntryGroup
 import com.bioscan.fieldterminal.domain.AddEntryStart
 import com.bioscan.fieldterminal.domain.AddEntryTarget
-
 import com.bioscan.fieldterminal.domain.AddEntryType
-import com.bioscan.fieldterminal.domain.ethanolGrams
-import com.bioscan.fieldterminal.domain.isDueOn
-import com.bioscan.fieldterminal.domain.REGIMEN_SLOTS
-import com.bioscan.fieldterminal.domain.doseTextOn
-import com.bioscan.fieldterminal.domain.amountOn
-import com.bioscan.fieldterminal.domain.nextDueAfter
-import com.bioscan.fieldterminal.domain.scheduleWords
-import com.bioscan.fieldterminal.domain.stateWords
-import com.bioscan.fieldterminal.domain.spec
-import com.bioscan.fieldterminal.domain.injectable
-import com.bioscan.fieldterminal.domain.supplementNextDueDate
 import com.bioscan.fieldterminal.domain.FuelSubType
+import com.bioscan.fieldterminal.domain.LogEntry
+import com.bioscan.fieldterminal.domain.LogSource
 import com.bioscan.fieldterminal.domain.formatRecentChoices
+import com.bioscan.fieldterminal.domain.logEntryWhen
 import com.bioscan.fieldterminal.domain.parseRecentChoices
 import com.bioscan.fieldterminal.domain.recordRecentChoice
 import com.bioscan.fieldterminal.domain.target
-import com.bioscan.fieldterminal.domain.LogEntry
-import com.bioscan.fieldterminal.domain.LogSource
-import com.bioscan.fieldterminal.domain.logEntryWhen
-import com.bioscan.fieldterminal.ui.components.DateField
-import com.bioscan.fieldterminal.ui.components.DateTimeField
+import com.bioscan.fieldterminal.ui.components.AddEntryStartSaver
+import com.bioscan.fieldterminal.ui.components.AddEntryTargetSaver
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
-import com.bioscan.fieldterminal.ui.components.FTConfirmDestructive
-import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
+import com.bioscan.fieldterminal.ui.components.Toasts
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
-import com.bioscan.fieldterminal.ui.components.ftClickable
-import com.bioscan.fieldterminal.ui.components.launchSafe
-import com.bioscan.fieldterminal.ui.components.softLoad
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.screens.events.EventFormSheet
+import com.bioscan.fieldterminal.ui.screens.events.SweatTestSheet
+import com.bioscan.fieldterminal.ui.screens.health.HealthCheckInSheet
+import com.bioscan.fieldterminal.ui.screens.health.IllnessSheet
+import com.bioscan.fieldterminal.ui.screens.health.SymptomCheckSheet
+import com.bioscan.fieldterminal.ui.screens.status.BodyCheckInSheet
+import com.bioscan.fieldterminal.ui.screens.status.ScaleWeighInSheet
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.domain.normalizeBarcode
-import com.bioscan.fieldterminal.util.createCameraCaptureUri
-import com.bioscan.fieldterminal.util.scanBarcode
-import com.bioscan.fieldterminal.util.readAndCompressImage
-import kotlinx.coroutines.delay
+import com.bioscan.fieldterminal.util.ExternalActivityGuard
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.ZoneId
+import java.time.LocalTime
+import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
-
-// Shared text styles for this sheet's own chrome (sheet titles, action/
-// confirm labels) -- DAV-108 follow-up migration off FieldTextStyles'
-// legacy JetBrainsMono onto the FT contract's Inter/Roboto Mono split.
-private val sheetHeaderTitleStyle = FTType.SectionTitle
-private val sheetActionLabelStyle = FTType.LabelCaps
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Step 12 (Phase D) + the 2026-09-15 follow-up pass: the "+" add-entry flow.
 // Type picker first, then a minimal per-type form that writes straight to
@@ -168,13 +104,15 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
         },
     ) }
     // Cleared on back, so picking FUEL again from the picker opens on FOOD as usual.
-    var fuelStart by rememberSaveable(stateSaver = com.bioscan.fieldterminal.ui.components.AddEntryStartSaver) { mutableStateOf<AddEntryStart?>(start as? AddEntryStart.Fuel) }
+    var fuelStart by rememberSaveable(stateSaver = AddEntryStartSaver) { mutableStateOf<AddEntryStart?>(start as? AddEntryStart.Fuel) }
     // UX review P3: the last three choices are one tap away in a RECENT row (was a single LAST button).
-    val addPrefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("ft_ui", android.content.Context.MODE_PRIVATE)
+    val addPrefs = LocalContext.current.getSharedPreferences("ft_ui", Context.MODE_PRIVATE)
     var recent by remember { mutableStateOf(parseRecentChoices(addPrefs.getString("recent_add_choices", null))) }
     // Injury and illness have their own form sheets (shared with Training › Injury); picking one swaps this sheet for it.
-    var healthForm by rememberSaveable(stateSaver = com.bioscan.fieldterminal.ui.components.AddEntryTargetSaver) { mutableStateOf<AddEntryTarget?>(null) }
-    // Analysis Layer 3 / R2: "say it" (LogAgentForm) and its hand-off of a food proposal to the normal food form.
+    var healthForm by rememberSaveable(stateSaver = AddEntryTargetSaver) { mutableStateOf<AddEntryTarget?>(null) }
+    // A symptom check's symptoms and signals, carried into the illness it is tracked as.
+    var illnessPrefill by remember { mutableStateOf<Pair<Set<String>, List<Long>>>(emptySet<String>() to emptyList()) }
+    // "say it" (LogAgentForm) and its hand-off of a food proposal to the normal food form.
     var sayIt by rememberSaveable { mutableStateOf(start is AddEntryStart.SayIt) }
     var foodPrefill by rememberSaveable { mutableStateOf<Pair<String, LocalDateTime>?>(null) }
     val repo = remember { AddEntryRepository(SupabaseClientProvider.client) }
@@ -199,13 +137,22 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
     }
 
     when (healthForm) {
-        AddEntryTarget.HealthCheckIn -> com.bioscan.fieldterminal.ui.screens.health.HealthCheckInSheet(onDismiss = onDismiss, onSaved = onSaved)
-        AddEntryTarget.BodyCheckIn -> com.bioscan.fieldterminal.ui.screens.status.BodyCheckInSheet(onDismiss = onDismiss, onSaved = onSaved)
-        AddEntryTarget.EventForm -> com.bioscan.fieldterminal.ui.screens.events.EventFormSheet(onDismiss = onDismiss, onSaved = { onSaved() })
-        AddEntryTarget.SweatTest -> com.bioscan.fieldterminal.ui.screens.events.SweatTestSheet(onDismiss = onDismiss, onSaved = onSaved)
-        AddEntryTarget.ScaleWeighIn -> com.bioscan.fieldterminal.ui.screens.status.ScaleWeighInSheet(onDismiss = onDismiss, onSaved = onSaved)
+        AddEntryTarget.HealthCheckIn -> HealthCheckInSheet(onDismiss = onDismiss, onSaved = onSaved)
+        AddEntryTarget.IllnessForm -> IllnessSheet(
+            onDismiss = onDismiss, onSaved = onSaved, prefillSymptoms = illnessPrefill.first, adoptSignalIds = illnessPrefill.second,
+        )
+        // TRACK AS ILLNESS / INJURY from here goes on to the matching sheet in place of this one.
+        AddEntryTarget.SymptomCheck -> SymptomCheckSheet(
+            onDismiss = onDismiss, onSaved = onSaved,
+            onTrackIllness = { symptoms, signals -> illnessPrefill = symptoms to signals; healthForm = AddEntryTarget.IllnessForm },
+            onTrackInjury = { healthForm = AddEntryTarget.HealthCheckIn },
+        )
+        AddEntryTarget.BodyCheckIn -> BodyCheckInSheet(onDismiss = onDismiss, onSaved = onSaved)
+        AddEntryTarget.EventForm -> EventFormSheet(onDismiss = onDismiss, onSaved = { onSaved() })
+        AddEntryTarget.SweatTest -> SweatTestSheet(onDismiss = onDismiss, onSaved = onSaved)
+        AddEntryTarget.ScaleWeighIn -> ScaleWeighInSheet(onDismiss = onDismiss, onSaved = onSaved)
         else -> ModalBottomSheet(
-            onDismissRequest = { if (!externalActivityActive.value && !com.bioscan.fieldterminal.util.ExternalActivityGuard.active) onDismiss() },
+            onDismissRequest = { if (!externalActivityActive.value && !ExternalActivityGuard.active) onDismiss() },
             sheetState = sheetState,
             shape = FT.SheetShape,
             containerColor = FT.Surface,
@@ -220,7 +167,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
                 val type = selectedType
                 // System back inside a form goes back to the picker, as BACK does, instead of closing the sheet and
                 // dropping what was typed.
-                androidx.activity.compose.BackHandler(enabled = sayIt || type != null) {
+                BackHandler(enabled = sayIt || type != null) {
                     if (sayIt) sayIt = false else { selectedType = null; foodPrefill = null; fuelStart = null }
                 }
                 if (sayIt) {
@@ -236,7 +183,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
                     )
                 } else if (type == null) {
                     Text("LOG NEW ENTRY", style = sheetHeaderTitleStyle, color = FT.DomainLog)
-                    // Scoring system rebuild: SAY IT is no longer offered here (the menu goes straight to the types).
+                    // SAY IT is no longer offered here (the menu goes straight to the types).
                     Spacer(Modifier.height(16.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         if (recent.isNotEmpty()) ChoiceSection("RECENT", recent, pick)
@@ -249,7 +196,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
                     // scope; the page refreshes when it lands. A rejected write says so with RETRY, which runs the same
                     // write again (the values are already in it), so nothing typed is lost.
                     val onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit = { write ->
-                        com.bioscan.fieldterminal.ui.components.Toasts.optimistic(
+                        Toasts.optimistic(
                             apply = onDismiss,
                             save = {
                                 write(repo)
@@ -259,7 +206,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
                             what = "Couldn't save the entry",
                         )
                     }
-                    saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical) }
+                    saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Bad) }
                     when (type) {
                         AddEntryType.Fuel -> FuelForm(
                             saving, onSubmit, onCanonicalSaved = onSaved, externalActivityActive = externalActivityActive, foodPrefill = foodPrefill,
@@ -272,7 +219,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
                                 onSubmit { it.addEncounter(date = date, encounterType = et, notes = n, occurredAt = occurredAt, locationType = loc, durationMin = dur, activities = acts, myRating = rating) }
                             },
                         )
-                        AddEntryType.Stool -> StoolForm(saving, onSave = { occurredAt, bt, d -> onSubmit { it.addStool(occurredAt, bt, d) } })
+                        AddEntryType.Stool -> StoolForm(saving, onSave = { occurredAt, bt, d, empty -> onSubmit { it.addStool(occurredAt, bt, d, empty) } })
                         AddEntryType.Wellness -> WellnessForm(saving, onSave = { date, e, m, s, so, mw, al -> onSubmit { it.addWellbeing(date, e, m, s, so, mw, al) } })
                         AddEntryType.Note -> NoteForm(saving, onSave = { occurredAt, text -> onSubmit { it.addNote(occurredAt, text) } })
                         AddEntryType.Ostrc -> OstrcForm(saving, onSave = { date, ba, q1, q2, q3, q4, n -> onSubmit { it.addOstrc(date, ba, q1, q2, q3, q4, n) } })
@@ -290,8 +237,8 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
 // DETAIL / EDIT / DELETE. It used to open a bare action menu. EDIT appears when the source has a corresponding form;
 // Sleep has no add-entry form and no editable fields, so it stays delete-only. Supplement (DAV-156) is editable -- dose
 // is a real field, even though which supplement was taken still isn't (that's "delete and re-log," not "edit").
-// Exercise (Phase G3) IS editable -- not its Health-Connect-sourced fields, just rpe/notes via ExerciseDetailsForm.
-// DETAIL (Phase G4) pushes SessionDetailScreen for exercise and opens the sleep detail for sleep. DELETE asks first
+// Exercise IS editable -- not its Health-Connect-sourced fields, just rpe/notes via ExerciseDetailsForm.
+// DETAIL pushes SessionDetailScreen for exercise and opens the sleep detail for sleep. DELETE asks first
 // (contract A2) and says when it failed.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -326,7 +273,7 @@ fun EntrySheet(
                 if (editable) FTButton(label = "EDIT", modifier = Modifier.weight(1f), onClick = onEdit)
                 FTButton(label = "DELETE", emphasis = FTButtonEmphasis.Destructive, modifier = Modifier.weight(1f)) { onDeleted() }
             }
-            deleteError?.let { Text("Couldn't delete: $it", style = FTType.BodySmall, color = FT.Critical) }
+            deleteError?.let { Text("Couldn't delete: $it", style = FTType.BodySmall, color = FT.Bad) }
             Spacer(Modifier.height(4.dp))
         }
     }
@@ -361,7 +308,7 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
             LogSource.Supplement -> repo.fetchSupplementTaken(entry.id)
             LogSource.Sleep -> null // no edit form; EntrySheet never offers EDIT for this
             }
-        } catch (e: kotlinx.coroutines.CancellationException) {
+        } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             saveError = "Couldn't load this entry (${describeLoadFailure(e)})"
@@ -393,7 +340,7 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                         write(repo)
                         saving = false
                         onSaved()
-                    } catch (e: kotlinx.coroutines.CancellationException) {
+                    } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
                         saving = false
@@ -401,7 +348,7 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                     }
                 }
             }
-            saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical) }
+            saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Bad) }
 
             if (row == null) {
                 Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) {
@@ -431,7 +378,7 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                 )
                 is LogEncounterRow -> EncounterForm(
                     saving,
-                    initialDateTime = row.occurredAt?.let { parseIsoToLocalDateTime(it) } ?: LocalDateTime.of(LocalDate.parse(row.date), java.time.LocalTime.of(21, 0)),
+                    initialDateTime = row.occurredAt?.let { parseIsoToLocalDateTime(it) } ?: LocalDateTime.of(LocalDate.parse(row.date), LocalTime.of(21, 0)),
                     initialType = row.encounterType ?: "",
                     initialLocationType = row.locationType ?: "",
                     initialDurationMin = row.durationMin,
@@ -447,7 +394,8 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                     initialDateTime = parseIsoToLocalDateTime(row.occurredAt),
                     initialBristolType = row.bristolType,
                     initialDiscomfort = row.discomfort,
-                    onSave = { occurredAt, bt, d -> onSubmit { it.updateStool(row.id, occurredAt, bt, d) } },
+                    initialEmpty = row.completeEvacuation,
+                    onSave = { occurredAt, bt, d, empty -> onSubmit { it.updateStool(row.id, occurredAt, bt, d, empty) } },
                 )
                 is LogGripRow -> GripForm(
                     saving,
@@ -525,8 +473,9 @@ fun SleepDetailSheet(entryId: Long, onDismiss: () -> Unit) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var row by remember { mutableStateOf<LogSleepDetailRow?>(null) }
 
-    LaunchedEffect(entryId) {
-        row = softLoad { AddEntryRepository(SupabaseClientProvider.client).fetchSleepDetail(entryId) }
+    val guard = rememberLoadGuard(refreshOnUpdates = false)
+    LaunchedEffect(entryId, guard.attempt) {
+        guard.run { row = AddEntryRepository(SupabaseClientProvider.client).fetchSleepDetail(entryId) }
     }
 
     ModalBottomSheet(
@@ -540,7 +489,9 @@ fun SleepDetailSheet(entryId: Long, onDismiss: () -> Unit) {
             SheetBackHeader(label = "SLEEP DETAIL", onBack = onDismiss)
             Spacer(Modifier.height(16.dp))
             val r = row
-            if (r == null) {
+            if (guard.error != null) {
+                LoadErrorLine(guard, "this night")
+            } else if (r == null) {
                 Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = FT.DomainLog)
                 }
@@ -606,1901 +557,7 @@ private fun formatSleepTime(iso: String): String =
 // fixes it without touching any of the naive readers.
 private fun parseIsoToLocalDateTime(iso: String): LocalDateTime =
     try {
-        java.time.OffsetDateTime.parse(iso).toLocalDateTime()
+        OffsetDateTime.parse(iso).toLocalDateTime()
     } catch (e: Exception) {
         LocalDateTime.parse(iso)
     }
-
-private fun LocalDateTime.toIsoWithOffset(): String = this.atOffset(java.time.ZoneOffset.UTC).toString()
-
-@Composable
-private fun SheetBackHeader(label: String, onBack: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
-            "BACK",
-            style = sheetActionLabelStyle,
-            color = FT.TextSecondary,
-            modifier = Modifier.ftClickable(onClick = onBack),
-        )
-        Text(label, style = sheetHeaderTitleStyle, color = FT.DomainLog)
-    }
-}
-
-// UX review P3: one labelled group of add-entry choices, three per row. Labels are words a person reads (Inter, contract
-// A7); the dot is the entry's category colour, an identity mark the Log feed uses for the same kinds, never a state.
-@Composable
-private fun ChoiceSection(label: String, choices: List<AddEntryChoice>, onPick: (AddEntryChoice) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(label, style = FTType.LabelCaps, color = FT.TextMuted)
-        choices.chunked(3).forEach { row ->
-            Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { choice -> ChoiceTile(choice, Modifier.weight(1f).fillMaxHeight()) { onPick(choice) } }
-                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ChoiceTile(choice: AddEntryChoice, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(FT.RadiusModule)
-    Row(
-        modifier = modifier
-            .defaultMinSize(minHeight = 48.dp)
-            .border(FT.BorderWidth, FT.GlassBorder, shape)
-            .ftClickable(shape = shape, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Box(Modifier.size(8.dp).clip(CircleShape).background(choiceColor(choice)))
-        // Hyphenated, so a long word at a large font size breaks as "Encoun-ter", not "Encounte / r".
-        Text(choice.label, style = FTType.ButtonLabel.copy(hyphens = androidx.compose.ui.text.style.Hyphens.Auto), color = FT.TextPrimary, maxLines = 2)
-    }
-}
-
-private fun choiceColor(choice: AddEntryChoice): Color = when (choice) {
-    AddEntryChoice.Food, AddEntryChoice.RunFuel -> FT.Category.Intake.c500
-    AddEntryChoice.Drink -> FT.Category.Intake.c300
-    AddEntryChoice.Supplements -> FT.Category.Intake.c700
-    AddEntryChoice.Wellbeing -> FT.Category.Wellbeing.c500
-    AddEntryChoice.Stool -> FT.Category.Digestion.c500
-    AddEntryChoice.HealthCheckIn -> FT.DomainHeart
-    AddEntryChoice.Grip, AddEntryChoice.BodyCheckIn, AddEntryChoice.SweatTest, AddEntryChoice.ScaleWeighIn -> FT.Category.Activity.c500
-    AddEntryChoice.Event -> FT.DomainTraining
-    AddEntryChoice.SexualActivity, AddEntryChoice.Encounter -> FT.Category.Arousal.c500
-    AddEntryChoice.Note -> FT.TextSecondary
-}
-
-@Composable
-private fun FormLabel(text: String) {
-    Text(
-        text,
-        style = sheetActionLabelStyle,
-        color = FT.TextSecondary,
-        modifier = Modifier.padding(bottom = 6.dp),
-    )
-}
-
-@Composable
-private fun SaveButton(saving: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    FTButton(label = if (saving) "SAVING..." else "SAVE", emphasis = FTButtonEmphasis.Primary) {
-        if (enabled && !saving) onClick()
-    }
-}
-
-@Composable
-private fun QtyRow(qty: Double, step: Double = SUPPLEMENT_QTY_STEP, words: ((Double) -> String?)? = null, onChange: (Double) -> Unit) {
-    val shape = androidx.compose.foundation.shape.RoundedCornerShape(FT.RadiusSmall)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text("QTY", style = FTType.LabelCaps, color = if (qty > 0.0) FT.TextMuted else FT.Warning)
-        for (delta in listOf(-step, step)) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(shape)
-                    .background(FT.Glass, shape)
-                    .border(FT.BorderWidth, FT.GlassBorder, shape)
-                    .ftClickable(shape = shape) {
-                        // 0 is allowed: the item is not taken this time and is left out of the save.
-                        // Rounded so a third of a dose (one of three softgels) adds back up to exactly one dose.
-                        val next = Math.round((qty + delta) * 1e6) / 1e6
-                        if (next >= 0.0) onChange(next)
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(if (delta < 0) "−" else "+", style = FTType.Telemetry, color = FT.TextSecondary)
-            }
-            // A fixed width, so the steppers of every row line up whatever the amount reads.
-            if (delta < 0) Text(
-                if (qty > 0.0) (words?.invoke(qty) ?: formatSupplementQty(qty)) else "NOT TAKEN",
-                style = FTType.Telemetry, color = if (qty > 0.0) FT.TextPrimary else FT.Warning,
-                maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.width(112.dp),
-            )
-        }
-    }
-}
-
-// FUEL: one entry point, three sub-tabs. Reuses FoodForm/DrinkForm/
-// SupplementsForm exactly as they'd be used standalone -- only the picker
-// wrapping them is new.
-@Composable
-private fun FuelForm(
-    saving: Boolean,
-    onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit,
-    onCanonicalSaved: () -> Unit,
-    externalActivityActive: androidx.compose.runtime.MutableState<Boolean>? = null,
-    foodPrefill: Pair<String, LocalDateTime>? = null,
-    initialSubType: FuelSubType = FuelSubType.Food,
-    supplementBundle: String? = null,
-) {
-    // A "say it" food hand-off always lands on FOOD, whatever the sheet was opened on.
-    var subType by rememberSaveable { mutableStateOf(if (foodPrefill != null) FuelSubType.Food else initialSubType) }
-
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FuelSubType.entries.forEach { sub ->
-                val isSelected = sub == subType
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .border(FT.BorderWidth, if (isSelected) Color.Transparent else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-                        .background(if (isSelected) FT.PlatinumSolid else Color.Transparent, RoundedCornerShape(FT.RadiusSmall))
-                        .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { subType = sub }
-                        .padding(vertical = 10.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(sub.label, style = sheetActionLabelStyle, color = if (isSelected) FT.PlatinumInk else FT.TextSecondary)
-                }
-            }
-        }
-        when (subType) {
-            FuelSubType.Food -> FoodForm(
-                saving,
-                initialDateTime = foodPrefill?.second ?: LocalDateTime.now(),
-                initialDescription = foodPrefill?.first ?: "",
-                onSave = { dt, desc, cal, p, c, f, fi, su, so, slot -> onSubmit { it.addFood(dt, desc, cal, p, c, f, fi, su, so, slot) } },
-                onCanonicalSaved = onCanonicalSaved,
-                externalActivityActive = externalActivityActive,
-            )
-            FuelSubType.Drink -> DrinkLogForm(
-                saving,
-                onWater = { date, ml -> onSubmit { it.addDrink(date, ml) } },
-                onSaved = onCanonicalSaved,
-                externalActivityActive = externalActivityActive,
-            )
-            FuelSubType.Supplements -> SupplementsForm(saving, preselectBundle = supplementBundle, onSave = { takenAt, items, source, quantities, sites -> onSubmit { it.addSupplementsTaken(takenAt, items, source, quantities, sites) } })
-            FuelSubType.Endurance -> com.bioscan.fieldterminal.ui.screens.fuel.RunFuelEntry(onSaved = onCanonicalSaved)
-        }
-    }
-}
-
-@Composable
-private fun FoodForm(
-    saving: Boolean,
-    initialDateTime: LocalDateTime = LocalDateTime.now(),
-    initialDescription: String = "",
-    initialCalories: Double? = null,
-    initialProtein: Double? = null,
-    initialCarbs: Double? = null,
-    initialFat: Double? = null,
-    initialFiber: Double? = null,
-    initialSugar: Double? = null,
-    initialSodium: Double? = null,
-    // Which planned meal it was; null pre-selects one (MealSlotChips). [editingMealId] leaves its own label out of the day's.
-    initialMealSlot: String? = null,
-    editingMealId: Long? = null,
-    onSave: (
-        loggedAt: String,
-        description: String,
-        calories: Double?,
-        proteinG: Double?,
-        carbsG: Double?,
-        fatG: Double?,
-        fiberG: Double?,
-        sugarG: Double?,
-        sodiumMg: Double?,
-        mealSlot: String?,
-    ) -> Unit,
-    // DAV-168: the canonical (foods/meal_items) save path doesn't go through
-    // AddEntryRepository at all -- NutritionMealSaveRepository writes
-    // directly -- so it can't reuse onSave's addFood-shaped contract above.
-    // This is the same "the whole sheet is done" signal AddEntrySheet's own
-    // onSaved already is, just reachable from inside this nested form.
-    onCanonicalSaved: () -> Unit = {},
-    externalActivityActive: androidx.compose.runtime.MutableState<Boolean>? = null,
-) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    // Saveable: TAKE PHOTO hands the screen to the camera app, which can get this app killed and restored.
-    var dateTime by rememberSaveable { mutableStateOf(initialDateTime) }
-    var mealSlot by rememberSaveable { mutableStateOf(initialMealSlot) }
-    var description by rememberSaveable { mutableStateOf(initialDescription) }
-    var calories by rememberSaveable { mutableStateOf(initialCalories?.toString() ?: "") }
-    var protein by rememberSaveable { mutableStateOf(initialProtein?.toString() ?: "") }
-    var carbs by rememberSaveable { mutableStateOf(initialCarbs?.toString() ?: "") }
-    var fat by rememberSaveable { mutableStateOf(initialFat?.toString() ?: "") }
-    var fiber by rememberSaveable { mutableStateOf(initialFiber?.toString() ?: "") }
-    var sugar by rememberSaveable { mutableStateOf(initialSugar?.toString() ?: "") }
-    var sodium by rememberSaveable { mutableStateOf(initialSodium?.toString() ?: "") }
-
-    var estimating by remember { mutableStateOf(false) }
-    var estimationError by remember { mutableStateOf<String?>(null) }
-    var pendingCameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
-
-    // User request (2026-09-30): one or more photos of the same meal queue up
-    // here before a single ESTIMATE tap -- was "first photo taken/picked
-    // auto-runs estimate," now a real batch since the whole point is letting
-    // Gemini see everything on the plate at once.
-    var pendingPhotos by rememberSaveable(stateSaver = com.bioscan.fieldterminal.ui.components.UriListSaver) { mutableStateOf<List<Uri>>(emptyList()) }
-    // A photo taken just before the app was killed, whose result never arrived (util/ImageUtils.kt PendingCameraCapture).
-    var strandedPhoto by remember { mutableStateOf<Uri?>(null) }
-    LaunchedEffect(Unit) {
-        val stranded = com.bioscan.fieldterminal.util.PendingCameraCapture.stranded(context)
-        if (stranded != null && stranded !in pendingPhotos) strandedPhoto = stranded
-    }
-    // Photo logging v3: what the person says the meal is (it wins over the photo), the weighed food, and the photos and
-    // answers of the last estimate, so a tapped answer or a correction reruns it on the same photos.
-    var photoNote by rememberSaveable { mutableStateOf("") }
-    var photoWeight by rememberSaveable { mutableStateOf("") }
-    var estimatedPhotos by rememberSaveable(stateSaver = com.bioscan.fieldterminal.ui.components.UriListSaver) { mutableStateOf<List<Uri>>(emptyList()) }
-    var photoAnswers by remember { mutableStateOf<List<com.bioscan.fieldterminal.data.PhotoAnswer>>(emptyList()) }
-    var mealEstimate by remember { mutableStateOf<NutritionMealEstimate?>(null) }
-    var mealEstimateId by remember { mutableStateOf<Long?>(null) }
-    var cronometerEnrichment by remember { mutableStateOf<CronometerEnrichment?>(null) }
-    var enriching by remember { mutableStateOf(false) }
-    var mealEstimateSource by remember { mutableStateOf(MealItemSource.AiImage) }
-
-    // DAV-168: candidates from any of the three sources funnel into the
-    // same review sheet before ever touching meal_items.
-    var reviewSeedItems by remember { mutableStateOf<List<ReviewSeedItem>?>(null) }
-    // A barcode no database has calories for: the label-scan sheet for it, and the photos taken of that label.
-    var labelTarget by remember { mutableStateOf<LabelTarget?>(null) }
-    var labelPhotos by remember { mutableStateOf<List<Uri>>(emptyList()) }
-    var photoForLabel by remember { mutableStateOf(false) }
-    var barcodeInput by remember { mutableStateOf("") }
-    var barcodeLooking by remember { mutableStateOf(false) }
-    var barcodeError by remember { mutableStateOf<String?>(null) }
-    var showRecentMeals by remember { mutableStateOf(false) }
-    var recentMeals by remember { mutableStateOf<List<MealRow>?>(null) }
-    var cloning by remember { mutableStateOf(false) }
-
-    // [answers] and a corrected [note] rerun the estimate on the same photos (from the confirm sheet); the photo's own
-    // foods then go to the database lookup as they are, at the grams the photo showed.
-    fun runImageEstimate(uris: List<Uri>, answers: List<com.bioscan.fieldterminal.data.PhotoAnswer> = emptyList()) {
-        if (uris.isEmpty()) return
-        estimating = true
-        estimationError = null
-        mealEstimateSource = MealItemSource.AiImage
-        scope.launch {
-            try {
-                val images = uris.map { readAndCompressImage(context, it) }
-                val result = NutritionImageEstimateRepository(SupabaseClientProvider.client).estimate(
-                    images,
-                    note = photoNote,
-                    totalWeightG = photoWeight.replace(',', '.').toDoubleOrNull(),
-                    answers = answers,
-                )
-                estimatedPhotos = uris
-                photoAnswers = answers
-                cronometerEnrichment = null
-                mealEstimateId = result.estimateId
-                mealEstimate = result.estimate
-                pendingPhotos = emptyList()
-                // The Gemini estimate is usable now; the Cronometer lookup below must not keep the spinner running.
-                estimating = false
-
-                enriching = true
-                try {
-                    val lookup = NutritionCronometerLookupRepository(SupabaseClientProvider.client)
-                    cronometerEnrichment = if (result.estimate.items.isNotEmpty()) {
-                        lookup.enrichPhoto(result.estimate.items, result.estimate.description)
-                    } else {
-                        lookup.enrich(result.estimate.description)
-                    }
-                } catch (_: Exception) {
-                    // Enrichment is best-effort; Gemini estimate stands if Cronometer fails
-                } finally {
-                    enriching = false
-                }
-            } catch (e: Exception) {
-                estimationError = e.functionErrorMessage()
-            } finally {
-                estimating = false
-            }
-        }
-    }
-
-    fun runTextEstimate() {
-        if (description.isBlank()) return
-        estimating = true
-        estimationError = null
-        cronometerEnrichment = null
-        mealEstimateSource = MealItemSource.AiText
-        scope.launch {
-            try {
-                enriching = true
-                val enrichResult = NutritionCronometerLookupRepository(SupabaseClientProvider.client)
-                    .enrich(description)
-                cronometerEnrichment = enrichResult
-                mealEstimate = NutritionMealEstimate(
-                    description = description.trim(),
-                    calories = enrichResult.calories ?: 0.0,
-                    proteinG = enrichResult.proteinG ?: 0.0,
-                    carbsG = enrichResult.carbsG ?: 0.0,
-                    fatG = enrichResult.fatG ?: 0.0,
-                    fiberG = enrichResult.fiberG,
-                    sugarG = enrichResult.sugarG,
-                    sodiumMg = enrichResult.sodiumMg,
-                    confidence = enrichResult.confidence,
-                )
-                mealEstimateId = null
-            } catch (e: Exception) {
-                estimationError = e.functionErrorMessage()
-            } finally {
-                enriching = false
-                estimating = false
-            }
-        }
-    }
-
-    // A barcode product as one catalog item (its label numbers, servings and package size), topped up with a good
-    // Cronometer match's micronutrients; the confirm sheet then offers serving / package / count portions.
-    suspend fun showBarcodeProduct(food: BarcodeLookupFood) {
-        val foodDesc = if (food.brand != null) "${food.name} (${food.brand})" else food.name
-        val lookup = NutritionCronometerLookupRepository(SupabaseClientProvider.client)
-        enriching = true
-        try {
-            val product = lookup.enrichItems(listOf(CronometerItemInput(foodDesc, catalogFoodId = food.id)))
-            val micros = try {
-                lookup.enrichItems(listOf(CronometerItemInput(food.name, quantityG = product.items.firstOrNull()?.quantityG)))
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                null
-            }
-            val enrichResult = withMicronutrients(product, micros).copy(confidence = 0.95, aiEstimateTotal = null)
-            cronometerEnrichment = enrichResult
-            mealEstimate = NutritionMealEstimate(
-                description = foodDesc,
-                calories = enrichResult.calories ?: 0.0,
-                proteinG = enrichResult.proteinG ?: 0.0,
-                carbsG = enrichResult.carbsG ?: 0.0,
-                fatG = enrichResult.fatG ?: 0.0,
-                fiberG = enrichResult.fiberG,
-                sugarG = enrichResult.sugarG,
-                sodiumMg = enrichResult.sodiumMg,
-                confidence = enrichResult.confidence,
-            )
-            mealEstimateId = null
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            reviewSeedItems = listOf(
-                ReviewSeedItem(
-                    description = food.name,
-                    isBeverage = food.beverageClass != null,
-                    foodConfidence = 1.0,
-                    source = MealItemSource.Barcode,
-                    preMatchedFood = com.bioscan.fieldterminal.data.model.FoodRow(
-                        id = food.id,
-                        foodSourceId = 0,
-                        name = food.name,
-                        brand = food.brand,
-                        barcode = food.barcode,
-                        category = food.category,
-                        beverageClass = food.beverageClass,
-                        beverageSubtype = food.beverageSubtype,
-                    ),
-                ),
-            )
-        } finally {
-            enriching = false
-        }
-    }
-
-    // Known product -> confirm sheet. Unknown barcode, or a product without calories -> scan its nutrition label.
-    fun runBarcodeLookup(raw: String = barcodeInput) {
-        val barcode = normalizeBarcode(raw) ?: raw.trim()
-        if (barcode.isBlank()) return
-        barcodeLooking = true
-        barcodeError = null
-        cronometerEnrichment = null
-        mealEstimateSource = MealItemSource.Barcode
-        scope.launch {
-            try {
-                val result = NutritionBarcodeLookupRepository(SupabaseClientProvider.client).lookup(barcode)
-                val food = result.food
-                if (food == null || result.needsLabel) {
-                    labelPhotos = emptyList()
-                    labelTarget = LabelTarget(barcode, food?.nameZh ?: food?.name ?: "", food?.brand)
-                } else {
-                    showBarcodeProduct(food)
-                }
-            } catch (e: Exception) {
-                barcodeError = e.functionErrorMessage()
-            } finally {
-                barcodeLooking = false
-            }
-        }
-    }
-
-    val takePictureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        externalActivityActive?.value = false
-        com.bioscan.fieldterminal.util.PendingCameraCapture.clear(context)
-        if (success) pendingCameraUri?.let {
-            if (photoForLabel) labelPhotos = labelPhotos + it
-            else if (it !in pendingPhotos) pendingPhotos = pendingPhotos + it
-        }
-        photoForLabel = false
-    }
-    val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) {
-            val uri = createCameraCaptureUri(context)
-            pendingCameraUri = uri
-            takePictureLauncher.launch(uri)
-            // externalActivityActive stays true: camera is about to take foreground
-        } else {
-            externalActivityActive?.value = false
-            photoForLabel = false
-            estimationError = "Camera permission denied"
-        }
-    }
-    val pickPhotoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
-        externalActivityActive?.value = false
-        if (uris.isNotEmpty()) {
-            if (photoForLabel) labelPhotos = labelPhotos + uris else pendingPhotos = pendingPhotos + uris
-        }
-        photoForLabel = false
-    }
-
-    // Meal photos and label photos share the camera and the picker; photoForLabel says where the result goes.
-    fun launchCamera() {
-        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-        externalActivityActive?.value = true
-        if (granted) {
-            val uri = createCameraCaptureUri(context)
-            pendingCameraUri = uri
-            takePictureLauncher.launch(uri)
-        } else {
-            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-        }
-    }
-
-    fun launchPicker() {
-        externalActivityActive?.value = true
-        pickPhotoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-    }
-
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        DateTimeField("WHEN", dateTime, { dateTime = it })
-        MealSlotChips(dateTime, com.bioscan.fieldterminal.domain.fuel.mealSlotOf(mealSlot), { mealSlot = it.name.lowercase() }, editingMealId)
-        Column { FormLabel("DESCRIPTION"); FieldTextField(description, { description = it }, "e.g. Chicken rice bowl") }
-
-        // DAV-168: this section now talks to the server-side Gemini/barcode
-        // pipeline (DAV-165/166/167) -- no local Gemini key needed anymore,
-        // unlike the plain-macro-entry fields further down which are
-        // untouched. A candidate from any of these three actions opens the
-        // review sheet; nothing here writes to `meals` directly.
-        Column {
-            FormLabel("LOG WITH AI OR BARCODE")
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PhotoActionButton(label = "TAKE PHOTO", modifier = Modifier.weight(1f)) {
-                    photoForLabel = false
-                    launchCamera()
-                }
-                PhotoActionButton(label = "CHOOSE PHOTOS", modifier = Modifier.weight(1f)) {
-                    photoForLabel = false
-                    launchPicker()
-                }
-            }
-            strandedPhoto?.let { photo ->
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 10.dp)) {
-                    Text("PHOTO JUST TAKEN", style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.weight(1f))
-                    com.bioscan.fieldterminal.ui.components.FTButton("USE IT", emphasis = com.bioscan.fieldterminal.ui.components.FTButtonEmphasis.Secondary) {
-                        pendingPhotos = pendingPhotos + photo
-                        strandedPhoto = null
-                        com.bioscan.fieldterminal.util.PendingCameraCapture.clear(context)
-                    }
-                    com.bioscan.fieldterminal.ui.components.FTButton("DISCARD", emphasis = com.bioscan.fieldterminal.ui.components.FTButtonEmphasis.Tertiary) {
-                        strandedPhoto = null
-                        com.bioscan.fieldterminal.util.PendingCameraCapture.clear(context)
-                    }
-                }
-            }
-            if (pendingPhotos.isNotEmpty()) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.padding(top = 10.dp),
-                ) {
-                    Text(
-                        "${pendingPhotos.size} photo${if (pendingPhotos.size == 1) "" else "s"} ready",
-                        style = FTType.BodySmall,
-                        color = FT.TextSecondary,
-                    )
-                    Text(
-                        "CLEAR",
-                        style = sheetActionLabelStyle,
-                        color = FT.Critical,
-                        modifier = Modifier.ftClickable {
-                            pendingPhotos = emptyList()
-                        },
-                    )
-                }
-                // Photo logging v3: optional, and both make the estimate better than the photo alone.
-                Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FieldTextField(photoNote, { photoNote = it }, "What is it? (optional, e.g. beef noodle soup, no oil)", singleLine = false)
-                    FieldTextField(photoWeight, { photoWeight = it.filter { c -> c.isDigit() || c == '.' || c == ',' } }, "Weighed? total grams (optional)", keyboardType = KeyboardType.Number)
-                }
-                PhotoActionButton(
-                    label = if (estimating) "ESTIMATING..." else "ESTIMATE MEAL",
-                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                    enabled = !estimating,
-                ) { runImageEstimate(pendingPhotos) }
-            }
-            PhotoActionButton(
-                label = "FROM DESCRIPTION",
-                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                enabled = description.isNotBlank(),
-            ) { runTextEstimate() }
-            if (estimating) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
-                    CircularProgressIndicator(color = FT.DomainLog, modifier = Modifier.size(14.dp))
-                    Text("Estimating...", style = FTType.BodySmall, color = FT.TextSecondary)
-                }
-            }
-            estimationError?.let {
-                Text(it, style = FTType.BodySmall, color = FT.Critical, modifier = Modifier.padding(top = 10.dp))
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 14.dp)) {
-                FieldTextField(
-                    barcodeInput,
-                    { barcodeInput = it },
-                    "Barcode number",
-                    modifier = Modifier.weight(1f),
-                    keyboardType = KeyboardType.Number,
-                )
-                PhotoActionButton(label = if (barcodeLooking) "..." else "LOOKUP", enabled = barcodeInput.isNotBlank() && !barcodeLooking) {
-                    runBarcodeLookup()
-                }
-                PhotoActionButton(label = "SCAN", enabled = !barcodeLooking) {
-                    scope.launch {
-                        val code = scanBarcode(context) { barcodeError = it }
-                        if (code != null) {
-                            barcodeInput = code
-                            runBarcodeLookup(code)
-                        }
-                    }
-                }
-            }
-            barcodeError?.let {
-                Text(it, style = FTType.BodySmall, color = FT.Critical, modifier = Modifier.padding(top = 8.dp))
-            }
-
-            Text(
-                if (showRecentMeals) "HIDE RECENT MEALS" else "REPEAT A RECENT MEAL",
-                style = sheetActionLabelStyle,
-                color = FT.TextSecondary,
-                modifier = Modifier
-                    .padding(top = 14.dp)
-                    .ftClickable {
-                        showRecentMeals = !showRecentMeals
-                    },
-            )
-            if (showRecentMeals) {
-                LaunchedEffect(Unit) {
-                    if (recentMeals == null) {
-                        recentMeals = try { NutritionRepository(SupabaseClientProvider.client).loadRecentMeals() } catch (e: Exception) { emptyList() }
-                    }
-                }
-                val meals = recentMeals
-                if (meals == null) {
-                    CircularProgressIndicator(color = FT.DomainLog, modifier = Modifier.padding(top = 8.dp).size(14.dp))
-                } else if (meals.isEmpty()) {
-                    Text("No recent meals yet.", style = FTType.BodySmall, color = FT.TextSecondary, modifier = Modifier.padding(top = 8.dp))
-                } else {
-                    Column(modifier = Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        meals.forEach { meal ->
-                            Text(
-                                meal.description ?: "Meal",
-                                style = FTType.BodySmall,
-                                color = if (cloning) FT.TextMuted else FT.TextPrimary,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .ftClickable(enabled = !cloning) {
-                                        val id = meal.id ?: return@ftClickable
-                                        cloning = true
-                                        scope.launch {
-                                            try {
-                                                NutritionMealSaveRepository(SupabaseClientProvider.client).cloneMeal(id, dateTime.toIsoWithOffset(), mealSlot)
-                                                onCanonicalSaved()
-                                            } catch (e: Exception) {
-                                                barcodeError = e.message ?: "Could not repeat this meal"
-                                            } finally {
-                                                cloning = false
-                                            }
-                                        }
-                                    }
-                                    .padding(vertical = 6.dp),
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        Column { FormLabel("CALORIES (OPTIONAL)"); FieldTextField(calories, { calories = it }, "e.g. 650", keyboardType = KeyboardType.Number) }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Column(Modifier.weight(1f)) { FormLabel("PROTEIN G"); FieldTextField(protein, { protein = it }, "0", keyboardType = KeyboardType.Number) }
-            Column(Modifier.weight(1f)) { FormLabel("CARBS G"); FieldTextField(carbs, { carbs = it }, "0", keyboardType = KeyboardType.Number) }
-            Column(Modifier.weight(1f)) { FormLabel("FAT G"); FieldTextField(fat, { fat = it }, "0", keyboardType = KeyboardType.Number) }
-        }
-        // DAV-77: kept to fiber/sugar/sodium -- the smallest real
-        // "beyond macros" set, not the dozens of vitamins/minerals a
-        // photo/description estimate can't plausibly guess anyway.
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Column(Modifier.weight(1f)) { FormLabel("FIBER G"); FieldTextField(fiber, { fiber = it }, "0", keyboardType = KeyboardType.Number) }
-            Column(Modifier.weight(1f)) { FormLabel("SUGAR G"); FieldTextField(sugar, { sugar = it }, "0", keyboardType = KeyboardType.Number) }
-            Column(Modifier.weight(1f)) { FormLabel("SODIUM MG"); FieldTextField(sodium, { sodium = it }, "0", keyboardType = KeyboardType.Number) }
-        }
-        SaveButton(saving, description.isNotBlank()) {
-            onSave(
-                dateTime.toIsoWithOffset(),
-                description.trim(),
-                calories.toDoubleOrNull(),
-                protein.toDoubleOrNull(),
-                carbs.toDoubleOrNull(),
-                fat.toDoubleOrNull(),
-                fiber.toDoubleOrNull(),
-                sugar.toDoubleOrNull(),
-                sodium.toDoubleOrNull(),
-                mealSlot,
-            )
-        }
-    }
-
-    reviewSeedItems?.let { seeds ->
-        NutritionCandidateReviewSheet(
-            seedItems = seeds,
-            mealDateTime = dateTime,
-            mealSlot = mealSlot,
-            onDismiss = { reviewSeedItems = null },
-            onSaved = {
-                reviewSeedItems = null
-                onCanonicalSaved()
-            },
-        )
-    }
-
-    labelTarget?.let { target ->
-        LabelEntrySheet(
-            barcode = target.barcode,
-            initialName = target.name,
-            initialBrand = target.brand,
-            photos = labelPhotos,
-            onTakePhoto = {
-                photoForLabel = true
-                launchCamera()
-            },
-            onChoosePhoto = {
-                photoForLabel = true
-                launchPicker()
-            },
-            onSaved = { food ->
-                labelTarget = null
-                labelPhotos = emptyList()
-                mealEstimateSource = MealItemSource.Barcode
-                scope.launch { showBarcodeProduct(food) }
-            },
-            onDismiss = {
-                labelTarget = null
-                labelPhotos = emptyList()
-            },
-        )
-    }
-
-    mealEstimate?.let { estimate ->
-        NutritionEstimateConfirmSheet(
-            estimate = estimate,
-            mealDateTime = dateTime,
-            mealSlot = mealSlot,
-            aiEstimateId = mealEstimateId,
-            enrichment = cronometerEnrichment,
-            enriching = enriching,
-            source = mealEstimateSource,
-            // Photo logging v3: a tapped answer, or a correction of what the meal is, reruns the estimate on the same photos.
-            rerunning = estimating,
-            onAnswer = if (mealEstimateSource == MealItemSource.AiImage && estimatedPhotos.isNotEmpty()) ({ answer ->
-                runImageEstimate(estimatedPhotos, photoAnswers.filter { it.question != answer.question } + answer)
-            }) else null,
-            onCorrect = if (mealEstimateSource == MealItemSource.AiImage && estimatedPhotos.isNotEmpty()) ({ note ->
-                photoNote = note
-                runImageEstimate(estimatedPhotos, photoAnswers)
-            }) else null,
-            onDismiss = { mealEstimate = null; mealEstimateId = null; cronometerEnrichment = null },
-            onSaved = {
-                mealEstimate = null
-                mealEstimateId = null
-                cronometerEnrichment = null
-                photoNote = ""
-                photoWeight = ""
-                photoAnswers = emptyList()
-                onCanonicalSaved()
-            },
-        )
-    }
-}
-
-// The barcode a label scan is for, with what the database knew about the product (an Open Food Facts entry without a
-// nutrition table still has a name).
-private data class LabelTarget(val barcode: String, val name: String, val brand: String?)
-
-// Beverage classes from DAV-181's hydration_factor_models vocabulary that
-// go through the meal_items path (non-water). Water stays on the simple
-// hydration_daily path for backward compatibility.
-
-// Editing a day's water total (hydration_daily); new drinks are logged in DrinkLogForm.
-@Composable
-private fun DrinkForm(
-    saving: Boolean,
-    initialDate: LocalDate = LocalDate.now(),
-    initialMl: Int? = null,
-    onSave: (date: String, ml: Int) -> Unit,
-) {
-    var date by remember { mutableStateOf(initialDate) }
-    var ml by remember { mutableStateOf(initialMl?.toString() ?: "") }
-    val mlValue = ml.toIntOrNull()
-
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        DateField("DATE", date, { date = it })
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            FormLabel("WATER THAT DAY (ML)")
-            TextChipRow(DRINK_PRESETS_ML, ml.takeIf { it in DRINK_PRESETS_ML }, perRow = 4) { ml = it ?: "" }
-            FieldTextField(ml, { ml = it }, "e.g. 500", keyboardType = KeyboardType.Number)
-        }
-        SaveButton(saving, mlValue != null && mlValue > 0) {
-            onSave(date.toString(), mlValue!!)
-        }
-    }
-}
-
-// "Bundled by time of day" (added 2026-09-15 per direct user request):
-// morning/afternoon/night supplements are logged as one group -- checking
-// the group logs every supplement in it, since you take them together, not
-// individually. As-needed supplements get their own checkbox each, since
-// which ones you take genuinely varies. Each checked supplement becomes its
-// own supplement_log row on save, so afterward it's individually deletable
-// from the Log feed like any other entry -- no separate "batch" concept
-// needed for "add or remove single items."
-@Composable
-private fun SupplementsForm(
-    saving: Boolean,
-    initialDateTime: LocalDateTime = LocalDateTime.now(),
-    // The bundle the Status hub's + SUPPS found still due now; ticked on open, untick to change.
-    preselectBundle: String? = null,
-    onSave: (takenAt: String, items: List<Triple<Long, String, String>>, source: String, quantities: Map<Long, Double>, sites: Map<Long, String>) -> Unit,
-) {
-    var dateTime by remember { mutableStateOf(initialDateTime) }
-    var supplements by remember { mutableStateOf<List<SupplementRow>?>(null) }
-    // Injectables: each injected dose's site, defaulting to the one rested longest (domain/Injectables.kt).
-    var siteHistory by remember { mutableStateOf<Map<Long, List<Pair<String, java.time.Instant>>>>(emptyMap()) }
-    var sites by remember { mutableStateOf<Map<Long, String>>(emptyMap()) }
-    var checkedBundles by remember { mutableStateOf(setOfNotNull(preselectBundle)) }
-    var checkedAsNeeded by remember { mutableStateOf(setOf<Long>()) }
-    // DAV-362: items picked by barcode are selected one by one, never as a time-of-day bundle.
-    var scanned by remember { mutableStateOf<List<SupplementRow>>(emptyList()) }
-    var scannedChecked by remember { mutableStateOf(setOf<Long>()) }
-    var recentLastTaken by remember { mutableStateOf<Map<Long, LocalDate>>(emptyMap()) }
-    var takesToday by remember { mutableStateOf<Map<Long, Int>>(emptyMap()) }
-    var quantities by remember { mutableStateOf<Map<Long, Double>>(emptyMap()) }
-
-    LaunchedEffect(Unit) {
-        try {
-            val repo = SupplementsRepository(SupabaseClientProvider.client)
-            val active = repo.loadOverview().active
-            supplements = active
-            val takes = repo.loadRecentTakes(active.map { it.id })
-            recentLastTaken = takes.lastTaken
-            takesToday = takes.takesToday
-            val injectableIds = active.filter { it.spec().injectable }.map { it.id }
-            if (injectableIds.isNotEmpty()) {
-                siteHistory = runCatching { com.bioscan.fieldterminal.data.InjectablesRepository(SupabaseClientProvider.client).siteHistory(injectableIds) }
-                    .getOrDefault(emptyMap())
-            }
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            // Offline: show an empty list instead of crashing the sheet.
-            android.util.Log.w("AddEntry", "supplement list load failed", e)
-            if (supplements == null) supplements = emptyList()
-        }
-    }
-
-    val today = LocalDate.now()
-    val list = supplements ?: emptyList()
-
-    // Supplements with an interval that haven't reached their next due date
-    // are removed from the pickable groups so the bundle toggle doesn't log
-    // them too early. They appear in a "NOT DUE TODAY" section instead.
-    // Regimen model (domain/Regimen.kt): due by each item's own schedule (every N days, weekdays, on-cycle). An item taken
-    // twice a day sits in both its bundles; the dose is today's (a planned dose step moves it on).
-    val specs = list.associate { it.id to it.spec() }
-    val asNeeded = list.filter { specs.getValue(it.id).asNeeded }
-    val dueList = list.filter { !specs.getValue(it.id).asNeeded && specs.getValue(it.id).isDueOn(today, recentLastTaken[it.id]) }
-    val notDueList = list.filter { !specs.getValue(it.id).asNeeded && it !in dueList }
-
-    val groups = REGIMEN_SLOTS.associateWith { slot -> dueList.filter { slot in specs.getValue(it.id).slots } }.filterValues { it.isNotEmpty() }
-    fun doseOf(s: SupplementRow) = specs[s.id]?.doseTextOn(today) ?: s.dose
-    // The form decides the step: a whole capsule, half a scored tablet, a quarter of a measured dose (domain/RegimenForms.kt).
-    fun stepOf(s: SupplementRow) = com.bioscan.fieldterminal.domain.doseStep(s.form, s.scored, specs[s.id]?.amountOn(today))
-    fun wordsOf(s: SupplementRow, q: Double) = specs[s.id]?.let { com.bioscan.fieldterminal.domain.unitsWords(q, it.amountOn(today), it.unit) }
-
-    // DAV-156: each selected item carries its roster dose string along so
-    // addSupplementsTaken can parse a real per-supplement dose default --
-    // Creatine's "5 g" and Boron's "10 mg" are different doses, so this has
-    // to travel per-item, not as one shared field for the whole save.
-    val selectedItems = buildList<Triple<Long, String, String>> {
-        checkedBundles.forEach { tod -> groups[tod]?.forEach { s -> if (none { it.first == s.id }) add(Triple(s.id, s.name, doseOf(s))) } }
-        asNeeded.filter { it.id in checkedAsNeeded }.forEach { add(Triple(it.id, it.name, doseOf(it))) }
-        scanned.filter { it.id in scannedChecked }.forEach { s -> if (none { it.first == s.id }) add(Triple(s.id, s.name, doseOf(s))) }
-    }
-    // "scan" only when everything being saved was picked by barcode.
-    val source = if (scannedChecked.isNotEmpty() && checkedBundles.isEmpty() && checkedAsNeeded.isEmpty()) "scan" else "manual"
-
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        DateTimeField("WHEN", dateTime, { dateTime = it })
-        when {
-            supplements == null -> Box(Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = FT.DomainLog)
-            }
-            list.isEmpty() -> Text(
-                "No active supplements to log.",
-                style = FTType.BodySmall,
-                color = FT.TextSecondary,
-            )
-            else -> {
-                BarcodeLogPanel(list) { hits ->
-                    scanned = (scanned + hits).distinctBy { it.id }
-                    scannedChecked = scannedChecked + hits.map { it.id }
-                }
-                if (scanned.isNotEmpty()) {
-                    FormLabel("SCANNED")
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        scanned.forEach { supp ->
-                            val checked = supp.id in scannedChecked
-                            CheckToggleRow(
-                                label = supp.name,
-                                checked = checked,
-                                onToggle = { scannedChecked = if (checked) scannedChecked - supp.id else scannedChecked + supp.id },
-                            )
-                            if (checked) {
-                                QtyRow(quantities[supp.id] ?: 1.0, stepOf(supp), { q -> wordsOf(supp, q) }) { quantities = quantities + (supp.id to it) }
-                            }
-                        }
-                    }
-                }
-                listOf("morning", "afternoon", "night").forEach { timeOfDay ->
-                    val itemsInGroup = groups[timeOfDay]
-                    if (!itemsInGroup.isNullOrEmpty()) {
-                        BundleToggleRow(
-                            label = timeOfDay.uppercase(),
-                            itemNames = itemsInGroup.joinToString(", ") { it.name },
-                            checked = timeOfDay in checkedBundles,
-                            onToggle = {
-                                checkedBundles = if (timeOfDay in checkedBundles) checkedBundles - timeOfDay else checkedBundles + timeOfDay
-                            },
-                        )
-                        if (timeOfDay in checkedBundles) {
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(6.dp),
-                                modifier = Modifier.padding(start = 16.dp),
-                            ) {
-                                itemsInGroup.forEach { supp ->
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Text(supp.name, style = FTType.BodySmall, color = FT.TextSecondary, modifier = Modifier.weight(1f))
-                                        QtyRow(quantities[supp.id] ?: 1.0, stepOf(supp), { q -> wordsOf(supp, q) }) { quantities = quantities + (supp.id to it) }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                if (asNeeded.isNotEmpty()) {
-                    FormLabel("AS NEEDED")
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        asNeeded.forEach { supp ->
-                            val checked = supp.id in checkedAsNeeded
-                            CheckToggleRow(
-                                label = supp.name,
-                                checked = checked,
-                                onToggle = {
-                                    checkedAsNeeded = if (checked) checkedAsNeeded - supp.id else checkedAsNeeded + supp.id
-                                },
-                            )
-                            if (checked) {
-                                QtyRow(quantities[supp.id] ?: 1.0, stepOf(supp), { q -> wordsOf(supp, q) }) { quantities = quantities + (supp.id to it) }
-                            }
-                        }
-                    }
-                }
-                if (notDueList.isNotEmpty()) {
-                    FormLabel("NOT DUE TODAY")
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        notDueList.forEach { supp ->
-                            val nextDate = specs.getValue(supp.id).nextDueAfter(today, recentLastTaken[supp.id])
-                            Row(modifier = Modifier.fillMaxWidth()) {
-                                Text(
-                                    supp.name,
-                                    style = FTType.BodySmall,
-                                    color = FT.TextMuted,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                Text(
-                                    specs.getValue(supp.id).stateWords(today) ?: (if (nextDate != null) "Next: ${if (nextDate == today.plusDays(1)) "tomorrow" else nextDate.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM", java.util.Locale.ENGLISH))}" else specs.getValue(supp.id).scheduleWords()),
-                                    style = FTType.MonoCaption,
-                                    color = FT.TextMuted,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        val injected = selectedItems.filter { (quantities[it.first] ?: 1.0) > 0.0 }.mapNotNull { (id, name, _) ->
-            specs[id]?.takeIf { it.injectable }?.let { Triple(id, name, it) }
-        }
-        val chosenSites = injected.associate { (id, _, spec) ->
-            id to (sites[id] ?: com.bioscan.fieldterminal.domain.nextSite(com.bioscan.fieldterminal.domain.sitesFor(spec), siteHistory[id].orEmpty())?.key)
-        }.filterValues { it != null }.mapValues { it.value!! }
-        if (injected.isNotEmpty()) {
-            FormLabel("INJECTION SITE")
-            injected.forEach { (id, name, spec) ->
-                val options = com.bioscan.fieldterminal.domain.sitesFor(spec)
-                val suggested = com.bioscan.fieldterminal.domain.nextSite(options, siteHistory[id].orEmpty())
-                val units = list.firstOrNull { it.id == id }?.syringeUnits?.let { " · ${com.bioscan.fieldterminal.domain.formatAmount(it)} units as prescribed" } ?: ""
-                Text("$name$units · suggested: ${suggested?.label ?: "—"} (rested longest)", style = FTType.Caption, color = FT.TextSecondary)
-                TextChipRow(options.map { it.label }, options.firstOrNull { it.key == chosenSites[id] }?.label, perRow = 2) { picked ->
-                    options.firstOrNull { it.label == picked }?.let { sites = sites + (id to it.key) }
-                }
-            }
-        }
-        SaveButton(saving, selectedItems.any { (quantities[it.first] ?: 1.0) > 0.0 }) {
-            onSave(dateTime.toIsoWithOffset(), selectedItems.filter { (quantities[it.first] ?: 1.0) > 0.0 }, source, quantities, chosenSites)
-        }
-    }
-}
-
-// DAV-156. The first edit form Supplement has ever had -- previously
-// delete-only, since a taken supplement was "add or remove as a whole," but
-// dose being a real editable field makes it field-editable now too. Name
-// isn't editable here (picking a different supplement is "delete and
-// re-log," not "edit"), but WHEN is, matching every other manual log type
-// per DAV-157.
-@Composable
-private fun SupplementEditForm(
-    saving: Boolean,
-    supplementName: String,
-    initialDateTime: LocalDateTime = LocalDateTime.now(),
-    initialDoseValue: Double? = null,
-    initialDoseUnit: String = "",
-    onSave: (takenAt: String, doseValue: Double?, doseUnit: String?) -> Unit,
-) {
-    var dateTime by remember { mutableStateOf(initialDateTime) }
-    var doseValue by remember { mutableStateOf(initialDoseValue?.let { if (it == Math.floor(it)) it.toInt().toString() else it.toString() } ?: "") }
-    var doseUnit by remember { mutableStateOf(initialDoseUnit) }
-
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text(supplementName, style = FTType.Value, color = FT.TextPrimary)
-        DateTimeField("WHEN", dateTime, { dateTime = it })
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Column(Modifier.weight(1f)) { FormLabel("DOSE (OPTIONAL)"); FieldTextField(doseValue, { doseValue = it }, "e.g. 500", keyboardType = KeyboardType.Number) }
-            Column(Modifier.weight(1f)) { FormLabel("UNIT (OPTIONAL)"); FieldTextField(doseUnit, { doseUnit = it }, "e.g. mg") }
-        }
-        SaveButton(saving, true) {
-            onSave(dateTime.toIsoWithOffset(), doseValue.toDoubleOrNull(), doseUnit.trim().ifBlank { null })
-        }
-    }
-}
-
-@Composable
-private fun BundleToggleRow(label: String, itemNames: String, checked: Boolean, onToggle: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(FT.BorderWidth, if (checked) FT.SelectedBorder else FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
-            .background(if (checked) FT.SelectedGlass else Color.Transparent, RoundedCornerShape(FT.RadiusModule))
-            .ftClickable(onClick = onToggle, shape = RoundedCornerShape(FT.RadiusModule))
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        CheckboxGlyph(checked)
-        Column {
-            Text(label, style = FTType.Telemetry, color = FT.TextPrimary)
-            Text(itemNames, style = FTType.BodySmall, color = FT.TextSecondary, modifier = Modifier.padding(top = 2.dp))
-        }
-    }
-}
-
-@Composable
-private fun CheckToggleRow(label: String, checked: Boolean, onToggle: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(FT.BorderWidth, if (checked) FT.SelectedBorder else FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
-            .background(if (checked) FT.SelectedGlass else Color.Transparent, RoundedCornerShape(FT.RadiusModule))
-            .ftClickable(onClick = onToggle, shape = RoundedCornerShape(FT.RadiusModule))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        CheckboxGlyph(checked)
-        Text(label, style = FTType.RowTitle, color = FT.TextPrimary)
-    }
-}
-
-@Composable
-private fun CheckboxGlyph(checked: Boolean) {
-    Box(
-        modifier = Modifier
-            .size(18.dp)
-            .border(1.dp, if (checked) FT.Emerald else FT.GlassBorder)
-            .background(if (checked) FT.Emerald else Color.Transparent),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (checked) {
-            Text("✓", style = FTType.CaptionStrong, color = FT.Base)
-        }
-    }
-}
-
-@Composable
-private fun PhotoActionButton(label: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
-    val color = if (enabled) FT.DomainLog else FT.GlassBorder
-    Box(
-        modifier = modifier
-            .border(FT.BorderWidth, color, RoundedCornerShape(FT.RadiusSmall))
-            .ftClickable(enabled = enabled, onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(label, style = sheetActionLabelStyle, color = color, maxLines = 1, softWrap = false)
-    }
-}
-
-// DAV-158: DateTimeField instead of the old date-only DateField -- encounters
-// previously had no time-of-day in storage at all (see the fake
-// ENCOUNTER_NOMINAL_TIME fallback in domain/Log.kt), just a bare DATE column.
-// DAV-159: location/duration/activities/rating restore real columns
-// (`encounters.location_type`/`duration_min`/`activities`/`my_rating`) that
-// already existed in the schema but had no UI anywhere. Of the schema's three
-// separate rating columns (my_rating/physical_rating/connection_rating,
-// confirmed unused in every real row), only my_rating is surfaced here --
-// "exactly one rating system" per this ticket's acceptance criterion.
-@Composable
-private fun EncounterForm(
-    saving: Boolean,
-    initialDateTime: LocalDateTime = LocalDateTime.now(),
-    initialType: String = "",
-    initialLocationType: String = "",
-    initialDurationMin: Int? = null,
-    initialActivities: String = "",
-    initialMyRating: Int? = null,
-    initialNotes: String = "",
-    onSave: (
-        date: String,
-        occurredAt: String,
-        encounterType: String?,
-        locationType: String?,
-        durationMin: Int?,
-        activities: List<String>?,
-        myRating: Int?,
-        notes: String?,
-    ) -> Unit,
-) {
-    var dateTime by remember { mutableStateOf(initialDateTime) }
-    var encounterType by remember { mutableStateOf(initialType) }
-    var locationType by remember { mutableStateOf(initialLocationType) }
-    var durationMin by remember { mutableStateOf(initialDurationMin?.toString() ?: "") }
-    var activities by remember { mutableStateOf(initialActivities) }
-    var myRating by remember { mutableStateOf(initialMyRating) }
-    var notes by remember { mutableStateOf(initialNotes) }
-
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        DateTimeField("WHEN", dateTime, { dateTime = it })
-        Column { FormLabel("TYPE (OPTIONAL)"); FieldTextField(encounterType, { encounterType = it }, "e.g. date, call, hangout") }
-        Column { FormLabel("LOCATION (OPTIONAL)"); FieldTextField(locationType, { locationType = it }, "e.g. their place, restaurant") }
-        Column { FormLabel("DURATION MIN (OPTIONAL)"); FieldTextField(durationMin, { durationMin = it }, "e.g. 90", keyboardType = KeyboardType.Number) }
-        Column { FormLabel("ACTIVITIES (OPTIONAL)"); FieldTextField(activities, { activities = it }, "comma-separated, e.g. dinner, movie") }
-        Column { FormLabel("RATING 1-5 (OPTIONAL)"); IntChipRow(1..5, myRating) { myRating = it } }
-        Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Notes...", singleLine = false) }
-        SaveButton(saving, true) {
-            onSave(
-                dateTime.toLocalDate().toString(),
-                dateTime.toIsoWithOffset(),
-                encounterType.trim().ifBlank { null },
-                locationType.trim().ifBlank { null },
-                durationMin.toIntOrNull(),
-                activities.split(",").map { it.trim() }.filter { it.isNotBlank() }.ifEmpty { null },
-                myRating,
-                notes.trim().ifBlank { null },
-            )
-        }
-    }
-}
-
-// Handgrip strength: the best of the attempts on a hand dynamometer, one row per hand. Logged for the record; it is shown on the
-// Healthspan card but not scored until a cited norm table exists.
-@Composable
-private fun GripForm(
-    saving: Boolean,
-    initialDateTime: LocalDateTime = LocalDateTime.now(),
-    initialHand: String? = null,
-    initialKg: Double? = null,
-    onSave: (occurredAt: String, hand: String, kg: Double) -> Unit,
-) {
-    var dateTime by remember { mutableStateOf(initialDateTime) }
-    var hand by remember { mutableStateOf(initialHand) }
-    var kg by remember { mutableStateOf(initialKg?.toString() ?: "") }
-    val value = kg.replace(',', '.').toDoubleOrNull()?.takeIf { it in 5.0..120.0 }
-
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        DateTimeField("WHEN", dateTime, { dateTime = it })
-        Column { FormLabel("HAND"); TextChipRow(listOf("right", "left"), hand, perRow = 2) { hand = it } }
-        Column { FormLabel("BEST OF 3, KG (DYNAMOMETER, 5-120)"); FieldTextField(kg, { kg = it }, "e.g. 46.5", keyboardType = KeyboardType.Decimal) }
-        SaveButton(saving, hand != null && value != null) {
-            onSave(dateTime.toIsoWithOffset(), hand!!, value!!)
-        }
-    }
-}
-
-@Composable
-private fun StoolForm(
-    saving: Boolean,
-    initialDateTime: LocalDateTime = LocalDateTime.now(),
-    initialBristolType: Int? = null,
-    initialDiscomfort: Int? = null,
-    onSave: (occurredAt: String, bristolType: Int, discomfort: Int?) -> Unit,
-) {
-    var dateTime by remember { mutableStateOf(initialDateTime) }
-    var bristolType by remember { mutableStateOf(initialBristolType) }
-    var discomfort by remember { mutableStateOf(initialDiscomfort?.toString() ?: "") }
-
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        DateTimeField("WHEN", dateTime, { dateTime = it })
-        BristolSlider(bristolType) { bristolType = it }
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("DISCOMFORT", discomfort.toIntOrNull(), 0..10, FT.Metric.StoolLoose, { discomfort = it?.toString() ?: "" }, lowWord = "none", highWord = "severe")
-        SaveButton(saving, bristolType != null) {
-            onSave(dateTime.toIsoWithOffset(), bristolType!!, discomfort.toIntOrNull())
-        }
-    }
-}
-
-// Extracted from StoolForm's own Bristol-scale chip row -- a small bounded
-// integer scale is also exactly what Encounter's 1-5 rating needs, so this
-// is shared rather than a second copy of the same 20 lines.
-@Composable
-private fun IntChipRow(range: IntRange, selected: Int?, onSelect: (Int) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        for (n in range) {
-            val isSelected = selected == n
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .border(FT.BorderWidth, if (isSelected) Color.Transparent else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-                    .background(if (isSelected) FT.PlatinumSolid else FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
-                    .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { onSelect(n) }
-                    .padding(vertical = 10.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    "$n",
-                    style = FTType.Value,
-                    color = if (isSelected) FT.PlatinumInk else FT.TextSecondary,
-                )
-            }
-        }
-    }
-}
-
-private val YES_NO_OPTIONS = listOf("Yes", "No")
-
-// Replaces the old per-occurrence MasturbationForm (DAV-91 rework): one
-// daily row per activityType ("masturbation"/"intercourse"), holding a real
-// list of that day's instances so per-instance detail (orgasm, intensity,
-// and -- masturbation only -- watched-porn/load-size) survives, same pattern
-// ExerciseDetailsForm's editable `exercises` list already uses below.
-private fun SexualActivityInstance.toEditable() = EditableSexualActivityInstance(
-    orgasm = orgasm,
-    orgasmIntensity = orgasmIntensity?.toString() ?: "",
-    watchedPorn = watchedPorn,
-    loadSize = loadSize?.toString() ?: "",
-    notes = notes ?: "",
-    partnerId = partnerId,
-)
-
-private class EditableSexualActivityInstance(
-    orgasm: Boolean = false,
-    orgasmIntensity: String = "",
-    watchedPorn: Boolean? = null,
-    loadSize: String = "",
-    notes: String = "",
-    partnerId: Long? = null,
-) {
-    var orgasm by mutableStateOf(orgasm)
-    var orgasmIntensity by mutableStateOf(orgasmIntensity)
-    var watchedPorn by mutableStateOf(watchedPorn)
-    var loadSize by mutableStateOf(loadSize)
-    var notes by mutableStateOf(notes)
-    var partnerId by mutableStateOf(partnerId)
-    var partnerName by mutableStateOf("")
-
-    fun toDto() = SexualActivityInstance(
-        orgasm = orgasm,
-        orgasmIntensity = orgasmIntensity.toIntOrNull(),
-        watchedPorn = watchedPorn,
-        loadSize = loadSize.toIntOrNull(),
-        notes = notes.trim().ifBlank { null },
-        partnerId = partnerId,
-    )
-}
-
-@Composable
-private fun SexualActivityForm(
-    saving: Boolean,
-    lockedActivityType: String? = null,
-    initialDate: LocalDate = LocalDate.now(),
-    initialInstances: List<SexualActivityInstance> = emptyList(),
-    initialNotes: String = "",
-    onSave: (date: String, activityType: String, instances: List<SexualActivityInstance>, notes: String?) -> Unit,
-) {
-    var date by remember { mutableStateOf(initialDate) }
-    val instances = remember {
-        val seeded = initialInstances.map { it.toEditable() }
-        mutableStateListOf(*seeded.ifEmpty { listOf(EditableSexualActivityInstance()) }.toTypedArray())
-    }
-    var notes by remember { mutableStateOf(initialNotes) }
-    var activityType by remember { mutableStateOf(lockedActivityType ?: "masturbation") }
-    val isMasturbation = activityType == "masturbation"
-
-    val peopleRepo = remember { PeopleRepository(SupabaseClientProvider.client) }
-    var allPeople by remember { mutableStateOf<List<PersonRow>>(emptyList()) }
-    LaunchedEffect(activityType) {
-        if (activityType == "intercourse") {
-            allPeople = try { peopleRepo.loadAll() } catch (e: Exception) { emptyList() }
-        }
-    }
-    // Resolve partner names for existing instances when people list loads
-    LaunchedEffect(allPeople) {
-        instances.forEach { inst ->
-            if (inst.partnerId != null && inst.partnerName.isEmpty()) {
-                inst.partnerName = allPeople.firstOrNull { it.id == inst.partnerId }?.name ?: ""
-            }
-        }
-    }
-
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        if (lockedActivityType == null) {
-            Column {
-                FormLabel("TYPE")
-                TextChipRow(listOf("Masturbation", "Intercourse"), if (isMasturbation) "Masturbation" else "Intercourse") {
-                    activityType = if (it == "Intercourse") "intercourse" else "masturbation"
-                }
-            }
-        }
-        DateField("DATE", date, { date = it })
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            FormLabel("INSTANCES")
-            instances.forEachIndexed { i, instance ->
-                SexualActivityInstanceEditor(
-                    instance, isMasturbation, canRemove = instances.size > 1,
-                    allPeople = allPeople,
-                    peopleRepo = peopleRepo,
-                ) { instances.removeAt(i) }
-            }
-            Text(
-                "+ ADD INSTANCE",
-                style = FTType.MonoCaption,
-                color = FT.DomainLog,
-                modifier = Modifier.ftClickable { instances.add(EditableSexualActivityInstance()) },
-            )
-        }
-        Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Anything else worth noting", singleLine = false) }
-        SaveButton(saving, true) {
-            onSave(date.toString(), activityType, instances.map { it.toDto() }, notes.trim().ifBlank { null })
-        }
-    }
-}
-
-@Composable
-private fun SexualActivityInstanceEditor(
-    instance: EditableSexualActivityInstance,
-    isMasturbation: Boolean,
-    canRemove: Boolean,
-    allPeople: List<PersonRow> = emptyList(),
-    peopleRepo: PeopleRepository,
-    onRemove: () -> Unit,
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth().border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule)).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            FormLabel("ORGASM")
-            if (canRemove) {
-                Text(
-                    "REMOVE",
-                    style = FTType.MonoCaption,
-                    color = FT.Critical,
-                    modifier = Modifier.ftClickable { onRemove() },
-                )
-            }
-        }
-        TextChipRow(YES_NO_OPTIONS, if (instance.orgasm) "Yes" else "No") { instance.orgasm = it == "Yes" }
-        if (instance.orgasm) {
-            com.bioscan.fieldterminal.ui.components.FTRatingSlider("ORGASM INTENSITY", instance.orgasmIntensity.toIntOrNull(), 0..10, FT.Metric.Arousal, { instance.orgasmIntensity = it?.toString() ?: "" }, lowWord = "faint", highWord = "intense")
-        }
-        if (isMasturbation) {
-            Column { FormLabel("WATCHED PORN"); TextChipRow(YES_NO_OPTIONS, instance.watchedPorn?.let { if (it) "Yes" else "No" }) { instance.watchedPorn = it?.let { s -> s == "Yes" } } }
-            Column { FormLabel("LOAD SIZE 1-5 (OPTIONAL)"); TextChipRow(listOf("1", "2", "3", "4", "5"), instance.loadSize.ifBlank { null }, perRow = 5) { instance.loadSize = it ?: "" } }
-        }
-        if (!isMasturbation) {
-            var partnerQuery by remember { mutableStateOf("") }
-            var showNewPartnerSheet by remember { mutableStateOf(false) }
-            var newPartnerInitialName by remember { mutableStateOf("") }
-            val filteredPeople = remember(partnerQuery, allPeople) {
-                if (partnerQuery.isBlank()) allPeople.take(5)
-                else allPeople.filter { it.name.contains(partnerQuery, ignoreCase = true) }.take(8)
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                FormLabel("PARTNER (OPTIONAL)")
-                if (instance.partnerId != null) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            instance.partnerName.ifEmpty { "#${instance.partnerId}" },
-                            style = FTType.RowTitle,
-                            color = FT.TextPrimary,
-                        )
-                        Text(
-                            "CLEAR",
-                            style = FTType.Micro,
-                            color = FT.Critical,
-                            modifier = Modifier.ftClickable {
-                                instance.partnerId = null
-                                instance.partnerName = ""
-                                partnerQuery = ""
-                            },
-                        )
-                    }
-                } else {
-                    FieldTextField(partnerQuery, { partnerQuery = it }, "Search people…")
-                    filteredPeople.forEach { person ->
-                        Text(
-                            person.name,
-                            style = FTType.BodySmall,
-                            color = FT.TextSecondary,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .ftClickable {
-                                    instance.partnerId = person.id
-                                    instance.partnerName = person.name
-                                    partnerQuery = ""
-                                }
-                                .padding(vertical = 4.dp),
-                        )
-                    }
-                    val trimmedQuery = partnerQuery.trim()
-                    if (trimmedQuery.isNotEmpty() && filteredPeople.none { it.name.equals(trimmedQuery, ignoreCase = true) }) {
-                        Text(
-                            "+ ADD \"$trimmedQuery\"",
-                            style = FTType.LabelCaps,
-                            color = FT.Emerald,
-                            modifier = Modifier.ftClickable {
-                                newPartnerInitialName = trimmedQuery
-                                showNewPartnerSheet = true
-                            },
-                        )
-                    }
-                }
-            }
-            if (showNewPartnerSheet) {
-                NewPartnerSheet(
-                    initialName = newPartnerInitialName,
-                    repo = peopleRepo,
-                    onDismiss = { showNewPartnerSheet = false },
-                    onCreated = { person ->
-                        instance.partnerId = person.id
-                        instance.partnerName = person.name
-                        partnerQuery = ""
-                        showNewPartnerSheet = false
-                    },
-                )
-            }
-        }
-        Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(instance.notes, { instance.notes = it }, "Anything else about this instance", singleLine = false) }
-    }
-}
-
-private val DRINK_PRESETS_ML = listOf("250", "330", "500", "750")
-private val OSTRC_Q1Q4_OPTIONS = listOf("0", "8", "17", "25")
-private val OSTRC_Q2Q3_OPTIONS = listOf("0", "6", "13", "19", "25")
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun NewPartnerSheet(
-    initialName: String,
-    repo: PeopleRepository,
-    onDismiss: () -> Unit,
-    onCreated: (PersonRow) -> Unit,
-) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val scope = rememberCoroutineScope()
-    var name by remember { mutableStateOf(initialName) }
-    var relationship by remember { mutableStateOf("") }
-    var whereMet by remember { mutableStateOf("") }
-    var gender by remember { mutableStateOf("") }
-    var ageRange by remember { mutableStateOf("") }
-    var country by remember { mutableStateOf("") }
-    var score by remember { mutableStateOf<Int?>(null) }
-    var notes by remember { mutableStateOf("") }
-    var saving by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = FT.SheetShape,
-        containerColor = FT.Surface,
-        contentColor = FT.TextPrimary,
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Text("NEW PARTNER", style = FTType.SectionTitle, color = FT.DomainLog)
-            Column { FormLabel("NAME"); FieldTextField(name, { name = it }, "") }
-            Column { FormLabel("RELATIONSHIP (OPTIONAL)"); FieldTextField(relationship, { relationship = it }, "e.g. FWB, Dating, Hookup") }
-            Column { FormLabel("WHERE MET (OPTIONAL)"); FieldTextField(whereMet, { whereMet = it }, "e.g. Tinder, Work, Mutual Friends") }
-            Column { FormLabel("GENDER (OPTIONAL)"); FieldTextField(gender, { gender = it }, "e.g. Female, Non-binary") }
-            Column { FormLabel("AGE RANGE (OPTIONAL)"); FieldTextField(ageRange, { ageRange = it }, "e.g. 25-30") }
-            Column { FormLabel("COUNTRY (OPTIONAL)"); FieldTextField(country, { country = it }, "e.g. Australia") }
-            Column {
-                FormLabel("SCORE (OPTIONAL)")
-                TextChipRow(listOf("1", "2", "3", "4", "5"), score?.toString(), perRow = 5) { score = it?.toIntOrNull() }
-            }
-            Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "", singleLine = false) }
-            error?.let { Text("Couldn't create ($it).", style = FTType.Caption, color = FT.Critical) }
-            SaveButton(saving, name.isNotBlank()) {
-                if (!saving && name.isNotBlank()) {
-                    saving = true
-                    scope.launch {
-                        try {
-                            val person = repo.createPerson(NewPersonRow(
-                                name = name.trim(),
-                                relationship = relationship.trim().ifBlank { null },
-                                whereMet = whereMet.trim().ifBlank { null },
-                                gender = gender.trim().ifBlank { null },
-                                ageRange = ageRange.trim().ifBlank { null },
-                                country = country.trim().ifBlank { null },
-                                score = score,
-                                notes = notes.trim().ifBlank { null },
-                            ))
-                            onCreated(person)
-                        } catch (e: Exception) {
-                            error = e.message
-                            saving = false
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-        }
-    }
-}
-
-// Phase A4 (Category 8). OSTRC-H2's own four-question weekly prompt per body
-// area -- q1/q4 (participation/performance) share one value set, q2/q3
-// (training volume/performance reduction) share a different, five-value
-// set. severity_score is a stored generated column (Phase A1) -- computed
-// server-side, never sent from here. body_area stays free text (the schema
-// has no fixed list -- see the A1 migration's own column definition).
-@Composable
-private fun OstrcForm(
-    saving: Boolean,
-    initialDate: LocalDate = LocalDate.now(),
-    initialBodyArea: String = "",
-    initialQ1: Int? = null,
-    initialQ2: Int? = null,
-    initialQ3: Int? = null,
-    initialQ4: Int? = null,
-    initialNotes: String = "",
-    onSave: (date: String, bodyArea: String, q1: Int, q2: Int, q3: Int, q4: Int, notes: String?) -> Unit,
-) {
-    var date by remember { mutableStateOf(initialDate) }
-    var bodyArea by remember { mutableStateOf(initialBodyArea) }
-    var q1 by remember { mutableStateOf(initialQ1?.toString()) }
-    var q2 by remember { mutableStateOf(initialQ2?.toString()) }
-    var q3 by remember { mutableStateOf(initialQ3?.toString()) }
-    var q4 by remember { mutableStateOf(initialQ4?.toString()) }
-    var notes by remember { mutableStateOf(initialNotes) }
-
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        DateField("WEEK OF", date, { date = it })
-        Column { FormLabel("BODY AREA"); FieldTextField(bodyArea, { bodyArea = it }, "e.g. Right knee") }
-        Column { FormLabel("Q1 — PARTICIPATION IN SPORT"); TextChipRow(OSTRC_Q1Q4_OPTIONS, q1) { q1 = it } }
-        Column { FormLabel("Q2 — TRAINING VOLUME REDUCED"); TextChipRow(OSTRC_Q2Q3_OPTIONS, q2, perRow = 5) { q2 = it } }
-        Column { FormLabel("Q3 — PERFORMANCE AFFECTED"); TextChipRow(OSTRC_Q2Q3_OPTIONS, q3, perRow = 5) { q3 = it } }
-        Column { FormLabel("Q4 — PAIN DURING PARTICIPATION"); TextChipRow(OSTRC_Q1Q4_OPTIONS, q4) { q4 = it } }
-        Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Anything else worth noting", singleLine = false) }
-        val valid = bodyArea.isNotBlank() && q1 != null && q2 != null && q3 != null && q4 != null
-        SaveButton(saving, valid) {
-            onSave(date.toString(), bodyArea.trim(), q1!!.toInt(), q2!!.toInt(), q3!!.toInt(), q4!!.toInt(), notes.trim().ifBlank { null })
-        }
-    }
-}
-
-// Arousal fold-in: morning-wood/arousal moved in from the old ArousalForm --
-// one combined daily survey instead of two separate ones.
-@Composable
-private fun WellnessForm(
-    saving: Boolean,
-    initialDate: LocalDate = LocalDate.now(),
-    initialEnergy: Int? = null,
-    initialMood: Int? = null,
-    initialStress: Int? = null,
-    initialSoreness: Int? = null,
-    initialMorningWood: Int? = null,
-    initialArousalLevel: Int? = null,
-    onSave: (date: String, energy: Int?, mood: Int?, stress: Int?, soreness: Int?, morningWood: Int?, arousalLevel: Int?) -> Unit,
-) {
-    var date by remember { mutableStateOf(initialDate) }
-    var energy by remember { mutableStateOf(initialEnergy?.toString() ?: "") }
-    var mood by remember { mutableStateOf(initialMood?.toString() ?: "") }
-    var stress by remember { mutableStateOf(initialStress?.toString() ?: "") }
-    var soreness by remember { mutableStateOf(initialSoreness?.toString() ?: "") }
-    var morningWood by remember { mutableStateOf(initialMorningWood?.toString() ?: "") }
-    var arousalLevel by remember { mutableStateOf(initialArousalLevel?.toString() ?: "") }
-
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        DateField("DATE", date, { date = it })
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("ENERGY", energy.toIntOrNull(), 0..10, FT.Metric.Energy, { energy = it?.toString() ?: "" }, lowWord = "drained", highWord = "full")
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("MOOD", mood.toIntOrNull(), 0..10, FT.Metric.Mood, { mood = it?.toString() ?: "" }, lowWord = "low", highWord = "great")
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("STRESS", stress.toIntOrNull(), 0..10, FT.Metric.Stress, { stress = it?.toString() ?: "" }, lowWord = "calm", highWord = "very stressed")
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("SORENESS", soreness.toIntOrNull(), 0..10, FT.Metric.Soreness, { soreness = it?.toString() ?: "" }, lowWord = "none", highWord = "very sore")
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("MORNING WOOD", morningWood.toIntOrNull(), 0..10, FT.Metric.Arousal, { morningWood = it?.toString() ?: "" }, lowWord = "none", highWord = "full")
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("AROUSAL LEVEL", arousalLevel.toIntOrNull(), 0..10, FT.Metric.Arousal, { arousalLevel = it?.toString() ?: "" }, lowWord = "none", highWord = "very high")
-        val valid = listOf(energy, mood, stress, soreness, morningWood, arousalLevel).any { it.isNotBlank() }
-        SaveButton(saving, valid) {
-            onSave(date.toString(), energy.toIntOrNull(), mood.toIntOrNull(), stress.toIntOrNull(), soreness.toIntOrNull(), morningWood.toIntOrNull(), arousalLevel.toIntOrNull())
-        }
-    }
-}
-
-private val ROUTE_TYPE_OPTIONS = listOf("road", "trail", "mixed", "track")
-private val RUN_TYPE_OPTIONS = listOf("easy", "tempo", "long", "hills", "intervals", "race", "recovery")
-
-// Phase G3 + Phase B follow-up: Health Connect still supplies the time,
-// distance, and heart rate for every session -- never editable here. RPE and
-// notes were the only hand-entered fields until now; type='run' sessions now
-// also get route_type/run_type chip pickers, and type='strength' sessions
-// get a real exercises/sets editor, matching the exercise_sessions.details
-// shapes Phase B's CHECK constraints enforce. Every other type keeps the
-// original rpe/notes-only form -- no jsonb shape is spec'd for those.
-@Composable
-private fun ExerciseDetailsForm(
-    saving: Boolean,
-    type: String,
-    initialRpe: Int? = null,
-    initialNotes: String = "",
-    initialDetails: ExerciseSessionDetails = ExerciseSessionDetails(),
-    onSave: (rpe: Int?, notes: String?, details: ExerciseSessionDetails) -> Unit,
-) {
-    var rpe by remember { mutableStateOf(initialRpe?.toString() ?: "") }
-    var notes by remember { mutableStateOf(initialNotes) }
-    var routeType by remember { mutableStateOf(initialDetails.routeType) }
-    var runType by remember { mutableStateOf(initialDetails.runType) }
-    val exercises = remember {
-        val seeded = initialDetails.exercises.orEmpty().map { it.toEditable() }
-        mutableStateListOf(*seeded.ifEmpty { listOf(EditableExercise()) }.toTypedArray())
-    }
-
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text(
-            "Health Connect supplies the time, distance, and heart rate for this $type session — " +
-                "everything below is entered by hand.",
-            style = FTType.Caption,
-            color = FT.TextSecondary,
-        )
-
-        if (type == "run") {
-            Column { FormLabel("ROUTE (OPTIONAL)"); TextChipRow(ROUTE_TYPE_OPTIONS, routeType) { routeType = it } }
-            Column { FormLabel("RUN TYPE (OPTIONAL)"); TextChipRow(RUN_TYPE_OPTIONS, runType) { runType = it } }
-        }
-
-        if (type == "strength") {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                FormLabel("EXERCISES")
-                exercises.forEachIndexed { i, exercise -> ExerciseEditor(exercise, canRemove = exercises.size > 1) { exercises.removeAt(i) } }
-                Text(
-                    "+ ADD EXERCISE",
-                    style = FTType.MonoCaption,
-                    color = FT.DomainLog,
-                    modifier = Modifier.ftClickable { exercises.add(EditableExercise()) },
-                )
-            }
-        }
-
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("RPE (EFFORT)", rpe.toIntOrNull(), 0..10, FT.Metric.Rpe, { rpe = it?.toString() ?: "" }, lowWord = "rest", highWord = "max")
-        Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Anything else worth noting", singleLine = false) }
-        SaveButton(saving, true) {
-            // Changing the exercises makes them the person's own, so no Zepp sync overwrites them; saving only RPE or
-            // notes leaves a Zepp list following Zepp (domain/StrengthImport.kt).
-            val details = editedDetails(
-                initial = initialDetails,
-                routeType = routeType,
-                runType = runType,
-                exercises = if (type == "strength") exercises.mapNotNull { it.toDtoOrNull() }.ifEmpty { null } else initialDetails.exercises,
-            )
-            onSave(rpe.toIntOrNull(), notes.trim().ifBlank { null }, details)
-        }
-    }
-}
-
-// Tap-to-select chip row over a small fixed vocabulary, generalizing
-// StoolForm's Bristol-type row (below) to string values -- these fields are
-// optional (unlike Bristol), so tapping the already-selected chip again
-// clears it back to null rather than always leaving exactly one selected.
-@Composable
-internal fun TextChipRow(options: List<String>, selected: String?, perRow: Int = 4, onSelect: (String?) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        options.chunked(perRow).forEach { rowOptions ->
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                rowOptions.forEach { option ->
-                    val isSelected = option == selected
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .border(FT.BorderWidth, if (isSelected) Color.Transparent else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-                            .background(if (isSelected) FT.PlatinumSolid else FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
-                            .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { onSelect(if (isSelected) null else option) }
-                            .padding(vertical = 10.dp, horizontal = 2.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            option.uppercase(),
-                            style = FTType.MonoCaption,
-                            color = if (isSelected) FT.PlatinumInk else FT.TextSecondary,
-                        )
-                    }
-                }
-                repeat(perRow - rowOptions.size) { Spacer(Modifier.weight(1f)) }
-            }
-        }
-    }
-}
-
-// Local editable mirror of StrengthExerciseDto/StrengthSetDto -- text-field-
-// backed (reps/weight_kg parse to Int/Double only on Save) since a set
-// mid-entry is routinely blank or partial, which the DTO's non-nullable
-// reps/weight_kg can't represent.
-// What the watch measured (set duration, heart rate, detected reps, and the exercise's Zepp code) is not editable but
-// rides along unchanged: saving used to drop it, so the first edit, even of RPE alone, lost the link to Zepp's data.
-private class EditableSet(
-    reps: String = "",
-    weightKg: String = "",
-    rpe: String = "",
-    percentOneRm: String = "",
-    val durationSec: Int? = null,
-    val avgHr: Int? = null,
-    val detectedReps: Int? = null,
-) {
-    var reps by mutableStateOf(reps)
-    var weightKg by mutableStateOf(weightKg)
-    var rpe by mutableStateOf(rpe)
-    var percentOneRm by mutableStateOf(percentOneRm)
-}
-
-private class EditableExercise(name: String = "", val exerciseCode: Int? = null) {
-    // The Zepp code names the exercise Zepp recorded; renamed, it would point at the wrong one, so it is dropped then.
-    val originalName = name
-    var name by mutableStateOf(name)
-    val sets = mutableStateListOf(EditableSet())
-}
-
-private fun StrengthExerciseDto.toEditable() = EditableExercise(name, exerciseCode).also { editable ->
-    editable.sets.clear()
-    sets.forEach { s ->
-        editable.sets.add(
-            EditableSet(
-                s.reps.toString(), s.weightKg.toString(), s.rpe?.toString() ?: "", s.percentOneRm?.toString() ?: "",
-                durationSec = s.durationSec, avgHr = s.avgHr, detectedReps = s.detectedReps,
-            ),
-        )
-    }
-}
-
-// Drops a set with no reps/weight rather than saving a garbage 0; drops an
-// exercise with no valid sets entirely rather than saving an empty shell.
-private fun EditableExercise.toDtoOrNull(): StrengthExerciseDto? {
-    if (name.isBlank()) return null
-    val validSets = sets.mapNotNull { s ->
-        val reps = s.reps.toIntOrNull()
-        val weightKg = s.weightKg.toDoubleOrNull()
-        if (reps == null || weightKg == null) null
-        else StrengthSetDto(
-            reps = reps,
-            weightKg = weightKg,
-            rpe = s.rpe.toIntOrNull(),
-            percentOneRm = s.percentOneRm.toDoubleOrNull(),
-            durationSec = s.durationSec,
-            avgHr = s.avgHr,
-            detectedReps = s.detectedReps,
-        )
-    }
-    val code = exerciseCode.takeIf { name.trim() == originalName.trim() }
-    return if (validSets.isEmpty()) null else StrengthExerciseDto(name.trim(), exerciseCode = code, sets = validSets)
-}
-
-// One exercise's editable form: name, its list of sets, and add/remove
-// controls -- all plain text links (REMOVE / + ADD SET), matching this
-// file's existing convention (no icons anywhere else in it). Reps and
-// weight_kg get the wider, primary row; RPE and % 1RM are optional per the
-// handoff's own scope and sit in a secondary row underneath.
-//
-// Phase C follow-up: the name field autocompletes against exercise_library's
-// 876 real entries via pg_trgm similarity (ExerciseLibraryRepository),
-// debounced so every keystroke doesn't fire a query. A read-side
-// convenience only -- tapping a suggestion just fills in that exact string,
-// the field stays free text underneath (matching the original handoff's own
-// "typo-tolerant at entry time" framing).
-@Composable
-private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRemove: () -> Unit) {
-    val libraryRepo = remember { ExerciseLibraryRepository(SupabaseClientProvider.client) }
-    var suggestions by remember { mutableStateOf<List<ExerciseLibraryMatch>>(emptyList()) }
-    var suppressSearch by remember { mutableStateOf(false) }
-
-    LaunchedEffect(exercise.name) {
-        if (suppressSearch) {
-            suppressSearch = false
-        } else if (exercise.name.trim().length >= 3) {
-            delay(250)
-            suggestions = runCatching { libraryRepo.matchExerciseName(exercise.name) }.getOrDefault(emptyList())
-        } else {
-            suggestions = emptyList()
-        }
-    }
-
-    Column(
-        modifier = Modifier.fillMaxWidth().border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule)).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            FieldTextField(exercise.name, { exercise.name = it }, "Exercise name", modifier = Modifier.weight(1f))
-            if (canRemove) {
-                Text(
-                    "REMOVE",
-                    style = FTType.MonoCaption,
-                    color = FT.Critical,
-                    modifier = Modifier.ftClickable { onRemove() },
-                )
-            }
-        }
-
-        if (suggestions.isNotEmpty()) {
-            Column(
-                modifier = Modifier.fillMaxWidth().border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall)),
-                verticalArrangement = Arrangement.spacedBy(1.dp),
-            ) {
-                suggestions.forEach { match ->
-                    Text(
-                        match.name,
-                        style = FTType.BodySmall,
-                        color = FT.TextSecondary,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .ftClickable {
-                                suppressSearch = true
-                                exercise.name = match.name
-                                suggestions = emptyList()
-                            }
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                    )
-                }
-            }
-        }
-
-        exercise.sets.forEachIndexed { i, set ->
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FieldTextField(set.reps, { set.reps = it }, "Reps", modifier = Modifier.weight(1f), keyboardType = KeyboardType.Number)
-                    FieldTextField(set.weightKg, { set.weightKg = it }, "Weight (kg)", modifier = Modifier.weight(1f), keyboardType = KeyboardType.Number)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FieldTextField(set.rpe, { set.rpe = it }, "RPE (optional)", modifier = Modifier.weight(1f), keyboardType = KeyboardType.Number)
-                    FieldTextField(set.percentOneRm, { set.percentOneRm = it }, "% 1RM (optional)", modifier = Modifier.weight(1f), keyboardType = KeyboardType.Number)
-                    if (exercise.sets.size > 1) {
-                        Text(
-                            "REMOVE",
-                            style = FTType.MonoCaption,
-                            color = FT.Critical,
-                            modifier = Modifier.ftClickable { exercise.sets.removeAt(i) },
-                        )
-                    }
-                }
-            }
-        }
-
-        Text(
-            "+ ADD SET",
-            style = FTType.MonoCaption,
-            color = FT.DomainLog,
-            modifier = Modifier.ftClickable {
-                // Most sets in a real workout repeat or closely follow the
-                // one before it -- default to the previous set's values
-                // instead of blank fields, per direct user feedback.
-                val previous = exercise.sets.lastOrNull()
-                exercise.sets.add(
-                    if (previous != null) {
-                        EditableSet(previous.reps, previous.weightKg, previous.rpe, previous.percentOneRm)
-                    } else {
-                        EditableSet()
-                    },
-                )
-            },
-        )
-    }
-}
-
-@Composable
-private fun NoteForm(saving: Boolean, initialDateTime: LocalDateTime = LocalDateTime.now(), initialText: String = "", onSave: (occurredAt: String, text: String) -> Unit) {
-    var dateTime by remember { mutableStateOf(initialDateTime) }
-    var text by remember { mutableStateOf(initialText) }
-
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        DateTimeField("WHEN", dateTime, { dateTime = it })
-        Column { FormLabel("NOTE"); FieldTextField(text, { text = it }, "Write a note...", singleLine = false) }
-        SaveButton(saving, text.isNotBlank()) {
-            onSave(dateTime.toIsoWithOffset(), text.trim())
-        }
-    }
-}
-
-/** The Bristol stool form scale's seven types, in words. */
-val BRISTOL_WORDS = listOf(
-    "Separate hard lumps",
-    "Lumpy, sausage-shaped",
-    "Sausage with cracks",
-    "Smooth, soft sausage",
-    "Soft blobs, clear edges",
-    "Mushy, ragged edges",
-    "Watery, no pieces",
-)
-
-/**
- * Bristol type on a slider: each type in its lane's colour as the stool hypnogram draws it (hard, healthy, loose,
- * liquid), its words instead of its number, and the lanes named under the track. Required, so no CLEAR.
- */
-@Composable
-fun BristolSlider(value: Int?, onChange: (Int) -> Unit) {
-    val lanes = com.bioscan.fieldterminal.domain.score.StoolLane.DRAWN.reversed()
-    com.bioscan.fieldterminal.ui.components.FTRatingSlider(
-        label = "STOOL FORM (BRISTOL)",
-        value = value,
-        range = 1..7,
-        color = FT.Metric.StoolHealthy,
-        onChange = { v -> v?.let(onChange) },
-        optional = false,
-        valueText = { t -> "${BRISTOL_WORDS[t - 1]} · ${com.bioscan.fieldterminal.domain.score.StoolLane.of(t)?.label?.lowercase() ?: ""}" },
-        stepColor = { t -> com.bioscan.fieldterminal.domain.score.StoolLane.of(t)?.let { com.bioscan.fieldterminal.ui.screens.today.laneColor(it) } ?: FT.TextMuted },
-        scale = lanes.map { it.types to it.label },
-    )
-}

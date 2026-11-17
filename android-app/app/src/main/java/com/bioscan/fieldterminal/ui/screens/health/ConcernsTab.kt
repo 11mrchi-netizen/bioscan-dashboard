@@ -23,15 +23,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.HealthConcernsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.SymptomCheckRow
 import com.bioscan.fieldterminal.data.model.ConcernOverviewDto
 import com.bioscan.fieldterminal.data.model.FindingDto
 import com.bioscan.fieldterminal.data.model.HealthConcernRow
 import com.bioscan.fieldterminal.data.model.HealthOverviewDto
 import com.bioscan.fieldterminal.domain.MetricState
+import com.bioscan.fieldterminal.domain.health.CHECK_PATTERNS
 import com.bioscan.fieldterminal.domain.health.HealthVocab
 import com.bioscan.fieldterminal.domain.health.concernStateOrder
 import com.bioscan.fieldterminal.domain.health.concernStateWord
 import com.bioscan.fieldterminal.domain.health.findingStatusWord
+import com.bioscan.fieldterminal.domain.health.illnessType
 import com.bioscan.fieldterminal.domain.health.isConcernOpen
 import com.bioscan.fieldterminal.domain.health.shortDate
 import com.bioscan.fieldterminal.ui.components.BodyMap
@@ -42,12 +45,15 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTCardEmphasis
 import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.components.metricStateColor
 import com.bioscan.fieldterminal.ui.components.parallel
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.theme.FTType
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Health concerns (plan §5): Health › CONCERNS, and the same list on Training › INJURY filtered to concerns of the body.
@@ -59,8 +65,8 @@ private const val CONCERNS_INFO = "A concern is anything that keeps bothering yo
     "This is personal tracking, not a diagnosis."
 
 fun concernColor(state: String): Color = when (state) {
-    "worsening" -> FT.Warning
-    "improving" -> FT.Emerald
+    "worsening" -> FT.Warn
+    "improving" -> FT.Ok
     "unobserved", "resolved" -> FT.TextMuted
     else -> FT.DomainHeart
 }
@@ -75,16 +81,23 @@ fun ConcernsTab(onOpenConcern: (String) -> Unit, anatomicalOnly: Boolean = false
     var overview by remember { mutableStateOf<HealthOverviewDto?>(null) }
     var findings by remember { mutableStateOf<List<FindingDto>>(emptyList()) }
     var checkIn by remember { mutableStateOf(false) }
+    var newInjury by remember { mutableStateOf(false) }
+    var newIllness by remember { mutableStateOf<Pair<Set<String>, List<Long>>?>(null) }
+    var symptomCheck by remember { mutableStateOf(false) }
+    var checks by remember { mutableStateOf<List<SymptomCheckRow>>(emptyList()) }
     var showResolved by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
     val guard = rememberLoadGuard()
+    val checksGuard = rememberLoadGuard(refreshOnUpdates = false)
 
-    LaunchedEffect(guard.attempt) {
+    LaunchedEffect(guard.attempt, checksGuard.attempt) {
         guard.run {
             parallel(
                 { concerns = repo.loadConcerns() },
                 { overview = repo.loadOverview() },
                 { findings = repo.loadAllFindings() },
+                // The small things are their own card: failing to read them must not take the concerns down with it.
+                { checksGuard.run { checks = repo.loadChecks() } },
             )
         }
     }
@@ -124,13 +137,20 @@ fun ConcernsTab(onOpenConcern: (String) -> Unit, anatomicalOnly: Boolean = false
                     scope.launchSafe(onDone = { refreshing = false }) { repo.refresh(); guard.retry() }
                 }
             }
+            // Three ways in: an injury through the body map, an illness or infection as what it is, and the symptom check
+            // for the small things that are neither.
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                FTButton(label = "+ INJURY", modifier = Modifier.weight(1f)) { newInjury = true }
+                if (!anatomicalOnly) FTButton(label = "+ ILLNESS", modifier = Modifier.weight(1f)) { newIllness = emptySet<String>() to emptyList() }
+            }
+            if (!anatomicalOnly) FTButton(label = "SYMPTOM CHECK · SMALL THINGS", modifier = Modifier.fillMaxWidth()) { symptomCheck = true }
         }
 
         // Safety prompts are never findings: plain advice to see a clinician, shown above everything else.
         val prompts = (overview?.concerns ?: emptyList()).filter { !it.archived }.flatMap { o -> o.safety.map { o.title to it.text } }
         if (prompts.isNotEmpty()) {
             FTCard(title = "WORTH A CLINICIAN'S VIEW", info = "Shown whenever a check-in meets a fixed rule (very high severity, fever of 39 °C or more, numbness, chest symptoms, pain at night, an illness over ten days). Not a diagnosis.") {
-                prompts.forEach { (title, text) -> Text("$title — $text", style = FTType.BodySmall, color = FT.Warning) }
+                prompts.forEach { (title, text) -> Text("$title — $text", style = FTType.BodySmall, color = FT.Warn) }
             }
         }
 
@@ -150,7 +170,15 @@ fun ConcernsTab(onOpenConcern: (String) -> Unit, anatomicalOnly: Boolean = false
         if (open.isEmpty() && closed.isEmpty()) {
             Text("No concerns yet. CHECK IN when something bothers you, or tap NOTHING on good days: both count.", style = FTType.BodySmall, color = FT.TextSecondary)
         }
-        open.forEach { c -> ConcernRow(c, byId[c.id], vocab) { onOpenConcern(c.id) } }
+        // Injuries and illnesses apart: they are followed and scored differently.
+        val (illnessesOpen, injuriesOpen) = open.partition { it.categoryOrKind != "injury" }
+        if (injuriesOpen.isNotEmpty()) Text("INJURIES & PAIN", style = FTType.LabelCaps, color = FT.TextMuted)
+        injuriesOpen.forEach { c -> ConcernRow(c, byId[c.id], vocab) { onOpenConcern(c.id) } }
+        if (illnessesOpen.isNotEmpty()) Text("ILLNESSES & INFECTIONS", style = FTType.LabelCaps, color = FT.TextMuted)
+        illnessesOpen.forEach { c -> ConcernRow(c, byId[c.id], vocab) { onOpenConcern(c.id) } }
+
+        if (!anatomicalOnly) LoadErrorLine(checksGuard, "the recent symptom checks")
+        if (!anatomicalOnly && checks.isNotEmpty()) SmallThingsCard(checks, vocab)
 
         val patterns = findings.filter { (it.status == "possible" || it.status == "persistent") && shown.any { c -> c.id == it.concernId } }
         if (patterns.isNotEmpty()) {
@@ -173,6 +201,20 @@ fun ConcernsTab(onOpenConcern: (String) -> Unit, anatomicalOnly: Boolean = false
     if (checkIn) {
         HealthCheckInSheet(onDismiss = { checkIn = false }, onSaved = { checkIn = false; guard.retry() })
     }
+    if (newInjury) {
+        HealthCheckInSheet(onDismiss = { newInjury = false }, onSaved = { newInjury = false; guard.retry() }, start = CheckInStart.NewBody)
+    }
+    newIllness?.let { (symptoms, signals) ->
+        IllnessSheet(onDismiss = { newIllness = null }, onSaved = { newIllness = null; guard.retry() }, prefillSymptoms = symptoms, adoptSignalIds = signals)
+    }
+    if (symptomCheck) {
+        SymptomCheckSheet(
+            onDismiss = { symptomCheck = false; guard.retry() },
+            onSaved = { symptomCheck = false; guard.retry() },
+            onTrackIllness = { symptoms, signals -> symptomCheck = false; newIllness = symptoms to signals },
+            onTrackInjury = { symptomCheck = false; newInjury = true },
+        )
+    }
 }
 
 @Composable
@@ -186,7 +228,9 @@ private fun ConcernRow(c: HealthConcernRow, o: ConcernOverviewDto?, vocab: Healt
             Text(c.title.uppercase(), style = FTType.CardTitle, color = FT.TextPrimary, modifier = Modifier.weight(1f))
             FTStatePill(concernStateWord(o?.state ?: "unobserved"))
         }
-        val where = c.regions.joinToString { vocab.regionLabel(it.code, it.side) }.ifBlank { if (c.kind == "systemic") "GENERAL" else "" }
+        val where = c.regions.joinToString { vocab.regionLabel(it.code, it.side) }.ifBlank {
+            if (c.kind == "systemic") listOfNotNull(c.categoryOrKind.uppercase(), illnessType(c.illnessType)?.label?.uppercase()).joinToString(" · ") else ""
+        }
         val parts = listOfNotNull(
             where.takeIf { it.isNotBlank() },
             o?.lastSeverity?.let { "last $it/10" },
@@ -197,5 +241,36 @@ private fun ConcernRow(c: HealthConcernRow, o: ConcernOverviewDto?, vocab: Healt
         Text(parts.joinToString(" · "), style = FTType.Caption, color = FT.TextSecondary)
         o?.stateReason?.takeIf { it.isNotBlank() }?.let { Text(it, style = FTType.Caption, color = FT.TextMuted) }
         if (o != null && o.safety.isNotEmpty()) Text("See the note above.", style = FTType.Caption, color = metricStateColor(MetricState.Warning))
+    }
+}
+
+// The symptom checks of the last two weeks: small things, kept as answered, never an episode or a ceiling on the score.
+@Composable
+private fun SmallThingsCard(checks: List<SymptomCheckRow>, vocab: HealthVocab) {
+    FTCard(
+        title = "SMALL THINGS · 14 DAYS",
+        info = "What you logged through SYMPTOM CHECK. They are kept as answered and count for nothing else: no episode, no " +
+            "effect on CHARGE. One that keeps coming back is worth tracking as an illness or an injury.",
+    ) {
+        checks.forEach { c ->
+            val a = c.assessment
+            fun str(k: String) = (a?.get(k) as? JsonPrimitive)?.content
+            val what = c.signals.joinToString { vocab.symptom(it.symptom)?.label ?: it.symptom }
+            val fits = (a?.get("patterns") as? JsonArray)?.mapNotNull {
+                CHECK_PATTERNS[(it as? JsonPrimitive)?.content]?.label
+            }.orEmpty()
+            val level = str("level")
+            Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("${shortDate(c.date).uppercase()} · ${what.uppercase()}" + (str("intensity")?.let { " · ${it.uppercase()}" } ?: ""), style = FTType.LabelCaps, color = FT.TextPrimary)
+                Text(
+                    listOfNotNull(
+                        fits.firstOrNull()?.let { "Fits: $it" },
+                        when (level) { "urgent" -> "red flag"; "clinician" -> "worth a clinician's view"; else -> null },
+                        "tracked".takeIf { c.signals.any { it.concernId != null } },
+                    ).joinToString(" · ").ifBlank { "Nothing pointed one way" },
+                    style = FTType.Caption, color = if (level == "urgent" || level == "clinician") FT.Warn else FT.TextSecondary,
+                )
+            }
+        }
     }
 }

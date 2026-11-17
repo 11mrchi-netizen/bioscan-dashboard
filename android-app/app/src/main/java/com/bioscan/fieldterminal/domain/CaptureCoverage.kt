@@ -2,7 +2,7 @@ package com.bioscan.fieldterminal.domain
 
 import java.time.LocalDate
 
-// Analysis Layer 3 / R2 (2e). How often each capture stream was actually logged: the success measure for the capture layer,
+// How often each capture stream was actually logged: the success measure for the capture layer,
 // because the relationship and experiment engines can only work with the days a person recorded. Alcohol is informational:
 // a day with no drink has no row, so days WITHOUT alcohol cannot be told apart from days that were not logged.
 data class StreamCoverage(

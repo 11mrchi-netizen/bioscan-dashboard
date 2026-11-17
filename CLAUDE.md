@@ -43,7 +43,8 @@ The owner lives in UTC+8, so a date taken from UTC is a day behind every morning
 local calendar, never `toISOString().slice(0, 10)` / `current_date`. Two kinds of timestamp exist; read each as what it is:
 
 - **Logged times** (`meals.logged_at`, `exercise_sessions.start_time`, `supplement_log.taken_at`, `nutrient_intake.logged_at`,
-  `occurred_at` on stool / grip / notes / body check-ins / scale readings, `athlete_events.start_time`) are the phone's
+  `occurred_at` on stool / grip / notes / body check-ins / scale readings, `athlete_events.start_time`,
+  `routine_logs.started_at` / `ended_at`) are the phone's
   wall clock labelled `+00`: their digits are local. Read them with `WallClock` (Android) or `wallClock` (analysis-core);
   never add an offset to them.
 - **Real instants** (`created_at`, `fired_at`, `trips.start_at`, `sleep_daily` bedtime / wake, calendar events, stress

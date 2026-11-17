@@ -44,7 +44,8 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     // training
     'exercise_sessions', 'zepp_workout_detail', 'runs', 'running_form_analyses', 'athlete_events', 'athlete_maxes',
     'exercise_library', 'planned_sessions', 'training_blocks', 'training_block_domains', 'training_cycles',
-    'training_definitions', 'training_settings', 'v_training_block_metrics',
+    'training_definitions', 'training_settings', 'v_training_block_metrics', 'training_plans', 'training_thresholds',
+    'planned_session_deviations', 'session_plan_links', 'run_best_efforts', 'v_personal_records',
     // nutrition, supplements, fuel
     'meals', 'meal_items', 'nutrient_intake', 'foods', 'food_nutrients', 'food_servings', 'food_sources',
     'breakfast_templates', 'meal_prep_weeks', 'fuel_plans', 'fuel_plan_reviews', 'fuel_schedules', 'fueling_intake_log',
@@ -62,6 +63,8 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     'agent_memory',
   ),
   user_profile: { scope: 'shared', columns: ['sex'] },
+  // shoes and their distance; the photo stays out
+  shoes: { scope: 'shared', columns: ['id', 'name', 'use', 'zepp_gear_id', 'start_km', 'retire_km', 'started_on', 'retired_on'] },
   ...optIn('sexual_health', 'encounters', 'sexual_activity_daily', 'arousal_daily', 'masturbation_log'),
   ...optIn('health_concerns', 'health_concerns', 'health_observations', 'health_signals', 'health_episode_marks', 'intervention_concerns'),
   // v_health_events unions injuries, illnesses and health concerns, so it is as private as its most private part.
@@ -71,11 +74,14 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
   ...never(
     // routine and location
     'location_fixes', 'place_visits', 'places', 'trips', 'mobility_daily', 'activity_transitions', 'phone_usage_daily',
-    'phone_app_usage_daily', 'phone_app_categories', 'daily_context', 'planned_routes',
+    'phone_app_usage_daily', 'phone_app_categories', 'daily_context', 'planned_routes', 'routine_activities', 'routine_logs',
     // other people and the calendar
-    'people', 'calendar_events', 'calendar_event_overrides',
+    'people', 'calendar_events', 'calendar_event_overrides', 'calendar_strength_staging', 'calendar_strength_staging_review',
     // free text by nature
     'notes',
+    // the home's environment (docs/home-environment): light and changes in the readings show when someone is home, so
+    // it stays closed until a phase decides what of it the assistant may see (bedroom temperature beside sleep, say)
+    'home_sensors', 'home_env_readings',
   ),
   ...internal(
     'sync_log', 'zepp_raw_extracts', 'zepp_history_pull', 'zepp_sync_state', 'calendar_sync_state', 'notification_log',
@@ -83,6 +89,8 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     'collector_heartbeats', 'daily_field_provenance', 'ai_estimates', 'nutrition_backfill_review',
     'exercise_session_tombstones', 'experiment_exclusion_snapshots', 'food_match_memory', 'clothing_items', 'laundry_loads',
     'agent_threads', 'agent_turns', 'agent_hints', 'agent_digests', 'agent_settings',
+    // device push tokens; the raw inputs behind a meal estimate (typed text, photo paths), read through meals instead
+    'push_subscriptions', 'meal_inputs',
   ),
 }
 

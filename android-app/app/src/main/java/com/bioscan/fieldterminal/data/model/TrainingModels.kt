@@ -3,7 +3,7 @@ package com.bioscan.fieldterminal.data.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// Phase G3: replaces the run-only RunRow -- `exercise_sessions` covers any
+// Replaces the run-only RunRow -- `exercise_sessions` covers any
 // activity type, so Training's math (sumDistanceKmSince, longestRunKm,
 // averagePaceMinPerKmSince in domain/Training.kt) now operates on whichever
 // subset of these TrainingRepository filters to (running only, since

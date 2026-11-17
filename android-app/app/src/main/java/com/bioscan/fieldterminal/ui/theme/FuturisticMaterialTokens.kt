@@ -14,8 +14,8 @@ import com.bioscan.fieldterminal.domain.score.DomainKey
  *  - surface = neutral: faint-platinum frosted glass, never tinted by a domain or metric ([GlassFill] .. [GlassBorder]);
  *  - ink = metric: every metric keeps one fixed hue app-wide ([Metric]).
  *
- * The older names (Emerald, Warning, DomainFuel, Category...) are kept as aliases onto the v1 values so every screen
- * moved to the new palette at once; new code uses [Domain], [Metric], [Zone] and the semantic [Ok] / [Warn] / [Bad].
+ * Status is [Ok] / [Warn] / [Bad] and nothing else; the primary action is platinum ([Platinum]). The section accents
+ * (DomainFuel, DomainLog...) and [Category] are older names kept as aliases onto the v1 values.
  */
 object FuturisticMaterialTokens {
     // ---- surfaces (--ft-bg, --ft-fg, --ft-muted, --ft-dim, --ft-line) ----
@@ -35,11 +35,7 @@ object FuturisticMaterialTokens {
     val Warn = Color(0xFFFFC24B)
     val Bad = Color(0xFFFF5D6C)
 
-    // Legacy semantic names, now the v1 semantic values. Emerald was the "primary signal"; in v1 the primary action is
-    // platinum ([Platinum]) and green means ok.
-    val Emerald = Ok
     val EmeraldHighlight = Color(0xFF9BF0C2)
-    val EmeraldAtmosphere = Color(0xFF0E3B2A)
     val Info = Color(0xFF5AB0FF)
     val Warning = Warn
     val Critical = Bad
@@ -115,6 +111,10 @@ object FuturisticMaterialTokens {
         val Weight = Color(0xFF9AA6BD)
         val WeightEma = Color(0xFFC7D0E0)
         val BodyFat = Color(0xFFFF9A3D)
+        // body fat by method, each its own hue so they read apart on one chart (scale keeps [BodyFat])
+        val BodyFatTape = Color(0xFF38C6D4)
+        val BodyFatCaliper = Color(0xFFA97BFF)
+        val BodyFatDexa = Color(0xFFE86FB0)
         val LeanMass = Color(0xFF36D07A)
         val MusclePotential = Color(0xFF5AD1B0)
         val Measurements = Color(0xFF9B6CFF)
@@ -165,12 +165,44 @@ object FuturisticMaterialTokens {
         val StoolLiquid = Color(0xFFE0774D)
         val GutComfort = Color(0xFF8CE06B)
 
+        // running: kinds of run (the Running page's stacked weeks)
+        val RunTrail = Color(0xFF2E9E5B)
+        val RunEasy = Color(0xFF3B86D6)
+        val RunQuality = Color(0xFFE8692E)
+
+        // routine: how a trip was travelled (the day map's path)
+        val ModeOnFoot = Color(0xFF199E70)
+        val ModeBicycle = Color(0xFFC98500)
+        val ModeVehicle = Color(0xFF3987E5)
+        val ModeStop = Color(0xFFD95926)
+        val ModeWaiting = Color(0xFF6B7178)
+        val ModeUnknown = Color(0xFF3A3F45)
+
+        // lab markers and lifts on the Healthspan factor pages (occasional readings, drawn as dots)
+        val Triglycerides = Color(0xFFE8B04B)
+        val Hdl = Color(0xFF5CC8E8)
+        val FastingGlucose = Color(0xFFF0846B)
+        val Hba1c = Color(0xFFD46BE0)
+        val LiftPrimary = Color(0xFFFFB86B)
+        val LiftSecondary = Color(0xFF7FD4FF)
+
+        // score scenes: CHARGE's city at dusk (the five domain scenes draw in their domain hue)
+        val SceneCitySky = Color(0xFF2A3A55)
+        val SceneCityWindow = Color(0xFFFFCF7A)
+
         // routine
         val PhoneSleep = Color(0xFF9B6CFF)
         val NightScreen = Color(0xFF7A6CFF)
         val Daylight = Color(0xFFFFD23A)
         val Commute = Color(0xFF5AB0FF)
         val ActiveTravel = Color(0xFF36D07A)
+        // routine: kinds of time on the 24-hour ribbon (asleep is SleepDuration, on the move Commute)
+        val TimeHome = Color(0xFF2FB8A0)
+        val TimeWork = Color(0xFFE8C26A)
+        val TimeOut = Color(0xFFFF8FB1)
+        val TimeTraining = Color(0xFFFF6A3D)
+        val TimeLogged = Color(0xFFB8E04A)
+        val TimePhone = Color(0xFFA7B0FF)
     }
 
     // ---- ordered ramps (--z-*) ----
@@ -222,6 +254,8 @@ object FuturisticMaterialTokens {
     /** Where the glass gradient ends, 60% of the way across (white 2.8%). */
     val GlassFillEnd = Color(0x07FFFFFF)
     val GlassStrongFill = Color(0x1FFFFFFF)
+    /** An unselected chip's faint fill (white 3%, --ft-chip-idle). */
+    val ChipIdle = Color(0x08FFFFFF)
     val GlassBorder = Color(0x1FFFFFFF)
     /** The inset top highlight of a glass card (white 15%). */
     val GlassHighlight = Color(0x26FFFFFF)

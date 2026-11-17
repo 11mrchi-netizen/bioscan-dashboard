@@ -38,3 +38,20 @@ class SportCatalogTest {
         assertEquals(0, tiles.first { it.sport.key == "strength" }.sessions4w)
     }
 }
+
+class SportWindowTest {
+    @org.junit.Test
+    fun aBlockCountsOnlyItsOwnDays() {
+        val from = java.time.LocalDate.of(2026, 11, 4) // a Wednesday
+        val to = java.time.LocalDate.of(2026, 11, 17)
+        val weeks = weekStarts(from, to)
+        org.junit.Assert.assertEquals(listOf(java.time.LocalDate.of(2026, 11, 2), java.time.LocalDate.of(2026, 11, 9), java.time.LocalDate.of(2026, 11, 16)), weeks)
+        val s = listOf(
+            SportSession(1, "run", null, java.time.LocalDate.of(2026, 11, 3), 60.0, 10.0, null, null, null),
+            SportSession(2, "run", null, java.time.LocalDate.of(2026, 11, 5), 30.0, 5.0, null, null, null),
+        )
+        val run = summarizeSportsIn(s, from, to, weeks).single()
+        org.junit.Assert.assertEquals(1, run.sessions4w)
+        org.junit.Assert.assertEquals(listOf(0.5, 0.0, 0.0), run.weeklyHours)
+    }
+}

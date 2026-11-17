@@ -50,7 +50,7 @@ For each distinct food or beverage item mentioned, extract:
 - quantityLow and quantityHigh: a plausible range only if the amount is vague (e.g. "a bowl of", "a handful") -- omit if quantityValue was given
 - preparation: cooking/preparation state if mentioned (e.g. "grilled", "raw"), else omit
 - isBeverage: true if this item is a drink
-- beverageClass: one of water/coffee/tea/milk/plant_milk/soda/juice/electrolyte/alcohol if isBeverage and determinable, else omit
+- beverageClass: one of water/coffee/tea/infusion/milk/plant_milk/soda/juice/electrolyte/alcohol (infusion = a herbal or caffeine-free tea) if isBeverage and determinable, else omit
 - caffeineMg: ONLY if the text states an explicit caffeine amount, or names a specific well-known product/preparation where a caffeine amount is safely known (e.g. "one espresso shot"). Omit otherwise -- never estimate a precise number.
 - foodConfidence: 0 to 1, how confident you are in the food identity
 - portionConfidence: 0 to 1, how confident you are in the quantity

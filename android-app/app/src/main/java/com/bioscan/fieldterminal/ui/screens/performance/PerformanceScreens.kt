@@ -5,98 +5,230 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AnalysisRepository
+import com.bioscan.fieldterminal.data.RunningHistory
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.TrainingCyclesRepository
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.Sport
 import com.bioscan.fieldterminal.domain.SportKind
 import com.bioscan.fieldterminal.domain.SportSession
 import com.bioscan.fieldterminal.domain.SportSummary
+import com.bioscan.fieldterminal.domain.TrainingCycle
+import com.bioscan.fieldterminal.domain.levels.formatPace
 import com.bioscan.fieldterminal.domain.sportOf
-import com.bioscan.fieldterminal.domain.summarizeSports
+import com.bioscan.fieldterminal.domain.summarizeSportsIn
+import com.bioscan.fieldterminal.domain.weekStarts
+import com.bioscan.fieldterminal.ui.components.BarLayout
+import com.bioscan.fieldterminal.ui.components.FTBarSpec
+import com.bioscan.fieldterminal.ui.components.FTChevron
+import com.bioscan.fieldterminal.ui.components.FTChip
+import com.bioscan.fieldterminal.ui.components.FTChipRow
+import com.bioscan.fieldterminal.ui.components.FTIcon
+import com.bioscan.fieldterminal.ui.components.FTIconSize
+import com.bioscan.fieldterminal.ui.components.FTIcons
+import com.bioscan.fieldterminal.ui.components.LoadGuard
+import com.bioscan.fieldterminal.ui.components.LoadingOrError
+import com.bioscan.fieldterminal.ui.components.drawBar
+import com.bioscan.fieldterminal.ui.components.drawBarStub
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.rememberGuarded
+import com.bioscan.fieldterminal.ui.components.rememberRange
 import com.bioscan.fieldterminal.ui.screens.detail.DetailScreen
 import com.bioscan.fieldterminal.ui.screens.detail.EmptyLine
 import com.bioscan.fieldterminal.ui.screens.detail.Fmt
 import com.bioscan.fieldterminal.ui.screens.detail.LocalRangeDays
+import com.bioscan.fieldterminal.ui.screens.detail.MetricPanel
 import com.bioscan.fieldterminal.ui.screens.detail.MetricRow
 import com.bioscan.fieldterminal.ui.screens.detail.Section
 import com.bioscan.fieldterminal.ui.screens.detail.StackedBars
 import com.bioscan.fieldterminal.ui.screens.detail.StatTiles
 import com.bioscan.fieldterminal.ui.screens.detail.shortDate
-import com.bioscan.fieldterminal.ui.components.drawBar
-import com.bioscan.fieldterminal.ui.components.drawBarStub
+import com.bioscan.fieldterminal.ui.screens.user.UserDataCache
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-private val SPORT_COLORS = listOf(FT.Category.Activity.c500, FT.Emerald, FT.Info, FT.Analysis, FT.Category.Arousal.c300, FT.Warning, FT.TextSecondary)
+private val SPORT_COLORS = listOf(FT.Category.Activity.c500, FT.Ok, FT.Info, FT.Analysis, FT.Category.Arousal.c300, FT.Warn, FT.TextSecondary)
 
 fun sportColor(index: Int): Color = SPORT_COLORS[index % SPORT_COLORS.size]
 
 private fun hours(h: Double): String = if (h < 1) "${(h * 60).roundToInt()} min" else "%.1f h".format(h)
 
 @Composable
-private fun rememberSportSessions(): List<SportSession>? {
-    val version = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
-    val state by produceState<List<SportSession>?>(null, version) {
-        value = runCatching { AnalysisRepository(SupabaseClientProvider.client).loadSportSessions() }.getOrNull() ?: value ?: emptyList()
-    }
-    return state
+private fun rememberSportSessions(): Pair<List<SportSession>?, LoadGuard> =
+    rememberGuarded { AnalysisRepository(SupabaseClientProvider.client).loadSportSessions() }
+
+/** The window the page reads: the last weeks, or a training block. */
+private data class PerfWindow(val key: String, val chip: String, val name: String, val from: LocalDate, val to: LocalDate) {
+    val days: Int get() = (ChronoUnit.DAYS.between(from, to) + 1).toInt()
+}
+
+// The standard ranges (FTRange 28D / 90D / 1Y), counted in whole weeks from a Monday because every chart here is weekly
+// bars: 28D is 4 weeks, 90D 13, 1Y 52. ALL is not offered (years of weekly bars do not read); a block is the long view.
+private val WEEK_CHOICES = listOf(4 to "28D", 13 to "90D", 52 to "1Y")
+
+private fun weeksWindow(weeks: Int, chip: String, today: LocalDate): PerfWindow {
+    val monday = today.minusDays((today.dayOfWeek.value - 1).toLong())
+    return PerfWindow("w$weeks", chip, if (weeks == 52) "the last year" else "the last $weeks weeks", monday.minusWeeks((weeks - 1).toLong()), today)
+}
+
+private fun blockName(c: TrainingCycle): String =
+    c.tbTemplate?.takeIf { it.isNotBlank() }?.substringBefore(" (") ?: "Block"
+
+private fun blockWindow(c: TrainingCycle, today: LocalDate): PerfWindow {
+    val end = listOfNotNull(c.endDate, today).min()
+    return PerfWindow("b${c.id}", blockName(c).uppercase(), "${blockName(c)} · ${shortDate(c.startDate)} – ${shortDate(end)}", c.startDate, end)
 }
 
 /**
- * ME › PERFORMANCE: one tile per sport (the three main ones first, then any other activity you record, newest first),
- * each with its last four weeks and twelve weeks of hours; a stacked chart of all of them on top.
+ * ME › PERFORMANCE: the window at the top (the last 4 / 12 weeks, 6 months, a year, or a training block), every sport's
+ * hours by week in it, VO2max and lactate threshold over it, then a tile per sport (the three main ones first, then any
+ * other activity you record, newest first) with its sessions, hours and weekly bars in the window.
  */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun PerformanceHub(onOpenSport: (Sport) -> Unit) {
-    val sessions = rememberSportSessions()
-    if (sessions == null) {
-        EmptyLine("Loading your sports…")
-        return
+fun PerformanceHub(onOpenSport: (Sport) -> Unit, onOpenRecords: () -> Unit = {}) {
+    val (sessions, sessionsGuard) = rememberSportSessions()
+    val today = remember { LocalDate.now() }
+    val cycles by produceState<List<TrainingCycle>>(emptyList()) {
+        value = catching { TrainingCyclesRepository(SupabaseClientProvider.client).loadCycles() }.getOrDefault(emptyList())
+            .filter { !it.startDate.isAfter(today) }.sortedByDescending { it.startDate }
     }
-    val today = LocalDate.now()
-    val sports = remember(sessions) { summarizeSports(sessions, today) }
-    if (sports.isEmpty()) {
-        EmptyLine("No sessions recorded yet. Workouts from your watch and logged sessions show up here, one tile per sport.")
-        return
+    val running by produceState<RunningHistory?>(null) {
+        value = catching { UserDataCache.running() }.getOrNull()
     }
+    // Kept across navigation (RangeMemory): back from a sport's page, the hub is still on the window it was read in.
+    var key by rememberRange("performance", "w13")
+    var picking by remember { mutableStateOf(false) }
+    val window = remember(key, cycles) {
+        WEEK_CHOICES.firstOrNull { "w${it.first}" == key }?.let { weeksWindow(it.first, it.second, today) }
+            ?: cycles.firstOrNull { "b${it.id}" == key }?.let { blockWindow(it, today) }
+            ?: weeksWindow(13, "90D", today)
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Section("ALL SPORTS · 12 WEEKS", info = "Hours per week by sport. Tap a week to read it. Walking counts only walks your watch recorded as workouts.") {
+        FTChipRow(
+            WEEK_CHOICES, WEEK_CHOICES.firstOrNull { key == "w${it.first}" }, { it.second }, { key = "w${it.first}" },
+            contentPadding = PaddingValues(0.dp),
+            trailing = if (cycles.isEmpty()) null else ({
+                val onBlock = key.startsWith("b")
+                FTChip(if (onBlock) window.chip else "BLOCK", onBlock, { picking = true }, role = Role.Button, menu = true)
+            }),
+        )
+        if (sessions == null) {
+            LoadingOrError(sessionsGuard, "Loading your sports…")
+            return@Column
+        }
+        val weeks = remember(window) { weekStarts(window.from, window.to) }
+        val sports = remember(sessions, window) { summarizeSportsIn(sessions, window.from, window.to, weeks) }
+        if (sports.isEmpty()) {
+            EmptyLine("No sessions recorded yet. Workouts from your watch and logged sessions show up here, one tile per sport.")
+            return@Column
+        }
+        val title = if (window.key.startsWith("b")) window.chip else "${weeks.size} WEEKS"
+        Section("ALL SPORTS · $title", info = "Hours per week by sport. The top line totals ${window.name}; tap a week to read it, tap it again to go back to the total. Walking counts only walks your watch recorded as workouts.") {
             val shown = sports.take(SPORT_COLORS.size)
-            val thisMonday = today.minusDays((today.dayOfWeek.value - 1).toLong())
             StackedBars(
-                (0 until 12).map { i -> shortDate(thisMonday.minusWeeks((11 - i).toLong())) to shown.map { it.weeklyHours[i] } },
+                weeks.mapIndexed { i, start -> shortDate(start) to shown.map { it.weeklyHours[i] } },
                 shown.indices.map(::sportColor), shown.map { it.sport.label }, Fmt.one, "h",
+                rangeName = if (window.key.startsWith("b")) blockName(cycles.first { "b${it.id}" == window.key }) else "${weeks.size} weeks",
+                lastPartial = window.to == today,
             )
         }
-        sports.forEachIndexed { i, s -> SportTile(s, sportColor(i)) { onOpenSport(s.sport) } }
+
+        CompositionLocalProvider(LocalRangeDays provides window.days) {
+            val r = running
+            if (r != null && r.vo2MaxSeries.isNotEmpty()) {
+                MetricPanel(
+                    "VO2MAX", r.vo2MaxSeries.toMap(), "ml/kg/min", Fmt.one, minSd = 0.5, betterHigher = true, color = FT.Metric.Vo2max, today = window.to,
+                    info = "Your watch's estimate of maximal oxygen uptake, from Health Connect. A slow-moving wearable estimate, not a lab test: read months, not days.",
+                )
+            }
+            if (r != null && (r.ltPaceSeries.isNotEmpty() || r.ltHrSeries.isNotEmpty())) {
+                val pace = r.ltPaceSeries.toMap()
+                val hr = r.ltHrSeries.toMap()
+                val main = pace.ifEmpty { hr }
+                MetricPanel(
+                    "LACTATE THRESHOLD", main, if (pace.isNotEmpty()) "/km" else "bpm", if (pace.isNotEmpty()) ::formatPace else Fmt.int,
+                    minSd = if (pace.isNotEmpty()) 0.05 else 1.0, betterHigher = pace.isEmpty(), color = if (pace.isNotEmpty()) FT.Metric.Pace else FT.Metric.HeartRate,
+                    today = window.to,
+                    info = "Zepp's lactate threshold, recomputed on qualifying runs: about the fastest pace you can hold for an hour (lower is faster), and the heart rate at it.",
+                ) {
+                    if (pace.isNotEmpty() && hr.isNotEmpty()) {
+                        MetricRow("Threshold heart rate", hr, "bpm", Fmt.int, minSd = 1.0, color = FT.Metric.HeartRate, today = window.to,
+                            info = "Zepp's heart rate at your lactate threshold.")
+                    }
+                }
+            }
+        }
+
+        RecordsCard(onOpenRecords)
+
+        sports.forEachIndexed { i, s -> SportTile(s, sportColor(i), window) { onOpenSport(s.sport) } }
+    }
+
+    if (picking) {
+        ModalBottomSheet(
+            onDismissRequest = { picking = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            shape = FT.SheetShape, containerColor = FT.Surface, contentColor = FT.TextPrimary,
+        ) {
+            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("TRAINING BLOCK", style = FTType.SectionTitle, color = FT.TextPrimary)
+                LazyColumn {
+                    items(cycles.size) { i ->
+                        val c = cycles[i]
+                        val on = key == "b${c.id}"
+                        Row(
+                            Modifier.fillMaxWidth().ftClickable(role = Role.Button, onClickLabel = "Show ${blockName(c)}") { key = "b${c.id}"; picking = false }.padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(blockName(c), style = FTType.RowTitle, color = if (on) FT.PlatinumSolid else FT.TextPrimary)
+                                Text(
+                                    "${shortDate(c.startDate)} ${c.startDate.year} – " + (c.endDate?.let { "${shortDate(it)} ${it.year}" } ?: "open") +
+                                        if (c.isActiveOn(today)) " · now" else "",
+                                    style = FTType.Caption, color = FT.TextSecondary,
+                                )
+                            }
+                            if (on) FTIcon(FTIcons.Check, null, tint = FT.PlatinumSolid, size = FTIconSize.Inline)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun SportTile(summary: SportSummary, color: Color, onClick: () -> Unit) {
+private fun SportTile(summary: SportSummary, color: Color, window: PerfWindow, onClick: () -> Unit) {
     val shape = RoundedCornerShape(FT.RadiusModule)
     Row(
         modifier = Modifier.fillMaxWidth()
@@ -109,28 +241,29 @@ private fun SportTile(summary: SportSummary, color: Color, onClick: () -> Unit) 
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(summary.sport.label, style = FTType.RowTitle, color = FT.TextPrimary)
-            val four = if (summary.sessions4w == 0) "nothing in the last 4 weeks"
-            else listOfNotNull("${summary.sessions4w} in 4 weeks", hours(summary.hours4w), summary.km4w?.let { "%.0f km".format(it) }).joinToString(" · ")
+            val four = if (summary.sessions4w == 0) "nothing in ${window.name.substringBefore(" · ")}"
+            else listOfNotNull("${summary.sessions4w} sessions", hours(summary.hours4w), summary.km4w?.let { "%.0f km".format(it) }).joinToString(" · ")
             Text(four, style = FTType.Caption, color = FT.TextSecondary)
             Text("last ${shortDate(summary.lastDate)} · ${summary.totalSessions} in all", style = FTType.Micro, color = FT.TextMuted)
         }
         Canvas(Modifier.width(84.dp).height(28.dp)) {
             val top = summary.weeklyHours.maxOrNull()?.takeIf { it > 0 } ?: 1.0
-            val layout = com.bioscan.fieldterminal.ui.components.BarLayout(size.width, summary.weeklyHours.size, 3.dp.toPx())
+            val layout = BarLayout(size.width, summary.weeklyHours.size, (if (summary.weeklyHours.size > 16) 1 else 3).dp.toPx())
             summary.weeklyHours.forEachIndexed { i, h ->
                 val bh = (h / top).toFloat() * (size.height - 2.dp.toPx())
-                if (h > 0) drawBar(color, layout.left(i), size.height - bh, layout.barWidth, cap = i == summary.weeklyHours.lastIndex)
+                val soFar = window.to == LocalDate.now() && i == summary.weeklyHours.lastIndex
+                if (h > 0) drawBar(color, layout.left(i), size.height - bh, layout.barWidth, alpha = if (soFar) FTBarSpec.PROJECTED_ALPHA else 1f, cap = i == summary.weeklyHours.lastIndex)
                 else drawBarStub(layout.left(i), layout.barWidth)
             }
         }
-        Text("›", style = FTType.SectionTitle, color = FT.TextMuted)
+        FTChevron(tint = FT.TextMuted)
     }
 }
 
 /** A sport's sessions, newest first, as rows that open the session's own page. */
 @Composable
 fun RecentSessions(sportKey: String, onOpenSession: (Long) -> Unit, count: Int = 12) {
-    val sessions = rememberSportSessions() ?: return
+    val sessions = rememberSportSessions().first ?: return
     val mine = remember(sessions, sportKey) { sessions.filter { sportOf(it.type, it.source).key == sportKey }.sortedByDescending { it.date }.take(count) }
     if (mine.isEmpty()) return
     Section("LATEST SESSIONS") {
@@ -145,7 +278,7 @@ fun RecentSessions(sportKey: String, onOpenSession: (Long) -> Unit, count: Int =
                         .joinToString(" · "),
                     style = FTType.Body, color = FT.TextPrimary, modifier = Modifier.weight(1f),
                 )
-                Text("›", style = FTType.RowTitle, color = FT.TextMuted)
+                FTChevron(tint = FT.TextMuted)
             }
         }
     }
@@ -154,11 +287,11 @@ fun RecentSessions(sportKey: String, onOpenSession: (Long) -> Unit, count: Int =
 /** The page of a sport without its own (cycling, hiking, walking, yoga...): volume, effort, records and sessions. */
 @Composable
 fun SportScreen(sportKey: String, onBack: () -> Unit, onOpenSession: (Long) -> Unit) {
-    val sessions = rememberSportSessions()
+    val (sessions, sessionsGuard) = rememberSportSessions()
     val label = sportOf(sportKey, null).label
     DetailScreen(label.uppercase(), onBack, eyebrow = "PERFORMANCE", domain = FT.Domain.Load) {
         if (sessions == null) {
-            EmptyLine("Loading…")
+            LoadingOrError(sessionsGuard, "Loading…")
             return@DetailScreen
         }
         val today = LocalDate.now()
@@ -188,7 +321,7 @@ fun SportScreen(sportKey: String, onBack: () -> Unit, onOpenSession: (Long) -> U
                     val start = thisMonday.minusWeeks(k.toLong())
                     shortDate(start) to listOf(mine.filter { !it.date.isBefore(start) && it.date.isBefore(start.plusWeeks(1)) }.sumOf { it.durationMin ?: 0.0 } / 60.0)
                 },
-                listOf(FT.Category.Activity.c500), listOf("Hours"), Fmt.one, "h",
+                listOf(FT.Category.Activity.c500), listOf("Hours"), Fmt.one, "h", lastPartial = true,
             )
         }
         Section("EACH SESSION") {

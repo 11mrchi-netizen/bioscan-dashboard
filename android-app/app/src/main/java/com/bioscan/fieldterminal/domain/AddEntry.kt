@@ -59,6 +59,10 @@ enum class AddEntryChoice(val label: String, val group: AddEntryGroup) {
     // check-in (NOTHING in one tap) and goes on to the body map or the general symptoms; the old Injury check-in,
     // Injury / pain and Illness / symptom entries are gone from the picker. The weekly OSTRC form stays for editing saved rows.
     HealthCheckIn("Health", AddEntryGroup.Body),
+    // An infection or another illness, logged as what it is (domain/health/Illness.kt), and the symptom check for the small
+    // things (domain/health/SymptomCheck.kt). Named apart from the retired "Illness" entry so old RECENT rows keep their meaning.
+    IllnessLog("Illness", AddEntryGroup.Body),
+    SymptomCheck("Symptom check", AddEntryGroup.Body),
     // A race, long day or other hard day outside the training plan (domain/events/AthleteEvent.kt).
     Event("Event", AddEntryGroup.Other),
     SexualActivity("Sexual activity", AddEntryGroup.Intimacy),
@@ -71,6 +75,8 @@ enum class AddEntryChoice(val label: String, val group: AddEntryGroup) {
 sealed interface AddEntryTarget {
     data class Form(val type: AddEntryType, val fuel: FuelSubType? = null) : AddEntryTarget
     data object HealthCheckIn : AddEntryTarget
+    data object IllnessForm : AddEntryTarget
+    data object SymptomCheck : AddEntryTarget
     data object BodyCheckIn : AddEntryTarget
     data object EventForm : AddEntryTarget
     data object SweatTest : AddEntryTarget
@@ -88,6 +94,8 @@ val AddEntryChoice.target: AddEntryTarget
         AddEntryChoice.Grip -> AddEntryTarget.Form(AddEntryType.Grip)
         AddEntryChoice.BodyCheckIn -> AddEntryTarget.BodyCheckIn
         AddEntryChoice.HealthCheckIn -> AddEntryTarget.HealthCheckIn
+        AddEntryChoice.IllnessLog -> AddEntryTarget.IllnessForm
+        AddEntryChoice.SymptomCheck -> AddEntryTarget.SymptomCheck
         AddEntryChoice.Event -> AddEntryTarget.EventForm
         AddEntryChoice.SweatTest -> AddEntryTarget.SweatTest
         AddEntryChoice.ScaleWeighIn -> AddEntryTarget.ScaleWeighIn
@@ -142,6 +150,8 @@ fun encodeTarget(t: AddEntryTarget?): String = when (t) {
     null -> ""
     is AddEntryTarget.Form -> "FORM|${t.type.name}|${t.fuel?.name.orEmpty()}"
     AddEntryTarget.HealthCheckIn -> "HEALTH"
+    AddEntryTarget.IllnessForm -> "ILLNESS_FORM"
+    AddEntryTarget.SymptomCheck -> "SYMPTOM_CHECK"
     AddEntryTarget.BodyCheckIn -> "BODY"
     AddEntryTarget.EventForm -> "EVENT"
     AddEntryTarget.SweatTest -> "SWEAT"
@@ -156,6 +166,8 @@ fun decodeTarget(s: String): AddEntryTarget? {
         }
         // INJURY and ILLNESS were separate targets before the unified Health entry; a state saved by an older build lands there.
         "HEALTH", "INJURY", "ILLNESS" -> AddEntryTarget.HealthCheckIn
+        "ILLNESS_FORM" -> AddEntryTarget.IllnessForm
+        "SYMPTOM_CHECK" -> AddEntryTarget.SymptomCheck
         "BODY" -> AddEntryTarget.BodyCheckIn
         "EVENT" -> AddEntryTarget.EventForm
         "SWEAT" -> AddEntryTarget.SweatTest

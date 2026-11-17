@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data.routine
 
+import android.R
 import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
@@ -13,6 +14,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
@@ -79,7 +81,7 @@ class TripRecordingService : Service() {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel(CHANNEL_ID, "Trip recording", NotificationManager.IMPORTANCE_MIN))
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .setSmallIcon(R.drawable.ic_menu_mylocation)
             .setContentTitle("Recording a trip")
             .setContentText("Locations · stops when you settle")
             .setOngoing(true)
@@ -90,7 +92,7 @@ class TripRecordingService : Service() {
             val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
             ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, type)
         }.onFailure {
-            android.util.Log.w("TripRecordingService", "could not start in the foreground: ${it.message}")
+            Log.w("TripRecordingService", "could not start in the foreground: ${it.message}")
             stopSelf()
         }.isSuccess
     }
@@ -107,7 +109,7 @@ class TripRecordingService : Service() {
         if (updatesOn) client.removeLocationUpdates(callback)
         runCatching { client.requestLocationUpdates(request, callback, Looper.getMainLooper()) }
             .onSuccess { updatesOn = true }
-            .onFailure { android.util.Log.w("TripRecordingService", "updates: ${it.message}") }
+            .onFailure { Log.w("TripRecordingService", "updates: ${it.message}") }
     }
 
     private fun onFix(loc: Location) {
@@ -158,7 +160,7 @@ class TripRecordingService : Service() {
             val intent = Intent(context, TripRecordingService::class.java).setAction(ACTION_START)
             if (activity != null) intent.putExtra(EXTRA_ACTIVITY, activity)
             runCatching { ContextCompat.startForegroundService(context, intent) }
-                .onFailure { android.util.Log.w("TripRecordingService", "start refused: ${it.message}") }
+                .onFailure { Log.w("TripRecordingService", "start refused: ${it.message}") }
         }
 
         fun settle(context: Context) {

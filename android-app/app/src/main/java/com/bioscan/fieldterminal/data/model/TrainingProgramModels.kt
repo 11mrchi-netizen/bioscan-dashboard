@@ -151,7 +151,7 @@ data class PlannedForSessionRow(
     val status: String = "planned",
     @SerialName("exercise_session_id") val exerciseSessionId: Long? = null,
     @SerialName("match_status") val matchStatus: String = "none",
-    val prescription: kotlinx.serialization.json.JsonElement? = null,
+    val prescription: JsonElement? = null,
 )
 
 @Serializable

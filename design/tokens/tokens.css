@@ -14,6 +14,12 @@
   --ft-glass-bg:      linear-gradient(135deg, rgba(255,255,255,.085), rgba(255,255,255,.028) 60%);
   --ft-glass-border:  rgba(255,255,255,.12);
   --ft-glass-blur:    blur(18px) saturate(1.1);
+  --ft-chip-idle:     rgba(255,255,255,.03);   /* an unselected chip's faint fill */
+
+  /* motion (contract section 12): soft 120-240 ms, no bounce; reduced motion snaps */
+  --ft-motion-fast:   120ms;   /* press release, chip selection, small state changes */
+  --ft-motion-base:   180ms;   /* tab switches, expanding a row, chart selection */
+  --ft-motion-slow:   240ms;   /* pushed pages, overlays and sheets */
 
   /* ---- domain framing hues (background wash + hero gauge only) ---- */
   --ft-domain-sleep:     #8b7cff;
@@ -55,6 +61,10 @@
   --m-weight:            #9aa6bd;
   --m-weight-ema:        #c7d0e0;
   --m-body-fat:          #ff9a3d;
+  /* body-fat by method, each a distinct hue so the sources read apart on one chart (scale keeps --m-body-fat) */
+  --m-body-fat-tape:     #38c6d4;
+  --m-body-fat-caliper:  #a97bff;
+  --m-body-fat-dexa:     #e86fb0;
   --m-lean-mass:         #36d07a;
   --m-muscle-potential:  #5ad1b0;
   --m-measurements:      #9b6cff;
@@ -105,12 +115,44 @@
   --m-stool-liquid:      #e0774d;
   --m-gut-comfort:       #8ce06b;
 
+  /* running — kinds of run (the Running page's stacked weeks) */
+  --m-run-trail:         #2e9e5b;
+  --m-run-easy:          #3b86d6;
+  --m-run-quality:       #e8692e;
+
+  /* routine — how a trip was travelled (the day map's path) */
+  --m-mode-on-foot:      #199e70;
+  --m-mode-bicycle:      #c98500;
+  --m-mode-vehicle:      #3987e5;
+  --m-mode-stop:         #d95926;
+  --m-mode-waiting:      #6b7178;
+  --m-mode-unknown:      #3a3f45;
+
+  /* lab markers and lifts on the Healthspan factor pages (occasional readings, drawn as dots) */
+  --m-triglycerides:     #e8b04b;
+  --m-hdl:               #5cc8e8;
+  --m-fasting-glucose:   #f0846b;
+  --m-hba1c:             #d46be0;
+  --m-lift-primary:      #ffb86b;
+  --m-lift-secondary:    #7fd4ff;
+
+  /* score scenes — CHARGE's city at dusk (the five domain scenes draw in their domain hue) */
+  --scene-city-sky:      #2a3a55;
+  --scene-city-window:   #ffcf7a;
+
   /* routine */
   --m-phone-sleep:       #9b6cff;
   --m-night-screen:      #7a6cff;
   --m-daylight:          #ffd23a;
   --m-commute:           #5ab0ff;
   --m-active-travel:     #36d07a;
+  /* routine: kinds of time on the 24-hour ribbon (asleep is --m-sleep-duration, on the move --m-commute) */
+  --m-time-home:         #2fb8a0;
+  --m-time-work:         #e8c26a;
+  --m-time-out:          #ff8fb1;
+  --m-time-training:     #ff6a3d;
+  --m-time-logged:       #b8e04a;
+  --m-time-phone:        #a7b0ff;
 
   /* ---- ordered ramps ---- */
   --z-hr-1: #6f86b0;  --z-hr-2: #3aa0ff;  --z-hr-3: #35c77a;  --z-hr-4: #ffb03a;  --z-hr-5: #ff4d4d;

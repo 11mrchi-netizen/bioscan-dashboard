@@ -3,6 +3,7 @@ package com.bioscan.fieldterminal.data
 import com.bioscan.fieldterminal.data.model.CalendarAttachmentRow
 import com.bioscan.fieldterminal.data.model.CalendarSyncStateRow
 import com.bioscan.fieldterminal.data.model.NewCalendarEventRow
+import com.bioscan.fieldterminal.domain.LenientJson
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.ktor.client.HttpClient
@@ -13,7 +14,6 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.isSuccess
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import java.time.Instant
 
 // DAV-145. Distinct from data/MapRepository.kt's fetchUpcomingEvents() on
@@ -31,7 +31,7 @@ sealed interface CalendarSyncResult {
 
 private class SyncTokenExpiredException : Exception("Calendar sync token expired, full resync required")
 
-private val json = Json { ignoreUnknownKeys = true }
+private val json = LenientJson
 
 class CalendarSyncRepository(
     private val accessToken: String,

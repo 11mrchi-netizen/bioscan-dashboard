@@ -25,8 +25,8 @@ import com.bioscan.fieldterminal.ui.components.FTConfirmDestructive
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CancellationException
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Personal health agent, phase 1 (docs/personal-health-agent): the assistant's switch and what it may read, in the same
 // per-stream style as the routine capture card. Off by default. Routine and location data have no switch: they are
@@ -72,11 +72,11 @@ fun AssistantCard() {
             "record of each question. Replies are checked against the data before they are shown. The model runs at a " +
             "provider that keeps no data and does not train on it.",
     ) {
-        error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+        error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
         val on = enabled
         if (on == null && error == null) Text("Loading…", style = FTType.BodySmall, color = FT.TextSecondary)
         if (on != null) {
-            Text(if (on) "ON" else "OFF", style = FTType.LabelCaps, color = if (on) FT.Emerald else FT.TextSecondary)
+            Text(if (on) "ON" else "OFF", style = FTType.LabelCaps, color = if (on) FT.Ok else FT.TextSecondary)
             if (on) {
                 FTButton("TURN OFF", modifier = Modifier.fillMaxWidth(), enabled = !saving) { save(false, groups) }
             } else {

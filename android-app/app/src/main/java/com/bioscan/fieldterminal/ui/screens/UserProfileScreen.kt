@@ -22,6 +22,8 @@ import com.bioscan.fieldterminal.data.HealthspanBundle
 import com.bioscan.fieldterminal.data.HealthspanRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingCyclesRepository
+import com.bioscan.fieldterminal.data.catching
+import com.bioscan.fieldterminal.domain.Confidence
 import com.bioscan.fieldterminal.domain.DataAvailability
 import com.bioscan.fieldterminal.domain.TrainingCycle
 import com.bioscan.fieldterminal.domain.levels.SkillLevel
@@ -29,6 +31,7 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTDataState
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
+import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.screens.training.currentBlockProgress
 import com.bioscan.fieldterminal.ui.screens.training.currentBlockTitle
@@ -39,9 +42,10 @@ import com.bioscan.fieldterminal.ui.screens.user.conditioningLevelOf
 import com.bioscan.fieldterminal.ui.screens.user.runningLevelOf
 import com.bioscan.fieldterminal.ui.screens.user.strengthLevelOf
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // User tab: Healthspan (radar over the scored factors), Aging, the three skill pages (Running / Strength / Conditioning) as buttons
 // under Aging, then the training block. Skill levels are computed from real history (see domain/levels/SkillLevel.kt); nothing on
@@ -52,7 +56,7 @@ fun UserProfileScreen(
     // UX review P5: opens Training › Plan, the one home of the training block.
     onOpenTrainingPlan: () -> Unit = {},
     onOpenSkill: (Skill) -> Unit = {},
-    // Scoring system rebuild: inside ME the page has ME's header, so its own is left out.
+    // Inside ME the page has ME's header, so its own is left out.
     showHeader: Boolean = true,
 ) {
     var agingOverview by remember { mutableStateOf<AgingProfileOverview?>(null) }
@@ -62,14 +66,14 @@ fun UserProfileScreen(
         agingGuard.run { agingOverview = UserDataCache.aging() }
     }
 
-    // Analysis Layer 3 / Phase 8: the Healthspan score (loaded once aging is known).
+    // The Healthspan score (loaded once aging is known).
     var healthspan by remember { mutableStateOf<HealthspanBundle?>(null) }
     var healthspanFailed by remember { mutableStateOf(false) }
     LaunchedEffect(agingOverview) {
         val overview = agingOverview ?: return@LaunchedEffect
         healthspanFailed = false
-        healthspan = runCatching { HealthspanRepository(SupabaseClientProvider.client).load(overview) }
-            .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it else healthspanFailed = true }
+        healthspan = catching { HealthspanRepository(SupabaseClientProvider.client).load(overview) }
+            .onFailure { if (it is CancellationException) throw it else healthspanFailed = true }
             .getOrNull()
     }
 
@@ -89,7 +93,7 @@ fun UserProfileScreen(
     }
     val activeCycle = cycles?.firstOrNull { it.isActiveOn(LocalDate.now()) }
 
-    Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
+    Column(modifier = Modifier.fillMaxSize().background(FT.Base).ftPlatinumWash()) {
         if (showHeader) ScreenHeader(title = "USER", context = "HEALTHSPAN · SKILLS · TRAINING BLOCK")
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -100,7 +104,7 @@ fun UserProfileScreen(
                 LoadErrorCard(failed, onRetry = { agingGuard.retry(); cyclesGuard.retry() })
             }
 
-            HealthspanCard(healthspan?.summary, healthspanFailed)
+            HealthspanCard(healthspan?.summary, healthspanFailed, onOpenAging = onOpenAging)
 
             AgingCard(agingOverview, onOpenAging)
 
@@ -115,12 +119,12 @@ fun UserProfileScreen(
 private suspend fun loadLevel(compute: suspend () -> SkillLevel): SkillLevel =
     try {
         compute()
-    } catch (e: kotlinx.coroutines.CancellationException) {
+    } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         SkillLevel(
             label = "Not enough data yet", position = null, basis = null, provisional = false, headline = null,
-            reason = "Couldn't load history — check connection", confidence = com.bioscan.fieldterminal.domain.Confidence(0, 1),
+            reason = "Couldn't load history — check connection", confidence = Confidence(0, 1),
         )
     }
 
@@ -133,7 +137,7 @@ private fun AgingCard(overview: AgingProfileOverview?, onOpen: () -> Unit) {
         onClick = onOpen,
     ) {
         when {
-            overview == null -> CircularProgressIndicator(color = FT.Emerald)
+            overview == null -> CircularProgressIndicator(color = FT.Ok)
             overview.chronologicalAgeYears == null -> FTDataState(DataAvailability.Unavailable, "Set your date of birth in Setup › Profile & goals to see this.")
             else -> {
                 BioAgeHero(overview)
@@ -160,6 +164,6 @@ private fun TrainingBlockLinkCard(cycle: TrainingCycle?, loaded: Boolean, onOpen
                 Text(currentBlockProgress(cycle), style = FTType.MonoCaption, color = FT.TextMuted)
             }
         }
-        Text("OPEN TRAINING › PLAN ›", style = FTType.LabelCaps, color = FT.EmeraldHighlight)
+        Text("OPEN TRAINING › PLAN ›", style = FTType.LabelCaps, color = FT.PlatinumSolid)
     }
 }

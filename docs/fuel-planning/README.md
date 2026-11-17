@@ -66,12 +66,16 @@ sets the week's energy and protein, the plan shapes each day.
 ## Phase 3 notes: the day engine
 
 - `domain/fuel/DayFuelPlan.kt` (`planFuelDay`, `planFuelDays`). Carbohydrate bands (Thomas 2016): rest or a short easy
-  session 3-5 g/kg; up to about 75 min 5-7; 75-240 min 6-10; over 240 min 8-12; easy days sit low in the band, hard
-  ones high, races at 90 %. The day before a hard, long or race session that starts before noon steps up one band. The
+  session 3-5 g/kg; up to 90 min 5-7; 90-240 min 6-10; over 240 min 8-12; easy days sit at the band's floor, moderate
+  a quarter up, hard and long halfway, races at 75 %. The day before a hard, long or race session that starts before
+  noon is lifted to the next band's floor. The
   two days before an A or B race over 90 minutes load at 10-12 g/kg (low fibre the day before). The goal's calories
   stay the weekly average: day = goal + that day's session energy − the week's mean session energy. Protein stays at the
   goal (1.8 g/kg without one). Fat is the remainder with a 20 % floor; when it binds, carbohydrate gives way (the
   step-up first, then to the low end of the day's own band) and only then does the day's energy rise, with a note.
+  No day asks for more than 4,500 kcal (`MAX_DAY_KCAL`): the excess moves to the day after, the day before, then two
+  days out (`spreadDayEnergy`, never onto past days), and where even the ceiling leaves too little room, carbohydrate
+  gives way instead of energy rising past it.
   Energy availability below 30 kcal/kg fat-free mass is named (IOC REDs 2023); a deficit goal on a key day is noted.
 - `domain/fuel/MealCodes.kt` (`codeMeals`): LOW / MEDIUM / HIGH per meal with the reason (HIGH 1-4 h before or 2 h
   after a key session, the evening before a hard morning, all of a loading day; LOW on rest days and, by opt-in only,
@@ -280,6 +284,25 @@ Friday with skippable meals; stored in Supabase; unreadable long calendar entrie
   list equals containers plus breakfasts in raw weight; breakfast within its bounds; after cooking, a changed day still
   adds up through breakfast and snacks. The migration was applied twice on a local Postgres 16 (policies, checks,
   uniqueness, other users) and then live.
+
+## Phase 12 notes: matching recordings to plans, and the long-session fuel loop
+
+- Plans differ from what is done: the calendar's 07:00 placeholder run at 07:55, 13 km where 19.3 were planned, a hike
+  for a run. `domain/fuel/SessionMatching.kt` scores each recording against each plan of its day: kind of session (same
+  0, compatible 0.8, else never), start (0.15 an hour, at most 1.5; untimed 0.6), size (distance log ratio × 1.2 when
+  both have one, else duration log ratio × 0.8; at most 2), role (a long plan is the day's longest recording −0.3, or
+  not +0.6). Leaving a recording unmatched costs 2; the cheapest pairing of the day wins (exhaustive up to six of each).
+  Confidence exp(−0.7 × cost), at least 0.8 for each other's only pair; under 0.5 it is shown as one to CHECK.
+- `session_plan_links` (migration 20261110040502) keeps one answer per recording: `manual` (the person's, always first,
+  may point at a plan of the day before or after, or say "not planned") or `auto` (the app's match, kept once its day
+  is over so it stops moving). The links events (`athlete_events.exercise_session_id`) and the training plan
+  (`planned_sessions.exercise_session_id`) carry count as answers too; a kept event match fills the event's own link.
+- Fuel › Plan, MATCHED SESSIONS: the recordings of the last three days and today, each with its plan and how sure the
+  match is; RIGHT / CHANGE on the uncertain ones, a tap on any of them for the choice of plans.
+- LONG SESSION FUEL: each long (90 min and over) non-event session of those days has its fuel schedule, kept under the
+  plan (`fuel_schedules` kind `planned`, ref = the plan item's id) and seeded from the race planner (weather, sweat,
+  catalog, tolerance). It stays once the run is recorded, and DEBRIEF WHAT YOU TOOK checks the intake against it (the
+  debrief finds the schedule through the link, or today's live match). Events keep their own FUEL tab.
 
 ## Read-only check on live data
 

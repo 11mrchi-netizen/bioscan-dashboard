@@ -24,7 +24,7 @@ data class ExistingHydrationRow(val ml: Int? = null)
 @Serializable
 data class NewHydrationRow(val date: String, val ml: Int)
 
-// personId/calendarEventTitle (Phase M3) are only ever set by the Map tab's
+// personId/calendarEventTitle are only ever set by the Map tab's
 // "LOG ENCOUNTER" action (see ui/screens/MapScreen.kt) -- the Log tab's own
 // EncounterForm collects the rest (occurredAt onward, DAV-158/159) but never
 // these two, so they stay null on every Log-tab write.
@@ -65,6 +65,8 @@ data class NewStoolRow(
     @SerialName("occurred_at") val occurredAt: String,
     @SerialName("bristol_type") val bristolType: Int,
     val discomfort: Int? = null,
+    // Does it feel empty afterwards: "yes" / "partly" / "no"; null when not answered.
+    @SerialName("complete_evacuation") val completeEvacuation: String? = null,
 )
 
 @Serializable
@@ -102,7 +104,7 @@ data class NewWellbeingRow(
     @SerialName("arousal_level") val arousalLevel: Int? = null,
 )
 
-// Analysis Layer 3 / R2: recovery_sessions has no form; rows come from the log agent (a confirmed proposal).
+// recovery_sessions has no form; rows come from the log agent (a confirmed proposal).
 @Serializable
 data class NewRecoverySessionRow(
     val date: String,
@@ -144,7 +146,7 @@ data class SupplementLogEditRow(
     @SerialName("dose_unit") val doseUnit: String? = null,
 )
 
-// Phase A4 (Category 8). severity_score is a stored generated column
+// severity_score is a stored generated column
 // (q1+q2+q3+q4, see Phase A1's migration) -- never written by the client.
 @Serializable
 data class NewOstrcRow(

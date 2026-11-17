@@ -21,29 +21,31 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingProgramRepository
 import com.bioscan.fieldterminal.data.ZoneAnchorsRepository
+import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.domain.HeartRateZone
 import com.bioscan.fieldterminal.domain.IntensityBand
 import com.bioscan.fieldterminal.domain.WeekIntensity
 import com.bioscan.fieldterminal.domain.ZoneMethod
 import com.bioscan.fieldterminal.domain.weeklyIntensity
-import com.bioscan.fieldterminal.ui.components.heartRateZoneColor
-import com.bioscan.fieldterminal.ui.components.softLoad
+import com.bioscan.fieldterminal.ui.components.BarLayout
+import com.bioscan.fieldterminal.ui.components.FTBarSpec
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.drawBarStub
 import com.bioscan.fieldterminal.ui.components.drawStackedBar
+import com.bioscan.fieldterminal.ui.components.heartRateZoneColor
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.screens.detail.Section
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Training › Load: how the last twelve weeks of endurance training split between low, moderate and high intensity
 // (domain/IntensityDistribution.kt). Bars are minutes per week, stacked by band in the zone colours of a session's chart
@@ -72,17 +74,21 @@ private const val INFO_DETAILS =
 fun IntensityCard(modifier: Modifier = Modifier) {
     var weeks by remember { mutableStateOf<List<WeekIntensity>?>(null) }
     var method by remember { mutableStateOf(ZoneMethod.AUTO) }
-    LaunchedEffect(Unit) {
-        val client = SupabaseClientProvider.client
-        val sessions = softLoad { AnalysisRepository(client).loadIntensitySessions() } ?: return@LaunchedEffect
-        val anchors = softLoad { ZoneAnchorsRepository(client).load() } ?: return@LaunchedEffect
-        method = softLoad { TrainingProgramRepository(client).loadZoneMethod() } ?: ZoneMethod.AUTO
-        weeks = weeklyIntensity(sessions, anchors::anchorsFor, method, LocalDate.now())
+    val guard = rememberLoadGuard(refreshOnUpdates = false)
+    LaunchedEffect(guard.attempt) {
+        guard.run {
+            val client = SupabaseClientProvider.client
+            val sessions = AnalysisRepository(client).loadIntensitySessions()
+            val anchors = ZoneAnchorsRepository(client).load()
+            method = softLoad { TrainingProgramRepository(client).loadZoneMethod() } ?: ZoneMethod.AUTO
+            weeks = weeklyIntensity(sessions, anchors::anchorsFor, method, LocalDate.now())
+        }
     }
+    LoadErrorLine(guard, "the intensity card", modifier)
     val w = weeks ?: return
     if (w.none { it.totalSeconds > 0 }) return
 
-    com.bioscan.fieldterminal.ui.screens.detail.Section("INTENSITY · 12 WEEKS", info = INFO + "\n\n" + INFO_DETAILS) {
+    Section("INTENSITY · 12 WEEKS", info = INFO + "\n\n" + INFO_DETAILS) {
         var selected by remember(w) { mutableStateOf<Int?>(null) }
         val shown = selected ?: w.lastIndex
         val week = w[shown]
@@ -126,8 +132,8 @@ private fun StackedWeeks(weeks: List<WeekIntensity>, shown: Int, onSelect: (Int)
             .pointerInput(weeks) { detectTapGestures { onSelect(indexAt(it.x, size.width.toFloat())) } }
             .pointerInput(weeks) { detectHorizontalDragGestures { change, _ -> onSelect(indexAt(change.position.x, size.width.toFloat())) } },
     ) {
-        val layout = com.bioscan.fieldterminal.ui.components.BarLayout(size.width, weeks.size, com.bioscan.fieldterminal.ui.components.FTBarSpec.gapFor(weeks.size).toPx())
-        val usable = size.height - com.bioscan.fieldterminal.ui.components.FTBarSpec.TopPad.toPx()
+        val layout = BarLayout(size.width, weeks.size, FTBarSpec.gapFor(weeks.size).toPx())
+        val usable = size.height - FTBarSpec.TopPad.toPx()
         weeks.forEachIndexed { i, wk ->
             val x = layout.left(i)
             if (wk.totalSeconds <= 0) {
@@ -136,7 +142,7 @@ private fun StackedWeeks(weeks: List<WeekIntensity>, shown: Int, onSelect: (Int)
             }
             // charts-bars-and-scales.md §1.10: stacked from the baseline, 2 dp between segments, the top one rounded.
             drawStackedBar(IntensityBand.entries.map { wk.seconds[it] ?: 0.0 }, IntensityBand.entries.map { BAND_COLORS.getValue(it) },
-                x, layout.barWidth, { v -> (v / top).toFloat() * usable }, alpha = if (i == shown) 1f else com.bioscan.fieldterminal.ui.components.FTBarSpec.DIMMED_ALPHA, cap = i == shown)
+                x, layout.barWidth, { v -> (v / top).toFloat() * usable }, alpha = if (i == shown) 1f else FTBarSpec.DIMMED_ALPHA, cap = i == shown)
         }
     }
 }

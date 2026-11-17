@@ -52,6 +52,9 @@ android {
         versionName = "0.1.0"
 
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
+        // One definition for both apps: android-app/gradle.properties.
+        buildConfigField("String", "SUPABASE_URL", "\"${providers.gradleProperty("supabaseUrl").get()}\"")
+        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"${providers.gradleProperty("supabasePublishableKey").get()}\"")
     }
 
     buildTypes {

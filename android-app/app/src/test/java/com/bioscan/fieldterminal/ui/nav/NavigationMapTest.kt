@@ -21,7 +21,7 @@ class NavigationMapTest {
         assertEquals(listOf("TODAY", "PLAN", "+ LOG", "LAB", "ME"), TopLevelTab.entries.map { it.label })
         assertEquals(listOf("status", "plan", "log", "lab", "user"), TopLevelTab.entries.map { it.route })
         assertEquals(listOf("TRAINING", "FOOD", "RACE", "SESSIONS"), PlanTab.entries.map { it.label })
-        assertEquals(listOf("HEALTHSPAN", "PERFORMANCE", "BODY", "HEALTH", "BLOODWORK"), MeTab.entries.map { it.label })
+        assertEquals(listOf("HEALTHSPAN", "PERFORMANCE", "BODY", "HEALTH", "BLOODWORK", "ROUTINE"), MeTab.entries.map { it.label })
     }
 
     // The map's change requests: each ring's tiles open pages of their own; FUEL's are Nutrition, Hydration, Digestion.

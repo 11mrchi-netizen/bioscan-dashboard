@@ -2,13 +2,12 @@ package com.bioscan.fieldterminal.ui.screens.detail
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -16,13 +15,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,53 +34,82 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
-import com.bioscan.fieldterminal.ui.components.InspectRow
-import com.bioscan.fieldterminal.ui.components.chartInspect
-import com.bioscan.fieldterminal.ui.components.drawInspectOverlay
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.SupplementsRepository
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.DayRange
 import com.bioscan.fieldterminal.domain.MetricReading
+import com.bioscan.fieldterminal.domain.RegimenMarker
 import com.bioscan.fieldterminal.domain.readMetric
+import com.bioscan.fieldterminal.domain.regimenMarkers
 import com.bioscan.fieldterminal.domain.score.InputDirection
 import com.bioscan.fieldterminal.domain.score.Series
-import com.bioscan.fieldterminal.ui.components.LoadGuard
-import com.bioscan.fieldterminal.ui.components.LoadErrorCard
-import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.BarLayout
+import com.bioscan.fieldterminal.ui.components.BarYAxis
+import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.FTBarSpec
+import com.bioscan.fieldterminal.ui.components.FTCardEmphasis
+import com.bioscan.fieldterminal.ui.components.FTChevron
+import com.bioscan.fieldterminal.ui.components.FTChip
+import com.bioscan.fieldterminal.ui.components.FTChipRow
+import com.bioscan.fieldterminal.ui.components.FTIconButton
+import com.bioscan.fieldterminal.ui.components.FTIcons
+import com.bioscan.fieldterminal.ui.components.FTLegend
+import com.bioscan.fieldterminal.ui.components.FTMetricDot
+import com.bioscan.fieldterminal.ui.components.InspectRow
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
+import com.bioscan.fieldterminal.ui.components.LoadGuard
+import com.bioscan.fieldterminal.ui.components.SkeletonSections
+import com.bioscan.fieldterminal.ui.components.TrendSeries
 import com.bioscan.fieldterminal.ui.components.barAlpha
 import com.bioscan.fieldterminal.ui.components.barLayout
+import com.bioscan.fieldterminal.ui.components.chartInspect
 import com.bioscan.fieldterminal.ui.components.drawBarStub
+import com.bioscan.fieldterminal.ui.components.drawInspectOverlay
 import com.bioscan.fieldterminal.ui.components.drawRangeCapsule
 import com.bioscan.fieldterminal.ui.components.drawStackedBar
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.ftDomainWash
 import com.bioscan.fieldterminal.ui.components.ftGlass
+import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
+import com.bioscan.fieldterminal.ui.components.localTrendAt
+import com.bioscan.fieldterminal.ui.components.rememberRange
+import com.bioscan.fieldterminal.ui.components.smoothedPath
+import com.bioscan.fieldterminal.ui.components.splitAtGaps
+import com.bioscan.fieldterminal.ui.components.trendCurve
 import com.bioscan.fieldterminal.ui.screens.today.FullScreenOverlay
-import com.bioscan.fieldterminal.ui.screens.today.Sparkline
+import com.bioscan.fieldterminal.ui.screens.today.SlotSparkline
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // The detail pages' shared kit (Sleep, Cardio, Load, Nutrition...), in the look of the score overlays: a plain page with
 // a back arrow, glass sections with a caps title, the number first and its chart under it, and every explanation one tap
 // away behind the section's ⓘ (never a collapsed card). Charts share one range (30 D · 90 D · 1 Y) chosen at the top.
 
-enum class ChartRange(val days: Int, val label: String) { M1(30, "30 D"), M3(90, "90 D"), Y1(365, "1 Y") }
+// The standard ranges (FTRange: 28D, 90D, 1Y); ALL is not offered here because these pages read a bounded window.
+enum class ChartRange(val days: Int, val label: String) { M1(28, "28D"), M3(90, "90D"), Y1(365, "1Y") }
 
 /** The chart window the page's range chips picked. */
 val LocalRangeDays = compositionLocalOf { ChartRange.M3.days }
 
 /** Regimen changes (domain/Regimen.kt) every TrendChart on the page draws as dashed lines; empty to hide them. */
-val LocalRegimenMarkers = compositionLocalOf { emptyList<com.bioscan.fieldterminal.domain.RegimenMarker>() }
+val LocalRegimenMarkers = compositionLocalOf { emptyList<RegimenMarker>() }
 
 @Composable
 fun DetailScreen(
@@ -94,25 +122,29 @@ fun DetailScreen(
     domain: Color? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    var range by rememberSaveable { mutableStateOf(defaultRange) }
+    // Kept per page across navigation (RangeMemory): the page opens again on the window it was last read in.
+    var range by rememberRange("detail:$title", defaultRange)
     // Regimen changes on the charts: loaded once per page (the roster history is cached), shown unless switched off.
     var showRegimen by rememberSaveable { mutableStateOf(true) }
-    var markers by remember { mutableStateOf(emptyList<com.bioscan.fieldterminal.domain.RegimenMarker>()) }
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        markers = runCatching { loadRegimenMarkers() }.getOrDefault(emptyList())
+    var markers by remember { mutableStateOf(emptyList<RegimenMarker>()) }
+    LaunchedEffect(Unit) {
+        markers = catching { loadRegimenMarkers() }.getOrDefault(emptyList())
     }
-    Column(modifier = Modifier.fillMaxSize().background(FT.Base).then(if (domain != null) Modifier.ftDomainWash(domain) else Modifier)) {
+    Column(modifier = Modifier.fillMaxSize().background(FT.Base).then(if (domain != null) Modifier.ftDomainWash(domain) else Modifier.ftPlatinumWash())) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("‹", style = FTType.SectionTitle, color = FT.TextSecondary,
-                modifier = Modifier.ftClickable(role = Role.Button, onClickLabel = "Back") { onBack() }.padding(12.dp))
+            FTIconButton(FTIcons.Back, "Back", onBack)
             Text(title, style = FTType.LabelCaps, color = FT.TextPrimary, modifier = Modifier.weight(1f).padding(start = 4.dp))
             if (eyebrow != null) Text(eyebrow, style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(end = 12.dp))
         }
         if (ranged) {
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                for (r in ChartRange.entries) Chip(r.label, r == range) { range = r }
-                if (markers.isNotEmpty()) Chip("REGIMEN", showRegimen) { showRegimen = !showRegimen }
-            }
+            FTChipRow(
+                ChartRange.entries, range, { it.label }, { range = it },
+                trailing = if (markers.isEmpty()) null else ({
+                    // A toggle, not a range: set apart by a gap.
+                    Spacer(Modifier.width(6.dp))
+                    FTChip("REGIMEN", showRegimen, { showRegimen = !showRegimen }, role = Role.Switch)
+                }),
+            )
         }
         CompositionLocalProvider(LocalRangeDays provides range.days, LocalRegimenMarkers provides if (showRegimen) markers else emptyList()) {
             Column(
@@ -126,47 +158,32 @@ fun DetailScreen(
 
 // `.ft-chip`: a mono pill; the selected one is platinum with dark ink.
 @Composable
-fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(50)
-    Text(
-        label,
-        style = if (selected) FTType.LabelCaps.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) else FTType.LabelCaps,
-        color = if (selected) FT.PlatinumInk else FT.TextSecondary,
-        modifier = Modifier
-            .then(if (selected) Modifier.background(FT.Platinum, shape) else Modifier.border(FT.BorderWidth, FT.Line, shape).background(Color(0x08FFFFFF), shape))
-            .ftClickable(shape = shape, role = Role.Tab, onClickLabel = label) { onClick() }
-            .padding(horizontal = 12.dp, vertical = 7.dp),
+fun Chip(label: String, selected: Boolean, onClick: () -> Unit) = FTChip(label, selected, onClick)
+
+/**
+ * A page's analytical card: since the polish pass an FTCard (Supporting by default, [emphasis] for a page's lead card),
+ * so every card has one header, one help affordance ("?", the info in the shared dialog) and one set of paddings.
+ * A [trailing] note ending in "›" draws the chevron icon instead of the glyph.
+ */
+@Composable
+fun Section(
+    title: String,
+    info: String? = null,
+    trailing: String? = null,
+    emphasis: FTCardEmphasis = FTCardEmphasis.Supporting,
+    onClick: (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val chevron = trailing?.trimEnd()?.endsWith("›") == true
+    com.bioscan.fieldterminal.ui.components.FTCard(
+        title = title,
+        info = info,
+        emphasis = emphasis,
+        onClick = onClick,
+        trailing = trailing?.trimEnd()?.removeSuffix("›")?.trimEnd()?.ifBlank { null },
+        trailingChevron = chevron,
+        content = content,
     )
-}
-
-/** A glass section: caps title, an ⓘ that opens [info] full screen, then the content. */
-@Composable
-fun Section(title: String, info: String? = null, trailing: String? = null, content: @Composable ColumnScope.() -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Column(
-        modifier = Modifier.fillMaxWidth()
-            .ftGlass(RoundedCornerShape(FT.RadiusCard))
-            .padding(start = 16.dp, end = 16.dp, top = 15.dp, bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(title, style = FTType.LabelCaps, color = FT.TextMuted, modifier = Modifier.weight(1f))
-            if (trailing != null) Text(trailing, style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(end = 6.dp))
-            if (info != null) {
-                Text("ⓘ", style = FTType.RowTitle, color = FT.TextSecondary,
-                    modifier = Modifier.ftClickable(role = Role.Button, onClickLabel = "What is $title") { open = true }.padding(horizontal = 6.dp))
-            }
-        }
-        content()
-    }
-    if (open && info != null) InfoOverlay(title, info) { open = false }
-}
-
-@Composable
-fun InfoOverlay(title: String, body: String, onClose: () -> Unit) {
-    FullScreenOverlay(title = title.uppercase(), onClose = onClose) {
-        Text(body, style = FTType.Body, color = FT.TextSecondary)
-    }
 }
 
 /** A row that opens another page. */
@@ -183,14 +200,14 @@ fun LinkRow(title: String, subtitle: String? = null, onClick: () -> Unit) {
             Text(title, style = FTType.RowTitle, color = FT.TextPrimary)
             if (subtitle != null) Text(subtitle, style = FTType.Caption, color = FT.TextMuted)
         }
-        Text("›", style = FTType.SectionTitle, color = FT.TextMuted)
+        FTChevron()
     }
 }
 
 @Composable
 fun Loading(guard: LoadGuard) {
     // A page-shaped placeholder instead of a spinner (ui/components/Skeleton.kt).
-    if (guard.error != null) LoadErrorCard(guard) else com.bioscan.fieldterminal.ui.components.SkeletonSections()
+    if (guard.error != null) LoadErrorCard(guard) else SkeletonSections()
 }
 
 @Composable
@@ -233,10 +250,12 @@ fun Headline(reading: MetricReading, format: (Double) -> String, unit: String, t
     }
     val tint = when {
         reading.position == null || reading.position == InputDirection.NORMAL || betterHigher == null -> FT.TextSecondary
-        (reading.position == InputDirection.ABOVE) == betterHigher -> FT.Emerald
-        else -> FT.Warning
+        (reading.position == InputDirection.ABOVE) == betterHigher -> FT.Ok
+        else -> FT.Warn
     }
-    val band = reading.normal?.let { " (${format(it.first)}–${format(it.second)})" } ?: ""
+    // Says which days the comparison reads, so it is not taken for the chart's range: the normal is the 60 days before
+    // the latest reading (domain/MetricReading.kt), the change the 7 days before it.
+    val band = reading.normal?.let { " (${format(it.first)}–${format(it.second)} over the 60 days before)" } ?: ""
     val change = reading.change?.let { c -> " · ${if (c >= 0) "+" else "−"}${format(abs(c))} vs the week before" } ?: ""
     Text("${positionGlyph(reading.position)} ${positionWords(reading.position)}$band$change", style = FTType.Caption, color = tint)
 }
@@ -259,12 +278,19 @@ fun MetricPanel(
     target: Pair<Double, Double>? = null,
     targetLabel: String? = null,
     today: LocalDate = LocalDate.now(),
+    // When set, the chart shows these series each in their own colour (with a legend) instead of the single trend line;
+    // the headline still reads the main [series]. Used for body fat measured several ways (scale, tape, caliper).
+    overlay: List<TrendSeries>? = null,
     extra: @Composable ColumnScope.() -> Unit = {},
 ) {
     val reading = remember(series, today) { readMetric(series, today, log = log, minSd = minSd) }
     Section(title, info = info) {
         Headline(reading, format, unit, today, betterHigher)
-        TrendChart(series, today, LocalRangeDays.current, reading.normal, format, color, target = target, targetLabel = targetLabel)
+        if (overlay != null) {
+            DateTrendLine(series = overlay, legend = true, valueFormat = format)
+        } else {
+            TrendChart(series, today, LocalRangeDays.current, reading.normal, format, color, target = target, targetLabel = targetLabel)
+        }
         extra()
     }
 }
@@ -287,7 +313,7 @@ fun MetricRow(
 ) {
     var open by remember { mutableStateOf(false) }
     val reading = remember(series, today) { readMetric(series, today, log = log, minSd = minSd) }
-    val spark = remember(series, today) { (29 downTo 0).mapNotNull { series[today.minusDays(it.toLong())] } }
+    val spark = remember(series, today) { (29 downTo 0).map { series[today.minusDays(it.toLong())] } }
     Row(
         modifier = Modifier.fillMaxWidth().ftClickable(role = Role.Button, onClickLabel = "Open $label") { open = true }.padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -295,12 +321,12 @@ fun MetricRow(
     ) {
         Column(Modifier.weight(1f)) {
             Text(label, style = FTType.RowTitle, color = FT.TextPrimary)
-            Text(flag ?: note ?: positionWords(reading.position), style = FTType.Caption, color = if (flag != null) FT.Warning else FT.TextMuted)
+            Text(flag ?: note ?: positionWords(reading.position), style = FTType.Caption, color = if (flag != null) FT.Warn else FT.TextMuted)
         }
         Text(reading.latest?.let { "${format(it)} $unit".trim() } ?: "—", style = FTType.Telemetry, color = FT.TextPrimary)
         Text(positionGlyph(reading.position), style = FTType.Telemetry, color = FT.TextSecondary)
-        Sparkline(spark, color = color)
-        Text("›", style = FTType.RowTitle, color = FT.TextMuted)
+        SlotSparkline(spark, color = color)
+        FTChevron(tint = FT.TextMuted)
     }
     if (open) MetricHistoryOverlay(HistorySpec(label, series, unit, format, color, log, minSd, betterHigher, info), today) { open = false }
 }
@@ -333,7 +359,8 @@ fun MetricTiles(tiles: List<TileSpec>, today: LocalDate = LocalDate.now()) {
 private fun MetricTile(t: TileSpec, today: LocalDate, modifier: Modifier) {
     var open by remember { mutableStateOf(false) }
     val reading = remember(t.series, today) { readMetric(t.series, today, minSd = t.minSd, maxAgeDays = 60) }
-    val spark = remember(t.series) { t.series.entries.sortedBy { it.key }.takeLast(30).map { it.value } }
+    // The 30 days up to the latest reading, each in its place.
+    val spark = remember(t.series) { t.series.keys.maxOrNull()?.let { end -> (29 downTo 0).map { t.series[end.minusDays(it.toLong())] } }.orEmpty() }
     val shape = RoundedCornerShape(FT.RadiusModule)
     Column(
         modifier.background(FT.Glass, shape).ftClickable(shape = shape, role = Role.Button, onClickLabel = "Open ${t.label}") { open = true }.padding(10.dp),
@@ -345,7 +372,7 @@ private fun MetricTile(t: TileSpec, today: LocalDate, modifier: Modifier) {
             Text(t.unit, style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(bottom = 4.dp))
         }
         Text("${positionGlyph(reading.position)} ${positionWords(reading.position)}", style = FTType.Caption, color = FT.TextMuted)
-        Sparkline(spark, color = t.color)
+        SlotSparkline(spark, color = t.color)
     }
     if (open) MetricHistoryOverlay(HistorySpec(t.label, t.series, t.unit, t.format, t.color, minSd = t.minSd, betterHigher = t.betterHigher, info = t.info), today) { open = false }
 }
@@ -373,9 +400,9 @@ fun StatTileGrid(tiles: List<Stat>, today: LocalDate = LocalDate.now()) {
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            t.history?.let { com.bioscan.fieldterminal.ui.components.FTMetricDot(it.color, Modifier.padding(end = 6.dp), size = 6.dp) }
+                            t.history?.let { FTMetricDot(it.color, Modifier.padding(end = 6.dp), size = 6.dp) }
                             Text(t.label, style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
-                            if (t.history != null) Text("›", style = FTType.Telemetry, color = FT.TextMuted)
+                            if (t.history != null) FTChevron(tint = FT.TextMuted)
                         }
                         Text(t.value, style = FTType.MetricMedium, color = FT.TextPrimary)
                         if (t.sub != null) Text(t.sub, style = FTType.Caption, color = FT.TextMuted)
@@ -411,7 +438,7 @@ data class HistorySpec(
 @Composable
 fun MetricHistoryOverlay(spec: HistorySpec, today: LocalDate = LocalDate.now(), onBack: (() -> Unit)? = null, onClose: () -> Unit) {
     val first = remember(spec.series) { spec.series.keys.minOrNull() }
-    val allDays = first?.let { java.time.temporal.ChronoUnit.DAYS.between(it, today).toInt() + 1 }?.coerceAtLeast(30) ?: 365
+    val allDays = first?.let { ChronoUnit.DAYS.between(it, today).toInt() + 1 }?.coerceAtLeast(30) ?: 365
     var days by rememberSaveable { mutableStateOf(ChartRange.M3.days) }
     val reading = remember(spec.series, today) { readMetric(spec.series, today, log = spec.log, minSd = spec.minSd) }
     FullScreenOverlay(title = spec.label.uppercase(), onClose = onClose, onBack = onBack) {
@@ -445,18 +472,10 @@ fun MetricHistoryOverlay(spec: HistorySpec, today: LocalDate = LocalDate.now(), 
 }
 
 @Composable
-fun Legend(items: List<Pair<String, Color>>) {
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        for ((label, color) in items) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                Box(Modifier.size(9.dp).background(color, CircleShape))
-                Text(label, style = FTType.Caption, color = FT.TextSecondary)
-            }
-        }
-    }
-}
+fun Legend(items: List<Pair<String, Color>>) = FTLegend(items)
 
-fun shortDate(d: LocalDate): String = "${d.dayOfMonth} ${d.month.name.take(3)}"
+/** One date format for every chart and label (ChartDates): "14 Aug". */
+fun shortDate(d: LocalDate): String = com.bioscan.fieldterminal.ui.components.ChartDates.short(d)
 
 // ---- charts ----
 
@@ -475,7 +494,7 @@ fun TrendChart(
     target: Pair<Double, Double>? = null,
     targetLabel: String? = null,
     height: Int = 140,
-    bandLabel: String = "your normal",
+    bandLabel: String = "your normal (60 days before)",
 ) {
     val from = day.minusDays((days - 1).toLong())
     val points = remember(series, day, days) { (0 until days).mapNotNull { i -> series[from.plusDays(i.toLong())]?.let { i to it } } }
@@ -483,13 +502,23 @@ fun TrendChart(
         EmptyLine("Not enough readings in the last $days days.")
         return
     }
-    val span = if (days > 120) 14 else 7
-    val mean = remember(points, span) {
-        val byIndex = points.toMap()
-        points.mapNotNull { (i, _) ->
-            val w = (0 until span).mapNotNull { byIndex[i - it] }
-            if (w.size >= span / 2) i to w.average() else null
+    // The trend: a local linear fit over about [span] days (a Gaussian of span/1.6 days), drawn through runs of readings
+    // and broken where readings stop for a while (ChartPaths.kt). The readings themselves are the faint dots.
+    val span = when {
+        days > 400 -> 30
+        days > 120 -> 14
+        else -> 7
+    }
+    val bandwidth = span / 1.6
+    val runs = remember(points, span) {
+        splitAtGaps(points, { it.first.toDouble() }, maxGap = maxOf(3.0 * span, 21.0)).map { run ->
+            trendCurve(run.map { it.first.toDouble() }, run.map { it.second }, bandwidth)
         }
+    }
+    val mean = remember(points, span) {
+        val xs = points.map { it.first.toDouble() }
+        val ys = points.map { it.second }
+        points.map { (i, _) -> i to localTrendAt(xs, ys, i.toDouble(), bandwidth) }
     }
     val markers = LocalRegimenMarkers.current
     val inWindow = remember(markers, from, day) { markers.filter { !it.date.isBefore(from) && !it.date.isAfter(day) } }
@@ -499,7 +528,8 @@ fun TrendChart(
     Row(Modifier.fillMaxWidth()) {
         Box(Modifier.width(48.dp).height(height.dp)) {
             fun frac(v: Double) = (1 - (v - lo) / (hi - lo)).toFloat()
-            val labels = listOfNotNull(hi, band?.second, band?.first, lo).distinct()
+            // At least three labelled values (chart rules): the top, the bottom, the middle, and the normal band's edges.
+            val labels = listOfNotNull(hi, band?.second, (hi + lo) / 2, band?.first, lo).distinct()
             var lastTop = -100f
             for (v in labels.sortedByDescending { it }) {
                 val top = (height - 12) * frac(v)
@@ -510,7 +540,7 @@ fun TrendChart(
                     modifier = Modifier.align(Alignment.TopStart).padding(top = top.dp.coerceAtLeast(0.dp)))
             }
         }
-        val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+        val measurer = rememberTextMeasurer()
         var pick by rememberPick(Triple(series, day, days))
         val byIndex = remember(points) { points.toMap() }
         val meanByIndex = remember(mean) { mean.toMap() }
@@ -528,25 +558,28 @@ fun TrendChart(
             val step = if (days > 120) 30 else 7
             var g = days - 1
             while (g >= 0) { drawLine(FT.GlassTrack, Offset(x(g), 0f), Offset(x(g), size.height), strokeWidth = 1f); g -= step }
-            val raw = Path()
-            points.forEachIndexed { k, (i, v) -> if (k == 0) raw.moveTo(x(i), y(v)) else raw.lineTo(x(i), y(v)) }
-            drawPath(raw, FT.TextSecondary.copy(alpha = 0.4f), style = Stroke(width = 1.2f))
-            val m = Path()
-            mean.forEachIndexed { k, (i, v) -> if (k == 0) m.moveTo(x(i), y(v)) else m.lineTo(x(i), y(v)) }
-            drawPath(m, color, style = Stroke(width = 3f))
-            if (days <= 90) points.forEach { (i, v) -> drawCircle(FT.TextSecondary, radius = 2.5f, center = Offset(x(i), y(v))) }
+            val dot = if (points.size > 120) 2f else 3f
+            points.forEach { (i, v) -> drawCircle(FT.TextSecondary.copy(alpha = 0.55f), radius = dot, center = Offset(x(i), y(v))) }
+            fun xf(d: Double) = (size.width * d / (days - 1).coerceAtLeast(1)).toFloat()
+            for (run in runs) {
+                if (run.size < 2) continue
+                drawPath(
+                    smoothedPath(run.map { (d, v) -> Offset(xf(d), y(v)) }), color,
+                    style = Stroke(width = 3.5f, cap = StrokeCap.Round, join = StrokeJoin.Round),
+                )
+            }
             points.last().let { (i, v) -> drawCircle(FT.EmeraldHighlight, radius = 6f, center = Offset(x(i), y(v))) }
             val dash = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))
             for (mk in inWindow) {
-                val i = java.time.temporal.ChronoUnit.DAYS.between(from, mk.date).toInt()
-                drawLine(FT.Warning.copy(alpha = 0.8f), Offset(x(i), 0f), Offset(x(i), size.height), strokeWidth = 1.5f, pathEffect = dash)
-                drawCircle(FT.Warning, radius = 4f, center = Offset(x(i), 4f))
+                val i = ChronoUnit.DAYS.between(from, mk.date).toInt()
+                drawLine(FT.Warn.copy(alpha = 0.8f), Offset(x(i), 0f), Offset(x(i), size.height), strokeWidth = 1.5f, pathEffect = dash)
+                drawCircle(FT.Warn, radius = 4f, center = Offset(x(i), 4f))
             }
             pick?.let { i ->
                 val v = byIndex[i] ?: return@let
                 val rows = listOfNotNull(
                     InspectRow(null, format(v), FT.TextPrimary),
-                    meanByIndex[i]?.let { InspectRow("$span-day", format(it), color) },
+                    meanByIndex[i]?.let { InspectRow("trend", format(it), color) },
                     band?.let { (a, b) -> InspectRow(bandLabel, "${format(a)}–${format(b)}", color) },
                 )
                 drawInspectOverlay(measurer, x(i), listOf(Offset(x(i), y(v))), shortDate(from.plusDays(i.toLong())), rows)
@@ -556,7 +589,7 @@ fun TrendChart(
     Row(Modifier.fillMaxWidth().padding(start = 48.dp)) {
         Text(shortDate(from), style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
         val key = listOfNotNull(
-            "line = ${span}-day mean",
+            "line = trend",
             band?.let { "shaded = $bandLabel" },
             targetLabel?.let { "dashed = $it" },
         ).joinToString(" · ")
@@ -567,7 +600,7 @@ fun TrendChart(
         // The newest changes in words; the dashed lines mark when, not that they caused anything.
         Column(Modifier.fillMaxWidth().padding(start = 48.dp, top = 2.dp)) {
             inWindow.takeLast(3).reversed().forEach { mk ->
-                Text("┆ ${shortDate(mk.date)} ${mk.label}", style = FTType.Micro, color = FT.Warning, maxLines = 2)
+                Text("┆ ${shortDate(mk.date)} ${mk.label}", style = FTType.Micro, color = FT.Warn, maxLines = 2)
             }
             if (inWindow.size > 3) Text("+${inWindow.size - 3} earlier regimen changes in this range", style = FTType.Micro, color = FT.TextMuted)
         }
@@ -578,17 +611,17 @@ fun TrendChart(
 internal fun nearestIndex(x: Float, width: Float, days: Int, has: List<Int>): Int? {
     if (has.isEmpty()) return null
     val raw = (x / width.coerceAtLeast(1f) * (days - 1).coerceAtLeast(1)).roundToInt()
-    return has.minByOrNull { kotlin.math.abs(it - raw) }
+    return has.minByOrNull { abs(it - raw) }
 }
 
 /** Touch handling shared by the kit's charts: a drag moves the cursor, releasing keeps it, a tap on it clears it. */
 @Composable
-internal fun rememberPick(key: Any?): androidx.compose.runtime.MutableState<Int?> = remember(key) { mutableStateOf<Int?>(null) }
+internal fun rememberPick(key: Any?): MutableState<Int?> = remember(key) { mutableStateOf<Int?>(null) }
 
 /** All regimen changes as chart markers, from the roster history (cached). */
-internal suspend fun loadRegimenMarkers(): List<com.bioscan.fieldterminal.domain.RegimenMarker> =
-    com.bioscan.fieldterminal.domain.regimenMarkers(
-        com.bioscan.fieldterminal.data.SupplementsRepository(com.bioscan.fieldterminal.data.SupabaseClientProvider.client).loadRegimenChanges(),
+internal suspend fun loadRegimenMarkers(): List<RegimenMarker> =
+    regimenMarkers(
+        SupplementsRepository(SupabaseClientProvider.client).loadRegimenChanges(),
     )
 
 /** Several lines on one axis (fitness and fatigue), told apart by colour and dash, labelled in a legend. */
@@ -607,9 +640,10 @@ fun MultiLineChart(lines: List<ChartLine>, day: LocalDate, days: Int, format: (D
     Row(Modifier.fillMaxWidth()) {
         Column(Modifier.width(40.dp).height(height.dp), verticalArrangement = Arrangement.SpaceBetween) {
             Text(format(hi), style = FTType.Micro, color = FT.TextMuted)
+            Text(format((hi + lo) / 2), style = FTType.Micro, color = FT.TextMuted)
             Text(format(lo), style = FTType.Micro, color = FT.TextMuted)
         }
-        val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+        val measurer = rememberTextMeasurer()
         var pick by rememberPick(Triple(lines, day, days))
         val withValue = remember(lines, day, days) { (0 until days).filter { i -> lines.any { it.series[from.plusDays(i.toLong())] != null } } }
         Canvas(Modifier.weight(1f).height(height.dp).chartInspect(Triple(lines, day, days)) { px, w, isTap ->
@@ -620,13 +654,9 @@ fun MultiLineChart(lines: List<ChartLine>, day: LocalDate, days: Int, format: (D
             fun y(v: Double) = (size.height * (1 - (v - lo) / (hi - lo))).toFloat()
             if (zeroLine) drawLine(FT.TextMuted, Offset(0f, y(0.0)), Offset(size.width, y(0.0)), strokeWidth = 1f)
             for (l in lines) {
-                val p = Path()
-                var started = false
-                for (i in 0 until days) {
-                    val v = l.series[from.plusDays(i.toLong())] ?: continue
-                    if (!started) { p.moveTo(x(i), y(v)); started = true } else p.lineTo(x(i), y(v))
-                }
-                drawPath(p, l.color, style = Stroke(width = 2.5f, pathEffect = if (l.dashed) PathEffect.dashPathEffect(floatArrayOf(10f, 8f)) else null))
+                val pts = (0 until days).mapNotNull { i -> l.series[from.plusDays(i.toLong())]?.let { Offset(x(i), y(it)) } }
+                drawPath(smoothedPath(pts), l.color, style = Stroke(width = 2.5f, cap = StrokeCap.Round,
+                    join = StrokeJoin.Round, pathEffect = if (l.dashed) PathEffect.dashPathEffect(floatArrayOf(10f, 8f)) else null))
             }
             pick?.let { i ->
                 val d = from.plusDays(i.toLong())
@@ -655,6 +685,11 @@ fun StackedBars(
     format: (Double) -> String,
     unit: String,
     height: Int = 120,
+    // The top line names each series in its own colour, so no legend is drawn under the chart. With nothing picked it
+    // reads the whole range ([rangeName]); a second tap on the picked column goes back to it.
+    rangeName: String? = null,
+    // The last column is still filling (this week, today): drawn faded and read as "so far", so it is not taken for a drop.
+    lastPartial: Boolean = false,
 ) {
     if (columns.isEmpty() || columns.all { it.second.sum() <= 0.0 }) {
         EmptyLine("Nothing logged in this range.")
@@ -662,31 +697,57 @@ fun StackedBars(
     }
     var selected by remember(columns) { mutableStateOf<Int?>(null) }
     val shown = (selected ?: columns.lastIndex).coerceIn(0, columns.lastIndex)
-    val (name, parts) = columns[shown]
-    Text(
-        "$name · " + labels.indices.joinToString(" · ") { "${labels[it]} ${format(parts.getOrElse(it) { 0.0 })}" } + " · total ${format(parts.sum())} $unit",
-        style = FTType.Caption, color = FT.TextSecondary,
-    )
+    if (rangeName != null) {
+        val pick = selected
+        val (name, parts) = if (pick == null) rangeName to labels.indices.map { i -> columns.sumOf { it.second.getOrElse(i) { 0.0 } } } else columns[pick]
+        val line = buildAnnotatedString {
+            if (pick == null) {
+                withStyle(SpanStyle(color = FT.TextPrimary)) { append("TOTAL ${format(parts.sum())} $unit") }
+            } else {
+                withStyle(SpanStyle(color = FT.TextPrimary)) { append(name.uppercase() + if (lastPartial && pick == columns.lastIndex) " (SO FAR)" else "") }
+                append(" · total ${format(parts.sum())} $unit")
+            }
+            labels.indices.filter { parts.getOrElse(it) { 0.0 } > 0.0 }.forEach { i ->
+                append("   ")
+                withStyle(SpanStyle(color = colors.getOrElse(i) { FT.TextSecondary })) {
+                    append("${labels[i]} ${format(parts[i])}")
+                }
+            }
+        }
+        Text(line, style = FTType.Caption, color = FT.TextSecondary)
+    } else {
+        val (name, parts) = columns[shown]
+        Text(
+            "$name" + (if (lastPartial && shown == columns.lastIndex) " (so far)" else "") + " · " +
+                labels.indices.joinToString(" · ") { "${labels[it]} ${format(parts.getOrElse(it) { 0.0 })}" } + " · total ${format(parts.sum())} $unit",
+            style = FTType.Caption, color = FT.TextSecondary,
+        )
+    }
     val top = columns.maxOf { it.second.sum() }.coerceAtLeast(1e-9)
-    Canvas(
-        Modifier.fillMaxWidth().height(height.dp).chartInspect(columns) { px, w, _ ->
-            selected = ((px / w) * columns.size).toInt().coerceIn(0, columns.lastIndex)
-        },
-    ) {
-        val layout = barLayout(columns.size)
-        val usable = size.height - FTBarSpec.TopPad.toPx()
-        columns.forEachIndexed { i, (_, values) ->
-            if (values.sum() <= 0.0) drawBarStub(layout.left(i), layout.barWidth)
-            else drawStackedBar(values, colors, layout.left(i), layout.barWidth, { v -> (v / top).toFloat() * usable },
-                alpha = barAlpha(i, selected), cap = i == shown)
+    Row(Modifier.fillMaxWidth()) {
+        BarYAxis(top, format, height.dp)
+        Canvas(
+            Modifier.weight(1f).height(height.dp).chartInspect(columns) { px, w, isTap ->
+                val i = ((px / w) * columns.size).toInt().coerceIn(0, columns.lastIndex)
+                selected = if (rangeName != null && isTap && i == selected) null else i
+            },
+        ) {
+            val layout = barLayout(columns.size)
+            val usable = size.height - FTBarSpec.TopPad.toPx()
+            columns.forEachIndexed { i, (_, values) ->
+                if (values.sum() <= 0.0) drawBarStub(layout.left(i), layout.barWidth)
+                else drawStackedBar(values, colors, layout.left(i), layout.barWidth, { v -> (v / top).toFloat() * usable },
+                    alpha = barAlpha(i, selected, projected = lastPartial && i == columns.lastIndex && selected != i),
+                    cap = if (rangeName != null) i == selected else i == shown)
+            }
         }
     }
-    Row(Modifier.fillMaxWidth()) {
+    Row(Modifier.fillMaxWidth().padding(start = 40.dp)) {
         Text(columns.first().first, style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
-        Text("0–${format(top)} $unit", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+        Text(unit + if (lastPartial) " · faded = so far" else "", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(2.2f), textAlign = TextAlign.Center, maxLines = 1)
         Text(columns.last().first, style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
     }
-    Legend(labels.zip(colors))
+    if (rangeName == null) Legend(labels.zip(colors))
 }
 
 /** Each day's low-to-high span as a vertical bar (heart rate). */
@@ -705,19 +766,19 @@ fun RangeBars(ranges: List<Pair<LocalDate, DayRange>>, day: LocalDate, days: Int
             Text(hi.roundToInt().toString(), style = FTType.Micro, color = FT.TextMuted)
             Text(lo.roundToInt().toString(), style = FTType.Micro, color = FT.TextMuted)
         }
-        val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+        val measurer = rememberTextMeasurer()
         var pick by rememberPick(Triple(shown, day, days))
-        val byIndex = remember(shown) { shown.associate { java.time.temporal.ChronoUnit.DAYS.between(from, it.first).toInt() to it } }
+        val byIndex = remember(shown) { shown.associate { ChronoUnit.DAYS.between(from, it.first).toInt() to it } }
         Canvas(Modifier.weight(1f).height(120.dp).chartInspect(Triple(shown, day, days)) { px, w, isTap ->
             val i = nearestIndex(px, w, days, byIndex.keys.sorted())
             pick = if (isTap && i == pick) null else i
         }) {
-            fun x(d: LocalDate) = size.width * java.time.temporal.ChronoUnit.DAYS.between(from, d) / (days - 1).coerceAtLeast(1).toFloat()
+            fun x(d: LocalDate) = size.width * ChronoUnit.DAYS.between(from, d) / (days - 1).coerceAtLeast(1).toFloat()
             fun y(v: Double) = (size.height * (1 - (v - lo) / (hi - lo))).toFloat()
             val w = BarLayout(size.width, days, FTBarSpec.gapFor(days).toPx()).barWidth.coerceIn(3.dp.toPx(), 10.dp.toPx())
             // §1.10 range bars: a capsule from the day's low to its high; the selected (or today's) at full strength.
             for ((d, r) in shown) {
-                val i = java.time.temporal.ChronoUnit.DAYS.between(from, d).toInt()
+                val i = ChronoUnit.DAYS.between(from, d).toInt()
                 drawRangeCapsule(color, x(d), w, y(r.high), y(r.low), alpha = if (pick == null) (if (d == day) 1f else 0.85f) else barAlpha(i, pick))
             }
             pick?.let { i ->

@@ -1,6 +1,7 @@
 package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.domain.Vial
+import com.bioscan.fieldterminal.domain.WallClock
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -54,7 +55,7 @@ class InjectablesRepository(private val supabase: SupabaseClient) {
             .mapNotNull { r ->
                 val id = r.supplementId ?: return@mapNotNull null
                 val site = r.injectionSite ?: return@mapNotNull null
-                val at = com.bioscan.fieldterminal.domain.WallClock.instant(r.takenAt, java.time.ZoneId.systemDefault()) ?: return@mapNotNull null
+                val at = WallClock.instant(r.takenAt, ZoneId.systemDefault()) ?: return@mapNotNull null
                 id to (site to at)
             }
             .groupBy({ it.first }, { it.second })

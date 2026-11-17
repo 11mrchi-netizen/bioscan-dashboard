@@ -2,7 +2,6 @@ package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,7 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -18,41 +17,49 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.data.EvidenceRepository
 import com.bioscan.fieldterminal.data.ExperimentResultRow
 import com.bioscan.fieldterminal.data.ExperimentRow
 import com.bioscan.fieldterminal.data.ExperimentsRepository
+import com.bioscan.fieldterminal.data.InteractionRepository
+import com.bioscan.fieldterminal.data.RegimenReferenceRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementsOverview
 import com.bioscan.fieldterminal.data.SupplementsRepository
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.SupplementRow
-import com.bioscan.fieldterminal.data.EvidenceRepository
-import com.bioscan.fieldterminal.data.InteractionRepository
 import com.bioscan.fieldterminal.domain.DetectedInteraction
 import com.bioscan.fieldterminal.domain.InteractionRecord
-import com.bioscan.fieldterminal.domain.RosterItem
-import com.bioscan.fieldterminal.domain.detectInteractions
+import com.bioscan.fieldterminal.domain.LabelMention
 import com.bioscan.fieldterminal.domain.RegimenKind
-import com.bioscan.fieldterminal.domain.doseTextOn
+import com.bioscan.fieldterminal.domain.RosterItem
 import com.bioscan.fieldterminal.domain.amountOn
+import com.bioscan.fieldterminal.domain.detectInteractions
+import com.bioscan.fieldterminal.domain.doseTextOn
+import com.bioscan.fieldterminal.domain.labelMentions
 import com.bioscan.fieldterminal.domain.scheduleWords
 import com.bioscan.fieldterminal.domain.spec
 import com.bioscan.fieldterminal.domain.stateWords
 import com.bioscan.fieldterminal.domain.stepsWords
+import com.bioscan.fieldterminal.domain.unitsWords
 import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.InfoHelpButton
+import com.bioscan.fieldterminal.ui.components.SkeletonSections
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.rememberCacheVersion
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Step 8 (Phase C). Real data from `supplements`. Ports index.html's
+// Real data from `supplements`. Ports index.html's
 // isSupplementActive()/supplementOutcome() 1:1 (domain/Supplements.kt) --
 // same active-or-ended-within-7-days display filter, same outcome-by-name
 // keyword map. Shows every supplement in one condensed list (not distributed
@@ -74,23 +81,23 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
     var editing by remember { mutableStateOf<SupplementRow?>(null) }
     var showAddSheet by remember { mutableStateOf(false) }
     var reviewing by remember { mutableStateOf(false) }
-    // Analysis Layer 3 / Phase 5: supplement N-of-1 experiments.
+    // Supplement N-of-1 experiments.
     var experimenting by remember { mutableStateOf<SupplementRow?>(null) }
     var experiments by remember { mutableStateOf<List<ExperimentRow>>(emptyList()) }
     var experimentResults by remember { mutableStateOf<Map<String, ExperimentResultRow>>(emptyMap()) }
 
-    // Phase 6: curated interaction registry checked against the active roster.
+    // Curated interaction registry checked against the active roster.
     var interactionRecords by remember { mutableStateOf<List<InteractionRecord>>(emptyList()) }
     var rosterItems by remember { mutableStateOf<List<RosterItem>>(emptyList()) }
     val detections = remember(interactionRecords, rosterItems) { detectInteractions(rosterItems, interactionRecords) }
 
     // Reference cards: the other active items each FDA label names (owner's name, mention).
-    var labelNotes by remember { mutableStateOf<List<Pair<String, com.bioscan.fieldterminal.domain.LabelMention>>>(emptyList()) }
+    var labelNotes by remember { mutableStateOf<List<Pair<String, LabelMention>>>(emptyList()) }
 
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    val cacheVersion = rememberCacheVersion()
     LaunchedEffect(reloadKey, cacheVersion) {
         // The kept roster stays on screen while a fresher one loads.
         isLoading = overview == null
@@ -99,21 +106,21 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
             val loaded = SupplementsRepository(SupabaseClientProvider.client).loadOverview()
             overview = loaded
             // Evidence is enrichment: a failed lookup must not hide the roster.
-            outcomes = runCatching { EvidenceRepository(SupabaseClientProvider.client).outcomeTextBySupplement(loaded.active) }
+            outcomes = catching { EvidenceRepository(SupabaseClientProvider.client).outcomeTextBySupplement(loaded.active) }
                 .getOrDefault(emptyMap())
             // Enrichment too: no registry or a failed lookup just hides the card.
-            runCatching {
+            catching {
                 val interactionRepo = InteractionRepository(SupabaseClientProvider.client)
                 interactionRecords = interactionRepo.loadRecords()
                 rosterItems = interactionRepo.rosterItems(loaded.active)
             }.onFailure { interactionRecords = emptyList(); rosterItems = emptyList() }
-            labelNotes = runCatching {
-                val refs = com.bioscan.fieldterminal.data.RegimenReferenceRepository(SupabaseClientProvider.client).loadAll()
+            labelNotes = catching {
+                val refs = RegimenReferenceRepository(SupabaseClientProvider.client).loadAll()
                 val active = loaded.active.associateBy { it.id }
                 refs.flatMap { ref ->
                     val owner = active[ref.supplementId] ?: return@flatMap emptyList()
                     val label = ref.label ?: return@flatMap emptyList()
-                    com.bioscan.fieldterminal.domain.labelMentions(label.sections, loaded.active.filter { it.id != owner.id }.map { it.id to it.name })
+                    labelMentions(label.sections, loaded.active.filter { it.id != owner.id }.map { it.id to it.name })
                         .map { owner.name to it }
                 }
             }.getOrDefault(emptyList())
@@ -128,9 +135,9 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
     }
 
     when {
-        isLoading -> com.bioscan.fieldterminal.ui.components.SkeletonSections()
+        isLoading -> SkeletonSections()
         error != null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Critical)
+            Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Bad)
         }
         else -> SupplementsContent(
             overview = overview!!,
@@ -143,7 +150,7 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
             experimentResults = experimentResults,
             onDeleteExperiment = { e ->
                 scope.launch {
-                    runCatching { ExperimentsRepository(SupabaseClientProvider.client).delete(e.id) }
+                    catching { ExperimentsRepository(SupabaseClientProvider.client).delete(e.id) }
                         .onSuccess { reloadKey++ }
                         .onFailure { error = it.message ?: "Could not delete the experiment" }
                 }
@@ -197,7 +204,7 @@ private fun SupplementsContent(
     experimentResults: Map<String, ExperimentResultRow>,
     onDeleteExperiment: (ExperimentRow) -> Unit,
     detections: List<DetectedInteraction>,
-    labelNotes: List<Pair<String, com.bioscan.fieldterminal.domain.LabelMention>> = emptyList(),
+    labelNotes: List<Pair<String, LabelMention>> = emptyList(),
     onOpenReview: () -> Unit = {},
 ) {
     Column(
@@ -222,7 +229,7 @@ private fun SupplementsContent(
         }
 
         if (overview.active.isNotEmpty()) {
-            SectionLabel("ACTIVE", FT.Emerald)
+            SectionLabel("ACTIVE", FT.Ok)
             // DAV-82: same morning/afternoon/night/as-needed grouping
             // AddEntrySheet.kt's SupplementsForm already uses for the "log as
             // taken" bundles -- this roster view and that logging view now
@@ -238,7 +245,7 @@ private fun SupplementsContent(
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(timeOfDay.uppercase(), style = sectionLabelStyle, color = FT.TextSecondary)
                         // App restructure: the time-of-day groups had square corners; they use the module radius like every other block.
-                        val groupShape = androidx.compose.foundation.shape.RoundedCornerShape(FT.RadiusModule)
+                        val groupShape = RoundedCornerShape(FT.RadiusModule)
                         Column(modifier = Modifier.fillMaxWidth().clip(groupShape).background(FT.Glass, groupShape).border(FT.BorderWidth, FT.GlassBorder, groupShape)) {
                             items.forEachIndexed { i, s ->
                                 ActiveRow(s, outcomes[s.id].orEmpty(), showDivider = i < items.lastIndex, onClick = { onSupplementClick(s) }, onExperiment = { onExperiment(s) })
@@ -253,15 +260,14 @@ private fun SupplementsContent(
         Text(
             "REVIEW THE SOURCES BEHIND THESE ›",
             style = FTType.MonoCaption,
-            color = FT.Emerald,
+            color = FT.Ok,
             modifier = Modifier.ftClickable(onClick = onOpenReview).padding(vertical = 4.dp),
         )
 
         if (labelNotes.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionLabel("FROM THE LABELS", FT.Warning)
-                Text("What an FDA label says about something else you take, in its own words. Read it; it is not a verdict.",
-                    style = FTType.Caption, color = FT.TextMuted)
+                SectionLabel("FROM THE LABELS", FT.Warn,
+                    info = "What an FDA label says about something else you take, in its own words. Read it; it is not a verdict.")
                 labelNotes.forEach { (owner, m) ->
                     Column {
                         Text("$owner's label names ${m.itemName} · ${m.section}", style = FTType.BodySmall, color = FT.TextPrimary)
@@ -285,10 +291,11 @@ private fun SupplementsContent(
 }
 
 @Composable
-private fun SectionLabel(text: String, color: androidx.compose.ui.graphics.Color) {
+private fun SectionLabel(text: String, color: Color, info: String? = null) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(text, style = sectionLabelStyle, color = color)
         Box(Modifier.weight(1f).height(1.dp).background(FT.GlassBorder))
+        if (info != null) InfoHelpButton(title = text, body = info)
     }
 }
 
@@ -327,9 +334,9 @@ private fun ActiveRow(s: SupplementRow, registryOutcome: String, showDivider: Bo
                 )
             }
             val spec = s.spec()
-            val today = java.time.LocalDate.now()
+            val today = LocalDate.now()
             Column(horizontalAlignment = Alignment.End) {
-                Text(com.bioscan.fieldterminal.domain.unitsWords(1.0, spec.amountOn(today), spec.unit) ?: spec.doseTextOn(today), style = FTType.Telemetry, color = FT.TextPrimary)
+                Text(unitsWords(1.0, spec.amountOn(today), spec.unit) ?: spec.doseTextOn(today), style = FTType.Telemetry, color = FT.TextPrimary)
                 s.syringeUnits?.let { Text("${com.bioscan.fieldterminal.domain.formatAmount(it)} UNITS", style = FTType.MonoCaption, color = FT.TextSecondary) }
                 if (spec.kind != RegimenKind.SUPPLEMENT) {
                     Text(spec.kind.label.uppercase(), style = FTType.MonoCaption, color = FT.DomainLog, modifier = Modifier.padding(top = 3.dp))
@@ -341,7 +348,7 @@ private fun ActiveRow(s: SupplementRow, registryOutcome: String, showDivider: Bo
                     modifier = Modifier.padding(top = 3.dp),
                 )
                 (spec.stateWords(today) ?: spec.stepsWords()?.takeIf { spec.steps != null })?.let {
-                    Text(it, style = FTType.Caption, color = FT.Warning, modifier = Modifier.padding(top = 3.dp))
+                    Text(it, style = FTType.Caption, color = FT.Warn, modifier = Modifier.padding(top = 3.dp))
                 }
             }
         }

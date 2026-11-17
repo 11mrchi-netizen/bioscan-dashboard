@@ -1,12 +1,12 @@
 package com.bioscan.fieldterminal.data
 
-import kotlinx.serialization.builtins.nullable
 import com.bioscan.fieldterminal.data.model.UserProfileRow
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.nullable
 import java.time.LocalDate
 
 // DAV-222/09A Aging Profile. One row per account (user_id defaults to

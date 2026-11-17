@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.domain.SessionWeather
 import com.bioscan.fieldterminal.domain.fuel.FORECAST_DAYS
 import com.bioscan.fieldterminal.domain.fuel.HourWeather
@@ -12,8 +13,9 @@ import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
@@ -28,7 +30,7 @@ class WeatherFetchException(message: String) : Exception(message)
 // since this is a forecast for a session that may be up to a week out.
 class WeatherRepository {
     companion object { private val client = HttpClient(OkHttp) }
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = LenientJson
 
     suspend fun fetchAt(lat: Double, lon: Double, at: ZonedDateTime): SessionWeather {
         val response = client.get("https://api.open-meteo.com/v1/forecast") {
@@ -113,14 +115,14 @@ class WeatherRepository {
                 for (y in 1..years) {
                     val start = from.toLocalDate().minusYears(y.toLong()).minusDays(3)
                     val end = to.toLocalDate().minusYears(y.toLong()).plusDays(3)
-                    samples += runCatching { hourly("https://archive-api.open-meteo.com/v1/archive", lat, lon, start, end, from.zone) }.getOrDefault(emptyList())
+                    samples += catching { hourly("https://archive-api.open-meteo.com/v1/archive", lat, lon, start, end, from.zone) }.getOrDefault(emptyList())
                 }
                 if (samples.isEmpty()) WeatherSeries.NONE else climatology(samples, targetHours, years)
             }
         }
     }
 
-    private suspend fun hourly(url: String, lat: Double, lon: Double, start: java.time.LocalDate, end: java.time.LocalDate, zone: java.time.ZoneId): List<HourWeather> {
+    private suspend fun hourly(url: String, lat: Double, lon: Double, start: LocalDate, end: LocalDate, zone: ZoneId): List<HourWeather> {
         val response = client.get(url) {
             url {
                 parameters.append("latitude", lat.toString())

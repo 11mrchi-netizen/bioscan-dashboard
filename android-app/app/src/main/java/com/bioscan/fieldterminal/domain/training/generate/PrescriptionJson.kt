@@ -55,4 +55,3 @@ fun GeneratedSession.prescriptionJson(): JsonArray = buildJsonArray {
     for (n in notes) add(buildJsonObject { put("type", "note"); put("text", n) })
 }
 
-fun GeneratedSession.hasProjectedLoad(): Boolean = items.any { it.projected }

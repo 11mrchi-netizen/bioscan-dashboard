@@ -15,7 +15,7 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Analysis Layer 3 / Phase 6. Read-only. Pairs from the curated interaction registry that apply to the active roster.
+// Read-only. Pairs from the curated interaction registry that apply to the active roster.
 // Unreviewed entries always carry "(unreviewed)" next to the effect.
 
 private fun DetectedInteraction.title(): String =
@@ -23,8 +23,8 @@ private fun DetectedInteraction.title(): String =
 
 private fun DetectedInteraction.tone(): Color = when {
     !needsAttention -> FT.TextMuted
-    record.severity == "major" -> FT.Critical
-    record.severity == "moderate" -> FT.Warning
+    record.severity == "major" -> FT.Bad
+    record.severity == "moderate" -> FT.Warn
     else -> FT.TextSecondary
 }
 
@@ -58,7 +58,7 @@ fun InteractionNotice(detections: List<DetectedInteraction>) {
     val attention = detections.filter { it.needsAttention }
     if (attention.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("INTERACTIONS", style = FTType.LabelCaps, color = FT.Warning)
+        Text("INTERACTIONS", style = FTType.LabelCaps, color = FT.Warn)
         attention.forEach { InteractionRow(it) }
     }
 }

@@ -3,7 +3,7 @@ package com.bioscan.fieldterminal.domain
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
-// Phase A4 (Analysis Layer). Evaluation Method Spec, Category 4 (Nutrition):
+// Evaluation Method Spec, Category 4 (Nutrition):
 // MacroFactor's classify-then-exclude pattern, plus variance (energy CV) as
 // its own first-class displayed metric, not a diagnostic. Reuses this
 // project's existing `DailyNutrition`/`aggregateMealsByDay` (domain/
@@ -123,13 +123,3 @@ fun evaluateNutrition(dailyTotals: List<DailyNutrition>, asOf: LocalDate = Local
     )
 }
 
-// DAV-76: per-day protein-%-of-calories, for the Weight/TDEE tab's "on-target"
-// trend line -- same AMDR band and same COMPLETE_MEALS_MIN gate
-// proteinAdherence14d itself uses, just exposed as a series instead of one
-// rolled-up percentage so it can be charted day-by-day.
-fun proteinPercentSeries(dailyTotals: List<DailyNutrition>, asOf: LocalDate = LocalDate.now(), days: Int = 90): List<Pair<LocalDate, Double>> =
-    dailyTotals
-        .mapNotNull { d -> runCatching { LocalDate.parse(d.date) }.getOrNull()?.let { it to d } }
-        .filter { (date, day) -> !date.isAfter(asOf) && ChronoUnit.DAYS.between(date, asOf) < days && day.mealCount >= COMPLETE_MEALS_MIN && day.calories > 0 }
-        .map { (date, day) -> date to (day.proteinG * 4.0 / day.calories * 100) }
-        .sortedBy { it.first }

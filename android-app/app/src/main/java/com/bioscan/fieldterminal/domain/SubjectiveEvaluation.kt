@@ -4,7 +4,7 @@ import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 
-// Phase A4 (Analysis Layer). Evaluation Method Spec, Category 3 (Subjective
+// Evaluation Method Spec, Category 3 (Subjective
 // self-report: energy/mood/stress/soreness): ordinal-safe throughout --
 // median + IQR for level, Mann-Kendall for direction, a fixed minimum shift
 // for change detection. Deliberately no mean/SD/z-score anywhere here: a

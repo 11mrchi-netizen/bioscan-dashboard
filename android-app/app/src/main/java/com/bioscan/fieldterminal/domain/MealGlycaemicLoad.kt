@@ -1,6 +1,8 @@
 package com.bioscan.fieldterminal.domain
 
 import com.bioscan.fieldterminal.data.model.MealRow
+import com.bioscan.fieldterminal.domain.fuel.mealSlotOf
+import java.time.Duration
 import java.time.OffsetDateTime
 
 // Glucose-spiking estimate (FUEL › Nutrition › Glucose spiking; a band chip on each TODAY meal page): a coarse, per-meal relative glycaemic load from what is logged
@@ -56,13 +58,13 @@ fun groupMeals(meals: List<MealRow>, gapMin: Int = MEAL_GROUP_GAP_MIN): List<Lis
         .mapNotNull { m -> runCatching { OffsetDateTime.parse(m.loggedAt) }.getOrNull()?.let { it to m } }.sortedBy { it.first }
     // Meals labelled with the same main meal (breakfast, lunch, dinner; meals.meal_slot) are one meal, however far apart they
     // were logged. Snacks, pre-session and recovery fuel happen several times a day, so they are not joined by label.
-    fun main(m: MealRow) = com.bioscan.fieldterminal.domain.fuel.mealSlotOf(m.mealSlot)?.main == true
+    fun main(m: MealRow) = mealSlotOf(m.mealSlot)?.main == true
     val labelled = timed.filter { main(it.second) }.groupBy { it.second.mealSlot }.values.map { it.toMutableList() }
     // The rest share a rise when logged within [gapMin] of the first of them, so a long grazing run is not chained into one.
     val unlabelled = mutableListOf<MutableList<Pair<OffsetDateTime, MealRow>>>()
     for (p in timed.filterNot { main(it.second) }) {
         val first = unlabelled.lastOrNull()?.first()
-        if (first != null && java.time.Duration.between(first.first, p.first).toMinutes() <= gapMin) unlabelled.last() += p else unlabelled += mutableListOf(p)
+        if (first != null && Duration.between(first.first, p.first).toMinutes() <= gapMin) unlabelled.last() += p else unlabelled += mutableListOf(p)
     }
     return (labelled + unlabelled).sortedBy { it.first().first }.map { g -> g.map { it.second } }
 }

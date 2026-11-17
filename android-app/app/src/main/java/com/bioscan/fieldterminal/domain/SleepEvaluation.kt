@@ -6,7 +6,7 @@ import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 
-// Phase A2 (Analysis Layer). Evaluation Method Spec, Category 2 (Sleep):
+// Evaluation Method Spec, Category 2 (Sleep):
 // three separate sub-metrics, deliberately never combined into one sleep
 // score (proprietary sleep scores are unauditable -- this app doesn't clone
 // one). Duration reuses Category 1's SWC-band machinery verbatim (the spec's

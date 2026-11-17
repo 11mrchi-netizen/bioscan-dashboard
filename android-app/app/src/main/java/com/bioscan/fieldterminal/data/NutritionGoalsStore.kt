@@ -92,7 +92,7 @@ object NutritionGoalsStore {
 
     fun saveGoals(context: Context, goals: NutritionGoals) {
         writeLocal(context, goals, unsynced = true)
-        scope.launch { runCatching { sync(context, SupabaseClientProvider.client) } }
+        scope.launch { catching { sync(context, SupabaseClientProvider.client) } }
     }
 
     fun clearGoals(context: Context) = saveGoals(context, NutritionGoals())

@@ -22,31 +22,31 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.domain.routine.ModeGroup
 import com.bioscan.fieldterminal.domain.routine.PlaceCategory
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // The day map's and the commute's shared colours and marks. Modes are a categorical set, in stack order, checked with the
 // dataviz validator against the dark surface (#11161A): lightness band, chroma, adjacent colour-blind separation (worst
 // ΔE 8.4, protan) and contrast all pass. Waiting and unknown are neutral greys: they are "not moving" and "not known",
 // not categories to tell apart by hue. A legend always sits beside the bars, so no mode is told by colour alone.
 val ModeColors: Map<ModeGroup, Color> = mapOf(
-    ModeGroup.ON_FOOT to Color(0xFF199E70),
-    ModeGroup.BICYCLE to Color(0xFFC98500),
-    ModeGroup.VEHICLE to Color(0xFF3987E5),
-    ModeGroup.STOP to Color(0xFFD95926),
-    ModeGroup.WAITING to Color(0xFF6B7178),
-    ModeGroup.UNKNOWN to Color(0xFF3A3F45),
+    ModeGroup.ON_FOOT to FT.Metric.ModeOnFoot,
+    ModeGroup.BICYCLE to FT.Metric.ModeBicycle,
+    ModeGroup.VEHICLE to FT.Metric.ModeVehicle,
+    ModeGroup.STOP to FT.Metric.ModeStop,
+    ModeGroup.WAITING to FT.Metric.ModeWaiting,
+    ModeGroup.UNKNOWN to FT.Metric.ModeUnknown,
 )
 
 // A place's colour by category. Unlabelled places use the warning amber: they need a name, and always carry the text
 // "Unlabelled" beside the colour.
 fun placeColor(category: PlaceCategory?, labelled: Boolean): Color = when {
-    category == PlaceCategory.HOME -> FT.Emerald
+    category == PlaceCategory.HOME -> FT.Ok
     category == PlaceCategory.WORK -> FT.DomainMap
     category != null || labelled -> FT.DomainLabs
-    else -> FT.Warning
+    else -> FT.Warn
 }
 
 private val clockFmt = DateTimeFormatter.ofPattern("HH:mm")

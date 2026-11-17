@@ -11,7 +11,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 /**
- * Step 14 (Map tab). Requests the calendar.readonly + drive.readonly scopes
+ * Requests the calendar.readonly + drive.readonly scopes
  * the Map tab needs, via Play Services' Authorization API -- a distinct flow
  * from [GoogleAuthManager]'s Credential Manager sign-in, which only ever
  * verifies identity for Supabase auth and never touches OAuth scopes at all.

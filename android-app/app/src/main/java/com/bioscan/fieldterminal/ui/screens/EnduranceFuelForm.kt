@@ -27,13 +27,13 @@ import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.screens.status.FuelingExperimentSheet
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private val KINDS = listOf("gel", "drink_mix", "chew", "bar", "homemade", "other")
 private val STATUSES = listOf("consumed", "partial", "planned", "skipped")
@@ -114,7 +114,7 @@ internal fun EnduranceFuelForm(onSaved: () -> Unit) {
         when {
             loading -> Text("Loading...", style = FTType.BodySmall, color = FT.TextSecondary)
             loadError != null -> {
-                Text("Could not load ($loadError).", style = FTType.BodySmall, color = FT.Critical)
+                Text("Could not load ($loadError).", style = FTType.BodySmall, color = FT.Bad)
                 FTButton(label = "RETRY") { reload++ }
             }
             sessions.isEmpty() -> Text("No run, hike or ride in the last three weeks to attach fueling to. Sync your watch or log the activity first.", style = FTType.BodySmall, color = FT.TextSecondary)
@@ -237,7 +237,7 @@ internal fun EnduranceFuelForm(onSaved: () -> Unit) {
                     }
                     FTButton(label = "TEST THIS PRODUCT (N-OF-1)") { experimenting = true }
                 }
-                error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+                error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
             }
         }
     }

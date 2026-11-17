@@ -26,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -45,22 +46,20 @@ import com.bioscan.fieldterminal.domain.fuel.scheduleAdherence
 import com.bioscan.fieldterminal.domain.fuel.suggestTolerance
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
-import com.bioscan.fieldterminal.ui.components.FTDropdown
+import com.bioscan.fieldterminal.ui.components.FTRatingSlider
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.util.UUID
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // The debrief after a race or long run (docs/race-fuel-rework/plan.md). It opens on "everything as planned": each block of the
 // schedule is one tap (as planned, less, more, none), the totals and whether the schedule held are worked out, then the
 // discomfort ticked, how the gut, energy, tiredness and thirst were, and the optional weigh-ins.
-
-private val SCORES = (0..10).map { it.toString() to it.toString() }
 
 private enum class Took(val label: String) { AsPlanned("AS PLANNED"), Less("LESS"), More("MORE"), None("NONE") }
 
@@ -159,7 +158,7 @@ fun FuelDebriefContent(target: DebriefTarget, onSaved: () -> Unit) {
                 adherence.verdict?.let { v ->
                     Text(
                         "SCHEDULE ${v.label} · ${(adherence.carbShare!! * 100).roundToInt()} % of the planned carbohydrate",
-                        style = FTType.LabelCaps, color = if (v == ScheduleVerdict.HELD) FT.Emerald else FT.Warning,
+                        style = FTType.LabelCaps, color = if (v == ScheduleVerdict.HELD) FT.Ok else FT.Warn,
                     )
                 }
                 adherence.slipped.forEach { Text("· ${it.label}: ${it.taken} of ${it.planned} taken", style = FTType.Caption, color = FT.TextSecondary) }
@@ -174,8 +173,8 @@ fun FuelDebriefContent(target: DebriefTarget, onSaved: () -> Unit) {
                 Text(
                     s.label.uppercase(), style = FTType.LabelCaps, color = if (on) FT.PlatinumInk else FT.TextSecondary,
                     modifier = Modifier
-                        .border(FT.BorderWidth, if (on) androidx.compose.ui.graphics.Color.Transparent else FT.GlassBorder, shape)
-                        .background(if (on) FT.PlatinumSolid else androidx.compose.ui.graphics.Color.Transparent, shape)
+                        .border(FT.BorderWidth, if (on) Color.Transparent else FT.GlassBorder, shape)
+                        .background(if (on) FT.PlatinumSolid else Color.Transparent, shape)
                         .ftClickable(shape = shape) { if (on) symptoms.remove(s) else symptoms.add(s) }
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                 )
@@ -185,17 +184,17 @@ fun FuelDebriefContent(target: DebriefTarget, onSaved: () -> Unit) {
 
         // Ratings are slid, not picked from a list, each in its metric's hue.
         fun slid(v: String?) = v?.toIntOrNull()
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("GUT", slid(gi), 0..10, FT.Metric.StoolLoose, { gi = it?.toString() ?: "" }, lowWord = "fine", highWord = "bad")
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("ENERGY", slid(energy), 0..10, FT.Metric.Energy, { energy = it?.toString() ?: "" }, lowWord = "empty", highWord = "strong")
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("TIREDNESS", slid(fatigue), 0..10, FT.Metric.Atl, { fatigue = it?.toString() ?: "" }, lowWord = "fresh", highWord = "spent")
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("THIRST", slid(thirst), 0..10, FT.Metric.Hydration, { thirst = it?.toString() ?: "" }, lowWord = "none", highWord = "severe")
+        FTRatingSlider("GUT", slid(gi), 0..10, FT.Metric.StoolLoose, { gi = it?.toString() ?: "" }, lowWord = "fine", highWord = "bad", reversed = true)
+        FTRatingSlider("ENERGY", slid(energy), 0..10, FT.Metric.Energy, { energy = it?.toString() ?: "" }, lowWord = "empty", highWord = "strong")
+        FTRatingSlider("TIREDNESS", slid(fatigue), 0..10, FT.Metric.Atl, { fatigue = it?.toString() ?: "" }, lowWord = "fresh", highWord = "spent", reversed = true)
+        FTRatingSlider("THIRST", slid(thirst), 0..10, FT.Metric.Hydration, { thirst = it?.toString() ?: "" }, lowWord = "none", highWord = "severe", reversed = true)
         Text("Weigh-ins (optional): without clothes, before the start and at the finish before drinking. They make this a sweat test.", style = FTType.Caption, color = FT.TextSecondary)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) { DLabel("BEFORE KG"); FieldTextField(before, { before = it }, "e.g. 70.2", keyboardType = KeyboardType.Decimal) }
             Column(Modifier.weight(1f)) { DLabel("AFTER KG"); FieldTextField(after, { after = it }, "e.g. 68.9", keyboardType = KeyboardType.Decimal) }
         }
         Column { DLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "What worked, what didn't", singleLine = false) }
-        error?.let { Text(it, style = FTType.Caption, color = FT.Critical) }
+        error?.let { Text(it, style = FTType.Caption, color = FT.Bad) }
 
         if (!saved) {
             val d = parseHoursMinutes(duration)

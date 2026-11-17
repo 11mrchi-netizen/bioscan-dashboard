@@ -5,6 +5,9 @@ Native Android companion app (Kotlin + Jetpack Compose). See the repo root
 `mobile-app-implementation-roadmap.md` (not committed here — they live outside
 the repo) for the full design/build sequencing this scaffold follows.
 
+This Gradle project also holds **Home Terminal** (`:tv`), the Google TV Streamer app that collects the home's
+environment. See `docs/home-environment/README.md`.
+
 ## Status
 
 **Steps 1–4 done** (project scaffold, Google sign-in, 4-tab navigation

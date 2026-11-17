@@ -6,6 +6,7 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.time.LocalDate
@@ -28,7 +29,7 @@ class StrengthImportRepository(private val supabase: SupabaseClient) {
             .decodeSingleOrNull<StrengthDecodedRow>()
             ?.decoded?.strengthData
 
-    private suspend fun mergeDetails(sessionId: Long, changes: Map<String, kotlinx.serialization.json.JsonElement>) {
+    private suspend fun mergeDetails(sessionId: Long, changes: Map<String, JsonElement>) {
         val current = supabase.postgrest.from("exercise_sessions")
             .select(columns = Columns.list("details")) { filter { eq("id", sessionId) } }
             .decodeSingle<StrengthDetailsJson>()

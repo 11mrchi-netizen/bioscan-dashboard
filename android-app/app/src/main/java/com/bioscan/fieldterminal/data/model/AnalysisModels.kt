@@ -3,7 +3,7 @@ package com.bioscan.fieldterminal.data.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// Phase A2 (Analysis Layer). Read models for data/AnalysisRepository.kt --
+// Read models for data/AnalysisRepository.kt --
 // separate from StatusModels.kt's WearableDailyRow/SleepDailyRow, which
 // select a narrower column set (limit(10), no bedtime/wake_time/respiratory
 // rate) tuned for the BodyConsole readiness display, not the 60-day lookback
@@ -47,7 +47,7 @@ data class BodyMetricsAnalysisRow(
     @SerialName("body_fat_pct") val bodyFatPct: Double? = null,
 )
 
-// Phase A4. Narrower than TrainingRepository's own ExerciseSessionRow --
+// Narrower than TrainingRepository's own ExerciseSessionRow --
 // this needs only what session_load's formula (duration_min * rpe) uses,
 // plus start_time to bucket by date.
 // DAV-205 (24/9 fixes): avg_hr/max_hr added as a TRIMP fallback input for
@@ -65,7 +65,7 @@ data class TrainingLoadSessionRow(
     val type: String? = null,
 )
 
-// Phase A4 (Category 3). The Log tab's own LogRepository/LogWellbeingRow
+// The Log tab's own LogRepository/LogWellbeingRow
 // already reads wellbeing_daily, but only the latest N rows for the feed --
 // this is the separate 60-day-lookback shape the Evaluation Method Spec's
 // formulas need, same reasoning as WearableAnalysisRow/SleepAnalysisRow.
@@ -89,7 +89,7 @@ data class PlannedOutcomeRow(
     @SerialName("exercise_session_id") val exerciseSessionId: Long? = null,
 )
 
-// Phase A4 (Category 8). Bristol half.
+// Bristol half.
 @Serializable
 data class StoolAnalysisRow(
     @SerialName("occurred_at") val occurredAt: String,
@@ -98,7 +98,7 @@ data class StoolAnalysisRow(
     val discomfort: Int? = null,
 )
 
-// Phase A4 (Category 8). OSTRC-H2 half.
+// OSTRC-H2 half.
 @Serializable
 data class OstrcAnalysisRow(
     @SerialName("check_date") val checkDate: String,
@@ -106,7 +106,7 @@ data class OstrcAnalysisRow(
     @SerialName("severity_score") val severityScore: Int? = null,
 )
 
-// Phase A4 (Category 9). Joined client-side by draw_id -> draw_date
+// Joined client-side by draw_id -> draw_date
 // (matching this project's existing "no relational embedding, join in
 // Kotlin" convention -- see TrainingCyclesRepository for the same pattern).
 @Serializable
@@ -125,7 +125,7 @@ data class LabResultAnalysisRow(
     @SerialName("ref_high") val refHigh: Double? = null,
 )
 
-// Analysis Layer 3 / R1. Read model for analysis_results rows of kind "series_break" (published by the analysis-run Edge
+// Read model for analysis_results rows of kind "series_break" (published by the analysis-run Edge
 // Function). Only the field this app needs is decoded: the last CONFIRMED break date, the start of the current regime.
 @Serializable
 data class SeriesBreakResultRow(val key: String, val payload: SeriesBreakPayload = SeriesBreakPayload())
@@ -133,12 +133,12 @@ data class SeriesBreakResultRow(val key: String, val payload: SeriesBreakPayload
 @Serializable
 data class SeriesBreakPayload(val lastConfirmed: String? = null)
 
-// Analysis Layer 3 / Phase 3. Read model for analysis_results rows of kind "relationship": one confirmatory hypothesis each
+// Read model for analysis_results rows of kind "relationship": one confirmatory hypothesis each
 // (supabase/functions/_shared/analysis-core/relationship.ts). Every field is defaulted so an older or partial payload still decodes.
 @Serializable
 data class RelationshipResultRow(val key: String, val state: String = "insufficient", val payload: RelationshipPayload = RelationshipPayload())
 
-// Analysis Layer 3 / Phase 4. Read model for the "typicality" row (key personal_normal). Every field is defaulted.
+// Read model for the "typicality" row (key personal_normal). Every field is defaulted.
 @Serializable
 data class TypicalityResultRow(val key: String, val state: String = "building", val payload: TypicalityPayload = TypicalityPayload())
 

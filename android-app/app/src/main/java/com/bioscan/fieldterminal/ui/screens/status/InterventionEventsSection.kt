@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.ExperimentsRepository
 import com.bioscan.fieldterminal.data.InterventionEventsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.DrawRow
 import com.bioscan.fieldterminal.data.model.EpisodicIntervention
 import com.bioscan.fieldterminal.data.model.EventEvidenceRow
@@ -40,8 +41,8 @@ import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Lab › N=1: interventions you repeat (nasal strips, a lactose meal, a cold shower), the events logged for them, how each
 // felt, and what the nightly analysis makes of them so far. The label climbs with the number of events that have data
@@ -83,7 +84,7 @@ fun InterventionEventsSection() {
         evidence = repo.loadEvidence()
         draws = repo.loadDraws()
         tracked = repo.loadTrackedOutcomes()
-        tested = runCatching { ExperimentsRepository(SupabaseClientProvider.client).loadExperiments().mapNotNull { it.interventionId }.toSet() }.getOrDefault(emptySet())
+        tested = catching { ExperimentsRepository(SupabaseClientProvider.client).loadExperiments().mapNotNull { it.interventionId }.toSet() }.getOrDefault(emptySet())
     }
 
     val seriesLabels = series.associate { it.id to it.label }
@@ -168,7 +169,7 @@ fun InterventionEventsSection() {
                                     error = null
                                     scope.launchSafe(onError = { e -> error = e.message ?: "Could not draw" }) {
                                         // stored first; a second tap (or a second phone) hits the one-per-day rule and just reloads
-                                        runCatching { repo.saveDraw(iv.id, today, drawCoin()) }
+                                        catching { repo.saveDraw(iv.id, today, drawCoin()) }
                                         draws = repo.loadDraws()
                                     }
                                 }
@@ -194,7 +195,7 @@ fun InterventionEventsSection() {
                     }
                 }
             }
-            error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+            error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FTButton(label = "NEW") { creating = true }
                 FTButton(label = "NEW OUTCOME") { creatingTracked = true }

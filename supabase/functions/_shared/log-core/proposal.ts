@@ -11,7 +11,7 @@
 //   * nothing is written by this module or by the function: proposals are confirmed in the app, which commits them through the
 //     same repositories as the forms.
 
-export const DRINK_CLASSES = ["water", "coffee", "tea", "milk", "plant_milk", "soda", "juice", "electrolyte", "alcohol"] as const;
+export const DRINK_CLASSES = ["water", "coffee", "tea", "infusion", "milk", "plant_milk", "soda", "juice", "electrolyte", "alcohol"] as const;
 export const RECOVERY_CATEGORIES = ["stretching_mobility", "contrast_therapy", "other"] as const;
 export const WELLBEING_DIMS = ["energy", "mood", "stress", "soreness"] as const;
 export const ETHANOL_DENSITY_G_PER_ML = 0.789;

@@ -1,8 +1,6 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class)
 package com.bioscan.fieldterminal.domain.score
 
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.UseSerializers
 import com.bioscan.fieldterminal.domain.ScorePredictor
 import com.bioscan.fieldterminal.domain.ScoreRule
 import com.bioscan.fieldterminal.domain.ScorecardResult
@@ -10,7 +8,10 @@ import com.bioscan.fieldterminal.domain.ScorecardSpec
 import com.bioscan.fieldterminal.domain.hrvResidualByDay
 import com.bioscan.fieldterminal.domain.nextMorning
 import com.bioscan.fieldterminal.domain.scorecard
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.LocalDate
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -179,9 +180,9 @@ private fun ridge(x: List<DoubleArray>, y: List<Double>, lambda: Double): Double
     // Gauss-Jordan on the small k x k system.
     val a = Array(k) { i -> xtx[i].copyOf() + doubleArrayOf(xty[i]) }
     for (c in 0 until k) {
-        val p = (c until k).maxByOrNull { kotlin.math.abs(a[it][c]) } ?: c
+        val p = (c until k).maxByOrNull { abs(a[it][c]) } ?: c
         val tmp = a[c]; a[c] = a[p]; a[p] = tmp
-        val pivot = a[c][c].takeIf { kotlin.math.abs(it) > 1e-12 } ?: continue
+        val pivot = a[c][c].takeIf { abs(it) > 1e-12 } ?: continue
         for (j in c..k) a[c][j] /= pivot
         for (r in 0 until k) if (r != c) {
             val f = a[r][c]

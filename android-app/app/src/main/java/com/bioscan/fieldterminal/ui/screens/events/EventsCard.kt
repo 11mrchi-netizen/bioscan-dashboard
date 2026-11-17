@@ -20,15 +20,20 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AthleteEventsRepository
 import com.bioscan.fieldterminal.data.EventSuggestion
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.draftEventFrom
 import com.bioscan.fieldterminal.domain.events.AthleteEvent
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTChevron
+import com.bioscan.fieldterminal.ui.components.NullableEventSaver
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.rememberCacheVersion
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import kotlinx.coroutines.CancellationException
 import java.time.LocalDate
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Training › Plan's EVENTS card: what is coming up outside the training block (races, long days, matches), ADD EVENT,
 // and calendar entries that read like a race (MAKE THIS AN EVENT). Loading also links finished events to the session
@@ -41,17 +46,17 @@ fun EventsCard(onOpenEvent: (Long) -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
     // Saveable: the event form can open the file picker, and the app may be restored while it is open.
-    var adding by rememberSaveable(stateSaver = com.bioscan.fieldterminal.ui.components.NullableEventSaver) { mutableStateOf<AthleteEvent?>(null) }
+    var adding by rememberSaveable(stateSaver = NullableEventSaver) { mutableStateOf<AthleteEvent?>(null) }
     var addingBlank by rememberSaveable { mutableStateOf(false) }
 
-    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    val cacheVersion = rememberCacheVersion()
     LaunchedEffect(attempt, cacheVersion) {
         error = null
         try {
-            runCatching { repo.linkCompletedEvents() }
+            catching { repo.linkCompletedEvents() }
             events = repo.loadUpcoming(LocalDate.now())
-            suggestions = runCatching { repo.loadSuggestions() }.getOrDefault(emptyList())
-        } catch (e: kotlinx.coroutines.CancellationException) {
+            suggestions = catching { repo.loadSuggestions() }.getOrDefault(emptyList())
+        } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             error = e.message ?: "Couldn't load events."
@@ -64,7 +69,7 @@ fun EventsCard(onOpenEvent: (Long) -> Unit) {
             "around them, and a finished event is linked to the session that recorded it.",
     ) {
         error?.let {
-            Text("Couldn't load events: $it", style = FTType.BodySmall, color = FT.Critical)
+            Text("Couldn't load events: $it", style = FTType.BodySmall, color = FT.Bad)
             FTButton("RETRY", emphasis = FTButtonEmphasis.Tertiary) { attempt++ }
         }
         val list = events.orEmpty()
@@ -80,7 +85,7 @@ fun EventsCard(onOpenEvent: (Long) -> Unit) {
                     Text(eventWhenLabel(e), style = FTType.MonoCaption, color = FT.DomainTraining)
                     Text(eventSummaryLine(e), style = FTType.MonoCaption, color = FT.TextSecondary)
                 }
-                Text("›", style = FTType.LabelCaps, color = FT.TextSecondary)
+                FTChevron(tint = FT.TextSecondary)
             }
         }
         suggestions.take(3).forEach { s ->

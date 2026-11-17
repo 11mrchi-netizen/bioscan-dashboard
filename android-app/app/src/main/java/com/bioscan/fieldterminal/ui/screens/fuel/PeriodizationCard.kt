@@ -16,9 +16,11 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.domain.fuel.CPI_MIN_DAYS
 import com.bioscan.fieldterminal.domain.fuel.periodizationWords
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Fuel › Nutrition: how well the last weeks' logged carbohydrate followed the training (the Carbohydrate Periodization
 // Index) and how the meal codes were kept (domain/fuel/Periodization.kt).
@@ -26,7 +28,9 @@ import kotlin.math.roundToInt
 fun PeriodizationCard(overview: NutritionOverview, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     var view by remember { mutableStateOf<PeriodizationView?>(null) }
-    LaunchedEffect(overview) { view = runCatching { FuelPlanRepository(SupabaseClientProvider.client).loadPeriodization(context, overview) }.getOrNull() }
+    val guard = rememberLoadGuard(refreshOnUpdates = false)
+    LaunchedEffect(overview, guard.attempt) { guard.run { view = FuelPlanRepository(SupabaseClientProvider.client).loadPeriodization(context, overview) } }
+    LoadErrorLine(guard, "the periodisation card", modifier)
     val v = view ?: return
     FTCard(
         title = "PERIODISATION · LAST 4 WEEKS",

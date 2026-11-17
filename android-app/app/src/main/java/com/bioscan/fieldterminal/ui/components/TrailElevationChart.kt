@@ -29,6 +29,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.domain.trail.TrailChartPoint
 import com.bioscan.fieldterminal.ui.theme.FTType
+import kotlin.math.abs
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // 28/9. Same colors SessionDetailScreen's own PerfSignal already uses for
@@ -99,7 +100,7 @@ fun TrailElevationChart(points: List<TrailChartPoint>, modifier: Modifier = Modi
                 .fillMaxWidth()
                 .height(120.dp)
                 .chartInspect(Triple(points, active, xMin)) { x, width, isTap ->
-                    val nearest = points.indices.minBy { kotlin.math.abs(xFor(xs[it], width) - x) }
+                    val nearest = points.indices.minBy { abs(xFor(xs[it], width) - x) }
                     selected = if (isTap && selected == nearest) null else nearest
                 },
         ) {

@@ -28,10 +28,10 @@ import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.util.scanBarcode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private val note = FTType.Caption
 
@@ -68,17 +68,18 @@ fun BarcodeLogPanel(roster: List<SupplementRow>, onMatched: (List<SupplementRow>
                     onMatched(hits)
                     message = "Matched ${hits.joinToString { it.name }}. Check it below, then save."
                 } else {
-                    val lookup = runCatching { SupplementLookupRepository(SupabaseClientProvider.client).lookupBarcode(code) }.getOrNull()
+                    // A check that failed is reported as that (below), never as a barcode no database knows.
+                    val lookup = SupplementLookupRepository(SupabaseClientProvider.client).lookupBarcode(code)
                     val lines = buildList {
-                        lookup?.suppco?.value?.products?.firstOrNull()?.let { add("SuppCo: ${it.name ?: "unnamed"}${it.brand?.let { b -> " · $b" } ?: ""}") }
-                        lookup?.dsld?.value?.labels?.firstOrNull()?.let { add("NIH DSLD: ${it.fullName ?: "unnamed"}${it.brandName?.let { b -> " · $b" } ?: ""}") }
+                        lookup.suppco?.value?.products?.firstOrNull()?.let { add("SuppCo: ${it.name ?: "unnamed"}${it.brand?.let { b -> " · $b" } ?: ""}") }
+                        lookup.dsld?.value?.labels?.firstOrNull()?.let { add("NIH DSLD: ${it.fullName ?: "unnamed"}${it.brandName?.let { b -> " · $b" } ?: ""}") }
                     }
                     unknown = UnknownBarcode(code, lines)
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                message = "Couldn't look that up (${e.message ?: "error"})."
+                message = "Couldn't check that barcode (${e.message ?: "error"}). Try again: this does not mean it is unknown."
             } finally {
                 busy = false
             }

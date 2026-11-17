@@ -8,6 +8,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.time.OffsetDateTime
 
 // The owner's review of the shared registries (migration 20261116_regimen_references.sql). evidence_records and
 // interaction_records are read-only and seeded 'unreviewed'; a verdict here is what makes a row count as reviewed for this
@@ -122,7 +123,7 @@ class RegistryReviewRepository(private val supabase: SupabaseClient) {
             put("record_version", version)
             put("verdict", verdict)
             put("note", note?.trim()?.takeIf { it.isNotEmpty() }?.take(1000))
-            put("reviewed_at", java.time.OffsetDateTime.now().toString())
+            put("reviewed_at", OffsetDateTime.now().toString())
         }) { onConflict = "user_id,registry,record_id" }
     }
 

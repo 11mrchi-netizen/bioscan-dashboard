@@ -1,5 +1,7 @@
 package com.bioscan.fieldterminal.domain
 
+import java.util.Locale
+
 // A roster supplement has one dose size ("500 mg"); each log multiplies it. The quantity can be a multiple (2), a
 // fraction (½) or zero ("not taken this time", left out of the save), so a stack can be logged with items skipped.
 const val SUPPLEMENT_QTY_STEP = 0.25
@@ -13,7 +15,7 @@ fun formatSupplementQty(qty: Double): String {
         Math.abs(frac - 0.25) < 1e-9 -> "¼"
         Math.abs(frac - 0.5) < 1e-9 -> "½"
         Math.abs(frac - 0.75) < 1e-9 -> "¾"
-        else -> return String.format(java.util.Locale.US, "%.2f", qty).trimEnd('0').trimEnd('.')
+        else -> return String.format(Locale.US, "%.2f", qty).trimEnd('0').trimEnd('.')
     }
     return when {
         glyph.isEmpty() -> "$whole"

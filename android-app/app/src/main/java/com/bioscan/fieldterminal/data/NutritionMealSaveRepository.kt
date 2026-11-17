@@ -1,17 +1,21 @@
 package com.bioscan.fieldterminal.data
 
+import android.util.Log
 import com.bioscan.fieldterminal.data.model.HydrationFactorModelRow
 import com.bioscan.fieldterminal.data.model.MealItemRow
+import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.data.model.NewMealRow
 import com.bioscan.fieldterminal.data.model.NutrientIntakeRow
 import com.bioscan.fieldterminal.domain.ethanolGrams
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import java.time.Instant
 
 // DAV-168. Turns a review sheet's confirmed line items into a real meal +
 // meal_items, via DAV-164's resolver -- this file never computes a nutrient
@@ -322,7 +326,7 @@ class NutritionMealSaveRepository(
                 !it.usedEstimate && (it.userEdited || it.fromMemory || it.matchQuality == "exact")
         }
         if (remembered.isEmpty()) return
-        val now = java.time.Instant.now().toString()
+        val now = Instant.now().toString()
         // Rows with a per-unit weight and rows without go separately, so a weight-based entry ("150 g apple") never
         // erases the remembered weight of one apple.
         val (withGrams, foodOnly) = remembered.partition { (it.portionCount ?: 0.0) > 0 }
@@ -360,10 +364,10 @@ class NutritionMealSaveRepository(
 
     private suspend fun <T> bestEffort(what: String, block: suspend () -> T): T? = try {
         block()
-    } catch (e: kotlinx.coroutines.CancellationException) {
+    } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        android.util.Log.w("NutritionMealSave", "$what skipped: ${e.message}")
+        Log.w("NutritionMealSave", "$what skipped: ${e.message}")
         null
     }
 
@@ -380,7 +384,7 @@ class NutritionMealSaveRepository(
             .select(
                 columns = Columns.list("logged_at,description,calories,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg"),
             ) { filter { eq("id", sourceMealId) } }
-            .decodeSingle<com.bioscan.fieldterminal.data.model.MealRow>()
+            .decodeSingle<MealRow>()
 
         val sourceItems = supabase.postgrest.from("meal_items")
             .select { filter { eq("meal_id", sourceMealId) } }
@@ -420,7 +424,7 @@ class NutritionMealSaveRepository(
     // factor for that class. caffeine_mg stays null unless a food match is
     // provided (use saveMeal for that richer path).
     //
-    // Analysis Layer 3 / R2: an alcohol drink must carry its strength. `abvPercent` is turned into grams of ethanol
+    // An alcohol drink must carry its strength. `abvPercent` is turned into grams of ethanol
     // (meal_items.alcohol_g) and shown in the description; an alcohol row without a usable strength is refused rather than
     // stored without grams, because a drink with no grams is invisible to every alcohol analysis.
     suspend fun saveBeverageDrink(loggedAt: String, beverageClass: String, volumeMl: Double, abvPercent: Double? = null): Long {
@@ -472,6 +476,7 @@ class NutritionMealSaveRepository(
 private fun beverageClassDisplayName(beverageClass: String): String = when (beverageClass) {
     "coffee" -> "Coffee"
     "tea" -> "Tea"
+    "infusion" -> "Herbal tea"
     "juice" -> "Juice"
     "soda" -> "Soda"
     "milk" -> "Milk"

@@ -1,14 +1,15 @@
 package com.bioscan.fieldterminal.data
 
 import android.content.Context
+import android.util.Log
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkerParameters
 import androidx.work.WorkManager
+import androidx.work.WorkerParameters
 import com.bioscan.fieldterminal.healthconnect.HealthConnectSyncStatus
 import java.time.Duration
 
@@ -22,7 +23,7 @@ class HealthConnectSyncWorker(context: Context, params: WorkerParameters) : Coro
         val prefs = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val sinceLast = System.currentTimeMillis() - prefs.getLong(KEY_LAST_SUCCESS, 0L)
         if (sinceLast in 0 until MIN_INTERVAL_MS) {
-            android.util.Log.d("HealthConnectSyncWorker", "skipped: last success ${sinceLast / 1000}s ago")
+            Log.d("HealthConnectSyncWorker", "skipped: last success ${sinceLast / 1000}s ago")
             return Result.success()
         }
         val syncCoordinator = HealthConnectSyncCoordinator(applicationContext, SupabaseClientProvider.client)
@@ -33,7 +34,7 @@ class HealthConnectSyncWorker(context: Context, params: WorkerParameters) : Coro
         val writeBackRepo = HealthConnectWriteBackRepository(applicationContext, SupabaseClientProvider.client)
         val writeBackResult = writeBackRepo.writeBackDaily()
 
-        android.util.Log.d("HealthConnectSyncWorker", "Read sync: $readResult, Write-back: $writeBackResult")
+        Log.d("HealthConnectSyncWorker", "Read sync: $readResult, Write-back: $writeBackResult")
 
         return when {
             readResult is HealthConnectSyncResult.Failed || writeBackResult is HealthConnectWriteBackResult.Failed -> {

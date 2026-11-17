@@ -1,10 +1,13 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain.fuel
 
-import kotlinx.serialization.UseSerializers
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
+import java.time.Duration
 import java.time.ZonedDateTime
+import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 // The weather a fuel and hydration plan is built for (docs/fuel-planning/README.md, phase 4), and how hot it is.
 //
@@ -33,8 +36,8 @@ data class HourWeather(
 )
 
 data class WeatherSeries(val source: WeatherSource, val hours: List<HourWeather>, val note: String? = null) {
-    fun at(t: ZonedDateTime): HourWeather? = hours.minByOrNull { kotlin.math.abs(java.time.Duration.between(it.time, t).toMinutes()) }
-        ?.takeIf { kotlin.math.abs(java.time.Duration.between(it.time, t).toMinutes()) <= 90 }
+    fun at(t: ZonedDateTime): HourWeather? = hours.minByOrNull { abs(Duration.between(it.time, t).toMinutes()) }
+        ?.takeIf { abs(Duration.between(it.time, t).toMinutes()) <= 90 }
 
     companion object {
         val NONE = WeatherSeries(WeatherSource.NONE, emptyList())
@@ -92,7 +95,7 @@ fun heatIndexC(tempC: Double, humidityPct: Double): Double {
     } else {
         var hi = -42.379 + 2.04901523 * t + 10.14333127 * rh - 0.22475541 * t * rh - 0.00683783 * t * t -
             0.05481717 * rh * rh + 0.00122874 * t * t * rh + 0.00085282 * t * rh * rh - 0.00000199 * t * t * rh * rh
-        if (rh < 13 && t in 80.0..112.0) hi -= ((13 - rh) / 4) * kotlin.math.sqrt((17 - kotlin.math.abs(t - 95)) / 17)
+        if (rh < 13 && t in 80.0..112.0) hi -= ((13 - rh) / 4) * sqrt((17 - abs(t - 95)) / 17)
         if (rh > 85 && t in 80.0..87.0) hi += ((rh - 85) / 10) * ((87 - t) / 5)
         hi
     }

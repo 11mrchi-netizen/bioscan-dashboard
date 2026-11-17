@@ -41,7 +41,7 @@ private fun WatchLine(w: LabWatch, showItem: Boolean) {
         val daily = w.dailyAmount?.let { " · ${formatAmount(Math.round(it * 10) / 10.0)} ${w.rule.amountUnit} a day" } ?: ""
         Text((if (showItem) "${w.itemName}$daily → " else "") + w.rule.markerLabel, style = FTType.RowTitle, color = FT.TextPrimary)
         if (w.latest.isEmpty()) {
-            Text("Never measured", style = FTType.Caption, color = FT.Warning)
+            Text("Never measured", style = FTType.Caption, color = FT.Warn)
         } else {
             w.latest.take(3).forEach { Text(labReadingWords(it), style = FTType.Caption, color = FT.TextSecondary) }
         }
@@ -51,12 +51,12 @@ private fun WatchLine(w: LabWatch, showItem: Boolean) {
             w.rule.reviewed -> "Reviewed"
             else -> "Unreviewed"
         }
-        Text("$tag · ${if (open) "less" else "why and source ›"}", style = FTType.MonoCaption, color = if (w.rule.reviewed) FT.TextMuted else FT.Warning)
+        Text("$tag · ${if (open) "less" else "why and source ›"}", style = FTType.MonoCaption, color = if (w.rule.reviewed) FT.TextMuted else FT.Warn)
         if (open) {
             Text(w.rule.reason, style = FTType.Caption, color = FT.TextSecondary)
             w.rule.caveats?.let { Text("Caveats: $it", style = FTType.Caption, color = FT.TextMuted) }
             Text("Source: ${w.rule.source}" + (w.rule.pmidDoi?.let { " · $it" } ?: ""), style = FTType.Caption,
-                color = if (w.rule.sourceUrl != null) FT.Emerald else FT.TextMuted,
+                color = if (w.rule.sourceUrl != null) FT.Ok else FT.TextMuted,
                 modifier = Modifier.padding(top = 2.dp).ftClickable(enabled = w.rule.sourceUrl != null) { w.rule.sourceUrl?.let { runCatching { uri.openUri(it) } } })
         }
     }

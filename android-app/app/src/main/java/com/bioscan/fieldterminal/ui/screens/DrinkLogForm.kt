@@ -3,6 +3,7 @@ package com.bioscan.fieldterminal.ui.screens
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -11,6 +12,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +27,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -32,8 +35,10 @@ import androidx.core.content.ContextCompat
 import com.bioscan.fieldterminal.data.DrinksRepository
 import com.bioscan.fieldterminal.data.NutritionBarcodeLookupRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.DrinkMatch
 import com.bioscan.fieldterminal.domain.STANDARD_DRINK_G
+import com.bioscan.fieldterminal.domain.UnknownScanCheck
 import com.bioscan.fieldterminal.domain.UsualDrink
 import com.bioscan.fieldterminal.domain.WallClock
 import com.bioscan.fieldterminal.domain.drinkAmounts
@@ -43,28 +48,34 @@ import com.bioscan.fieldterminal.domain.usualDrinks
 import com.bioscan.fieldterminal.ui.components.DateTimeField
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
+import com.bioscan.fieldterminal.ui.components.FTIcon
+import com.bioscan.fieldterminal.ui.components.FTIconSize
+import com.bioscan.fieldterminal.ui.components.FTIcons
 import com.bioscan.fieldterminal.ui.components.FTRatingSlider
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.ftGlass
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.util.PendingCameraCapture
 import com.bioscan.fieldterminal.util.createCameraCaptureUri
 import com.bioscan.fieldterminal.util.scanBarcode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlin.math.roundToInt
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// The drink log: a real drink, found by usual drinks, its kind, a search of the catalog (USDA, Taiwan FDA, scanned
-// products) or its barcode, then the amount on a slider in the drink's own sizes. Plain water keeps the day's running
+// The drink log, top to bottom: FIND A DRINK (a search of the catalog: USDA, Taiwan FDA, scanned products; or its barcode),
+// KIND (a typical drink of a kind, herbal tea among them), USUALS (kept closed). A pick opens the panel with when, the
+// amount on a slider in the drink's own sizes and what it brings. Plain water keeps the day's running
 // total (hydration_daily); every other drink is saved as a meal item with its calories, sugar, caffeine and alcohol.
 
 /** The kinds of drink, in the order offered, with their names. */
 internal val DRINK_KINDS = listOf(
-    "water" to "Water", "coffee" to "Coffee", "tea" to "Tea", "milk" to "Milk", "plant_milk" to "Plant milk",
+    "water" to "Water", "coffee" to "Coffee", "tea" to "Tea", "infusion" to "Herbal tea", "milk" to "Milk", "plant_milk" to "Plant milk",
     "juice" to "Juice", "soda" to "Soda", "electrolyte" to "Electrolyte", "alcohol" to "Alcohol",
 )
 
@@ -96,6 +107,7 @@ internal fun DrinkLogForm(
     var dateTime by remember { mutableStateOf(LocalDateTime.now()) }
     var defaults by remember { mutableStateOf<List<DrinkMatch>>(emptyList()) }
     var usual by remember { mutableStateOf<List<Pair<UsualDrink, DrinkMatch?>>>(emptyList()) }
+    var usualOpen by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<DrinkMatch>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
@@ -110,6 +122,7 @@ internal fun DrinkLogForm(
 
     // A barcode no database has numbers for: its label is scanned, then the saved product is picked.
     var labelBarcode by remember { mutableStateOf<String?>(null) }
+    val unknownScan = remember { UnknownScanCheck() }
     var labelPhotos by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
 
@@ -127,13 +140,13 @@ internal fun DrinkLogForm(
         try {
             defaults = repo.search("")
             val logged = repo.logged(days = 60, zone = zone)
-            val u = usualDrinks(logged, java.time.Instant.now())
+            val u = usualDrinks(logged, Instant.now())
             val byId = repo.byIds(u.mapNotNull { it.foodId }.distinct()).associateBy { it.id }
             usual = u.map { it to it.foodId?.let(byId::get) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            android.util.Log.w("DrinkLog", "drink lists failed", e)
+            Log.w("DrinkLog", "drink lists failed", e)
         }
     }
     LaunchedEffect(query) {
@@ -145,7 +158,7 @@ internal fun DrinkLogForm(
         searching = false
     }
 
-    fun lookupBarcode(code: String) {
+    fun lookupBarcode(code: String, scanned: Boolean = false) {
         val barcode = normalizeBarcode(code) ?: code.trim()
         if (barcode.isBlank()) return
         busy = true
@@ -153,9 +166,13 @@ internal fun DrinkLogForm(
         scope.launch {
             try {
                 val found = NutritionBarcodeLookupRepository(SupabaseClientProvider.client).lookup(barcode)
-                if (found.food == null || found.needsLabel) {
+                if (found.food == null && scanned && !unknownScan.confirmed(barcode)) {
+                    error = UnknownScanCheck.askAgain(barcode)
+                } else if (found.food == null || found.needsLabel) {
+                    unknownScan.clear()
                     labelBarcode = barcode
                 } else {
+                    unknownScan.clear()
                     val match = repo.search(found.food.barcode ?: barcode, 1).firstOrNull()
                     if (match == null) error = "That product is in the catalog but has no drink numbers."
                     else pick(match, match.beverageClass, scanned = true)
@@ -172,7 +189,7 @@ internal fun DrinkLogForm(
 
     val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         externalActivityActive?.value = false
-        com.bioscan.fieldterminal.util.PendingCameraCapture.clear(context)
+        PendingCameraCapture.clear(context)
         if (ok) pendingCameraUri?.let { labelPhotos = labelPhotos + it }
     }
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -191,39 +208,12 @@ internal fun DrinkLogForm(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        DateTimeField("WHEN", dateTime, { dateTime = it })
-
-        if (usual.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                DrinkLabel("USUAL")
-                usual.forEach { (u, match) ->
-                    DrinkRow(
-                        title = match?.title ?: u.description,
-                        detail = "${u.ml.roundToInt()} ml · ${u.times}× in 60 days",
-                        selected = picked != null && picked?.id == match?.id && match != null,
-                    ) {
-                        val k = match?.beverageClass ?: u.beverageClass
-                        pick(match ?: defaults.firstOrNull { it.beverageClass == k }, k, u.ml)
-                    }
-                }
-            }
-        }
-
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            DrinkLabel("KIND")
-            TextChipRow(DRINK_KINDS.map { it.second }, DRINK_KINDS.firstOrNull { it.first == kind && (picked == null || picked?.drinkDefault == true) }?.second, perRow = 3) { label ->
-                val k = DRINK_KINDS.firstOrNull { it.second == label }?.first
-                if (k == null) { kind = null; picked = null; steps = null }
-                else pick(if (k == "water") null else defaults.firstOrNull { it.beverageClass == k }, k)
-            }
-        }
-
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             DrinkLabel("FIND A DRINK")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 FieldTextField(query, { query = it }, "Name, brand or 中文 (e.g. oat latte, 珍珠奶茶)", modifier = Modifier.weight(1f))
                 FTButton(if (busy) "..." else "SCAN", enabled = !busy) {
-                    scope.launch { scanBarcode(context) { error = it }?.let(::lookupBarcode) }
+                    scope.launch { scanBarcode(context) { error = it }?.let { lookupBarcode(it, scanned = true) } }
                 }
             }
             if (searching) Text("Searching…", style = FTType.BodySmall, color = FT.TextMuted)
@@ -240,7 +230,58 @@ internal fun DrinkLogForm(
                 ) { pick(m, m.beverageClass); query = ""; results = emptyList() }
             }
             if (query.trim().length >= 2 && !searching && results.isEmpty()) {
-                Text("Nothing found. Pick the kind above, or scan the barcode or label.", style = FTType.BodySmall, color = FT.TextMuted)
+                Text("Nothing found. Pick the kind below, or scan the barcode or label.", style = FTType.BodySmall, color = FT.TextMuted)
+            }
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            DrinkLabel("KIND")
+            TextChipRow(DRINK_KINDS.map { it.second }, DRINK_KINDS.firstOrNull { it.first == kind && (picked == null || picked?.drinkDefault == true) }?.second, perRow = 3) { label ->
+                val k = DRINK_KINDS.firstOrNull { it.second == label }?.first
+                if (k == null) { kind = null; picked = null; steps = null }
+                else pick(if (k == "water") null else defaults.firstOrNull { it.beverageClass == k }, k)
+            }
+        }
+
+        // Usual drinks, kept closed: one tap opens them.
+        if (usual.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    Modifier.fillMaxWidth().ftClickable(onClickLabel = if (usualOpen) "Close usual drinks" else "Open usual drinks") { usualOpen = !usualOpen }.padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    DrinkLabel("USUALS (${usual.size})")
+                    Spacer(Modifier.weight(1f))
+                    FTIcon(if (usualOpen) FTIcons.Minus else FTIcons.Plus, null, tint = FT.TextSecondary, size = FTIconSize.Inline)
+                }
+                if (usualOpen) usual.forEach { (u, match) ->
+                    DrinkRow(
+                        title = match?.title ?: u.description,
+                        detail = "${u.ml.roundToInt()} ml · ${u.times}× in 60 days",
+                        selected = picked != null && picked?.id == match?.id && match != null,
+                    ) {
+                        val k = match?.beverageClass ?: u.beverageClass
+                        pick(match ?: defaults.firstOrNull { it.beverageClass == k }, k, u.ml)
+                    }
+                }
+            }
+        }
+
+        // A product with no kind yet (a label just scanned, a barcode from a food database): it is shown with the question
+        // straight away. Without this the product was found and nothing appeared, since the card below needs a kind.
+        val unclassed = picked?.takeIf { kind == null }
+        if (unclassed != null) {
+            Column(Modifier.fillMaxWidth().ftGlass(RoundedCornerShape(FT.RadiusModule)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(unclassed.title, style = FTType.RowTitle, color = FT.TextPrimary)
+                Text(
+                    listOfNotNull(unclassed.nameZh?.takeIf { it != unclassed.name }, unclassed.kcal?.let { "${it.roundToInt()} kcal/100 ml" }, "numbers from ${sourceName(unclassed.source)}").joinToString(" · "),
+                    style = FTType.BodySmall, color = FT.TextSecondary,
+                )
+                DrinkLabel("WHAT KIND OF DRINK IS IT?")
+                TextChipRow(DRINK_KINDS.drop(1).map { it.second }, null, perRow = 3) { label ->
+                    DRINK_KINDS.firstOrNull { it.second == label }?.first?.let { kind = it }
+                }
+                Text("Asked once: after you log it, the next scan remembers.", style = FTType.Caption, color = FT.TextMuted)
             }
         }
 
@@ -252,6 +293,7 @@ internal fun DrinkLogForm(
             val amounts = drinkAmounts(picked, ml, abvValue)
             Column(Modifier.fillMaxWidth().ftGlass(RoundedCornerShape(FT.RadiusModule)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 val p = picked
+                DateTimeField("WHEN", dateTime, { dateTime = it })
                 Text(if (k == "water") "Water" else p?.title ?: DRINK_KINDS.first { it.first == k }.second, style = FTType.RowTitle, color = FT.TextPrimary)
                 if (p != null) Text(
                     listOfNotNull(p.nameZh?.takeIf { it != p.name }, if (p.drinkDefault) "a typical ${DRINK_KINDS.firstOrNull { it.first == k }?.second?.lowercase()}" else null, "numbers from ${sourceName(p.source)}").joinToString(" · "),
@@ -355,7 +397,7 @@ internal fun DrinkLogForm(
                 labelBarcode = null
                 labelPhotos = emptyList()
                 scope.launch {
-                    val match = runCatching { repo.byIds(listOf(food.id)).firstOrNull() }.getOrNull()
+                    val match = catching { repo.byIds(listOf(food.id)).firstOrNull() }.getOrNull()
                     if (match != null) pick(match, match.beverageClass, scanned = true) else error = "Saved the label, but could not read it back."
                 }
             },
@@ -403,7 +445,7 @@ private fun DrinkReadout(kcal: Double?, sugarG: Double?, caffeineMg: Double?, ca
 }
 
 @Composable
-private fun ReadoutCell(label: String, value: String?, ink: androidx.compose.ui.graphics.Color) {
+private fun ReadoutCell(label: String, value: String?, ink: Color) {
     Column {
         Text(label, style = FTType.Micro, color = FT.TextMuted)
         Text(value ?: "—", style = FTType.StatValue, color = if (value == null) FT.TextMuted else ink)

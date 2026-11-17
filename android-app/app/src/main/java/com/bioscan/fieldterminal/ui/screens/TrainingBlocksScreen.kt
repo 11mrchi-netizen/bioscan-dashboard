@@ -34,9 +34,9 @@ import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 @Composable
 fun TrainingBlocksScreen(onBack: () -> Unit) {
@@ -214,7 +214,6 @@ private fun MetricRow(label: String, value: String, note: String = "") {
 }
 
 private val FMT_MONTH_DAY = DateTimeFormatter.ofPattern("MMM d")
-private val FMT_YEAR = DateTimeFormatter.ofPattern("yyyy")
 
 private fun formatBlockDateRange(start: String, end: String): String {
     val s = runCatching { LocalDate.parse(start) }.getOrNull() ?: return "$start → $end"

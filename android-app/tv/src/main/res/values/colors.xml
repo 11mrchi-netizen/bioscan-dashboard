@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Launcher banner only (res/drawable/banner.xml); screens use the theme. -->
+    <color name="banner_background">#FF0B0F14</color>
+    <color name="banner_ink">#FFE6E9EE</color>
+</resources>

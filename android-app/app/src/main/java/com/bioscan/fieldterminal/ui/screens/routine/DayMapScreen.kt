@@ -7,10 +7,9 @@ import android.graphics.PixelFormat
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
-import androidx.compose.foundation.border
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -18,7 +17,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -37,6 +35,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -65,19 +64,16 @@ import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.PinnedPage
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
+import com.bioscan.fieldterminal.ui.components.fitTo
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
+import com.bioscan.fieldterminal.ui.components.stableMapView
 import com.bioscan.fieldterminal.ui.screens.settings.PlaceEditor
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.tileprovider.tilesource.XYTileSource
-import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.CustomZoomButtonsController
-import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polygon
@@ -85,6 +81,7 @@ import org.osmdroid.views.overlay.Polyline
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Day map (docs/routine-intelligence/README.md, "Day map and commute"): one day of what Locations recorded, on a map and
 // as a timeline. The path is drawn from the trip fixes, coloured by the activity Android reported with each fix; each
@@ -160,11 +157,11 @@ fun DayMapScreen(initialDate: LocalDate, onBack: () -> Unit) {
         },
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(horizontal = 22.dp, vertical = 16.dp)) {
-            error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+            error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
             problem?.let { msg ->
                 val setup = places.firstOrNull { it.source == "home_setting" }
                 FTCard(title = "HOME AND WORK") {
-                    Text(msg, style = FTType.BodySmall, color = FT.Warning)
+                    Text(msg, style = FTType.BodySmall, color = FT.Warn)
                     if (setup != null && setup.category != PlaceCategory.HOME.key && places.none { it.category == PlaceCategory.HOME.key }) {
                         FTButton("MAKE THE SETUP PLACE HOME", modifier = Modifier.fillMaxWidth(), emphasis = FTButtonEmphasis.Primary) {
                             scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { reload++ }) {
@@ -202,9 +199,9 @@ fun DayMapScreen(initialDate: LocalDate, onBack: () -> Unit) {
             place = p,
             places = places,
             onDismiss = { editing = null },
-            onSave = { label, category ->
+            onSave = { label, category, stop ->
                 scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { editing = null; reload++ }) {
-                    repo.saveLabel(p.id, label, category)
+                    repo.saveLabel(p.id, label, category, stop)
                 }
             },
             onMerge = { into ->
@@ -253,14 +250,10 @@ private fun DayMap(
 ) {
     val holder = remember { MapHolder() }
     AndroidView(
-        modifier = modifier,
+        modifier = modifier.clipToBounds(),
+        onRelease = { it.onDetach() },
         factory = { ctx ->
-            Configuration.getInstance().apply {
-                userAgentValue = ctx.packageName
-                osmdroidBasePath = ctx.filesDir
-                osmdroidTileCache = ctx.cacheDir
-            }
-            MapView(ctx).apply {
+            stableMapView(ctx).apply {
                 // CARTO's dark tiles when a key is saved (Setup › Connected services), OpenStreetMap's own otherwise.
                 if (cartoKey != null) {
                     setTileSource(
@@ -269,8 +262,6 @@ private fun DayMap(
                 } else {
                     setTileSource(TileSourceFactory.MAPNIK)
                 }
-                setMultiTouchControls(true)
-                zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
                 controller.setZoom(13.0)
             }
         },
@@ -345,19 +336,13 @@ private fun DayMap(
                 } else {
                     record.visits.map { GeoPoint(it.lat, it.lon) } + record.fixes.map { GeoPoint(it.lat, it.lon) }
                 }.ifEmpty { places.firstOrNull { it.category == PlaceCategory.HOME.key }?.let { listOf(GeoPoint(it.lat, it.lon)) }.orEmpty() }
-                if (pts.isNotEmpty()) map.post { zoomTo(map, pts) }
+                if (pts.isNotEmpty()) map.fitTo(pts)
             }
             map.invalidate()
         },
     )
 }
 
-private fun zoomTo(map: MapView, pts: List<GeoPoint>) {
-    val box = BoundingBox.fromGeoPoints(pts)
-    val latPad = (box.latNorth - box.latSouth).coerceAtLeast(0.004) * 0.25
-    val lonPad = (box.lonEast - box.lonWest).coerceAtLeast(0.004) * 0.25
-    map.zoomToBoundingBox(BoundingBox(box.latNorth + latPad, box.lonEast + lonPad, box.latSouth - latPad, box.lonWest - lonPad), false)
-}
 
 private data class PathRun(val mode: ModeGroup, val points: List<GeoPoint>)
 
@@ -507,7 +492,7 @@ private fun Timeline(items: List<TimelineItem>, byId: Map<String, PlaceRow>, zon
                     ) {
                         Dot(placeColor(cat, p?.label != null))
                         Column(Modifier.weight(1f)) {
-                            Text(name, style = FTType.Body, color = if (p?.label == null) FT.Warning else FT.TextPrimary)
+                            Text(name, style = FTType.Body, color = if (p?.label == null) FT.Warn else FT.TextPrimary)
                             val more = listOfNotNull(
                                 cat?.label,
                                 p?.osmName?.takeIf { p.label == null }?.let { "near $it" },
@@ -551,7 +536,7 @@ private fun PlaceSheet(
     place: PlaceRow,
     places: List<PlaceRow>,
     onDismiss: () -> Unit,
-    onSave: (String?, PlaceCategory?) -> Unit,
+    onSave: (String?, PlaceCategory?, Boolean) -> Unit,
     onMerge: (PlaceRow) -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -616,7 +601,7 @@ private fun PlaceSheet(
                 Text(
                     "Its visits stay, as unlabelled time. If you stay here again, a new place starts. Merge is usually what you want.",
                     style = FTType.BodySmall,
-                    color = FT.Warning,
+                    color = FT.Warn,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     FTButton("KEEP", modifier = Modifier.weight(1f)) { confirmDelete = false }
@@ -673,7 +658,8 @@ private fun MarkPlaceSheet(point: GeoPoint, onDismiss: () -> Unit, onSave: (Stri
                 place = PlaceRow("new", point.latitude, point.longitude, radius, source = "manual"),
                 suggestion = null,
                 onCancel = onDismiss,
-                onSave = { label, category -> onSave(label, category, radius) },
+                onSave = { label, category, _ -> onSave(label, category, radius) },
+                showStop = false,
             )
         }
     }

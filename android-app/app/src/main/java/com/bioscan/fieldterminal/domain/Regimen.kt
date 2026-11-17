@@ -1,6 +1,7 @@
 @file:kotlinx.serialization.UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain
 
+import com.bioscan.fieldterminal.data.model.SupplementRow
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.math.BigDecimal
@@ -28,12 +29,6 @@ enum class RegimenKind(val key: String, val label: String) {
     }
 }
 
-/** Forms and routes as stored; the labels are what the form shows. */
-val REGIMEN_FORMS: List<Pair<String, String>> = listOf(
-    "capsule" to "Capsule", "tablet" to "Tablet", "softgel" to "Softgel", "powder" to "Powder", "liquid" to "Liquid",
-    "gummy" to "Gummy", "injection" to "Injection", "nasal_spray" to "Nasal spray", "cream" to "Cream", "patch" to "Patch",
-    "other" to "Other",
-)
 val REGIMEN_ROUTES: List<Pair<String, String>> = listOf(
     "oral" to "Oral", "sublingual" to "Under the tongue", "subcutaneous" to "Under the skin", "intramuscular" to "Into muscle",
     "nasal" to "Nasal", "topical" to "On the skin", "other" to "Other",
@@ -321,7 +316,7 @@ fun RegimenSpec.legacyColumns(today: LocalDate): LegacyColumns = LegacyColumns(
 )
 
 /** A roster row's spec. */
-fun com.bioscan.fieldterminal.data.model.SupplementRow.spec(): RegimenSpec = regimenSpec(
+fun SupplementRow.spec(): RegimenSpec = regimenSpec(
     timeOfDay = timeOfDay, everyNDays = everyNDays, dose = dose, kind = kind, form = form, route = route,
     doseAmount = doseAmount, doseUnit = doseUnit, slots = slots, schedule = schedule, doseSteps = doseSteps,
     startDate = startDate, endDate = endDate,

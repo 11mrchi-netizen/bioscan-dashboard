@@ -9,7 +9,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.time.LocalDate
 
-// Analysis Layer 3 / R2 (2e). Reads the dates each capture stream has an entry for. Timestamps in this app are local
+// Reads the dates each capture stream has an entry for. Timestamps in this app are local
 // wall-clock time labeled UTC, so the date is simply the first ten characters.
 @Serializable
 private data class WellbeingDateRow(val date: String, val energy: Int? = null, val mood: Int? = null, val stress: Int? = null, val soreness: Int? = null)

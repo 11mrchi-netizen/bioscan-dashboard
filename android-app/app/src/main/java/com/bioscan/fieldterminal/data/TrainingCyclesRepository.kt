@@ -13,14 +13,15 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
-import java.time.LocalDate
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.time.LocalDate
 
-// Phase A3 (Analysis Layer). A cycle with a malformed quality/role value is
+// A cycle with a malformed quality/role value is
 // dropped from its own focus list rather than crashing the whole read --
 // defensive parsing, same convention this app already uses for timestamp
 // parsing elsewhere (domain/Log.kt's parseTimestamp()).
@@ -37,7 +38,7 @@ class TrainingCyclesRepository(private val supabase: SupabaseClient) {
 
     // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun loadCycles(): List<TrainingCycle> =
-        ReadCache.get("cycles.all", tables = setOf("training_cycles"), serializer = kotlinx.serialization.builtins.ListSerializer(TrainingCycle.serializer())) { fetchLoadCycles() }
+        ReadCache.get("cycles.all", tables = setOf("training_cycles"), serializer = ListSerializer(TrainingCycle.serializer())) { fetchLoadCycles() }
 
     private suspend fun fetchLoadCycles(): List<TrainingCycle> {
         val rows = supabase.postgrest.from("training_cycles")
@@ -117,7 +118,7 @@ class TrainingCyclesRepository(private val supabase: SupabaseClient) {
 
     // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun loadBlockSummaries(): List<TrainingBlockSummaryRow> =
-        ReadCache.get("cycles.block_summaries", tables = null, serializer = kotlinx.serialization.builtins.ListSerializer(TrainingBlockSummaryRow.serializer())) { fetchLoadBlockSummaries() }
+        ReadCache.get("cycles.block_summaries", tables = null, serializer = ListSerializer(TrainingBlockSummaryRow.serializer())) { fetchLoadBlockSummaries() }
 
     private suspend fun fetchLoadBlockSummaries(): List<TrainingBlockSummaryRow> =
         supabase.postgrest.from("v_training_block_metrics")

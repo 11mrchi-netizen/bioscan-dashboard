@@ -1,12 +1,10 @@
 package com.bioscan.fieldterminal.ui.screens
 
-import com.bioscan.fieldterminal.domain.movingMinutes
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -19,95 +17,74 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.contracts.ExerciseRouteRequestContract
+import com.bioscan.fieldterminal.data.ExerciseLibraryRepository
 import com.bioscan.fieldterminal.data.MapSettingsStore
+import com.bioscan.fieldterminal.data.PlannedMatch
 import com.bioscan.fieldterminal.data.SessionDetailRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.TrainingProgramRepository
 import com.bioscan.fieldterminal.data.ZeppStrengthData
 import com.bioscan.fieldterminal.data.ZeppWorkoutSummary
-import com.bioscan.fieldterminal.data.ExerciseLibraryRepository
+import com.bioscan.fieldterminal.data.ZoneAnchorSeries
+import com.bioscan.fieldterminal.data.ZoneAnchorsRepository
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.ExerciseLibraryRow
 import com.bioscan.fieldterminal.data.model.ExerciseSessionDetailRow
-import com.bioscan.fieldterminal.data.model.StrengthExerciseDto
+import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.data.toRoutePoints
 import com.bioscan.fieldterminal.domain.DisplayValue
 import com.bioscan.fieldterminal.domain.RouteAvailability
 import com.bioscan.fieldterminal.domain.RoutePoint
+import com.bioscan.fieldterminal.domain.RunDynamicsMarks
 import com.bioscan.fieldterminal.domain.SessionDetail
-import com.bioscan.fieldterminal.domain.SessionSplit
-import com.bioscan.fieldterminal.domain.TimePoint
-import com.bioscan.fieldterminal.domain.bestEstimatedOneRepMax
-import com.bioscan.fieldterminal.domain.classifyMovementPattern
-import com.bioscan.fieldterminal.domain.heartRateZoneBreakdown
-import com.bioscan.fieldterminal.domain.heartRateZoneFor
 import com.bioscan.fieldterminal.domain.ZoneMethod
-import com.bioscan.fieldterminal.domain.initialZoneMethod
-import com.bioscan.fieldterminal.domain.zoneBounds
-import com.bioscan.fieldterminal.data.ZoneAnchorSeries
-import com.bioscan.fieldterminal.data.ZoneAnchorsRepository
-import com.bioscan.fieldterminal.ui.components.HeartRateZoneMethodSwitch
-import com.bioscan.fieldterminal.ui.components.SessionZoneInputs
-import com.bioscan.fieldterminal.domain.MovementPattern
-import com.bioscan.fieldterminal.domain.resolveExercise
-import com.bioscan.fieldterminal.domain.sessionAverageRir
-import com.bioscan.fieldterminal.domain.sessionAverageRpe
-import com.bioscan.fieldterminal.domain.sessionRegionalLoad
-import com.bioscan.fieldterminal.domain.sessionVolumeLoad
 import com.bioscan.fieldterminal.domain.computeKmSplits
+import com.bioscan.fieldterminal.domain.findRun
 import com.bioscan.fieldterminal.domain.mergePreferZepp
+import com.bioscan.fieldterminal.domain.movingMinutes
+import com.bioscan.fieldterminal.domain.runDynamicsMarks
+import com.bioscan.fieldterminal.domain.sessionAvgSpeedKmh
 import com.bioscan.fieldterminal.domain.trail.computeTrailSessionState
-import com.bioscan.fieldterminal.domain.zoneLoads
-import com.bioscan.fieldterminal.ui.components.BodyHeatMap
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
-import com.bioscan.fieldterminal.ui.components.HeartRateZoneDonutChart
-import com.bioscan.fieldterminal.ui.components.InfoHelpButton
-import com.bioscan.fieldterminal.ui.components.LineChart
-import com.bioscan.fieldterminal.ui.components.MinMaxAverageBar
 import com.bioscan.fieldterminal.ui.components.RouteMiniMap
-import com.bioscan.fieldterminal.ui.components.SegmentedToggle
+import com.bioscan.fieldterminal.ui.components.SessionZoneInputs
+import com.bioscan.fieldterminal.ui.components.SkeletonSections
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
-import com.bioscan.fieldterminal.ui.components.heartRateZoneColor
-import com.bioscan.fieldterminal.ui.components.softLoad
-import com.bioscan.fieldterminal.ui.screens.session.EF_SESSION_HELP
-import com.bioscan.fieldterminal.ui.screens.session.GAP_HELP
-import com.bioscan.fieldterminal.ui.screens.session.GROUND_CONTACT_HELP
-import com.bioscan.fieldterminal.ui.screens.session.HR_DECOUPLING_HELP
-import com.bioscan.fieldterminal.ui.screens.session.LACTATE_THRESHOLD_HELP
 import com.bioscan.fieldterminal.ui.screens.session.RunDynamicsCard
 import com.bioscan.fieldterminal.ui.screens.session.RunSplitsCard
 import com.bioscan.fieldterminal.ui.screens.session.RunSummaryCard
 import com.bioscan.fieldterminal.ui.screens.session.RunTrailCard
-import com.bioscan.fieldterminal.ui.screens.session.STRIDE_LENGTH_HELP
-import com.bioscan.fieldterminal.ui.screens.session.VERTICAL_RATIO_HELP
 import com.bioscan.fieldterminal.ui.screens.session.formatDuration
 import com.bioscan.fieldterminal.ui.screens.session.formatSplitPace
+import com.bioscan.fieldterminal.ui.screens.training.PlannedSessionCard
+import com.bioscan.fieldterminal.ui.screens.user.UserDataCache
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Phase G4/G5. The app's first pushed detail route (see ui/nav/
+// The app's first pushed detail route (see ui/nav/
 // FieldTerminalNavHost.kt) -- reached from a Log tab Exercise entry's
 // DETAIL action. loadHeader() reads real aggregates from Supabase;
 // loadTimeSeries() reads fresh from Health Connect on demand, only when
 // this screen actually opens, nothing persisted (same principle as Step
-// 14's GPX route). Route/elevation (Phase G5) load separately from the other
+// 14's GPX route). Route/elevation load separately from the other
 // series since a route needs its own per-session Health Connect consent --
 // see routeLauncher below and domain/SessionRoute.kt.
 //
@@ -119,7 +96,7 @@ import java.time.format.DateTimeFormatter
 // "shared compact selector treatment" Fuel/Heart/Labs already use for their
 // own sub-tabs, rather than a new selector component.
 @Composable
-fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
+fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit, onOpenShoe: (Long) -> Unit = {}) {
     val context = LocalContext.current
     var header by remember { mutableStateOf<ExerciseSessionDetailRow?>(null) }
     var headerError by remember { mutableStateOf<String?>(null) }
@@ -131,9 +108,10 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
     var zeppStrengthData by remember { mutableStateOf<ZeppStrengthData?>(null) }
     var zoneSeries by remember { mutableStateOf<ZoneAnchorSeries?>(null) }
     var zoneDefault by remember { mutableStateOf(ZoneMethod.AUTO) }
-    var planned by remember { mutableStateOf<com.bioscan.fieldterminal.data.PlannedMatch?>(null) }
-    var runMarks by remember { mutableStateOf<com.bioscan.fieldterminal.domain.RunDynamicsMarks?>(null) }
-    val sessionScope = androidx.compose.runtime.rememberCoroutineScope()
+    var planned by remember { mutableStateOf<PlannedMatch?>(null) }
+    var linkError by remember { mutableStateOf(false) }
+    var runMarks by remember { mutableStateOf<RunDynamicsMarks?>(null) }
+    val sessionScope = rememberCoroutineScope()
 
     var exerciseLibrary by remember { mutableStateOf<List<ExerciseLibraryRow>>(emptyList()) }
 
@@ -169,19 +147,19 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
         // Heart-rate zones: the anchor series (maximum, resting, threshold) and the person's default method, loaded once
         // per screen open; the anchors are taken as of this session's date below.
         zoneSeries = softLoad { ZoneAnchorsRepository(SupabaseClientProvider.client).load() }
-        zoneDefault = softLoad { com.bioscan.fieldterminal.data.TrainingProgramRepository(SupabaseClientProvider.client).loadZoneMethod() } ?: ZoneMethod.AUTO
+        zoneDefault = softLoad { TrainingProgramRepository(SupabaseClientProvider.client).loadZoneMethod() } ?: ZoneMethod.AUTO
         // A run's RUN DYNAMICS marks against usual, from the per-run history the Running page reads (cached there).
         if (row?.type == "run") {
             runMarks = softLoad {
-                val rows = com.bioscan.fieldterminal.ui.screens.user.UserDataCache.running().historyRows()
-                com.bioscan.fieldterminal.domain.findRun(rows, row.id, OffsetDateTime.parse(row.startTime).toLocalDate(), row.distanceKm)
-                    ?.let { com.bioscan.fieldterminal.domain.runDynamicsMarks(it, rows) }
+                val rows = UserDataCache.running().historyRows()
+                findRun(rows, row.id, OffsetDateTime.parse(row.startTime).toLocalDate(), row.distanceKm)
+                    ?.let { runDynamicsMarks(it, rows) }
             }
         }
         // What the training block planned for this workout, if anything (DAV-346).
         if (row != null) {
-            planned = runCatching {
-                com.bioscan.fieldterminal.data.TrainingProgramRepository(SupabaseClientProvider.client)
+            planned = catching {
+                TrainingProgramRepository(SupabaseClientProvider.client)
                     .loadPlannedFor(sessionId, OffsetDateTime.parse(row.startTime).toLocalDate(), row.type == "strength")
             }.getOrNull()
         }
@@ -280,7 +258,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
         )
 
         when {
-            loadingHeader -> com.bioscan.fieldterminal.ui.components.SkeletonSections()
+            loadingHeader -> SkeletonSections()
             header == null -> Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
                 Text(headerError ?: "Session not found.", style = FTType.BodySmall, color = FT.TextSecondary)
             }
@@ -307,7 +285,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                     // A run: SUMMARY tiles, then RUN DYNAMICS with a collapsible section per signal (owner's structure,
                     // run session page). Every other type keeps SUMMARY with its combined chart.
                     if (isRun) {
-                        RunSummaryCard(h, d, zeppSummary)
+                        RunSummaryCard(h, d, zeppSummary, onOpenShoe)
                         RunDynamicsCard(h, d, zeppSummary, zones, loadingDetail, detailError, hasTimeSeries = h.healthConnectRecordId != null || d != null, marks = runMarks)
                     } else {
                         SummaryCard(h, d, loadingDetail, detailError, hasHealthConnectRecord = h.healthConnectRecordId != null, zones = zones)
@@ -317,12 +295,15 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                     // editable via the Log tab's edit sheet) never rendered
                     // anywhere in the app.
                     planned?.let { pm ->
-                        com.bioscan.fieldterminal.ui.screens.training.PlannedSessionCard(pm, h.details.exercises.orEmpty(), h.durationMin) {
+                        PlannedSessionCard(pm, h.details.exercises.orEmpty(), h.durationMin) {
                             sessionScope.launch {
-                                runCatching { com.bioscan.fieldterminal.data.TrainingProgramRepository(SupabaseClientProvider.client).linkPlanned(pm.row.id, sessionId) }
+                                linkError = false
+                                catching { TrainingProgramRepository(SupabaseClientProvider.client).linkPlanned(pm.row.id, sessionId) }
                                     .onSuccess { planned = pm.copy(linked = true) }
+                                    .onFailure { linkError = true }
                             }
                         }
+                        if (linkError) Text("Couldn't link this session to the plan. Try again.", style = FTType.Caption, color = FT.Bad)
                     }
                     if (isStrength) {
                         h.details.exercises?.takeIf { it.isNotEmpty() }?.let { exercises ->
@@ -427,7 +408,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                                 }
                             }
                             loadingRoute -> Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(color = FT.Emerald)
+                                CircularProgressIndicator(color = FT.Ok)
                             }
                             routeAvailability is RouteAvailability.ConsentRequired -> FTCard(title = "ROUTE") {
                                 Text(
@@ -452,391 +433,6 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
     }
 }
 
-private enum class PerfSignal(val label: String, val unit: String, val color: Color) {
-    HR("HR", "bpm", FT.DomainHeart),
-    PACE("PACE", "min/km", FT.Category.Activity.c500),
-    POWER("POWER", "W", FT.Category.Activity.c300),
-    CADENCE("CADENCE", "spm", FT.TextSecondary),
-    VERTICAL_RATIO("V.RATIO", "%", FT.TextSecondary),
-}
-
-// Pace reads as m:ss /km (not a decimal like 4.8), everything else as value + unit.
-private fun formatSignalValue(signal: PerfSignal, v: Double): String =
-    if (signal == PerfSignal.PACE) {
-        val s = Math.round(v * 60).toInt()
-        "%d:%02d /km".format(s / 60, s % 60)
-    } else {
-        "%.1f %s".format(v, signal.unit)
-    }
-
-// One chart, switchable rather than four stacked ones -- only signals this
-// session actually recorded appear as options. PACE is derived from the
-// same speed samples SPEED used to plot directly (min/km = 60/kmh), matching
-// this app's existing averagePaceMinPerKmSince convention (domain/
-// Training.kt) rather than showing raw km/h, since the ticket calls for PACE.
-// 28/9: no longer its own "PERFORMANCE" FTCard -- folded into SUMMARY as a
-// plain content section per direct request (HR/pace/cadence "in the summary").
-// HR zone breakdown: line-vs-zones is its own tiny local toggle, not reusing
-// PerfSignal (zones only ever apply to HR, never PACE/POWER/CADENCE).
-private enum class ChartColorMode(val label: String) { Line("LINE"), Zones("ZONES") }
-
-@Composable
-private fun PerformanceChartSection(d: SessionDetail, zones: SessionZoneInputs?) {
-    val pace = remember(d.speedKmh) { d.speedKmh.mapNotNull { p -> if (p.value > 0) TimePoint(p.offsetSeconds, 60.0 / p.value) else null } }
-    val seriesBySignal = mapOf(
-        PerfSignal.HR to d.heartRate,
-        PerfSignal.PACE to pace,
-        PerfSignal.POWER to d.powerW,
-        PerfSignal.CADENCE to d.cadenceSpm,
-        PerfSignal.VERTICAL_RATIO to d.verticalRatioPct,
-    )
-    val available = PerfSignal.entries.filter { seriesBySignal[it]?.isNotEmpty() == true }
-    if (available.isEmpty()) return
-    var selected by remember(d) { mutableStateOf(available.first()) }
-    if (selected !in available) selected = available.first()
-
-    // Live check: switching tabs made a sensor that only reported for part
-    // of the run look exactly as "full" as one spanning the whole session --
-    // each chart stretched to its own first/last sample. The widest real
-    // coverage across every available signal becomes the shared axis every
-    // tab draws against, so a partial one shows up short instead.
-    val sessionStart = available.minOf { seriesBySignal.getValue(it).first().offsetSeconds }
-    val sessionEnd = available.maxOf { seriesBySignal.getValue(it).last().offsetSeconds }
-
-    SubTabRow(items = available, selected = selected, label = { it.label }, onSelect = { selected = it })
-    val points = seriesBySignal.getValue(selected)
-    val values = points.map { it.value }
-    MinMaxAverageBar(
-        min = values.min(),
-        average = values.average(),
-        max = values.max(),
-        color = selected.color,
-        format = { v -> formatSignalValue(selected, v) },
-    )
-
-    // The zone method starts on the person's default (or what AUTO picks for this session) and can be switched here.
-    var zoneMethod by remember(d, zones) { mutableStateOf(zones?.let { initialZoneMethod(it.defaultMethod, it.anchors, it.sport) }) }
-    val bounds = remember(zoneMethod, zones) { zones?.let { z -> zoneMethod?.let { zoneBounds(it, z.anchors, z.sport) } } }
-    val showZoneUi = selected == PerfSignal.HR && bounds != null
-    var colorMode by remember(d) { mutableStateOf(ChartColorMode.Line) }
-    if (showZoneUi) {
-        SegmentedToggle(
-            options = ChartColorMode.entries,
-            selected = colorMode,
-            labelOf = { it.label },
-            onSelect = { colorMode = it },
-            modifier = Modifier.padding(top = 8.dp),
-        )
-        HeartRateZoneMethodSwitch(zones!!, bounds!!.method, onSelect = { zoneMethod = it }, modifier = Modifier.padding(top = 6.dp))
-    }
-
-    LineChart(
-        points = points,
-        color = selected.color,
-        xRange = sessionStart to sessionEnd,
-        segmentColor = if (showZoneUi && colorMode == ChartColorMode.Zones) { hr -> heartRateZoneColor(heartRateZoneFor(hr, bounds!!)) } else null,
-        pauses = d.pauses.map { it.startOffset to it.endOffset },
-        modifier = Modifier.padding(top = 4.dp),
-        valueFormat = { v -> formatSignalValue(selected, v) },
-        invertY = selected == PerfSignal.PACE,
-        unit = if (selected == PerfSignal.PACE) "pace · min:sec per km" else selected.unit,
-    )
-    if (points.first().offsetSeconds > sessionStart || points.last().offsetSeconds < sessionEnd) {
-        Text(
-            "${selected.label} only reported for part of this session.",
-            style = FTType.Caption,
-            color = FT.TextSecondary,
-        )
-    }
-
-    if (showZoneUi) {
-        val breakdown = remember(points, bounds, d.pauses) { heartRateZoneBreakdown(points, bounds!!, d.pauses) }
-        HeartRateZoneDonutChart(breakdown, modifier = Modifier.padding(top = 12.dp), bounds = bounds)
-    }
-}
-
-@Composable
-private fun SplitsCard(splits: List<SessionSplit>) {
-    if (splits.isEmpty()) return
-    val fastestKm = splits.minByOrNull { it.durationSec }?.km
-    FTCard(title = "SPLITS") {
-        splits.forEach { split ->
-            val isFastest = split.km == fastestKm
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("KM ${split.km}", style = FTType.BodySmall, color = FT.TextSecondary)
-                Text(
-                    formatSplitPace(split.durationSec) + (split.avgHr?.let { "  ·  %.0f bpm".format(it) } ?: "") + (if (isFastest) "  ★" else ""),
-                    style = if (isFastest) FTType.Telemetry else FTType.Value,
-                    color = if (isFastest) FT.Emerald else FT.TextPrimary,
-                )
-            }
-        }
-    }
-}
-
-// DAV-115/123: Zepp's own run-dynamics + lactate-threshold summary averages
-// (docs/zepp-integration/03-workout-detail-field-decode.md) -- workout-level
-// scalars, not a TimePoint series, so they get their own small card rather
-// than forcing them into PerformanceChartCard's per-second signals. Each row
-// renders only when that field is non-null -- a device/sport that doesn't
-// report ground contact time (say) just omits that row, same optional-stat
-// convention SummaryCard/TrailCard already use in this file. Lactate
-// threshold is Zepp's own rolling estimate as of this workout, not a
-// dedicated one-off test -- labeled that way rather than implying otherwise.
-@Composable
-private fun ZeppDynamicsCard(summary: ZeppWorkoutSummary) {
-    val rows = buildList {
-        summary.gapMinPerKm?.let { add(Triple("Grade-adjusted pace", formatSplitPace((it * 60).toLong()), "Grade-adjusted pace" to GAP_HELP)) }
-        summary.efficiencyFactor?.let { add(Triple("Efficiency factor", "%.2f".format(it), "Efficiency factor" to EF_SESSION_HELP)) }
-        summary.hrDecouplingPct?.let { add(Triple("HR decoupling", "%+.1f%%".format(it), "HR decoupling" to HR_DECOUPLING_HELP)) }
-        summary.smoothedAscentM?.let { add(Triple("Smoothed ascent", "${it.toInt()} m", null)) }
-        summary.avgCadenceSpm?.let { add(Triple("Avg cadence", "%.0f spm".format(it), null)) }
-        summary.maxCadenceSpm?.let { add(Triple("Max cadence", "%.0f spm".format(it), null)) }
-        summary.avgGroundContactMs?.let { add(Triple("Ground contact", "%.0f ms".format(it), "Ground contact time" to GROUND_CONTACT_HELP)) }
-        summary.avgStrideLengthCm?.let { add(Triple("Stride length", "%.0f cm".format(it), "Stride length" to STRIDE_LENGTH_HELP)) }
-        summary.avgVerticalStrideRatioPct?.let { add(Triple("Vertical ratio", "%.1f%%".format(it), "Vertical oscillation ratio" to VERTICAL_RATIO_HELP)) }
-        if (summary.lactateThresholdHrBpm != null || summary.lactateThresholdPaceSecPerKm != null) {
-            val hr = summary.lactateThresholdHrBpm?.let { "%.0f bpm".format(it) }
-            val pace = summary.lactateThresholdPaceSecPerKm?.let { formatSplitPace(it.toLong()) }
-            add(Triple("Lactate threshold (as of this run)", listOfNotNull(hr, pace).joinToString("  ·  "), "Lactate threshold" to LACTATE_THRESHOLD_HELP))
-        }
-    }
-    if (rows.isEmpty()) return
-
-    FTCard(title = "RUN DYNAMICS") {
-        rows.forEach { (label, value, help) ->
-            if (help != null) StatLineHelp(label, value, help.first, help.second) else FTMetricRow(label, value)
-        }
-    }
-}
-
-// v11: HR chart for strength sessions with work/rest band overlay.
-// Work windows come from decoded.strengthData: each set's startOffsetSec +
-// durationSec maps to a colored band on the existing LineChart's segmentColor axis.
-@Composable
-private fun StrengthHrCard(heartRate: List<TimePoint>, strengthData: ZeppStrengthData) {
-    if (heartRate.isEmpty() || strengthData.sets.isEmpty()) return
-    // Build set work windows as (startOffset, endOffset) pairs.
-    val workWindows = remember(strengthData) {
-        strengthData.sets.map { s -> s.startOffsetSec.toLong() to (s.startOffsetSec + s.durationSec).toLong() }
-    }
-    val sessionStart = heartRate.first().offsetSeconds
-    val sessionEnd = heartRate.last().offsetSeconds
-    FTCard(title = "HEART RATE") {
-        val values = heartRate.map { it.value }
-        MinMaxAverageBar(
-            min = values.min(), average = values.average(), max = values.max(),
-            color = FT.Critical, format = { v -> "%.0f bpm".format(v) },
-        )
-        LineChart(
-            points = heartRate,
-            color = FT.Critical,
-            xRange = sessionStart to sessionEnd,
-            segmentColor = { _ ->
-                // colour the current x-position (not the HR value) by work/rest.
-                // LineChart's segmentColor receives the y-value, not x, so we
-                // need a different hook. Instead, overlay a solid amber for
-                // work periods using the filled=false approach with a secondary
-                // segmentColor that keys off the point's offsetSeconds.
-                // Since LineChart only exposes segmentColor(value), we use the
-                // work/rest colouring as a best-effort approximation:
-                // all points in work windows get FT.Warning tint, others dimmer.
-                // For a proper time-axis overlay LineChart would need an xSegment
-                // param -- mark as ponytail: add xSegment to LineChart if needed.
-                FT.Critical
-            },
-            modifier = Modifier.padding(top = 4.dp),
-        )
-        // Work period legend strip below chart.
-        if (workWindows.isNotEmpty()) {
-            Text(
-                "Amber segments = lifting · gaps = rest",
-                style = FTType.MonoCaption,
-                color = FT.TextMuted,
-            )
-        }
-    }
-}
-
-// v11: per-session 5-axis movement evaluation radar at the bottom.
-@Composable
-private fun MovementEvaluationCard(strengthData: ZeppStrengthData) {
-    val evaluatedSets = strengthData.sets.filter { it.scores != null }
-    if (evaluatedSets.isEmpty()) return
-    val avg = remember(evaluatedSets) {
-        val n = evaluatedSets.size.toFloat()
-        mapOf(
-            "Stability" to evaluatedSets.sumOf { it.scores!!.stability } / n,
-            "Consistency" to evaluatedSets.sumOf { it.scores!!.consistency } / n,
-            "Speed Decay" to evaluatedSets.sumOf { it.scores!!.speedDecay } / n,
-            "Rhythm" to evaluatedSets.sumOf { it.scores!!.rhythm } / n,
-            "Continuity" to evaluatedSets.sumOf { it.scores!!.continuity } / n,
-        )
-    }
-    FTCard(title = "MOVEMENT EVALUATION") {
-        Text(
-            "${evaluatedSets.size} of ${strengthData.sets.size} sets evaluated",
-            style = FTType.Caption,
-            color = FT.TextSecondary,
-        )
-        com.bioscan.fieldterminal.ui.components.MovementRadarChart(
-            scores = avg,
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-        )
-        // Average score per dimension for quick read.
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-        ) {
-            avg.forEach { (label, score) ->
-                val color = when {
-                    score < 60f -> FT.Critical
-                    score < 80f -> FT.Warning
-                    else -> FT.Emerald
-                }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("%.0f".format(score), style = FTType.Value, color = color)
-                    Text(label.replace(" ", "\n"), style = FTType.Micro.copy(textAlign = TextAlign.Center), color = FT.TextMuted)
-                }
-            }
-        }
-    }
-}
-
-// Same StatLine row shape, with a "?" between label and value for the
-// specialized/jargon-heavy metrics on this screen (28/9) -- plain stats
-// (Duration, Distance, Avg HR, ...) don't get one, same as CTL/ATL/TSB got
-// explainers on the Training tab but "This week"/"Confidence" didn't.
-@Composable
-private fun StatLineHelp(label: String, value: String, helpTitle: String, helpBody: String) {
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = FTType.Body, color = FT.TextSecondary)
-        InfoHelpButton(helpTitle, helpBody, modifier = Modifier.padding(start = 6.dp))
-        Text(
-            value,
-            style = FTType.Value,
-            color = FT.TextPrimary,
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(1f).padding(start = 8.dp),
-        )
-    }
-}
-
-// Live check: this used to run a best-effort keyword guess over free-text
-// exercise names. Redone against domain/RegionalLoad.kt's already-built,
-// already-verified pipeline instead -- exercise_library's real 876-row
-// primary/secondary_muscles data, resolved by exact name match
-// (StrengthLoad.kt's resolveExercise()), weighted primary/secondary and
-// merged across the session (sessionRegionalLoad()). An exercise whose
-// logged name doesn't match the library contributes nothing to the
-// breakdown rather than a guessed region -- a real data-availability gap,
-// not hidden behind a heuristic.
-@Composable
-private fun StrengthCard(
-    exercises: List<StrengthExerciseDto>,
-    library: List<ExerciseLibraryRow>,
-    strengthData: ZeppStrengthData? = null,
-) {
-    val totalVolume = remember(exercises) { sessionVolumeLoad(exercises) }
-    val regional = remember(exercises, library) { sessionRegionalLoad(exercises, library) }
-    val avgRpe = remember(exercises) { sessionAverageRpe(exercises) }
-    val avgRir = remember(exercises) { sessionAverageRir(exercises) }
-    // Flatten all Zepp set data into a lookup by global set index.
-    val zeppSetByIdx = remember(strengthData) {
-        strengthData?.sets?.associateBy { it.idx } ?: emptyMap()
-    }
-    FTCard(title = "STRENGTH") {
-        FTMetricRow("Total volume", "%.0f kg".format(totalVolume))
-        avgRpe?.let { FTMetricRow("Avg RPE", "%.1f".format(it)) }
-        avgRir?.let { FTMetricRow("Avg RIR", "%.1f".format(it)) }
-
-        // Body heat map replaces the old per-region bars (25/9 rework).
-        val zones = remember(regional) { zoneLoads(regional) }
-        if (zones.values.sum() > 0) {
-            BodyHeatMap(zones, modifier = Modifier.padding(vertical = 6.dp))
-        } else if (library.isNotEmpty()) {
-            Text(
-                "None of this session's logged exercise names matched the exercise library -- no anatomical breakdown available.",
-                style = FTType.Caption,
-                color = FT.TextSecondary,
-            )
-        }
-
-        // One set per line: "Set 1 -- 8 x 60 kg  82% 1RM  RPE 8  RIR 2".
-        // 28/9: subtitle line from the exercise library match already used for
-        // the heat map above (category/equipment/movement pattern) -- real
-        // fields, silently omitted per-part when null/unclassified rather than
-        // guessed, same convention the heat map's own fallback text uses.
-        var globalSetIdx = 0
-        exercises.forEach { exercise ->
-            val e1rm = bestEstimatedOneRepMax(exercise)
-            val libraryRow = remember(exercise.name, library) { resolveExercise(exercise.name, library) }
-            val subtitle = remember(libraryRow) {
-                libraryRow?.let {
-                    listOfNotNull(
-                        it.category?.replaceFirstChar(Char::uppercase),
-                        it.equipment?.replaceFirstChar(Char::uppercase),
-                        classifyMovementPattern(it).takeIf { p -> p != MovementPattern.Unclassified }?.name,
-                    ).joinToString(" · ").ifBlank { null }
-                }
-            }
-            Column(modifier = Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(exercise.name, style = FTType.RowTitle, color = FT.TextPrimary)
-                        subtitle?.let { Text(it, style = FTType.Caption, color = FT.TextSecondary) }
-                    }
-                    e1rm?.let { Text("e1RM %.0f kg".format(it), style = FTType.MonoCaption, color = FT.TextSecondary) }
-                }
-                exercise.sets.forEachIndexed { i, set ->
-                    val zs = zeppSetByIdx[globalSetIdx++]
-                    val extras = listOfNotNull(
-                        set.percentOneRm?.let { "%.0f%% 1RM".format(it) },
-                        set.rpe?.let { "RPE $it" },
-                        set.rir?.let { "RIR $it" },
-                        set.durationSec?.let { "${it}s" },
-                        set.avgHr?.let { "${it} bpm" },
-                    )
-                    FTMetricRow("Set ${i + 1}", "${set.reps} × %.0f kg".format(set.weightKg) + extras.joinToString("") { "  ·  $it" })
-                    zs?.scores?.let { SetMovementScoreRow(it) }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SetMovementScoreRow(scores: com.bioscan.fieldterminal.data.ZeppMovementScores) {
-    val items = listOf(
-        "Stab" to scores.stability,
-        "Cons" to scores.consistency,
-        "SpDec" to scores.speedDecay,
-        "Rhy" to scores.rhythm,
-        "Cont" to scores.continuity,
-    )
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        items.forEach { (label, score) ->
-            val color = when {
-                score < 0 -> FT.TextMuted
-                score < 60 -> FT.Critical
-                score < 80 -> FT.Warning
-                else -> FT.Emerald
-            }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    if (score < 0) "—" else "$score",
-                    style = FTType.MonoCaption,
-                    color = color,
-                )
-                Text(label, style = FTType.Micro, color = FT.TextMuted)
-            }
-        }
-    }
-}
-
 @Composable
 private fun SummaryCard(
     header: ExerciseSessionDetailRow,
@@ -854,7 +450,7 @@ private fun SummaryCard(
     val avgHr = header.avgHr
         ?: detail?.heartRate?.takeIf { it.isNotEmpty() }?.let { s -> s.map { it.value }.average() }
     val avgPaceMinPerKm = (
-        com.bioscan.fieldterminal.domain.sessionAvgSpeedKmh(
+        sessionAvgSpeedKmh(
             header.type, header.avgSpeedKmh, header.distanceKm, header.durationMin,
             detail?.movingMinutes(),
         )
@@ -913,7 +509,7 @@ private fun SummaryCard(
                     color = FT.TextSecondary,
                 )
                 loadingDetail -> Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = FT.Emerald)
+                    CircularProgressIndicator(color = FT.Ok)
                 }
                 detailError != null -> Text(
                     "Couldn't load time-series detail (${detailError}).",

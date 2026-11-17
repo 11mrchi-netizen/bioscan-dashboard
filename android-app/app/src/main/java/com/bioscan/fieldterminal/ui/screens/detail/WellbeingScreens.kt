@@ -19,9 +19,9 @@ import com.bioscan.fieldterminal.ui.components.DayActivity
 import com.bioscan.fieldterminal.ui.components.parallel
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 internal fun List<WellbeingAnalysisRow>.wbSeries(pick: (WellbeingAnalysisRow) -> Int?): Series =
     mapNotNull { r -> pick(r)?.let { LocalDate.parse(r.date) to it.toDouble() } }.toMap()

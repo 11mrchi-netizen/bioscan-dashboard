@@ -11,13 +11,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
-import com.bioscan.fieldterminal.ui.components.FTSwitch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -41,13 +40,14 @@ import com.bioscan.fieldterminal.domain.zoneSpec
 import com.bioscan.fieldterminal.domain.zoneText
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
+import com.bioscan.fieldterminal.ui.components.FTSwitch
 import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.security.SecureRandom
 import java.time.LocalDate
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Analysis review phase F (was Analysis Layer 3 / Phase 5's fixed A-then-B design). Registers a randomised self-experiment
 // for one supplement or fueling product: pairs of equal periods, with and without, the order inside each pair drawn on the
@@ -155,7 +155,7 @@ fun ExperimentSheet(
             Text(BLINDING_HELP, style = FTType.Caption, color = FT.TextMuted)
 
             problems.forEach { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
-            error?.takeIf { preview.isNotEmpty() }?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+            error?.takeIf { preview.isNotEmpty() }?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
 
             FTButton(label = if (saving) "REGISTERING..." else "REGISTER AND DRAW THE ORDER", enabled = problems.isEmpty() && !saving && !loading, emphasis = FTButtonEmphasis.Primary) {
                 saving = true

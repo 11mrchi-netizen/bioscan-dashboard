@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.InjectablesRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.VialRow
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.RegimenSpec
 import com.bioscan.fieldterminal.domain.Vial
 import com.bioscan.fieldterminal.domain.daysToDiscard
@@ -29,14 +30,16 @@ import com.bioscan.fieldterminal.domain.siteLabel
 import com.bioscan.fieldterminal.domain.sitesFor
 import com.bioscan.fieldterminal.domain.vialState
 import com.bioscan.fieldterminal.ui.components.FieldTextField
-import com.bioscan.fieldterminal.ui.screens.TextChipRow
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // An injectable's sites and vial (domain/Injectables.kt): the last sites used with the one rested longest, and the open
 // vial's concentration, doses left and discard date, with the prescribed syringe units cross-checked against the mix.
@@ -51,20 +54,29 @@ fun InjectableSection(supplementId: Long, spec: RegimenSpec, prescribedUnits: Do
     var editing by remember { mutableStateOf(false) }
     var reload by remember { mutableIntStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(supplementId, reload) {
-        history = runCatching { repo.siteHistory(listOf(supplementId))[supplementId].orEmpty() }.getOrDefault(emptyList())
-        vial = runCatching { repo.openVial(supplementId) }.getOrNull()
-        used = vial?.let { v -> runCatching { repo.usedSince(supplementId, LocalDate.parse(v.openedOn)) }.getOrDefault(0.0) } ?: 0.0
+    // Read together or not at all: a next site worked out from a history that failed to load, or a "new vial" form over
+    // a vial that is open, would both be wrong.
+    val guard = rememberLoadGuard(refreshOnUpdates = false)
+    LaunchedEffect(supplementId, reload, guard.attempt) {
+        guard.run {
+            history = repo.siteHistory(listOf(supplementId))[supplementId].orEmpty()
+            vial = repo.openVial(supplementId)
+            used = vial?.let { v -> repo.usedSince(supplementId, LocalDate.parse(v.openedOn)) } ?: 0.0
+        }
+    }
+    if (guard.error != null) {
+        LoadErrorLine(guard, "the injection sites and vial")
+        return
     }
     fun act(block: suspend () -> Unit) = scope.launch {
         error = null
-        runCatching { block() }.onSuccess { editing = false; reload++ }.onFailure { error = it.message ?: "Couldn't save" }
+        catching { block() }.onSuccess { editing = false; reload++ }.onFailure { error = it.message ?: "Couldn't save" }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("INJECTION SITES", style = FTType.LabelCaps, color = FT.TextSecondary)
         val next = nextSite(sitesFor(spec), history)
-        Text("Next: ${next?.label ?: "—"} (rested longest)", style = FTType.BodySmall, color = FT.Emerald)
+        Text("Next: ${next?.label ?: "—"} (rested longest)", style = FTType.BodySmall, color = FT.Ok)
         if (history.isEmpty()) Text("No sites logged yet: the logging sheet asks for one with each dose.", style = FTType.Caption, color = FT.TextMuted)
         history.take(5).forEach { (site, at) ->
             val d = at.atZone(ZoneId.systemDefault()).toLocalDate()
@@ -85,7 +97,7 @@ fun InjectableSection(supplementId: Long, spec: RegimenSpec, prescribedUnits: Do
                 (st.dosesLeft?.let { " · $it of your doses" } ?: ""), style = FTType.Caption, color = FT.TextSecondary)
             daysToDiscard(st, LocalDate.now())?.let { d ->
                 Text(if (d < 0) "Past its discard date (${st.discardOn})" else "Discard by ${st.discardOn} ($d days)",
-                    style = FTType.Caption, color = if (d <= 3) FT.Warning else FT.TextSecondary)
+                    style = FTType.Caption, color = if (d <= 3) FT.Warn else FT.TextSecondary)
             }
             if (v.spares > 0) Text("${v.spares} unopened spare${if (v.spares == 1) "" else "s"}", style = FTType.Caption, color = FT.TextSecondary)
             st.doseUnits?.let { units ->
@@ -94,16 +106,16 @@ fun InjectableSection(supplementId: Long, spec: RegimenSpec, prescribedUnits: Do
                         "Check it against your prescriber's instructions.", style = FTType.Caption, color = FT.TextMuted)
                     st.unitsMismatch -> Text("Check before the next dose: your prescribed ${formatAmount(prescribedUnits)} units and this mix give " +
                         "${formatAmount(round1(units))} units for your ${formatAmount(spec.amount ?: 0.0)} ${spec.unit} dose. Ask your prescriber or pharmacist.",
-                        style = FTType.BodySmall, color = FT.Critical)
+                        style = FTType.BodySmall, color = FT.Bad)
                     else -> Text("Your prescribed ${formatAmount(prescribedUnits)} units match this mix.", style = FTType.Caption, color = FT.TextMuted)
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                Text("START THE NEXT VIAL", style = FTType.LabelCaps, color = FT.Emerald, modifier = Modifier.ftClickable { act { repo.startNextVial(v) } })
+                Text("START THE NEXT VIAL", style = FTType.LabelCaps, color = FT.Ok, modifier = Modifier.ftClickable { act { repo.startNextVial(v) } })
                 Text("EDIT", style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.ftClickable { editing = true })
             }
         }
-        error?.let { Text(it, style = FTType.Caption, color = FT.Critical) }
+        error?.let { Text(it, style = FTType.Caption, color = FT.Bad) }
     }
 }
 
@@ -136,7 +148,7 @@ private fun VialForm(existing: VialRow?, spec: RegimenSpec, onSave: (Vial) -> Un
     val day = runCatching { LocalDate.parse(opened.trim()) }.getOrNull()
     val ok = a != null && (w != null || vol != null) && day != null
     Text(if (ok) "SAVE THE VIAL" else "Needs what it holds, the water added (or its volume) and the day it was opened",
-        style = if (ok) FTType.LabelCaps else FTType.Caption, color = if (ok) FT.Emerald else FT.TextMuted,
+        style = if (ok) FTType.LabelCaps else FTType.Caption, color = if (ok) FT.Ok else FT.TextMuted,
         modifier = Modifier.ftClickable(enabled = ok) {
             onSave(Vial(a!!, unit, w, if (w == null) vol else null, day!!, keep.toIntOrNull()?.takeIf { it in 1..365 }, spares.toIntOrNull()?.coerceIn(0, 999) ?: 0))
         })

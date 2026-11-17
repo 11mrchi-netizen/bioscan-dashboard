@@ -1,16 +1,23 @@
 package com.bioscan.fieldterminal.ui.screens.training
 
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.bioscan.fieldterminal.data.AthleteEventsRepository
 import com.bioscan.fieldterminal.data.BlockPlan
 import com.bioscan.fieldterminal.data.DefinitionCatalog
 import com.bioscan.fieldterminal.data.ImportFile
+import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingProgramRepository
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.TrainingSettingsRow
 import com.bioscan.fieldterminal.domain.ZoneMethod
+import com.bioscan.fieldterminal.domain.events.AthleteEvent
+import com.bioscan.fieldterminal.domain.events.taperWeeks
+import com.bioscan.fieldterminal.domain.events.weeksToEvent
+import com.bioscan.fieldterminal.domain.events.withTaper
 import com.bioscan.fieldterminal.domain.training.PercentBase
 import com.bioscan.fieldterminal.domain.training.ResolvedMax
 import com.bioscan.fieldterminal.domain.training.definition.ConditioningProtocolDef
@@ -31,12 +38,14 @@ import com.bioscan.fieldterminal.domain.training.generate.cycleWeekKind
 import com.bioscan.fieldterminal.domain.training.generate.defaultTimeline
 import com.bioscan.fieldterminal.domain.training.generate.generateMergedBlock
 import com.bioscan.fieldterminal.domain.training.generate.generateTemplateBlock
+import com.bioscan.fieldterminal.domain.training.generate.isCluster
 import com.bioscan.fieldterminal.domain.training.generate.layoutWarnings
 import com.bioscan.fieldterminal.domain.training.generate.resizeTimeline
+import com.bioscan.fieldterminal.domain.training.generate.slotsToChoose
 import com.bioscan.fieldterminal.domain.training.generate.suggestLayout
-import com.bioscan.fieldterminal.domain.training.generate.weeksForBlocks
 import com.bioscan.fieldterminal.domain.training.generate.templateDayPositions
 import com.bioscan.fieldterminal.domain.training.generate.templateModuleKeys
+import com.bioscan.fieldterminal.domain.training.generate.weeksForBlocks
 import com.bioscan.fieldterminal.domain.training.movementKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -52,15 +61,14 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.temporal.TemporalAdjusters
 
+// The planner's steps, in the order both routes walk them (the owner's layout, Nov 2026): dates first, then the
+// program, the week, the weeks (own blocks only: a published program fixes its own), the details, the review.
 enum class PlannerStep(val label: String) {
-    Program("START"),
-    Modules("MODULES"),
-    Strength("STRENGTH TEMPLATE"),
-    Protocol("CONDITIONING TEMPLATE"),
-    Layout("THE WEEK"),
-    Timeline("LENGTH AND DELOADS"),
-    Exercises("EXERCISES"),
-    Conditioning("SESSIONS"),
+    When("WHEN"),
+    Program("PROGRAM"),
+    Week("THE WEEK"),
+    Weeks("THE WEEKS"),
+    Details("DETAILS"),
     Review("REVIEW"),
 }
 
@@ -89,8 +97,15 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
     var zoneMessage by mutableStateOf<String?>(null)
     var creating by mutableStateOf(false)
 
-    var step by mutableStateOf(PlannerStep.Program)
-    var program by mutableStateOf<Program?>(null)
+    var step by mutableStateOf(PlannerStep.When)
+    // Building your own is the usual route, so it is picked to start with (a published program is one tap away).
+    var program by mutableStateOf<Program?>(Program.Build)
+    // How far the planner has been walked: the step bar opens any step up to here.
+    var furthest by mutableIntStateOf(0)
+    // Set when a step was opened from the review's EDIT: NEXT goes straight back to the review.
+    var editingFromReview by mutableStateOf(false)
+    // The length was set by hand (or by an event): picking a strength program keeps it.
+    var lengthChosen by mutableStateOf(false)
     var startDate by mutableStateOf(LocalDate.now().with(TemporalAdjusters.nextOrSame(DayOfWeek.MONDAY)))
     val variables = mutableStateMapOf<String, String>()
     val weekdays = mutableStateMapOf<Int, DayOfWeek>()
@@ -104,38 +119,55 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
 
     // The build path: how the two templates share the week, and what each calendar week is.
     var layout by mutableStateOf<List<DayPlan>>(emptyList())
-    var timeline by mutableStateOf<List<WeekKind>>(emptyList())
+    var timeline by mutableStateOf<List<WeekKind>>(List(8) { WeekKind.Normal })
     var weeks by mutableIntStateOf(8)
-    var openSection by mutableStateOf<String?>(null)
     var startWithTest by mutableStateOf(false)
     // Fuel planning phase 9: the event the block builds toward (it ends in that week, the last weeks taper).
-    var events by mutableStateOf<List<com.bioscan.fieldterminal.domain.events.AthleteEvent>>(emptyList())
-    var targetEvent by mutableStateOf<com.bioscan.fieldterminal.domain.events.AthleteEvent?>(null)
+    var events by mutableStateOf<List<AthleteEvent>>(emptyList())
+    var targetEvent by mutableStateOf<AthleteEvent?>(null)
 
     val index: DefinitionIndex? get() = catalog?.let { DefinitionIndex(it.definitions) }
 
-    // The steps the current path walks through.
+    // The steps the current route walks through: a published program has no WEEKS step (it fixes its own length).
     val steps: List<PlannerStep>
-        get() = when (program) {
-            is Program.Build -> listOf(PlannerStep.Program, PlannerStep.Strength, PlannerStep.Protocol, PlannerStep.Review)
-            is Program.Fixed -> listOf(PlannerStep.Program, PlannerStep.Modules, PlannerStep.Exercises, PlannerStep.Conditioning, PlannerStep.Review)
-            null -> listOf(PlannerStep.Program)
-        }
+        get() = if (program is Program.Fixed) PlannerStep.entries.filter { it != PlannerStep.Weeks } else PlannerStep.entries
 
-    fun next() { val s = steps; step = s.getOrNull(s.indexOf(step) + 1) ?: step }
-    fun back(): Boolean { val s = steps; val i = s.indexOf(step); return if (i > 0) { step = s[i - 1]; true } else false }
+    fun next() {
+        if (editingFromReview) { editingFromReview = false; step = PlannerStep.Review; return }
+        val s = steps
+        step = s.getOrNull(s.indexOf(step) + 1) ?: step
+        furthest = maxOf(furthest, s.indexOf(step))
+    }
+    fun back(): Boolean {
+        if (editingFromReview) { editingFromReview = false; step = PlannerStep.Review; return true }
+        val s = steps; val i = s.indexOf(step); return if (i > 0) { step = s[i - 1]; true } else false
+    }
+    /** Opens a step already walked (the step bar). */
+    fun goTo(target: PlannerStep) { if (steps.indexOf(target) in 0..furthest) { editingFromReview = false; step = target } }
+    /** Opens a step from the review; NEXT comes back to the review. */
+    fun editFromReview(target: PlannerStep) { editingFromReview = true; step = target }
+
+    /** Moves the start: the week is re-suggested from the new first weekday, and a target event re-sets the length. */
+    fun changeStart(d: LocalDate) {
+        startDate = d
+        resetLayout()
+        targetEvent?.let { buildToward(it) }
+    }
+
+    /** The length set by hand. */
+    fun setLength(n: Int) { lengthChosen = true; changeWeeks(n) }
 
     fun load() {
         scope.launch {
             loading = true
             error = null
-            runCatching {
+            catching {
                 catalog = repo.loadCatalog()
                 settings = repo.loadSettings()
                 zoneMethod = repo.loadZoneMethod()
                 maxes = repo.loadMaxes()
             }.onFailure { error = it.message ?: "Could not load" }
-            events = runCatching { com.bioscan.fieldterminal.data.AthleteEventsRepository(com.bioscan.fieldterminal.data.SupabaseClientProvider.client).loadUpcoming(LocalDate.now()) }
+            events = catching { AthleteEventsRepository(SupabaseClientProvider.client).loadUpcoming(LocalDate.now()) }
                 .getOrDefault(emptyList())
             loading = false
         }
@@ -143,7 +175,7 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
 
     fun saveSettings(new: TrainingSettingsRow) {
         scope.launch {
-            runCatching { repo.saveSettings(new) }
+            catching { repo.saveSettings(new) }
                 .onSuccess { settings = new; settingsMessage = "Saved" }
                 .onFailure { settingsMessage = "Could not save: ${it.message}" }
         }
@@ -153,7 +185,7 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
         val before = zoneMethod
         zoneMethod = method
         scope.launch {
-            runCatching { repo.saveZoneMethod(method) }
+            catching { repo.saveZoneMethod(method) }
                 .onSuccess { zoneMessage = "Saved" }
                 .onFailure { zoneMethod = before; zoneMessage = "Could not save: ${it.message}" }
         }
@@ -162,7 +194,7 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
     fun import(files: List<ImportFile>) {
         scope.launch {
             importMessage = "Importing ${files.size} files..."
-            runCatching { repo.importDefinitions(files) }
+            catching { repo.importDefinitions(files) }
                 .onSuccess { r ->
                     importMessage = "Imported ${r.imported}; rejected ${r.rejected.size}" + (r.rejected.firstOrNull()?.let { " (first: $it)" } ?: "") +
                         (if (r.setErrors.isNotEmpty()) "; ${r.setErrors.size} cross-reference problems" else "")
@@ -172,11 +204,14 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
         }
     }
 
+    /** Switches route; the name, the start and (for an own block) the length and event stay as set. */
     fun choose(p: Program) {
+        if (p == program) return
         program = p
         variables.clear(); moduleChoices.clear(); conditioningChoices.clear(); weekdays.clear(); manualMaxes.clear()
-        strengthKey = null; protocolKey = null; layout = emptyList(); timeline = emptyList(); startWithTest = false
-        name = p.title
+        strengthKey = null; protocolKey = null; layout = emptyList(); startWithTest = false
+        timeline = if (p is Program.Build) List(weeks) { WeekKind.Normal } else emptyList()
+        furthest = minOf(furthest, steps.indexOf(PlannerStep.Program))
     }
 
     // ---- build path ----
@@ -186,8 +221,9 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
     fun pickStrength(key: String) {
         strengthKey = key
         moduleChoices.remove(key)
-        weeks = weeksForBlocks(2, blockLength())
+        if (!lengthChosen) weeks = weeksForBlocks(2, blockLength())
         resetLayout(); resetTimeline()
+        targetEvent?.let { e -> timeline = withTaper(timeline, taperWeeks(e)) }
     }
 
     fun pickProtocol(key: String?) {
@@ -213,12 +249,13 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
     }
 
     /** Sets the length to end in [event]'s week and makes the last weeks a taper; null clears the target. */
-    fun buildToward(event: com.bioscan.fieldterminal.domain.events.AthleteEvent?) {
+    fun buildToward(event: AthleteEvent?) {
         targetEvent = event
         if (event == null) return
-        changeWeeks(com.bioscan.fieldterminal.domain.events.weeksToEvent(startDate, event.date))
+        lengthChosen = true
+        changeWeeks(weeksToEvent(startDate, event.date))
         resetTimeline()
-        timeline = com.bioscan.fieldterminal.domain.events.withTaper(timeline, com.bioscan.fieldterminal.domain.events.taperWeeks(event))
+        timeline = withTaper(timeline, taperWeeks(event))
         if (name.isBlank()) name = "Toward ${event.name}"
     }
 
@@ -283,10 +320,26 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
     )
 
     fun canContinue(): Boolean = when (step) {
-        PlannerStep.Program -> program != null
-        PlannerStep.Strength -> strengthKey != null
+        PlannerStep.Program -> when (program) {
+            is Program.Build -> strengthKey != null || protocolKey != null
+            is Program.Fixed -> true
+            null -> false
+        }
         else -> program != null
     }
+
+    /** The exercises picked (or the book's defaults) that have no max yet: the generator needs one to set loads. */
+    fun missingMaxes(): List<String> = strengthModules.flatMap { m ->
+        val choice = choiceFor(m.key)
+        slotsToChoose(m).flatMap { slot ->
+            val chosen = choice.exercises[slot.id].orEmpty()
+            when {
+                isCluster(m, slot) && slot.pick != null -> emptyList()
+                isCluster(m, slot) -> chosen.ifEmpty { listOf(slot.standard) }
+                else -> listOf(chosen.firstOrNull() ?: slot.standard)
+            }
+        }
+    }.distinct().filter { maxEntry(it)?.oneRmKg == null }
 
     fun generate(): GeneratedBlock? {
         val idx = index ?: return null
@@ -317,7 +370,7 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
         scope.launch {
             creating = true
             error = null
-            runCatching {
+            catching {
                 manualMaxes.forEach { (key, kg) ->
                     val label = maxes[key]?.name ?: key
                     repo.saveMax(label, "1rm", kg, "kg", "manual")

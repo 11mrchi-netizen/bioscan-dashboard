@@ -79,6 +79,8 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     'people', 'calendar_events', 'calendar_event_overrides', 'calendar_strength_staging', 'calendar_strength_staging_review',
     // the phone's copy of a prep week for the web's meal prep: its planned sessions can carry calendar entry titles
     'fuel_week_plans',
+    // the day's plan as the phone drew it, for the web Dashboard: its sessions can carry calendar entry titles
+    'today_plans',
     // free text by nature
     'notes',
     // the home's environment (docs/home-environment): light and changes in the readings show when someone is home, so

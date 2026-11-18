@@ -14,6 +14,9 @@ const Body         = lazy(() => import('./workspaces/Body'))
 // Planning (Nov 2026): the long-form work prepared on the web and carried out on the phone.
 const PlanBlock    = lazy(() => import('./workspaces/PlanBlock'))
 const MealPrep     = lazy(() => import('./workspaces/MealPrep'))
+// Web transition plan, phase 2: where the Dashboard's DAY LOG and OPEN IN CONSOLE land.
+const Log          = lazy(() => import('./workspaces/Log'))
+const History      = lazy(() => import('./workspaces/History'))
 
 // Routes of the removed dashboards and the renamed workspaces, so bookmarks still land somewhere sensible.
 const LEGACY_ROUTES: Record<string, string> = {
@@ -49,6 +52,8 @@ export default function App() {
         <Route path="body"      element={<Body />} />
         <Route path="plan-block" element={<PlanBlock />} />
         <Route path="meal-prep" element={<MealPrep />} />
+        <Route path="log" element={<Log />} />
+        <Route path="history" element={<History />} />
         {Object.entries(LEGACY_ROUTES).map(([from, to]) => (
           <Route key={from} path={from} element={<Navigate to={`/${to}`} replace />} />
         ))}

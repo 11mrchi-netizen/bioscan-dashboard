@@ -1,0 +1,16 @@
+/* METRIC HISTORY: one series, its latest value and the days behind it. Uses the planner's controls (PlanBlock.css). */
+.hist { display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-4); max-width: 1200px; }
+.hist-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-3) var(--sp-4); }
+.hist-head > div:first-child { flex: 1; min-width: 220px; }
+.hist-title { font-size: 15px; letter-spacing: .1em; margin: 0; color: var(--color-text-primary); }
+.hist-sub { margin: 4px 0 0; font-size: 12px; color: var(--color-text-muted); }
+.hist-pick { display: flex; flex-direction: column; gap: 4px; font-size: 10px; letter-spacing: .08em; color: var(--color-text-muted); }
+.hist-pick select { max-width: 280px; }
+.hist-chart-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-2); }
+.hist-latest { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; font-size: 11px; color: var(--color-text-muted); }
+.hist-latest-v { font-size: 26px; font-weight: 700; color: var(--color-text-primary); font-variant-numeric: tabular-nums; }
+.hist-ref { font-size: 12px; }
+.hist-chart { height: 320px; width: 100%; }
+.hist-days { overflow-x: auto; }
+.hist-links { display: flex; gap: 12px; white-space: nowrap; }
+.hist-links a { font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em; color: var(--color-text-secondary); }

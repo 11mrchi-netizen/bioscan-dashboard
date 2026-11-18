@@ -13,6 +13,8 @@ import './Shell.css'
 
 // docs/analysis-console/IA.md §3.1
 const NAV = [
+  { to: 'log',       label: 'Log' },
+  { to: 'history',   label: 'History' },
   { to: 'integrity', label: 'Integrity' },
   { to: 'evidence',  label: 'Evidence' },
   { to: 'explore',   label: 'Explore' },

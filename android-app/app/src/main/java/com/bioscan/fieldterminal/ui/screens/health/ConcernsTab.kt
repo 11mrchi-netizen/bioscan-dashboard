@@ -100,6 +100,13 @@ fun ConcernsTab(onOpenConcern: (String) -> Unit, anatomicalOnly: Boolean = false
                 { checksGuard.run { checks = repo.loadChecks() } },
             )
         }
+        // The web Dashboard's Me › Health shows this same tab (domain/meview); the injury-only view on Training is not it.
+        if (!anatomicalOnly) concerns?.let { list ->
+            com.bioscan.fieldterminal.data.catching {
+                com.bioscan.fieldterminal.data.MeViewPublisher.publish(SupabaseClientProvider.client,
+                    com.bioscan.fieldterminal.domain.meview.healthMeView(list, overview, findings, checks, vocab))
+            }
+        }
     }
 
     val list = concerns

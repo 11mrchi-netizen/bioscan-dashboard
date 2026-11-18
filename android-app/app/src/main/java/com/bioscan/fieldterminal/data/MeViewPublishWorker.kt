@@ -8,8 +8,6 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.bioscan.fieldterminal.domain.meview.bodyMeView
-import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 
 // Keeps the web Dashboard's Me tabs current without the phone's tabs being opened (web transition plan, phase 3): every few
@@ -19,17 +17,16 @@ class MeViewPublishWorker(context: Context, params: WorkerParameters) : Coroutin
 
     override suspend fun doWork(): Result {
         val supabase = SupabaseClientProvider.client
-        val today = LocalDate.now()
-        val body = catching {
-            val metrics = AnalysisRepository(supabase).loadBodyMetrics()
-            val checkinRepo = BodyCheckinRepository(supabase)
-            val checkins = catching { checkinRepo.loadHistory() }.getOrDefault(emptyList())
-            val profile = catching { UserProfileRepository(supabase).loadProfile() }.getOrNull()
-            val height = profile?.heightCm ?: catching { checkinRepo.latestHeightCm() }.getOrNull()
-            val scale = catching { ScaleReadingRepository(supabase).loadCompositionSeries() }.getOrDefault(emptyList())
-            MeViewPublisher.publish(supabase, bodyMeView(metrics, checkins, height, profile, scale, today))
-        }
-        return if (body.isSuccess) Result.success() else Result.retry()
+        val tabs = listOf<suspend () -> com.bioscan.fieldterminal.domain.meview.MeViewDoc>(
+            { MeViewSources.body(supabase) },
+            { MeViewSources.bloodwork(supabase) },
+            { MeViewSources.health(applicationContext, supabase) },
+            { MeViewSources.performance(supabase) },
+            { com.bioscan.fieldterminal.ui.screens.user.HealthspanMeSource.build() },
+            { MeViewSources.routine(supabase) },
+        )
+        val results = tabs.map { build -> catching { MeViewPublisher.publish(supabase, build()) } }
+        return if (results.any { it.isSuccess }) Result.success() else Result.retry()
     }
 
     companion object {

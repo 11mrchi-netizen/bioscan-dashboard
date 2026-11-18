@@ -175,3 +175,16 @@
 }
 .me-tabs-bar .ft-chip[aria-current="true"], .me-ranges .ft-chip[aria-current="true"] { background: var(--ft-platinum); color: var(--ft-platinum-ink); border-color: transparent; font-weight: 700; }
 .body3d-hint { top: 10px; bottom: auto; }
+.me-radar { margin: 0; display: flex; justify-content: center; }
+.me-radar svg { width: min(100%, 340px); height: auto; overflow: visible; }
+.me-swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 8px; vertical-align: 1px; }
+.me-ribbons { margin: 0; display: grid; gap: 3px; }
+.me-ribbon-hours, .me-ribbon-day { display: grid; grid-template-columns: 56px 1fr; align-items: center; gap: 8px; }
+.me-ribbon-hours { grid-template-columns: 56px repeat(4, 1fr) auto; font-size: 10px; color: var(--ft-muted); }
+.me-ribbon-day { color: var(--ft-muted); font-size: 10px; text-decoration: none; border-radius: 3px; }
+.me-ribbon-day:hover, .me-ribbon-day:focus-visible { background: color-mix(in srgb, var(--ft-fg) 6%, transparent); }
+.me-ribbon-day svg { width: 100%; height: 10px; display: block; }
+.me-ribbons figcaption { margin-top: 8px; }
+.me-ribbons .me-legend { flex-wrap: wrap; gap: 4px 14px; font: 500 10px/1.4 var(--ft-mono); letter-spacing: .06em; color: var(--ft-muted); }
+.me-ribbons .me-legend span { white-space: nowrap; }
+.me-fixed-range { font-size: 10px; letter-spacing: .08em; color: var(--ft-muted); padding: 8px 0; }

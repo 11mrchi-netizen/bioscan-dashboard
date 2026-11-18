@@ -93,6 +93,18 @@ fun UserProfileScreen(
     }
     val activeCycle = cycles?.firstOrNull { it.isActiveOn(LocalDate.now()) }
 
+    // The web Dashboard's Me › Healthspan shows this page (domain/meview), once everything on it has loaded.
+    LaunchedEffect(healthspan, agingOverview, runningLevel, strengthLevel, conditioningLevel, cycles) {
+        if (healthspan == null || agingOverview == null || runningLevel == null || strengthLevel == null || conditioningLevel == null || cycles == null) return@LaunchedEffect
+        catching {
+            com.bioscan.fieldterminal.data.MeViewPublisher.publish(SupabaseClientProvider.client, com.bioscan.fieldterminal.domain.meview.healthspanMeView(
+                healthspan?.summary, agingOverview,
+                listOf("Running" to runningLevel, "Strength" to strengthLevel, "Conditioning" to conditioningLevel),
+                activeCycle?.let { com.bioscan.fieldterminal.ui.screens.training.currentBlockTitle(it) to com.bioscan.fieldterminal.ui.screens.training.currentBlockProgress(it) },
+            ))
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).ftPlatinumWash()) {
         if (showHeader) ScreenHeader(title = "USER", context = "HEALTHSPAN · SKILLS · TRAINING BLOCK")
         Column(

@@ -5,11 +5,14 @@ import { supabase } from '../lib/supabase'
 export type Tone = 'ok' | 'warn' | 'bad'
 export type Point = [string, number]
 export interface MeTile { kind: 'tile'; label: string; value: string; unit?: string; sub?: string; tone?: Tone; hue?: string; series?: Point[]; info?: string }
-export interface MeRow { kind: 'row'; label: string; value?: string; sub?: string; tone?: Tone; state?: string; region?: string; side?: string }
-export interface MeChart { kind: 'chart'; label: string; unit?: string; decimals: number; series: { name: string; hue: string; points: Point[] }[]; caption?: string }
+export interface MeRow { kind: 'row'; label: string; value?: string; sub?: string; tone?: Tone; state?: string; region?: string; side?: string; hue?: string }
+export interface MeChart { kind: 'chart'; label: string; unit?: string; decimals: number; series: { name: string; hue: string; points: Point[] }[]; caption?: string; format?: 'pace' }
+export interface MeBars { kind: 'bars'; label: string; unit: string; weeks: string[]; series: { name: string; hue: string; values: number[] }[]; last_partial?: boolean }
 export interface MeRing { kind: 'ring'; label: string; fraction: number; value: string; lines: string[]; hue: string }
 export interface MeNote { kind: 'note'; text: string; muted: boolean }
-export type MeItem = MeTile | MeRow | MeChart | MeRing | MeNote
+export interface MeRadar { kind: 'radar'; label: string; lines: number[]; axes: { short: string; label: string; score?: number; state: string }[] }
+export interface MeRibbons { kind: 'ribbons'; label: string; slots: number; caption?: string; days: { date: string; spans: [number, number, string][] }[]; legend: { label: string; hue: string; value?: string }[] }
+export type MeItem = MeTile | MeRow | MeChart | MeBars | MeRing | MeNote | MeRadar | MeRibbons
 export interface MeSection { title: string; info?: string; items: MeItem[] }
 export interface MeViewDoc { v: number; tab: string; range?: string; sections: MeSection[] }
 export interface MeViewRow { view: MeViewDoc; builtAt: string }

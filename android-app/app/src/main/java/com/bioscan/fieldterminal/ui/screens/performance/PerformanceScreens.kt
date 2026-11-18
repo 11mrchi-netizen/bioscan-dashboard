@@ -19,6 +19,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -146,6 +147,13 @@ fun PerformanceHub(onOpenSport: (Sport) -> Unit, onOpenRecords: () -> Unit = {})
         if (sessions == null) {
             LoadingOrError(sessionsGuard, "Loading your sports…")
             return@Column
+        }
+        // The web Dashboard's Me › Performance shows this tab (domain/meview), worked out once per opening.
+        LaunchedEffect(sessions, running) {
+            if (running != null) com.bioscan.fieldterminal.data.catching {
+                com.bioscan.fieldterminal.data.MeViewPublisher.publish(SupabaseClientProvider.client, com.bioscan.fieldterminal.domain.meview.performanceMeView(
+                    sessions, running, com.bioscan.fieldterminal.domain.recordHistories(com.bioscan.fieldterminal.data.PersonalRecordsRepository(SupabaseClientProvider.client).loadSets()), today))
+            }
         }
         val weeks = remember(window) { weekStarts(window.from, window.to) }
         val sports = remember(sessions, window) { summarizeSportsIn(sessions, window.from, window.to, weeks) }

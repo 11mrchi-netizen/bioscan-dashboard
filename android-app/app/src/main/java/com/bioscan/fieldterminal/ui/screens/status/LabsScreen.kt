@@ -1,5 +1,9 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.data.MeViewPublisher
+import com.bioscan.fieldterminal.data.loadBloodworkRcv
+import com.bioscan.fieldterminal.domain.meview.bloodworkMeView
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -78,8 +82,10 @@ fun LabsScreen() {
         error = null
         try {
             overview = LabsRepository(SupabaseClientProvider.client).loadOverview()
-            rcv = catching { loadRcv() }.getOrDefault(emptyMap())
+            rcv = catching { loadBloodworkRcv(SupabaseClientProvider.client) }.getOrDefault(emptyMap())
             watches = catching { LabWatchRepository(SupabaseClientProvider.client).watches() }.getOrDefault(watches)
+            // The web Dashboard's Me › Bloodwork shows this same tab (domain/meview); a failed write never touches the page.
+            overview?.let { o -> catching { MeViewPublisher.publish(SupabaseClientProvider.client, bloodworkMeView(o, rcv, watches)) } }
         } catch (e: Exception) {
             error = e.message ?: "Unknown error"
         }
@@ -301,20 +307,6 @@ private fun RcvLine(m: BloodworkMarkerEvaluation?, modifier: Modifier = Modifier
         bloodworkTrendMetricState(m.state)?.let { FTStatePill(it) }
         Text("Δ%+.1f%% · RCV ±%.1f%%".format(delta, rcvPct), style = FTType.Label, color = FT.TextSecondary)
     }
-}
-
-private suspend fun loadRcv(): Map<String, BloodworkMarkerEvaluation> {
-    val repo = AnalysisRepository(SupabaseClientProvider.client)
-    val draws = repo.loadLabDraws()
-    val results = repo.loadLabResults()
-    val drawDatesById = draws.associate { it.id to LocalDate.parse(it.drawDate) }
-    return results
-        .mapNotNull { row -> row.value?.let { v -> drawDatesById[row.drawId]?.let { date -> Triple(row, date, v) } } }
-        .groupBy { it.first.markerName }
-        .mapValues { (name, rows) ->
-            val first = rows.first().first
-            evaluateBloodworkMarker(markerName = name, draws = rows.map { it.second to it.third }, unit = first.unit, refLow = first.refLow, refHigh = first.refHigh)
-        }
 }
 
 private fun flagColor(flag: String?): Color = when (flag) {

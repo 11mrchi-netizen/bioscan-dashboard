@@ -42,6 +42,12 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.routine.AppWeekTotal
 import com.bioscan.fieldterminal.data.routine.RoutinePageData
 import com.bioscan.fieldterminal.data.routine.RoutinePageRepository
+import com.bioscan.fieldterminal.data.MeViewPublisher
+import com.bioscan.fieldterminal.data.catching
+import com.bioscan.fieldterminal.data.MeViewSources
+import com.bioscan.fieldterminal.domain.meview.RoutineLineFormat
+import com.bioscan.fieldterminal.domain.meview.routineHours
+import com.bioscan.fieldterminal.domain.meview.routineLineFormat
 import com.bioscan.fieldterminal.domain.routine.CalendarState
 import com.bioscan.fieldterminal.domain.routine.DailyLine
 import com.bioscan.fieldterminal.domain.routine.LogStatus
@@ -120,18 +126,9 @@ private fun lineColor(key: String): Color = when {
     else -> FT.Metric.TimeOut
 }
 
-private fun hours(h: Double) = if (h < 1) "${(h * 60).roundToInt()} min" else "%.1f h".format(h)
+private fun hours(h: Double) = routineHours(h)
 
-private class LineFormat(val unit: String, val format: (Double) -> String)
-
-private fun formatOf(key: String): LineFormat = when {
-    key.startsWith("place:") -> LineFormat("h", ::hours)
-    key == "phone:night" -> LineFormat("unlocks", { "%.1f".format(it) })
-    key == "reg:bedtime" || key == "reg:wake" -> LineFormat("min", { "± ${it.roundToInt()} min" })
-    key == "reg:similarity" -> LineFormat("%", { "${it.roundToInt()} %" })
-    key == "reg:places" -> LineFormat("places", { "%.1f".format(it) })
-    else -> LineFormat("min", ::minutesWords)
-}
+private fun formatOf(key: String): RoutineLineFormat = routineLineFormat(key)
 
 @Composable
 fun RoutinePage(onOpenDay: (LocalDate) -> Unit) {
@@ -143,8 +140,10 @@ fun RoutinePage(onOpenDay: (LocalDate) -> Unit) {
     val cacheVersion = rememberCacheVersion()
     LaunchedEffect(reload, cacheVersion) {
         try {
-            data = RoutinePageRepository(SupabaseClientProvider.client).load()
+            val loaded = RoutinePageRepository(SupabaseClientProvider.client).load()
+            data = loaded
             error = null
+            catching { MeViewPublisher.publish(SupabaseClientProvider.client, MeViewSources.routine(loaded)) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

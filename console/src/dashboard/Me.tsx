@@ -5,7 +5,6 @@ import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useLoadEffect } from '../lib/useLoadEffect'
 import { localDaysAgo } from '../lib/dates'
-import { legacyHref } from '../lib/surfaces'
 import { MeSections } from './MeView'
 import { loadMeView, ME_TABS, type MeRow, type MeTab, type MeViewRow } from './meView'
 import type { Concern } from './Body3D'
@@ -13,7 +12,6 @@ import type { Concern } from './Body3D'
 const Body3D = lazy(() => import('./Body3D').then((m) => ({ default: m.Body3D })))
 
 /** The tabs the phone sends so far (phase 3 builds them one by one). */
-const PUBLISHED: ReadonlySet<MeTab> = new Set(['BODY'])
 
 const RANGES = [{ id: '28D', days: 28 }, { id: '90D', days: 90 }, { id: '1Y', days: 365 }, { id: 'ALL', days: 0 }]
 
@@ -46,7 +44,9 @@ export function Me() {
         {ME_TABS.map((t) => <button key={t} className="ft-chip" aria-current={t === tab} onClick={() => set('tab', t)}>{t}</button>)}
       </nav>
       <div className="me-head">
-        <div className="me-ranges">{RANGES.map((r) => <button key={r.id} className="ft-chip" aria-current={r.id === range.id} onClick={() => set('range', r.id)}>{r.id}</button>)}</div>
+        {row?.view.range
+          ? <span className="me-fixed-range mono">LAST {row.view.range.replace(/^(\d+)D$/, '$1 DAYS')}</span>
+          : <div className="me-ranges">{RANGES.map((r) => <button key={r.id} className="ft-chip" aria-current={r.id === range.id} onClick={() => set('range', r.id)}>{r.id}</button>)}</div>}
         {builtAt && <span className="me-fresh">As the phone worked it out · {builtAt}</span>}
       </div>
 
@@ -61,9 +61,7 @@ export function Me() {
         : row ? <MeSections sections={row.view.sections} sinceDay={since} />
         : (
           <section className="ft-card me-soon">
-            {PUBLISHED.has(tab)
-              ? <p>The phone has not sent {tab} yet. It does when the tab is opened on the phone, and every few hours in the background once the updated app is installed.</p>
-              : <p>{tab} comes next: the phone will send this tab like BODY, with the same numbers it shows. Until then it is on the phone, and the old charts are on the <a href={legacyHref()}>previous dashboard</a>.</p>}
+            <p>The phone has not sent {tab} yet. It does when the tab is opened on the phone, and every few hours in the background once the updated app is installed.</p>
           </section>
         )}
     </div>

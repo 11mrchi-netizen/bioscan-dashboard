@@ -1,10 +1,12 @@
-name: Deploy Analysis Console
+name: Deploy Dashboard and Console
 
 on:
   push:
     branches: [main]
     paths:
       - 'console/**'
+      - 'design/tokens/**'
+      - 'index.html'
       - '.github/workflows/deploy-console.yml'
 
 permissions:
@@ -40,19 +42,23 @@ jobs:
 
       # Copy built output into console/ in-place so GitHub Pages (main branch) serves it.
       # Clears stale hashed assets first to avoid accumulation.
-      - name: Stage built files into console/
+      # Two pages from one build (transition plan, Nov 2026): the Console at console/ and the Dashboard at the site root.
+      # They share the hashed chunks in console/assets; the root page points into that folder.
+      - name: Stage built files into console/ and the site root
         run: |
           rm -rf console/assets
           cp console/dist/app.html console/index.html
           cp -r console/dist/assets console/assets
           cp console/dist/favicon.svg console/favicon.svg 2>/dev/null || true
           cp console/dist/icons.svg console/icons.svg 2>/dev/null || true
+          sed -e 's#"\./assets/#"./console/assets/#g' -e 's#"\./favicon\.svg"#"./console/favicon.svg"#g' console/dist/dashboard.html > index.html
+          grep -q 'console/assets/dashboard-' index.html
 
       - name: Commit and push built console
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add console/index.html console/assets
+          git add index.html console/index.html console/assets
           # Only commit if there are changes
           git diff --cached --quiet || git commit -m "chore: deploy console build [skip ci]"
           git push

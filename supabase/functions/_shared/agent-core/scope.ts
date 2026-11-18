@@ -93,6 +93,8 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     'agent_threads', 'agent_turns', 'agent_hints', 'agent_digests', 'agent_settings',
     // device push tokens; the raw inputs behind a meal estimate (typed text, photo paths), read through meals instead
     'push_subscriptions', 'meal_inputs',
+    // the Google refresh token the calendar sync uses (written at sign-in): a credential, never data
+    'user_google_tokens',
   ),
 }
 

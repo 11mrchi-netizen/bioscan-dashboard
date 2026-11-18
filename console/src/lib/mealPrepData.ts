@@ -25,6 +25,13 @@ export async function loadPublished(weekStart: string): Promise<PublishedWeek | 
   return { plan: d.plan, computedAt: d.computed_at, engineVersion: d.engine_version }
 }
 
+/** Every week the phone has sent, newest first: what the web can portion right now. */
+export async function loadPublishedWeeks(): Promise<{ weekStart: string; computedAt: string }[]> {
+  const r = await supabase.from('fuel_week_plans').select('week_start,computed_at').order('week_start', { ascending: false }).limit(8)
+  if (r.error) throw new Error(`fuel_week_plans: ${r.error.message}`)
+  return ((r.data ?? []) as { week_start: string; computed_at: string }[]).map((x) => ({ weekStart: x.week_start, computedAt: x.computed_at }))
+}
+
 export async function loadWeek(weekStart: string): Promise<PrepWeek> {
   const r = await supabase.from('meal_prep_weeks').select('week_start,picks,recipes,skipped,containers,status').eq('week_start', weekStart).maybeSingle()
   if (r.error) throw new Error(`meal_prep_weeks: ${r.error.message}`)

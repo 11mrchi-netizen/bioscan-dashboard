@@ -40,6 +40,7 @@ fun LabTileScreen(
     onBack: (() -> Unit)?,
     onOpenPantry: () -> Unit = {},
     onOpenDayMap: (LocalDate) -> Unit = {},
+    onOpenBreathwork: () -> Unit = {},
     // Set by a deep link (supplement reminder -> SUPPLEMENTS, fuel reminder -> PLANNING › FOOD PLAN, body check-in
     // reminder -> TESTS with the check-in up); applied once, then cleared via the callback.
     requestedTab: LabTab? = null,
@@ -72,7 +73,7 @@ fun LabTileScreen(
         subtitle = when (tab) {
             LabTab.N1 -> "WHAT GOES WITH WHAT · EXPERIMENTS · SUMMARIES"
             LabTab.Supplements -> "ROSTER · PANTRY · EXPERIMENTS"
-            LabTab.Tests -> "START A TEST · RESULTS GO TO LOG"
+            LabTab.Tests -> "START A TEST · RESULTS GO TO LOG · BREATHWORK"
             LabTab.Routine -> "DAY MAP · THE WEEK BY PLACE · COMMUTE · PHONE"
             LabTab.Explore -> "ANY TWO MEASURES · DAYS LATER · HOW SURE"
         },
@@ -83,7 +84,7 @@ fun LabTileScreen(
         when (tab) {
             LabTab.N1 -> N1Tab()
             LabTab.Supplements -> SupplementsScreen(onOpenPantry = onOpenPantry)
-            LabTab.Tests -> TestsTab(onStart = { test = it })
+            LabTab.Tests -> TestsTab(onStart = { test = it }, onOpenBreathwork = onOpenBreathwork)
             LabTab.Routine -> RoutineTab(onOpenDay = onOpenDayMap)
             LabTab.Explore -> ExploreTab()
         }
@@ -103,7 +104,7 @@ enum class LabTest { Grip, BodyCheckIn, SweatTest, RunningForm }
 // Lab › TESTS: where a test starts. Its result is saved like any other entry, so it shows in Log and on the cards that
 // read it (grip and the check-in on Health › Body, the sweat test in race fuel plans).
 @Composable
-private fun TestsTab(onStart: (LabTest) -> Unit) {
+private fun TestsTab(onStart: (LabTest) -> Unit, onOpenBreathwork: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -112,16 +113,18 @@ private fun TestsTab(onStart: (LabTest) -> Unit) {
         TestRow("BODY CHECK-IN", "Grip, tape girths and three skinfolds, once a month before breakfast. About 15 minutes.") { onStart(LabTest.BodyCheckIn) }
         TestRow("SWEAT TEST", "Weigh before and after a session of an hour or more, with what you drank. It sets your sweat rate.") { onStart(LabTest.SweatTest) }
         TestRow("RUNNING FORM ANALYSER", "A 10–20 s side-on clip, read on the phone: foot landing, knee and shin, trunk lean, bounce and, in slow motion, contact time.") { onStart(LabTest.RunningForm) }
+        // Not a test (nothing is saved): a guided breathing pacer with presets and your own patterns.
+        TestRow("BREATHWORK", "Box, 4-7-8, coherent, the physiological sigh, or a pattern of your own, paced by a guide circle.", startLabel = "OPEN", onStart = onOpenBreathwork)
     }
 }
 
 @Composable
-private fun TestRow(title: String, line: String, onStart: (() -> Unit)?) {
+private fun TestRow(title: String, line: String, startLabel: String = "START", onStart: (() -> Unit)?) {
     FTCard(title = title) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(line, style = FTType.BodySmall, color = FT.TextSecondary, modifier = Modifier.weight(1f))
             if (onStart != null) {
-                FTButton("START", emphasis = FTButtonEmphasis.Primary, onClick = onStart)
+                FTButton(startLabel, emphasis = FTButtonEmphasis.Primary, onClick = onStart)
             } else {
                 FTButton("COMING", enabled = false, emphasis = FTButtonEmphasis.Tertiary, onClick = {})
             }

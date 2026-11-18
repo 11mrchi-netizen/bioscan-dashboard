@@ -29,6 +29,9 @@ enum class TopLevelTab(val route: String, val label: String) {
 /** Setup's hub, pushed from ME's gear (it was a dock tab). */
 const val SETUP_ROUTE = "setup"
 
+/** Breathwork, pushed from Lab › TESTS. */
+const val BREATHWORK_ROUTE = "breathwork"
+
 // PLAN's sub-tabs: what is planned and what was done.
 enum class PlanTab(val label: String) {
     Training("TRAINING"),

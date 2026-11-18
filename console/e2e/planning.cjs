@@ -106,7 +106,7 @@ const check = (ok, what, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} 
 
     await page.goto(`${BASE}#/plan-block`)
     await page.waitForSelector('.pb-steps', { timeout: 15000 })
-    check((await page.textContent('.shell-rail')).includes('Plan block'), 'the rail lists Plan block under PLANNING')
+    check((await page.textContent('.shell-rail')).includes('Plan block'), 'the rail lists Plan block under PLAN')
     await shot('plan_1_when')
     check((await page.inputValue('input[type=time]')) === '06:30', 'session times start from training_settings')
 

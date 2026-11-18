@@ -3,6 +3,8 @@
 .shell {
   display: grid;
   grid-template-rows: var(--header-h) 1fr;
+  /* minmax(0, …): the header's controls must not widen the page past a phone's screen (they scroll instead). */
+  grid-template-columns: minmax(0, 1fr);
   height: 100dvh;
   background: var(--color-base);
   color: var(--color-text-primary);
@@ -144,9 +146,12 @@
   .shell.inspector-open .shell-body,
   .shell.rail-collapsed .shell-body,
   .shell.rail-collapsed.inspector-open .shell-body {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
   }
+
+  .shell-header { overflow-x: auto; overflow-y: hidden; }
+  .shell-header > * { flex-shrink: 0; }
 
   .shell-rail {
     flex-direction: row;
@@ -179,3 +184,4 @@
 }
 
 .rail-section { display: block; font-size: 10px; letter-spacing: 0.1em; color: var(--color-text-muted); padding: var(--sp-4) var(--sp-4) var(--sp-1); }
+.rail-group { display: contents; }

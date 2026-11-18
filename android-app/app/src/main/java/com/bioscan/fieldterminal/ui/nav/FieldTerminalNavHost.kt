@@ -65,6 +65,7 @@ import com.bioscan.fieldterminal.ui.screens.detail.SleepScreen
 import com.bioscan.fieldterminal.ui.screens.detail.WellbeingScreen
 import com.bioscan.fieldterminal.ui.screens.events.EventScreen
 import com.bioscan.fieldterminal.ui.screens.health.ConcernScreen
+import com.bioscan.fieldterminal.ui.screens.lab.BreathworkScreen
 import com.bioscan.fieldterminal.ui.screens.me.MeScreen
 import com.bioscan.fieldterminal.ui.screens.performance.RecordsScreen
 import com.bioscan.fieldterminal.ui.screens.performance.SportScreen
@@ -261,6 +262,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                         onBack = if (route == TileRoute.Lab.route) ({ navController.popBackStack() }) else null,
                         onOpenPantry = { navController.navigate("pantry") },
                         onOpenDayMap = { date -> navController.navigate("routine_day/$date") },
+                        onOpenBreathwork = { navController.navigate(BREATHWORK_ROUTE) { launchSingleTop = true } },
                         requestedTab = labsRequestedTab,
                         onRequestedTabConsumed = { labsRequestedTab = null },
                         openBodyCheckIn = bodyCheckInRequested,
@@ -278,6 +280,8 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                     onRequestedTabConsumed = { planRequestedTab = null },
                 )
             }
+            // Lab › TESTS › BREATHWORK: presets, your own patterns and the guided session.
+            composable(BREATHWORK_ROUTE) { BreathworkScreen(onBack = { navController.popBackStack() }) }
             composable("pantry") { PantryScreen(onBack = { navController.popBackStack() }) }
             // The day map (Lab › ROUTINE): one day's path, places and timeline; places are labelled and marked here.
             composable("routine_day/{date}") { backStackEntry ->

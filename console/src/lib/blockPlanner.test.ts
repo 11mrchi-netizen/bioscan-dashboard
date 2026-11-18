@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { DefinitionIndex, parseDefinition } from '../../../supabase/functions/_shared/training-core/index.ts'
 import {
-  buildToward, changeWeeks, choicesJson, DEFAULT_SETTINGS, definitionsUsed, generate, missingMaxes, newDraft, pickProtocol, pickStrength, type PlannerCatalog,
+  buildToward, changeWeeks, choicesJson, startAfterBlocks, DEFAULT_SETTINGS, definitionsUsed, generate, missingMaxes, newDraft, pickProtocol, pickStrength, type PlannerCatalog,
 } from './blockPlanner.ts'
 
 const sc = JSON.parse(readFileSync(new URL('../../../supabase/functions/_shared/training-core/fixtures/scenarios.json', import.meta.url), 'utf8'))
@@ -42,4 +42,17 @@ test('building toward an event sets the length to its week and tapers the last w
   assert.equal(d.name, 'Toward Spring half')
   d = changeWeeks(d, index, 4)
   assert.equal(d.timeline.length, 4)
+})
+
+test('toward a race the weeks start with early weeks and the last cycle ends right before the taper', () => {
+  let d = pickStrength(newDraft(DEFAULT_SETTINGS, '2026-01-07', null), index, 'example.three_day')
+  const race = { id: 2, name: 'Race', priority: 'B', eventDate: '2026-03-16', plannedDurationMin: 60 }
+  d = buildToward(d, index, race, [race])
+  assert.deepEqual(d.timeline, ['lead', 'lead', 'normal', 'normal', 'normal', 'deload', 'normal', 'normal', 'normal', 'deload'])
+})
+
+test('a new block starts the day after the latest block still running', () => {
+  assert.equal(startAfterBlocks([{ end_date: '2026-11-29', status: 'completed' }, { end_date: '2026-10-01', status: 'completed' }], '2026-11-18'), '2026-11-30')
+  assert.equal(startAfterBlocks([{ end_date: '2026-10-01', status: 'completed' }], '2026-11-18'), undefined)
+  assert.equal(startAfterBlocks([{ end_date: '2026-12-31', status: 'abandoned' }], '2026-11-18'), undefined)
 })

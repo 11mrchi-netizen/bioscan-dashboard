@@ -170,6 +170,10 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
             }.onFailure { error = it.message ?: "Could not load" }
             events = catching { AthleteEventsRepository(SupabaseClientProvider.client).loadUpcoming(LocalDate.now()) }
                 .getOrDefault(emptyList())
+            // A block still running (or one just ended early): the new one starts the day after it ends.
+            catching { repo.loadGeneratedBlocks() }.getOrNull()?.mapNotNull { runCatching { LocalDate.parse(it.endDate) }.getOrNull() }?.maxOrNull()
+                ?.takeIf { !it.isBefore(LocalDate.now().minusDays(1)) }
+                ?.let { end -> if (startDate.isBefore(end.plusDays(1)) || startDate.isAfter(end.plusDays(7))) changeStart(end.plusDays(1)) }
             loading = false
         }
     }

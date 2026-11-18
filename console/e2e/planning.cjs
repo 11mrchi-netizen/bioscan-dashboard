@@ -16,6 +16,7 @@ const REF = 'ugfrglbcoivkprjqvjzz'
 
 const sc = JSON.parse(fs.readFileSync(path.join(__dirname, '../../supabase/functions/_shared/training-core/fixtures/scenarios.json'), 'utf8'))
 const today = new Date().toLocaleDateString('sv-SE')
+const addDays = (d, n) => { const t = new Date(`${d}T12:00:00Z`); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10) }
 const T = {
   training_definitions: sc.definitions.map((d, i) => ({ id: i + 1, key: d.key, version: 1, kind: d.kind, body: d, status: 'reviewed' })),
   training_settings: [{ plates_kg: [1.25, 2.5, 5, 10, 15, 20], default_start_time: '06:30:00', default_duration_min: 60, second_start_time: '19:00:00', second_duration_min: 45, weighted_percent_base: 'added' }],
@@ -27,7 +28,15 @@ const T = {
   exercise_sessions: [{ start_time: '2026-11-02T07:00:00+00:00', type: 'strength', details: { exercises: [{ name: 'Deadlift', sets: [{ reps: 5, weight_kg: 150 }, { reps: 3, weight_kg: 160 }] }] } }],
   athlete_events: [{ id: 7, name: 'Spring half', priority: 'A', event_date: '2027-03-14', target_time_min: 95, expected_duration_min: null, status: 'planned' }],
   body_metrics: [{ date: '2026-11-15', weight_kg: 78.4 }],
-  training_blocks: [], training_block_domains: [], planned_sessions: [],
+  // A block under way (Velocity): three-day program, Mondays/Wednesdays/Fridays, ending in five weeks.
+  training_blocks: [{
+    id: 99, name: 'Velocity', start_date: addDays(today, -14), end_date: addDays(today, 34), status: 'scheduled', origin: 'generated',
+    components: [{ role: 'strength', ref: { kind: 'strength_module', key: 'example.three_day' } }],
+    choices: { clusters: { 'example.three_day': { H: ['Deadlift'] } } },
+    definition_snapshot: { definitions: { 'example.three_day': sc.definitions.find((d) => d.key === 'example.three_day') } }, review: null,
+  }],
+  training_block_domains: [],
+  planned_sessions: Array.from({ length: 21 }, (_, i) => ({ id: 1000 + i, block_id: 99, scheduled_date: addDays(today, -14 + Math.floor(i / 3) * 7 + (i % 3) * 2), week_index: Math.floor(i / 3) + 1, status: i < 6 ? 'confirmed' : 'planned', prescription: [{ type: 'lift', exercise: 'Press', load: { kind: 'pct_1rm', pct: 70 + (Math.floor(i / 3) % 3) * 5 + (i >= 15 ? 15 : 0) } }] })),
   meal_prep_weeks: [], breakfast_templates: [{ items: [{ food_id: 'staple:oats', grams: 70 }, { food_id: 'staple:greek_yoghurt', grams: 200 }, { food_id: 'staple:banana', grams: 118 }] }],
 }
 // The meal prep fixture week (fuel-core/fixtures/week.json), published for next Monday as the phone would.
@@ -74,7 +83,8 @@ const check = (ok, what, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} 
       const single = (req.headers()['accept'] ?? '').includes('vnd.pgrst.object')
       if (req.method() !== 'GET' && req.method() !== 'HEAD') {
         const body = JSON.parse(req.postData() || 'null')
-        writes.push({ method: req.method(), table, body })
+        writes.push({ method: req.method(), table, body, url: decodeURIComponent(req.url()) })
+        if (req.method() === 'PATCH') return route.fulfill({ status: 204, body: '' })
         const rows = Array.isArray(body) ? body : body ? [body] : []
         const out = rows.map((r) => { const row = { id: (T[table]?.length ?? 0) + 1, ...r }; (T[table] ??= []).push(row); return row })
         return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(single ? out[0] ?? null : out) })
@@ -124,12 +134,36 @@ const check = (ok, what, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} 
     await page.click('button:has-text("CREATE BLOCK")')
     await page.waitForSelector('text=CREATED', { timeout: 10000 })
     await shot('plan_7_created')
-    const planned = writes.filter((w) => w.table === 'planned_sessions').flatMap((w) => w.body)
+    const planned = writes.filter((w) => w.table === 'planned_sessions' && w.method === 'POST').flatMap((w) => w.body)
     check(planned.length === sessions && sessions > 0, 'every planned session is written', `${planned.length} of ${sessions}`)
     check(writes.some((w) => w.table === 'athlete_maxes' && w.body.value === 170 && w.body.source === 'manual'), 'the typed deadlift max is recorded')
-    const blk = writes.find((w) => w.table === 'training_blocks').body
+    const blk = writes.find((w) => w.table === 'training_blocks' && w.method === 'POST').body
     check(blk.origin === 'generated' && blk.status === 'scheduled' && blk.choices.timeline[1] === 'test', 'the block row keeps the choices', JSON.stringify(blk.choices.timeline))
     check(planned.every((p) => p.start_time === '06:30' || p.start_time === '19:00'), 'sessions carry the session times')
+
+    // ---- END A BLOCK EARLY, THEN BUILD TOWARD THE RACE ----
+    await page.goto(`${BASE}#/plan-block`)
+    await page.waitForSelector('.pb-steps', { timeout: 15000 })
+    await page.click('.pb-step:has-text("WHEN")')
+    await page.click('.pb-detail:has-text("Velocity") button:has-text("END EARLY")')
+    await page.click('.pb-chip:has-text("END OF NEXT WEEK")')
+    await page.waitForSelector('text=sets aside')
+    await shot('plan_8_end_early')
+    check((await page.textContent('.pb-section:has-text("BLOCKS UNDER WAY")')).includes('% of the 1RM'), 'ending early shows what is set aside')
+    await page.click('button:has-text("END ON")')
+    await page.waitForTimeout(800)
+    const sup = writes.find((w) => w.method === 'PATCH' && w.table === 'planned_sessions')
+    check(sup && sup.body.status === 'superseded' && sup.url.includes('status=eq.planned') && sup.url.includes('scheduled_date=gt.'), 'later planned sessions are superseded, not deleted', sup && sup.url)
+    const ended = writes.find((w) => w.method === 'PATCH' && w.table === 'training_blocks')
+    check(ended && ended.body.status === 'completed' && ended.body.review.ended_early.maxes_stepped_up === false, 'the block ends with its maxes kept by default')
+    check(!writes.some((w) => w.table === 'athlete_maxes' && w.body.source === 'progression'), 'no max is stepped up unless asked')
+    const lastDay = ended.body.end_date
+    check((await page.inputValue('.pb-field:has-text("START") input[type=date]')) === addDays(lastDay, 1), 'the new block starts the day after the stop', await page.inputValue('.pb-field:has-text("START") input[type=date]'))
+    await page.selectOption('.pb-field:has-text("BUILD TOWARD") select', '7')
+    await page.click('.pb-step:has-text("THE WEEKS")')
+    await shot('plan_9_race_weeks')
+    const kinds = await page.$$eval('.pb-table tbody tr', (rows) => rows.map((r) => r.className))
+    check(kinds[0] === 'pb-week-lead' && kinds[kinds.length - 1] === 'pb-week-deload', 'toward the race: early weeks first, taper last', kinds.join(','))
 
     // ---- MEAL PREP ----
     await page.goto(`${BASE}#/meal-prep`)

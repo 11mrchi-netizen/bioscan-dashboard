@@ -8,15 +8,15 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLoadEffect } from '../lib/useLoadEffect'
 import {
   blockLength, buildableEvents, buildToward, canCreate, changeStart, changeWeeks, choiceFor, dayPositions, exercisesInPlay, generate,
-  missingMaxes, newDraft, pickProtocol, pickRoute, pickStrength, pickTemplate, type PlannerCatalog, type PlannerDraft, protocolOf, setDay, setWeek,
+  missingMaxes, newDraft, startAfterBlocks, pickProtocol, pickRoute, pickStrength, pickTemplate, type PlannerCatalog, type PlannerDraft, protocolOf, setDay, setWeek,
   strengthModules, strengthOf, templateOf, updateChoice, weekdayFor, weekStats, weekWarnings, withLayoutReset, withTimelineReset,
 } from '../lib/blockPlanner'
-import { createBlock, type ExistingBlock, loadExistingBlocks, loadPlannerCatalog, saveSettingsAsDefault } from '../lib/blockPlannerData'
+import { type BlockForEnding, createBlock, endBlockEarly, type ExistingBlock, loadBlockForEnding, loadExistingBlocks, loadPlannerCatalog, saveSettingsAsDefault } from '../lib/blockPlannerData'
 import {
   type ConditioningProtocolDef, type ConditioningSessionDef, countedWeeks, type DayPlan, type GeneratedBlock, type GeneratedSession, isCluster,
   isMainProtocol, itemText, loadText, localToday, type NumRange, plusDays, plusWeekday, rangeText, slotsToChoose, STRENGTH_GROUPS, type StrengthModuleDef,
   type TemplateDef, templateVariables, versionsOf, WEEK_KINDS, type WeekKind, weekdayOf, weekdayShort, type Weekday, progressionIncrementKg, loadStepKg,
-  fmt, kgToLb,
+  fmt, kgToLb, endEarlyPreview, stepUpMaxes, movementKey,
 } from '../../../supabase/functions/_shared/training-core/index.ts'
 import './PlanBlock.css'
 
@@ -55,7 +55,7 @@ export default function PlanBlock() {
     if (!isCurrent()) return
     setCat(c)
     setExisting(blocks)
-    setDraftState((d) => d ?? readDraft() ?? newDraft(c.settings, localToday(), c.bodyweightKg))
+    setDraftState((d) => d ?? readDraft() ?? newDraft(c.settings, localToday(), c.bodyweightKg, startAfterBlocks(blocks, localToday())))
   }, [])
 
   const setDraft = (f: (d: PlannerDraft) => PlannerDraft) => setDraftState((d) => (d ? f(d) : d))
@@ -93,7 +93,7 @@ export default function PlanBlock() {
     setCreated(null)
     setSelected(null)
     setStep('when')
-    setDraftState(newDraft(cat.settings, localToday(), cat.bodyweightKg))
+    setDraftState(newDraft(cat.settings, localToday(), cat.bodyweightKg, startAfterBlocks(existing, localToday())))
   }
 
   return (
@@ -115,6 +115,10 @@ export default function PlanBlock() {
       </nav>
 
       <main className="pb-main">
+        {current === 'when' && <RunningBlocks blocks={existing} cat={cat} onEnded={async (nextStart) => {
+          setExisting(await loadExistingBlocks().catch(() => existing))
+          setDraft((x) => changeStart(x, cat.index, nextStart, cat.events))
+        }} />}
         {current === 'when' && <WhenStep d={draft} cat={cat} set={setDraft} />}
         {current === 'program' && <ProgramStep d={draft} cat={cat} set={setDraft} />}
         {current === 'week' && <WeekStep d={draft} cat={cat} set={setDraft} />}
@@ -549,6 +553,7 @@ function cycleRows(d: PlannerDraft, len: number, hasStrength: boolean): WeekPlan
   let blockPos = 0
   let block = 1
   let skip = false
+  let lead = 0
   return d.timeline.map((k, i) => {
     const start = plusDays(d.startDate, 7 * i)
     if (!hasStrength) return { week: i + 1, kind: k, start, label: k === 'normal' ? '' : k.toUpperCase(), progresses: false }
@@ -559,6 +564,7 @@ function cycleRows(d: PlannerDraft, len: number, hasStrength: boolean): WeekPlan
       blockPos++
       return { week: i + 1, kind: k, start, label: `BLOCK ${block} · WEEK ${blockPos} OF ${len}`, progresses: progresses && d.projectProgression }
     }
+    if (k === 'lead') { lead++; return { week: i + 1, kind: k, start, label: `EARLY: OPENING WEEK ${((lead - 1) % Math.max(1, len - 1)) + 1} AGAIN, BEFORE THE FULL CYCLE`, progresses: false } }
     if (k === 'test') skip = true
     return { week: i + 1, kind: k, start, label: k === 'deload' ? 'DELOAD: NOT COUNTED, PAUSES THE CYCLE' : 'TEST: MAXES, NO PROGRESSION AFTER', progresses: false }
   })
@@ -572,7 +578,7 @@ function WeeksStep({ d, cat, set }: { d: PlannerDraft; cat: PlannerCatalog; set:
   const event = cat.events.find((e) => e.id === d.targetEventId)
   return (
     <>
-      <Section title="WHAT EACH WEEK IS" info={s ? `${s.title} runs in blocks of ${len} weeks. A deload week is invisible: it does not count and pauses the cycle. After a test week the maxes are not stepped up.` : 'Without a strength program every week is conditioning; a deload eases the low-intensity minutes and drops hard sessions.'}>
+      <Section title="WHAT EACH WEEK IS" info={s ? `${s.title} runs in blocks of ${len} weeks. A deload week is invisible: it does not count and pauses the cycle. After a test week the maxes are not stepped up. An early week repeats the cycle's opening weeks before the first full cycle: toward a race, the weeks that do not make a whole cycle become early weeks, so the last cycle peaks right before the taper.` : 'Without a strength program every week is conditioning; a deload eases the low-intensity minutes and drops hard sessions.'}>
         <table className="pb-table">
           <thead><tr><th>WEEK</th><th>FROM</th><th>KIND</th><th>IN THE CYCLE</th><th /></tr></thead>
           <tbody>
@@ -582,7 +588,7 @@ function WeeksStep({ d, cat, set }: { d: PlannerDraft; cat: PlannerCatalog; set:
                 <td>{dateShort(r.start)}</td>
                 <td>
                   <div className="pb-chips">
-                    {WEEK_KINDS.map((k) => <button key={k} className={`pb-chip small ${r.kind === k ? 'on' : ''}`} onClick={() => set((x) => setWeek(x, r.week - 1, k))}>{k.toUpperCase()}</button>)}
+                    {WEEK_KINDS.map((k) => <button key={k} className={`pb-chip small ${r.kind === k ? 'on' : ''}`} onClick={() => set((x) => setWeek(x, r.week - 1, k))}>{k === 'lead' ? 'EARLY' : k.toUpperCase()}</button>)}
                   </div>
                 </td>
                 <td className="mono pb-muted">{r.label}</td>
@@ -1006,6 +1012,85 @@ function SessionDetail({ s, onClose }: { s: GeneratedSession; onClose: () => voi
         <span className="pb-info">{s.conditioning.label}{s.conditioning.category ? ` · ${s.conditioning.category.toUpperCase()}` : ''}{s.conditioning.minutes ? ` · ${rangeText(s.conditioning.minutes)} min` : ''}</span>
       )}
       {s.notes.map((n) => <span key={n} className="pb-hint">{n}</span>)}
+    </div>
+  )
+}
+
+// ---------------- blocks under way: end one early ----------------
+
+function RunningBlocks({ blocks, cat, onEnded }: { blocks: ExistingBlock[]; cat: PlannerCatalog; onEnded: (nextStart: string) => void }) {
+  const today = localToday()
+  const running = blocks.filter((b) => (b.status === 'scheduled' || b.status === 'active') && b.end_date > today)
+  const [open, setOpen] = useState<number | null>(null)
+  if (running.length === 0) return null
+  return (
+    <Section title="BLOCKS UNDER WAY" info="A new block starts the day after the latest one ends. To change course (more training now, the peak nearer the race), end the current block early: its later sessions are set aside, not deleted.">
+      {running.map((b) => (
+        <div key={b.id} className="pb-detail">
+          <div className="pb-row tight" style={{ justifyContent: 'space-between' }}>
+            <span><b>{b.name}</b> <span className="pb-muted mono">{dateShort(b.start_date)} → {dateShort(b.end_date)} · {b.status.toUpperCase()}</span></span>
+            {open !== b.id && <button className="btn-ghost mono" onClick={() => setOpen(b.id)}>END EARLY</button>}
+          </div>
+          {open === b.id && <EndEarly id={b.id} cat={cat} onCancel={() => setOpen(null)} onEnded={(last) => { setOpen(null); onEnded(plusDays(last, 1)) }} />}
+        </div>
+      ))}
+    </Section>
+  )
+}
+
+function EndEarly({ id, cat, onCancel, onEnded }: { id: number; cat: PlannerCatalog; onCancel: () => void; onEnded: (lastDay: string) => void }) {
+  const today = localToday()
+  const sunday = plusDays(today, (7 - weekdayOf(today)) % 7)
+  const [b, setB] = useState<BlockForEnding | null>(null)
+  const [lastDay, setLastDay] = useState(plusDays(sunday, 7))
+  const [stepUp, setStepUp] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  useEffect(() => {
+    let live = true
+    loadBlockForEnding(id).then((x) => {
+      if (!live) return
+      setB(x)
+      setLastDay((d) => (d < x.row.start_date ? x.row.start_date : d >= x.row.end_date ? plusDays(x.row.end_date, -1) : d))
+    }).catch((e) => setErr(e instanceof Error ? e.message : String(e)))
+    return () => { live = false }
+  }, [id])
+  if (!b) return <p className="pb-hint">{err ?? 'Loading the block…'}</p>
+  const valid = lastDay >= b.row.start_date && lastDay < b.row.end_date
+  const preview = endEarlyPreview(b.sessions, lastDay)
+  const steps = b.module ? stepUpMaxes(b.module, b.choice, (n) => cat.maxes[movementKey(n)]?.entry.oneRmKg, loadStepKg(cat.settings.plates_kg)) : []
+  return (
+    <div className="pb-detail">
+      <div className="pb-row">
+        <Field label="LAST DAY OF THE BLOCK">
+          <div className="pb-chips">
+            {[[sunday, 'END OF THIS WEEK'], [plusDays(sunday, 7), 'END OF NEXT WEEK']].filter(([d]) => d >= b.row.start_date && d < b.row.end_date).map(([d, l]) => (
+              <button key={d} className={`pb-chip ${lastDay === d ? 'on' : ''}`} onClick={() => setLastDay(d)}>{l} · {dateShort(d)}</button>
+            ))}
+            <input className="pb-input" type="date" value={lastDay} min={b.row.start_date} max={plusDays(b.row.end_date, -1)} onChange={(e) => e.target.value && setLastDay(e.target.value)} />
+          </div>
+        </Field>
+      </div>
+      {!valid && <p className="pb-warn">Choose a day from {dateShort(b.row.start_date)} to {dateShort(plusDays(b.row.end_date, -1))}.</p>}
+      <p className="pb-info">Keeps {preview.kept} session{preview.kept === 1 ? '' : 's'}; sets aside the {preview.dropped} still planned after {dateLong(lastDay)}{preview.heaviestDroppedPct != null ? `, the heaviest at ${fmt(preview.heaviestDroppedPct)}% of the 1RM` : ''}.</p>
+      {preview.droppedWeeks.length > 0 && <p className="pb-hint mono">{preview.droppedWeeks.map((w) => `W${w.weekIndex}: ${w.sessions}${w.topPct != null ? ` · ≤${fmt(w.topPct)}%` : ''}`).join('   ')}</p>}
+      <Field label="MAXES FOR THE NEXT BLOCK" hint="The program steps maxes up after a completed cycle; this one stops before its end.">
+        <div className="pb-chips">
+          <button className={`pb-chip ${!stepUp ? 'on' : ''}`} onClick={() => setStepUp(false)}>KEEP TODAY'S MAXES (RECOMMENDED)</button>
+          <button className={`pb-chip ${stepUp ? 'on' : ''}`} onClick={() => setStepUp(true)}>STEP THEM UP AS IF THE CYCLE WAS DONE</button>
+        </div>
+      </Field>
+      {stepUp && (steps.length === 0 ? <p className="pb-hint">Nothing to step up: no progression in the program, or no max recorded.</p>
+        : <p className="pb-hint mono">{steps.map((st) => `${st.exercise} ${fmt(Math.round(st.fromKg * 10) / 10)} → ${fmt(Math.round(st.toKg * 10) / 10)} kg`).join(' · ')}</p>)}
+      {err && <p className="pb-warn">{err}</p>}
+      <div className="pb-row">
+        <button className="pb-primary mono" disabled={!valid || busy} onClick={async () => {
+          setBusy(true); setErr(null)
+          try { await endBlockEarly(b, lastDay, stepUp ? steps : []); onEnded(lastDay) } catch (e) { setErr(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
+        }}>{busy ? 'ENDING…' : `END ON ${dateShort(lastDay).toUpperCase()}`}</button>
+        <button className="btn-ghost mono" onClick={onCancel}>CANCEL</button>
+      </div>
+      <p className="pb-hint">The new block then starts {dateLong(plusDays(lastDay, 1))}.</p>
     </div>
   )
 }

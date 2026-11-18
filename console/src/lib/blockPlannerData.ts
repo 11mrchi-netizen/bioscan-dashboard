@@ -3,6 +3,7 @@
 
 import { supabase } from './supabase'
 import {
+  endEarlyPreview, type MaxStep, type ModuleChoice, type PlannedLite, type StrengthModuleDef, topPct,
   type DatedSet, type Definition, DefinitionIndex, deriveBlockDomains, type GeneratedBlock, localToday, movementKey, parseDefinition, plusDays,
   prescriptionJson, type RecordedMax, resolveMaxes,
 } from '../../../supabase/functions/_shared/training-core/index.ts'
@@ -145,4 +146,47 @@ export async function createBlock(d: PlannerDraft, cat: PlannerCatalog, block: G
     throw e
   }
   return blockId
+}
+
+// ---- ending a block early (same rows as the phone's TrainingProgramRepository.endBlockEarly) ----
+
+export interface BlockForEnding {
+  row: ExistingBlock; sessions: PlannedLite[]; module: StrengthModuleDef | null; choice: ModuleChoice; review: Record<string, unknown> | null
+}
+
+export async function loadBlockForEnding(id: number): Promise<BlockForEnding> {
+  const b = await supabase.from('training_blocks').select('id,name,start_date,end_date,status,components,choices,definition_snapshot,review').eq('id', id).single()
+  if (b.error) throw new Error(`training_blocks: ${b.error.message}`)
+  const s = await supabase.from('planned_sessions').select('id,scheduled_date,week_index,status,prescription').eq('block_id', id).neq('status', 'superseded')
+  if (s.error) throw new Error(`planned_sessions: ${s.error.message}`)
+  const row = b.data as ExistingBlock & { components: unknown; choices: Record<string, unknown> | null; definition_snapshot: { definitions?: Record<string, unknown> } | null; review: Record<string, unknown> | null }
+  const strengthKey = (Array.isArray(row.components) ? row.components : []).map((c) => c as { role?: string; ref?: { key?: string } }).find((c) => c.role === 'strength')?.ref?.key ?? null
+  let module: StrengthModuleDef | null = null
+  if (strengthKey && row.definition_snapshot?.definitions?.[strengthKey]) {
+    try { const d = parseDefinition(row.definition_snapshot.definitions[strengthKey]); module = d.kind === 'strength_module' ? d : null } catch { module = null }
+  }
+  const cluster = (strengthKey ? (row.choices?.clusters as Record<string, Record<string, unknown>> | undefined)?.[strengthKey] : undefined) ?? {}
+  const exercises: Record<string, string[]> = {}
+  for (const [k, v] of Object.entries(cluster)) if (k !== 'variant' && k !== 'block_length' && Array.isArray(v)) exercises[k] = v.map(String)
+  return {
+    row: { id: row.id, name: row.name, start_date: row.start_date, end_date: row.end_date, status: row.status },
+    sessions: ((s.data ?? []) as { id: number; scheduled_date: string; week_index: number; status: string; prescription: unknown }[])
+      .map((x) => ({ id: x.id, date: x.scheduled_date, weekIndex: x.week_index, status: x.status, topPct: topPct(x.prescription) })),
+    module, choice: { variant: (cluster.variant as string | undefined) ?? null, blockLength: (cluster.block_length as number | undefined) ?? null, exercises },
+    review: row.review,
+  }
+}
+
+/** Ends the block on [lastDay]: later planned sessions superseded (kept), the block completed, the stop in its review. */
+export async function endBlockEarly(b: BlockForEnding, lastDay: string, steps: MaxStep[]): Promise<void> {
+  const dropped = endEarlyPreview(b.sessions, lastDay)
+  const u = await supabase.from('planned_sessions').update({ status: 'superseded' }).eq('block_id', b.row.id).eq('status', 'planned').gt('scheduled_date', lastDay)
+  if (u.error) throw new Error(`planned_sessions: ${u.error.message}`)
+  const review = { ...(b.review ?? {}), ended_early: { last_day: lastDay, original_end_date: b.row.end_date, on: localToday(), superseded_sessions: dropped.dropped, maxes_stepped_up: steps.length > 0 } }
+  const t = await supabase.from('training_blocks').update({ end_date: lastDay, status: 'completed', review, updated_at: new Date().toISOString() }).eq('id', b.row.id)
+  if (t.error) throw new Error(`training_blocks: ${t.error.message}`)
+  for (const st of steps) {
+    const r = await supabase.from('athlete_maxes').insert({ exercise_key: movementKey(st.exercise), exercise_name: st.exercise, kind: '1rm', value: st.toKg, unit: 'kg', as_of: localToday(), source: 'progression', derivation: { from_kg: st.fromKg, reason: 'block ended early, stepped up by choice' }, block_id: b.row.id })
+    if (r.error) throw new Error(`athlete_maxes: ${r.error.message}`)
+  }
 }

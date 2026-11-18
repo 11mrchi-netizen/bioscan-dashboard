@@ -9,7 +9,7 @@ import {
   DefinitionIndex, generateMergedBlock, generateTemplateBlock, type GenChoices, type GeneratedBlock, type GenEquipment, isCluster, layoutWarnings,
   type LocalDate, type MaxEntry, type ModuleChoice, movementKey, nextOrSame, plusWeekday, resizeTimeline, type ResolvedMax, slotsToChoose,
   type SlotTime, type StrengthModuleDef, suggestLayout, type TemplateDef, templateDayPositions, templateModuleKeys, type WeekKind, weekdayOf,
-  weeksForBlocks, type Weekday, withTaper, daysBetween, WEEKDAY_NAMES,
+  weeksForBlocks, type Weekday, withTaper, daysBetween, WEEKDAY_NAMES, raceTimeline,
 } from '../../../supabase/functions/_shared/training-core/index.ts'
 
 export type Route = 'build' | 'published'
@@ -71,9 +71,10 @@ export interface PlannerCatalog {
 
 const hm = (t: string): string => t.slice(0, 5)
 
-export function newDraft(settings: TrainingSettings, today: LocalDate, bodyweightKg: number | null): PlannerDraft {
+/** A new draft starting on [start] (default: the next Monday). */
+export function newDraft(settings: TrainingSettings, today: LocalDate, bodyweightKg: number | null, start?: LocalDate): PlannerDraft {
   return {
-    v: 1, route: 'build', name: '', startDate: nextOrSame(today, 1), targetEventId: null, weeks: 8, lengthChosen: false, startWithTest: false,
+    v: 1, route: 'build', name: '', startDate: start ?? nextOrSame(today, 1), targetEventId: null, weeks: 8, lengthChosen: false, startWithTest: false,
     strengthKey: null, protocolKey: null, templateKey: null, variables: {}, weekdays: {}, layout: [], timeline: Array.from({ length: 8 }, () => 'normal'),
     modules: {}, conditioning: {}, conditioningPerWeek: null, manualMaxes: {}, projectProgression: true,
     slotTimes: { 1: { start: hm(settings.default_start_time), durationMin: settings.default_duration_min }, 2: { start: hm(settings.second_start_time), durationMin: settings.second_duration_min } },
@@ -119,10 +120,12 @@ export function withLayoutReset(d: PlannerDraft, idx: DefinitionIndex): PlannerD
   return { ...d, layout: suggestLayout(strengthOf(d, idx), protocolOf(d, idx), weekdayOf(d.startDate), d.conditioningPerWeek) }
 }
 
+/** The default weeks; toward an event, worked back from the race so the last cycle peaks right before the taper. */
 export function withTimelineReset(d: PlannerDraft, idx: DefinitionIndex, events: PlannerEvent[] = []): PlannerDraft {
-  const base: WeekKind[] = strengthOf(d, idx) ? defaultTimeline(blockLength(d, idx), d.weeks, d.startWithTest) : Array.from({ length: d.weeks }, () => 'normal')
   const e = events.find((x) => x.id === d.targetEventId)
-  return { ...d, timeline: e ? withTaper(base, taperWeeks(e)) : base }
+  const flat: WeekKind[] = Array.from({ length: d.weeks }, () => 'normal')
+  if (!strengthOf(d, idx)) return { ...d, timeline: e ? withTaper(flat, taperWeeks(e)) : flat }
+  return { ...d, timeline: e ? raceTimeline(blockLength(d, idx), d.weeks, taperWeeks(e), d.startWithTest) : defaultTimeline(blockLength(d, idx), d.weeks, d.startWithTest) }
 }
 
 export function pickRoute(d: PlannerDraft, route: Route): PlannerDraft {
@@ -318,3 +321,12 @@ export function weekStats(block: GeneratedBlock, timeline: WeekKind[]): WeekStat
 }
 
 export const counted = (d: PlannerDraft): number => countedWeeks(d.timeline)
+
+/** Where a new block starts: the day after the latest block still running (or just ended early), else the next Monday. */
+export function startAfterBlocks(blocks: { end_date: string; status: string }[], today: LocalDate): LocalDate | undefined {
+  const ends = blocks.filter((b) => b.status !== 'abandoned').map((b) => b.end_date).sort()
+  const last = ends[ends.length - 1]
+  if (!last || last < plusDaysLocal(today, -1)) return undefined
+  return plusDaysLocal(last, 1)
+}
+const plusDaysLocal = (d: LocalDate, n: number): LocalDate => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10)

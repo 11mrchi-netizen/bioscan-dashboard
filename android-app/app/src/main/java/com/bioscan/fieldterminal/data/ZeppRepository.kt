@@ -54,6 +54,7 @@ private data class ZeppPlannedRow(
     val prescription: JsonElement? = null,
     @SerialName("zepp_template_id") val zeppTemplateId: String? = null,
     @SerialName("zepp_pushed_hash") val zeppPushedHash: String? = null,
+    val status: String = "planned",
 )
 
 sealed class ZeppSyncResult {
@@ -150,7 +151,7 @@ class ZeppRepository(private val supabase: SupabaseClient) {
     suspend fun pushUpcoming(days: Long = 7): String { return try {
         val today = LocalDate.now()
         val table = supabase.postgrest.from("planned_sessions")
-        val cols = Columns.list("id,title,scheduled_date,week_index,prescription,zepp_template_id,zepp_pushed_hash")
+        val cols = Columns.list("id,title,scheduled_date,week_index,prescription,zepp_template_id,zepp_pushed_hash,status")
         val upcoming = table.select(columns = cols) {
             filter { gte("scheduled_date", today.toString()); lte("scheduled_date", today.plusDays(days).toString()) }
             order("scheduled_date", Order.ASCENDING)
@@ -159,9 +160,12 @@ class ZeppRepository(private val supabase: SupabaseClient) {
             filter { lt("scheduled_date", today.toString()); neq("zepp_template_id", "") }
         }.decodeList<ZeppPlannedRow>()
 
-        val deleteIds = past.mapNotNull { it.zeppTemplateId }.toMutableList()
+        // A session of a block ended early (superseded) or skipped is not trained: its template comes off the watch.
+        val dropped = upcoming.filter { (it.status == "superseded" || it.status == "skipped") && it.zeppTemplateId != null }
+        val deleteIds = (past + dropped).mapNotNull { it.zeppTemplateId }.toMutableList()
         val specs = mutableMapOf<Long, Pair<String, JsonObject>>() // planned id -> (hash, template json)
         for (row in upcoming) {
+            if (row.status == "superseded" || row.status == "skipped") continue
             val lifts = parsePlannedLifts(row.prescription)
             if (lifts.isEmpty()) continue
             val spec = buildJsonObject {
@@ -214,7 +218,7 @@ class ZeppRepository(private val supabase: SupabaseClient) {
         }
         // Sessions whose old template was deleted but whose new one failed would keep a dead id: clear it.
         val createdKeys = answer["created"]?.jsonArray.orEmpty().map { it.jsonObject["key"]!!.jsonPrimitive.content.toLong() }.toSet()
-        val cleared = upcoming.filter { it.zeppTemplateId != null && it.id in specs && it.id !in createdKeys } + past
+        val cleared = upcoming.filter { it.zeppTemplateId != null && it.id in specs && it.id !in createdKeys } + past + dropped
         for (row in cleared) {
             table.update({
                 set("zepp_template_id", null as String?)

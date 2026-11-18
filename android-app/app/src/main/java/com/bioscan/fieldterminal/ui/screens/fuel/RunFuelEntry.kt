@@ -19,6 +19,16 @@ import com.bioscan.fieldterminal.data.FuelingRepository
 import com.bioscan.fieldterminal.data.FuelingSessionRow
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTFlow
+import com.bioscan.fieldterminal.ui.components.FlowPage
+import com.bioscan.fieldterminal.ui.components.FlowPickGrid
+import com.bioscan.fieldterminal.ui.components.FlowQuestion
+import com.bioscan.fieldterminal.ui.components.rememberFlowState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.LoadingOrError
@@ -43,8 +53,14 @@ private fun label(s: FuelingSessionRow): String {
     return "${s.type.uppercase()} · $whenText" + (s.durationMin?.let { " · ${it.toInt()} MIN" } ?: "")
 }
 
+/**
+ * Add entry › Run fuel as a full-screen flow: ACTIVITY (the recent runs, rides and hikes, six to a page), then the debrief's
+ * pages for the one picked. LOG ONE INTAKE INSTEAD swaps the flow for the single-intake form.
+ */
 @Composable
-internal fun RunFuelEntry(onSaved: () -> Unit) {
+internal fun RunFuelFlow(onDismiss: () -> Unit, onSaved: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val repo = remember { FuelDebriefRepository(SupabaseClientProvider.client) }
     val (sessions, guard) = rememberGuarded { FuelingRepository(SupabaseClientProvider.client).recentSessions() }
     var picked by remember { mutableStateOf<FuelingSessionRow?>(null) }
@@ -52,23 +68,46 @@ internal fun RunFuelEntry(onSaved: () -> Unit) {
     LaunchedEffect(sessions) { if (picked == null) picked = sessions?.firstOrNull() }
     val targetGuard = rememberLoadGuard(refreshOnUpdates = false)
     val target by produceGuarded<DebriefTarget?>(targetGuard, null, picked?.id) { picked?.let { repo.targetForSession(it) } }
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        when {
-            single -> {
-                EnduranceFuelForm(onSaved = onSaved)
-                FTButton("BACK TO THE DEBRIEF", emphasis = FTButtonEmphasis.Tertiary, modifier = Modifier.fillMaxWidth()) { single = false }
-            }
-            sessions == null -> LoadingOrError(guard, "Loading…")
-            sessions.isEmpty() -> {
-                Text("No run, hike or ride in the last three weeks to debrief. Sync your watch or log the activity first.", style = FTType.BodySmall, color = FT.TextSecondary)
-            }
-            else -> {
-                Text("ACTIVITY", color = FT.TextMuted, style = FTType.LabelCaps)
-                val labels = sessions.associateBy({ label(it) }, { it })
-                TextChipRow(labels.keys.toList(), picked?.let { label(it) }, perRow = 1) { chosen -> if (chosen != null) picked = labels[chosen] }
-                LoadErrorLine(targetGuard, "the debrief for this activity")
-                target?.let { t -> key(t.sessionId) { FuelDebriefContent(t, onSaved) } }
-                FTButton("LOG ONE INTAKE INSTEAD", emphasis = FTButtonEmphasis.Tertiary, modifier = Modifier.fillMaxWidth()) { single = true }
+    val flow = rememberFlowState()
+    val t = target
+    key(t?.sessionId, single) {
+        val d = t?.let { rememberDebriefState(it) }
+        val suggestion = d?.suggestion
+        val pages = when {
+            single -> listOf(FlowPage("ONE INTAKE"))
+            suggestion != null -> listOf(FlowPage("SUGGESTION"))
+            else -> listOf(FlowPage("ACTIVITY", ready = d != null)) + d?.pages.orEmpty()
+        }
+        FTFlow(
+            title = "RUN FUEL", pages = pages, state = flow, onClose = onDismiss,
+            canSave = d?.canSave == true, saving = d?.saving == true, saveLabel = "SAVE DEBRIEF", wash = FT.Domain.Fuel, error = d?.error,
+            onSave = { d?.save(context, scope, onSaved) },
+            bottomBar = when {
+                single -> { _ ->
+                    Row(Modifier.fillMaxWidth().background(FT.Surface).padding(horizontal = 16.dp, vertical = 10.dp)) {
+                        FTButton("BACK TO THE DEBRIEF", modifier = Modifier.weight(1f)) { single = false }
+                    }
+                }
+                suggestion != null -> { _ -> ToleranceBar(suggestion, onSaved) }
+                else -> null
+            },
+        ) { page ->
+            when {
+                single -> EnduranceFuelForm(onSaved = onSaved)
+                suggestion != null -> ToleranceResult(suggestion)
+                page == 0 -> when {
+                    sessions == null -> LoadingOrError(guard, "Loading…")
+                    sessions.isEmpty() -> Text("No run, hike or ride in the last three weeks to debrief. Sync your watch or log the activity first.", style = FTType.BodySmall, color = FT.TextSecondary)
+                    else -> {
+                        FlowQuestion("Which activity?", "The debrief is checked against the fuel schedule made for it.")
+                        FlowPickGrid(sessions.map { it.id.toString() to label(it) }, setOfNotNull(picked?.id?.toString()), { id ->
+                            picked = sessions.firstOrNull { it.id.toString() == id }
+                        }, columns = 1, perPage = 6, single = true)
+                        LoadErrorLine(targetGuard, "the debrief for this activity")
+                        FTButton("LOG ONE INTAKE INSTEAD", emphasis = FTButtonEmphasis.Tertiary, modifier = Modifier.fillMaxWidth()) { single = true }
+                    }
+                }
+                else -> d?.Page(page - 1)
             }
         }
     }

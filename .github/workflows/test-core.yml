@@ -43,6 +43,12 @@ jobs:
       - name: Zepp extraction decoder tests
         run: node --test "supabase/functions/zepp-extract/*.test.ts"
 
+      - name: Training engine tests (parity with the Android engine)
+        run: node --test "supabase/functions/_shared/training-core/*.test.ts"
+
+      - name: Meal prep engine tests (parity with the Android engine)
+        run: node --test "supabase/functions/_shared/fuel-core/*.test.ts"
+
       - name: Body composition tests
         run: node --test "supabase/functions/_shared/body-composition/*.test.ts"
 

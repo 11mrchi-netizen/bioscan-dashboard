@@ -20,6 +20,12 @@ const NAV = [
   { to: 'body',      label: 'Body' },
 ]
 
+// Planning: the long-form work done here and carried out on the phone.
+const PLAN_NAV = [
+  { to: 'plan-block', label: 'Plan block' },
+  { to: 'meal-prep',  label: 'Meal prep' },
+]
+
 export function Shell() {
   const { user, signOut } = useAuth()
   const location = useLocation()
@@ -56,6 +62,12 @@ export function Shell() {
       <div className="shell-body">
         <nav className="shell-rail" aria-label="Workspace navigation">
           {NAV.map(({ to, label }) => (
+            <NavLink key={to} to={to} className={({ isActive }) => `rail-item mono ${isActive ? 'active' : ''}`}>
+              {railCollapsed ? label.slice(0, 2).toUpperCase() : label}
+            </NavLink>
+          ))}
+          <span className="rail-section mono">{railCollapsed ? '—' : 'PLANNING'}</span>
+          {PLAN_NAV.map(({ to, label }) => (
             <NavLink key={to} to={to} className={({ isActive }) => `rail-item mono ${isActive ? 'active' : ''}`}>
               {railCollapsed ? label.slice(0, 2).toUpperCase() : label}
             </NavLink>

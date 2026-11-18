@@ -38,6 +38,9 @@ import com.bioscan.fieldterminal.domain.GUT_SYMPTOMS
 import com.bioscan.fieldterminal.domain.WallClock
 import com.bioscan.fieldterminal.domain.withNothingElse
 import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTFlow
+import com.bioscan.fieldterminal.ui.components.FlowPage
+import com.bioscan.fieldterminal.ui.components.rememberFlowState
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTRatingSlider
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
@@ -67,7 +70,6 @@ private val TIME_OF_DAY = DateTimeFormatter.ofPattern("HH:mm")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EveningCheckInSheet(date: LocalDate, onDismiss: () -> Unit, onSaved: (EveningCheckin) -> Unit) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val repo = remember { EveningCheckinRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
     var draft by remember(date) { mutableStateOf(EveningCheckin(date)) }
@@ -90,19 +92,26 @@ fun EveningCheckInSheet(date: LocalDate, onDismiss: () -> Unit, onSaved: (Evenin
         }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, shape = FT.SheetShape, containerColor = FT.Surface, contentColor = FT.TextPrimary) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(20.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text("EVENING CHECK-IN", style = FTType.SectionTitle, color = FT.DomainLog)
+    // THE DAY (drinks, late caffeine, late eating, stress), then the GUT. NOTHING ELSE on either page marks every
+    // unanswered row as none and saves, so a quiet evening is still one tap.
+    val flow = rememberFlowState()
+    val pages = listOf(FlowPage("THE DAY"), FlowPage("GUT"))
+    val blocked = saving || guard.error != null
+    FTFlow(
+        title = "EVENING CHECK-IN", pages = pages, state = flow, onClose = onDismiss,
+        canSave = !blocked, saving = saving, onSave = { save(draft) }, wash = FT.DomainLog,
+        error = error?.let { "Couldn't save: $it" },
+        bottomBar = { page ->
+            Row(Modifier.fillMaxWidth().background(FT.Surface).padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                FTButton("NOTHING ELSE", enabled = !blocked, modifier = Modifier.weight(1f)) { save(draft.withNothingElse()) }
+                if (page == 0) FTButton("NEXT", emphasis = FTButtonEmphasis.Primary, modifier = Modifier.weight(1f)) { flow.next() }
+                else FTButton(if (saving) "SAVING..." else "SAVE", emphasis = FTButtonEmphasis.Primary, enabled = !blocked, modifier = Modifier.weight(1f)) { save(draft) }
+            }
+        },
+    ) { page ->
+        if (page == 0) {
             Text(date.format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.ENGLISH)), style = FTType.RowTitle, color = FT.TextPrimary)
-            Text(
-                "One tap each. Mark what happened, then NOTHING ELSE marks the rest as none, so a quiet evening counts as one.",
-                style = FTType.BodySmall,
-                color = FT.TextSecondary,
-            )
-
+            Text("One tap each. NOTHING ELSE marks the rest as none.", style = FTType.BodySmall, color = FT.TextSecondary)
             CheckInLabel("DRINKS WITH ALCOHOL")
             TextChipRow(DRINK_OPTIONS, draft.drinks?.let { if (it >= 4) "4+" else it.toString() }, perRow = 5) { picked ->
                 draft = draft.copy(drinks = picked?.let { if (it == "4+") 4 else it.toInt() })
@@ -117,7 +126,7 @@ fun EveningCheckInSheet(date: LocalDate, onDismiss: () -> Unit, onSaved: (Evenin
             }
             FTRatingSlider("STRESS TODAY", draft.stress, 1..5, FT.Metric.Stress, { draft = draft.copy(stress = it) },
                 lowWord = "calm", highWord = "very stressed", reversed = true)
-
+        } else {
             // Scoring system (FUEL › gut): how the gut was, what happened, and the day's logged movements with their times.
             FTRatingSlider("GUT", draft.gutComfort, 0..4, FT.Metric.GutComfort, { draft = draft.copy(gutComfort = it) },
                 lowWord = "rough", highWord = "comfortable")
@@ -127,24 +136,8 @@ fun EveningCheckInSheet(date: LocalDate, onDismiss: () -> Unit, onSaved: (Evenin
                 draft = draft.copy(gutSymptoms = if (symptom in now) now - symptom else now + symptom)
             }
             BowelMovements(date)
-
-            LoadErrorCard(guard)
-            error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Bad) }
-            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                FTButton(
-                    label = "NOTHING ELSE",
-                    emphasis = FTButtonEmphasis.Secondary,
-                    enabled = !saving && guard.error == null,
-                    modifier = Modifier.weight(1f),
-                ) { save(draft.withNothingElse()) }
-                FTButton(
-                    label = if (saving) "SAVING..." else "SAVE",
-                    emphasis = FTButtonEmphasis.Primary,
-                    enabled = !saving && guard.error == null,
-                    modifier = Modifier.weight(1f),
-                ) { save(draft) }
-            }
         }
+        LoadErrorCard(guard)
     }
 }
 

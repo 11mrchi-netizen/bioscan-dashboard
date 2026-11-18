@@ -66,13 +66,35 @@ class StayPointsTest {
     }
 
     @Test
-    fun aTripSettlesOnlyAfterTenQuietMinutes() {
+    fun aTripSettlesOnlyAfterFiveQuietMinutes() {
         val quiet = (0..10).map { at(it.toLong(), office, jitterM = (it % 3) * 10.0) }
         assertTrue(isSettled(quiet, now = 10 * min))
         // still moving: the first fixes of the window are 400 m away
-        val moving = (0..10).map { at(it.toLong(), office, jitterM = if (it < 3) 400.0 else 0.0) }
+        val moving = (0..10).map { at(it.toLong(), office, jitterM = if (it < 7) 400.0 else 0.0) }
         assertFalse(isSettled(moving, now = 10 * min))
         // too little history to tell
-        assertFalse(isSettled(quiet.takeLast(4), now = 10 * min))
+        assertFalse(isSettled(quiet.takeLast(3), now = 10 * min))
+    }
+
+    @Test
+    fun stepsAtAKnownStayDoNotStartATrip() {
+        assertFalse(startsTrip("walking", recording = false, atKnownStay = true))
+        assertFalse(startsTrip("running", recording = false, atKnownStay = true))
+        // a vehicle or bicycle is a trip at once; so is walking with no stay to leave, or while a trip is being recorded
+        assertTrue(startsTrip("in_vehicle", recording = false, atKnownStay = true))
+        assertTrue(startsTrip("on_bicycle", recording = false, atKnownStay = true))
+        assertTrue(startsTrip("walking", recording = false, atKnownStay = false))
+        assertTrue(startsTrip("walking", recording = true, atKnownStay = true))
+    }
+
+    @Test
+    fun aRecordingHasLeftOnlyBeyondTheFixesOwnError() {
+        val (lat, lon) = office
+        val north = { m: Double -> lat + m / 111_000.0 }
+        assertFalse(hasLeft(lat, lon, north(100.0), lon, accuracyM = 10.0))
+        assertTrue(hasLeft(lat, lon, north(200.0), lon, accuracyM = 10.0))
+        // a cell-tower fix 400 m away that may be 500 m wrong proves nothing
+        assertFalse(hasLeft(lat, lon, north(400.0), lon, accuracyM = 500.0))
+        assertTrue(hasLeft(lat, lon, north(200.0), lon, accuracyM = null))
     }
 }

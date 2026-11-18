@@ -199,7 +199,7 @@ internal fun FrameFields(state: TrainingPlannerState) {
         state.targetEvent?.let { e ->
             val taper = taperWeeks(e)
             Body(
-                "Ends in the week of ${e.name}." + if (taper > 0) {
+                "Ends in the week of ${e.name}, the last cycle's peak right before the taper; weeks that do not make a whole cycle come first as early weeks." + if (taper > 0) {
                     " The last $taper week${if (taper > 1) "s" else ""} taper (lighter weeks, about half the volume; Bosquet 2007): keep a few short efforts at race pace."
                 } else {
                     ""
@@ -237,12 +237,12 @@ internal fun TimelineStep(state: TrainingPlannerState) {
         Chips(listOf("yes", "no"), setOf(if (state.startWithTest) "yes" else "no"), { if (it == "yes") "BEGIN WITH A TEST WEEK" else "NO TEST WEEK" }) { state.startWithTest = it == "yes"; state.resetTimeline() }
     }
     Label("THE WEEKS")
-    Body("Tap a week to change it: normal, deload (does not count toward the block, pauses the strength cycle, no hard conditioning) or a max test week.", muted = true)
+    Body("Tap a week to change it: normal, deload (does not count toward the block, pauses the strength cycle, no hard conditioning), a max test week, or an early week (repeats the cycle's opening weeks before the first full cycle).", muted = true)
     t.chunked(6).forEachIndexed { row, kinds ->
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             kinds.forEachIndexed { j, k ->
                 val i = row * 6 + j
-                val accent = when (k) { WeekKind.Normal -> FT.DomainTraining; WeekKind.Deload -> FT.Warn; WeekKind.Test -> FT.Info }
+                val accent = when (k) { WeekKind.Normal, WeekKind.Lead -> FT.DomainTraining; WeekKind.Deload -> FT.Warn; WeekKind.Test -> FT.Info }
                 DayChip("${i + 1} ${k.label.take(1)}", k != WeekKind.Normal, accent, Modifier.weight(1f)) { state.toggleWeek(i) }
             }
             repeat(6 - kinds.size) { Spacer(Modifier.weight(1f)) }
@@ -254,6 +254,7 @@ internal fun TimelineStep(state: TrainingPlannerState) {
         FTMetricRow("Counted weeks", "${countedWeeks(t)}")
         FTMetricRow("Deload weeks", "${t.count { it == WeekKind.Deload }}")
         FTMetricRow("Test weeks", "${t.count { it == WeekKind.Test }}")
+        if (t.any { it == WeekKind.Lead }) FTMetricRow("Early weeks", "${t.count { it == WeekKind.Lead }}")
         Text("Blocks of $len weeks; the strength template restarts after each block and the maxes can step up.", style = FTType.Caption, color = FT.TextMuted)
     }
 }

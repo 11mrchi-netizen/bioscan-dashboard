@@ -63,6 +63,7 @@ import com.bioscan.fieldterminal.domain.fuel.shoppingList
 import com.bioscan.fieldterminal.domain.fuel.slotKey
 import com.bioscan.fieldterminal.domain.fuel.upcomingPrepWeek
 import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FlowPager
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTCardEmphasis
@@ -102,6 +103,8 @@ fun MealPrepPage(overview: NutritionOverview?, modifier: Modifier = Modifier) {
     var error by remember { mutableStateOf<String?>(null) }
     var loaded by remember { mutableStateOf(false) }
     var attempt by remember { mutableIntStateOf(0) }
+    var step by remember { mutableStateOf("PICK") }
+    var recipeIndex by remember { mutableIntStateOf(0) }
 
     val cacheVersion = rememberCacheVersion()
     LaunchedEffect(weekStart, attempt, overview, cacheVersion) {
@@ -140,19 +143,30 @@ fun MealPrepPage(overview: NutritionOverview?, modifier: Modifier = Modifier) {
         val foods = remember(p) { p.foods.associateBy { it.id } }
         val w = week ?: MealPrepWeek(weekStart, PrepPicks(emptyList(), emptyList(), emptyList()), emptyList(), emptySet(), null)
 
-        PickCard(p.foods, w.picks, enabled = !w.cooked) { picks -> save(w.copy(picks = picks, recipes = if (picks.ready) buildRecipes(picks) else emptyList())) }
-        if (w.recipes.isNotEmpty()) {
-            RecipesCard(w, foods, enabled = !w.cooked) { save(w.copy(recipes = it)) }
-            WeekCard(w, foods, enabled = !w.cooked) { save(w.copy(skipped = it)) }
-            val containers = remember(w, p) { containersFor(w, p, foods) }
-            ShopCookCard(context, w, containers, breakfastPlates(breakfast, p, foods), foods, onCooked = { cooked ->
-                save(w.copy(containers = if (cooked) containers.map { c -> StoredContainer(c.date, c.slot, c.letter, c.plate.portions.associate { it.food.id to it.grams }) } else null))
+        // One step at a time (no long page): PICK, then RECIPES, WEEK and COOK (shop and cook) once the picks make recipes, and the
+        // standing BREAKFAST. The recipes show one at a time.
+        val steps = if (w.recipes.isNotEmpty()) listOf("PICK", "RECIPES", "WEEK", "COOK", "BREAKFAST") else listOf("PICK", "BREAKFAST")
+        val shown = step.takeIf { it in steps } ?: "PICK"
+        SegmentedToggle(steps, shown, { it }, { step = it }, accentColor = FT.DomainFuel)
+        when (shown) {
+            "PICK" -> PickCard(p.foods, w.picks, enabled = !w.cooked) { picks -> save(w.copy(picks = picks, recipes = if (picks.ready) buildRecipes(picks) else emptyList())) }
+            "RECIPES" -> {
+                val i = recipeIndex.coerceIn(0, (w.recipes.size - 1).coerceAtLeast(0))
+                FlowPager(i, w.recipes.size, { recipeIndex = it }, what = "recipes")
+                RecipesCard(w, foods, enabled = !w.cooked, only = w.recipes.getOrNull(i)?.letter) { save(w.copy(recipes = it)) }
+            }
+            "WEEK" -> WeekCard(w, foods, enabled = !w.cooked) { save(w.copy(skipped = it)) }
+            "COOK" -> {
+                val containers = remember(w, p) { containersFor(w, p, foods) }
+                ShopCookCard(context, w, containers, breakfastPlates(breakfast, p, foods), foods, onCooked = { cooked ->
+                    save(w.copy(containers = if (cooked) containers.map { c -> StoredContainer(c.date, c.slot, c.letter, c.plate.portions.associate { it.food.id to it.grams }) } else null))
+                })
+            }
+            else -> BreakfastCard(p.foods, breakfast, onSave = { items ->
+                breakfast = items
+                scope.launchSafe(onError = { error = describeLoadFailure(it) }) { repo.saveBreakfast(items) }
             })
         }
-        BreakfastCard(p.foods, breakfast, onSave = { items ->
-            breakfast = items
-            scope.launchSafe(onError = { error = describeLoadFailure(it) }) { repo.saveBreakfast(items) }
-        })
     }
 }
 
@@ -224,9 +238,9 @@ private fun nextOf(pool: List<String>, current: List<String>): List<String> {
 }
 
 @Composable
-private fun RecipesCard(w: MealPrepWeek, foods: Map<String, FoodOption>, enabled: Boolean, onChange: (List<Recipe>) -> Unit) {
+private fun RecipesCard(w: MealPrepWeek, foods: Map<String, FoodOption>, enabled: Boolean, only: Char? = null, onChange: (List<Recipe>) -> Unit) {
     FTCard(title = "2 · RECIPES", info = "Tap a food to swap it for the next one you picked. Oil is added where the day's fat target needs it.") {
-        w.recipes.forEach { r ->
+        w.recipes.filter { only == null || it.letter == only }.forEach { r ->
             Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("${r.letter} · ${r.slot.label}", style = FTType.LabelCaps, color = FT.DomainFuel)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

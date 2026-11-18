@@ -35,6 +35,9 @@ import com.bioscan.fieldterminal.data.TrainingCyclesRepository
 import com.bioscan.fieldterminal.domain.TrainingCycle
 import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTFlow
+import com.bioscan.fieldterminal.ui.components.FlowPage
+import com.bioscan.fieldterminal.ui.components.rememberFlowState
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
@@ -50,7 +53,6 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun TrainingBlockFormSheet(cycle: TrainingCycle?, onDismiss: () -> Unit, onSaved: () -> Unit) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val repo = remember { TrainingCyclesRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
 
@@ -73,136 +75,127 @@ fun TrainingBlockFormSheet(cycle: TrainingCycle?, onDismiss: () -> Unit, onSaved
     val weeksInt = weeks.toIntOrNull()?.coerceIn(1, 52) ?: 1
     val endDate = startDate.plusWeeks(weeksInt.toLong())
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = FT.SheetShape,
-        containerColor = FT.Surface,
-        contentColor = FT.TextPrimary,
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-        ) {
-            Text(
-                if (cycle == null) "ADD TRAINING BLOCK" else "EDIT TRAINING BLOCK",
-                style = sheetHeaderStyle,
-                color = FT.Ok,
+    val hasGoal = goalMetric.isNotBlank()
+    val startingNum = startingValue.toDoubleOrNull()
+    val targetNum = targetValue.toDoubleOrNull()
+    val goalValid = !hasGoal || (startingNum != null && targetNum != null)
+    // WHEN (name, start, weeks), FOCUS (primary and secondary), then DAYS AND GOAL.
+    FTFlow(
+        title = if (cycle == null) "ADD TRAINING BLOCK" else "EDIT TRAINING BLOCK",
+        pages = listOf(FlowPage("WHEN"), FlowPage("FOCUS", ready = primaryFocus != null), FlowPage("DAYS AND GOAL")),
+        state = rememberFlowState(), onClose = onDismiss,
+        canSave = primaryFocus != null && goalValid, saving = saving, wash = FT.DomainTraining, error = error,
+        onSave = {
+        if (primaryFocus == null) {
+            error = "Select a primary focus."
+        } else if (!goalValid) {
+            error = "Set both a starting and target value, or clear the goal metric."
+        } else if (!saving) {
+            saving = true
+            error = null
+            val notesJson = buildJsonObject {
+                putJsonObject("notion_import_focus") {
+                    put("source", "user")
+                    templateName.trim().takeIf { it.isNotBlank() }?.let { put("template", it) }
+                    put("primary", primaryFocus!!.key)
+                    secondaryFocus?.let { put("secondary", it.key) }
+                    put("strength_days", strengthDays)
+                    put("conditioning_days", conditioningDays)
+                }
+            }.toString()
+            val resolvedGoal = goalMetric.trim().ifBlank { null }
+            scope.launch {
+                try {
+                    if (cycle == null) {
+                        repo.insertTbCycle(startDate, endDate, notesJson, resolvedGoal, startingNum, targetNum)
+                    } else {
+                        repo.updateTbCycle(cycle.id, startDate, endDate, notesJson, resolvedGoal, startingNum, targetNum)
+                    }
+                    onSaved()
+                } catch (e: Exception) {
+                    error = e.message ?: "Unknown error"
+                } finally {
+                    saving = false
+                }
+            }
+        }
+        },
+    ) { page ->
+        when (page) {
+            0 -> {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            BlockFormLabel("TEMPLATE NAME")
+            FieldTextField(templateName, { templateName = it }, "e.g. Operator, Base Building")
+        }
+
+        DateField("START DATE", startDate, { startDate = it })
+
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            BlockFormLabel("DURATION (WEEKS)")
+            FieldTextField(
+                weeks,
+                { weeks = it.filter { c -> c.isDigit() } },
+                "e.g. 6",
+                keyboardType = KeyboardType.Number,
             )
+        }
+        Text(
+            "Ends $endDate",
+            style = FTType.MonoCaption,
+            color = FT.TextMuted,
+        )
 
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                BlockFormLabel("TEMPLATE NAME")
-                FieldTextField(templateName, { templateName = it }, "e.g. Operator, Base Building")
             }
-
-            DateField("START DATE", startDate, { startDate = it })
-
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                BlockFormLabel("DURATION (WEEKS)")
-                FieldTextField(
-                    weeks,
-                    { weeks = it.filter { c -> c.isDigit() } },
-                    "e.g. 6",
-                    keyboardType = KeyboardType.Number,
-                )
-            }
-            Text(
-                "Ends $endDate",
-                style = FTType.MonoCaption,
-                color = FT.TextMuted,
+            1 -> {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            BlockFormLabel("PRIMARY FOCUS *")
+            FocusChipGrid(
+                selected = primaryFocus,
+                exclude = secondaryFocus,
+                onSelect = { primaryFocus = if (primaryFocus == it) null else it },
             )
+        }
 
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                BlockFormLabel("PRIMARY FOCUS *")
-                FocusChipGrid(
-                    selected = primaryFocus,
-                    exclude = secondaryFocus,
-                    onSelect = { primaryFocus = if (primaryFocus == it) null else it },
-                )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            BlockFormLabel("SECONDARY FOCUS (OPTIONAL)")
+            FocusChipGrid(
+                selected = secondaryFocus,
+                exclude = primaryFocus,
+                onSelect = { secondaryFocus = if (secondaryFocus == it) null else it },
+            )
+        }
+
             }
-
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                BlockFormLabel("SECONDARY FOCUS (OPTIONAL)")
-                FocusChipGrid(
-                    selected = secondaryFocus,
-                    exclude = primaryFocus,
-                    onSelect = { secondaryFocus = if (secondaryFocus == it) null else it },
-                )
+            else -> {
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                BlockFormLabel("STR DAYS/WEEK")
+                DaysStepper(strengthDays, { if (strengthDays > 0) strengthDays-- }, { if (strengthDays < 7) strengthDays++ })
             }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                BlockFormLabel("COND DAYS/WEEK")
+                DaysStepper(conditioningDays, { if (conditioningDays > 0) conditioningDays-- }, { if (conditioningDays < 7) conditioningDays++ })
+            }
+        }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    BlockFormLabel("STR DAYS/WEEK")
-                    DaysStepper(strengthDays, { if (strengthDays > 0) strengthDays-- }, { if (strengthDays < 7) strengthDays++ })
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            BlockFormLabel("GOAL METRIC (OPTIONAL)")
+            FieldTextField(goalMetric, { goalMetric = it }, "e.g. weekly_mileage_km")
+        }
+        if (goalMetric.isNotBlank()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    BlockFormLabel("STARTING VALUE")
+                    FieldTextField(startingValue, { startingValue = it }, "e.g. 30", keyboardType = KeyboardType.Decimal)
                 }
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    BlockFormLabel("COND DAYS/WEEK")
-                    DaysStepper(conditioningDays, { if (conditioningDays > 0) conditioningDays-- }, { if (conditioningDays < 7) conditioningDays++ })
-                }
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                BlockFormLabel("GOAL METRIC (OPTIONAL)")
-                FieldTextField(goalMetric, { goalMetric = it }, "e.g. weekly_mileage_km")
-            }
-            if (goalMetric.isNotBlank()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        BlockFormLabel("STARTING VALUE")
-                        FieldTextField(startingValue, { startingValue = it }, "e.g. 30", keyboardType = KeyboardType.Decimal)
-                    }
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        BlockFormLabel("TARGET VALUE")
-                        FieldTextField(targetValue, { targetValue = it }, "e.g. 60", keyboardType = KeyboardType.Decimal)
-                    }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    BlockFormLabel("TARGET VALUE")
+                    FieldTextField(targetValue, { targetValue = it }, "e.g. 60", keyboardType = KeyboardType.Decimal)
                 }
             }
+        }
 
-            error?.let {
-                Text(it, style = FTType.Caption, color = FT.Bad)
             }
-
-            val hasGoal = goalMetric.isNotBlank()
-            val startingNum = startingValue.toDoubleOrNull()
-            val targetNum = targetValue.toDoubleOrNull()
-            val goalValid = !hasGoal || (startingNum != null && targetNum != null)
-
-            FTButton(label = if (saving) "SAVING..." else "SAVE", emphasis = FTButtonEmphasis.Primary) {
-                if (primaryFocus == null) {
-                    error = "Select a primary focus."
-                } else if (!goalValid) {
-                    error = "Set both a starting and target value, or clear the goal metric."
-                } else if (!saving) {
-                    saving = true
-                    error = null
-                    val notesJson = buildJsonObject {
-                        putJsonObject("notion_import_focus") {
-                            put("source", "user")
-                            templateName.trim().takeIf { it.isNotBlank() }?.let { put("template", it) }
-                            put("primary", primaryFocus!!.key)
-                            secondaryFocus?.let { put("secondary", it.key) }
-                            put("strength_days", strengthDays)
-                            put("conditioning_days", conditioningDays)
-                        }
-                    }.toString()
-                    val resolvedGoal = goalMetric.trim().ifBlank { null }
-                    scope.launch {
-                        try {
-                            if (cycle == null) {
-                                repo.insertTbCycle(startDate, endDate, notesJson, resolvedGoal, startingNum, targetNum)
-                            } else {
-                                repo.updateTbCycle(cycle.id, startDate, endDate, notesJson, resolvedGoal, startingNum, targetNum)
-                            }
-                            onSaved()
-                        } catch (e: Exception) {
-                            error = e.message ?: "Unknown error"
-                        } finally {
-                            saving = false
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
         }
     }
 }

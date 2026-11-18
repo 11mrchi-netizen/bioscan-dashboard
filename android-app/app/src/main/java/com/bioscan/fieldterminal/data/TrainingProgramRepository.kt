@@ -37,6 +37,13 @@ import com.bioscan.fieldterminal.domain.training.generate.deriveBlockDomains
 import com.bioscan.fieldterminal.domain.training.generate.prescriptionJson
 import com.bioscan.fieldterminal.domain.training.movementKey
 import com.bioscan.fieldterminal.domain.training.resolveMaxes
+import com.bioscan.fieldterminal.domain.training.generate.MaxStep
+import com.bioscan.fieldterminal.domain.training.generate.ModuleChoice
+import com.bioscan.fieldterminal.domain.training.generate.PlannedLite
+import com.bioscan.fieldterminal.domain.training.generate.endEarlyPreview
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.put
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -273,6 +280,97 @@ class TrainingProgramRepository(private val supabase: SupabaseClient) {
             throw t
         }
         return blockId
+    }
+}
+
+
+/** A block as ending it early needs it: its row, its sessions, its strength program and choices, and its review. */
+data class BlockForEnding(
+    val row: GeneratedBlockRow,
+    val sessions: List<PlannedLite>,
+    val module: StrengthModuleDef?,
+    val choice: ModuleChoice,
+    val review: JsonObject?,
+)
+
+@kotlinx.serialization.Serializable
+private data class BlockEndRow(
+    val id: Long,
+    val name: String,
+    @kotlinx.serialization.SerialName("start_date") val startDate: String,
+    @kotlinx.serialization.SerialName("end_date") val endDate: String,
+    val status: String = "scheduled",
+    val components: JsonElement? = null,
+    val choices: JsonElement? = null,
+    @kotlinx.serialization.SerialName("definition_snapshot") val definitionSnapshot: JsonElement? = null,
+    val review: JsonElement? = null,
+)
+
+@kotlinx.serialization.Serializable
+private data class EndSessionRow(
+    val id: Long,
+    @kotlinx.serialization.SerialName("scheduled_date") val scheduledDate: String,
+    @kotlinx.serialization.SerialName("week_index") val weekIndex: Int = 0,
+    val status: String = "planned",
+    val prescription: JsonElement? = null,
+)
+
+/** The heaviest % of 1RM among a frozen prescription's lifts, or null. */
+internal fun topPct(prescription: JsonElement?): Double? = (prescription as? JsonArray)?.mapNotNull { e ->
+    val o = e as? JsonObject ?: return@mapNotNull null
+    if (o["type"]?.jsonPrimitive?.contentOrNull != "lift") null else (o["load"] as? JsonObject)?.get("pct")?.jsonPrimitive?.doubleOrNull
+}?.maxOrNull()
+
+suspend fun loadBlockForEnding(supabase: SupabaseClient, id: Long): BlockForEnding {
+    val b = supabase.postgrest.from("training_blocks")
+        .select(columns = Columns.list("id,name,start_date,end_date,status,components,choices,definition_snapshot,review")) { filter { eq("id", id) } }
+        .decodeSingle<BlockEndRow>()
+    val sessions = supabase.postgrest.from("planned_sessions")
+        .select(columns = Columns.list("id,scheduled_date,week_index,status,prescription")) { filter { eq("block_id", id); neq("status", "superseded") } }
+        .decodeList<EndSessionRow>()
+        .map { PlannedLite(it.id, LocalDate.parse(it.scheduledDate), it.weekIndex, it.status, topPct(it.prescription)) }
+    val strengthKey = (b.components as? JsonArray)?.mapNotNull { it as? JsonObject }
+        ?.firstOrNull { it["role"]?.jsonPrimitive?.contentOrNull == "strength" }
+        ?.let { (it["ref"] as? JsonObject)?.get("key")?.jsonPrimitive?.contentOrNull }
+    val module = strengthKey?.let { k ->
+        ((b.definitionSnapshot as? JsonObject)?.get("definitions") as? JsonObject)?.get(k)
+            ?.let { runCatching { parseDefinition(it.toString()) as? StrengthModuleDef }.getOrNull() }
+    }
+    val cluster = strengthKey?.let { ((b.choices as? JsonObject)?.get("clusters") as? JsonObject)?.get(it) as? JsonObject }
+    val choice = ModuleChoice(
+        variant = cluster?.get("variant")?.jsonPrimitive?.contentOrNull,
+        blockLength = cluster?.get("block_length")?.jsonPrimitive?.intOrNull,
+        exercises = cluster?.filterKeys { it != "variant" && it != "block_length" }
+            ?.mapNotNull { (k, v) -> (v as? JsonArray)?.let { a -> k to a.mapNotNull { it.jsonPrimitive.contentOrNull } } }?.toMap().orEmpty(),
+    )
+    return BlockForEnding(GeneratedBlockRow(b.id, b.name, b.startDate, b.endDate, b.status), sessions, module, choice, b.review as? JsonObject)
+}
+
+/**
+ * Ends [block] on [lastDay]: its sessions still planned after that day are superseded (kept, never deleted), the block
+ * ends that day and is completed, and the review records the stop. [steps] are the maxes the lifter chose to step up
+ * (empty keeps them, the default: the cycle was not completed).
+ */
+suspend fun endBlockEarly(supabase: SupabaseClient, block: BlockForEnding, lastDay: LocalDate, steps: List<MaxStep>) {
+    val dropped = endEarlyPreview(block.sessions, lastDay)
+    supabase.postgrest.from("planned_sessions").update({ set("status", "superseded") }) {
+        filter { eq("block_id", block.row.id); eq("status", "planned"); gt("scheduled_date", lastDay.toString()) }
+    }
+    val review = buildJsonObject {
+        block.review?.forEach { (k, v) -> put(k, v) }
+        put("ended_early", buildJsonObject {
+            put("last_day", lastDay.toString()); put("original_end_date", block.row.endDate); put("on", LocalDate.now().toString())
+            put("superseded_sessions", dropped.dropped); put("maxes_stepped_up", steps.isNotEmpty())
+        })
+    }
+    supabase.postgrest.from("training_blocks").update({
+        set("end_date", lastDay.toString()); set("status", "completed"); set("review", review); set("updated_at", java.time.Instant.now().toString())
+    }) { filter { eq("id", block.row.id) } }
+    for (st in steps) {
+        supabase.postgrest.from("athlete_maxes").insert(
+            NewAthleteMaxRow(movementKey(st.exercise), st.exercise, "1rm", st.toKg, "kg", LocalDate.now().toString(), "progression",
+                buildJsonObject { put("from_kg", st.fromKg); put("reason", "block ended early, stepped up by choice") }, blockId = block.row.id),
+        )
     }
 }
 

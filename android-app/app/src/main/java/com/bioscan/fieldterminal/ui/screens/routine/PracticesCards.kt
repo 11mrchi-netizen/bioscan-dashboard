@@ -52,6 +52,10 @@ import com.bioscan.fieldterminal.domain.routine.practicesToday
 import com.bioscan.fieldterminal.domain.routine.scheduleWords
 import com.bioscan.fieldterminal.domain.routine.weekTime
 import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTFlow
+import com.bioscan.fieldterminal.ui.components.FlowPage
+import com.bioscan.fieldterminal.ui.components.FlowPickGrid
+import com.bioscan.fieldterminal.ui.components.rememberFlowState
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTChoiceChip
@@ -333,7 +337,6 @@ private fun Label(text: String) = Text(text, color = FT.TextMuted, style = FTTyp
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun ActivitySheet(initial: RoutineActivity, isNew: Boolean, onDismiss: () -> Unit, onSave: (RoutineActivity) -> Unit, onArchive: () -> Unit) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var name by remember { mutableStateOf(initial.name) }
     var kind by remember { mutableStateOf(initial.kind) }
     var category by remember { mutableStateOf(initial.category) }
@@ -350,9 +353,24 @@ private fun ActivitySheet(initial: RoutineActivity, isNew: Boolean, onDismiss: (
         kind == ActivityKind.PRACTICE && remind && parsedTime == null -> "A reminder needs a time."
         else -> null
     }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, shape = FT.SheetShape, containerColor = FT.Surface, contentColor = FT.TextPrimary) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(if (isNew) "ADD" else "CHANGE", style = FTType.SectionTitle, color = FT.TextPrimary)
+    // WHAT (name, practice or pastime, kind), then WHEN (a practice's length, days, time and reminder; a pastime's length).
+    FTFlow(
+        title = if (isNew) "ADD A PRACTICE OR PASTIME" else "CHANGE ${initial.name.uppercase()}",
+        pages = listOf(FlowPage("WHAT", ready = name.isNotBlank()), FlowPage(if (kind == ActivityKind.PRACTICE) "WHEN" else "LENGTH")),
+        state = rememberFlowState(), onClose = onDismiss, canSave = problem == null,
+        error = problem?.takeIf { name.isNotBlank() },
+        onSave = {
+            onSave(
+                initial.copy(
+                    name = name.trim(), kind = kind, category = category, targetMin = targetMin,
+                    days = days.takeIf { kind == ActivityKind.PRACTICE && it.isNotEmpty() },
+                    time = parsedTime.takeIf { kind == ActivityKind.PRACTICE },
+                    remind = kind == ActivityKind.PRACTICE && remind && days.isNotEmpty() && parsedTime != null,
+                ),
+            )
+        },
+    ) { page ->
+        if (page == 0) {
             Column { Label("NAME"); FieldTextField(name, { name = it }, if (kind == ActivityKind.PRACTICE) "e.g. Meditation" else "e.g. TV, Reading") }
             Column {
                 Label("WHAT IT IS")
@@ -364,42 +382,28 @@ private fun ActivitySheet(initial: RoutineActivity, isNew: Boolean, onDismiss: (
             }
             Column {
                 Label("KIND")
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ActivityCategory.entries.forEach { c -> Chip(c.label, c == category) { category = c } }
-                }
+                FlowPickGrid(ActivityCategory.entries.map { it.name to it.label }, setOf(category.name), { k -> category = ActivityCategory.valueOf(k) }, columns = 3, single = true)
             }
-            if (kind == ActivityKind.PRACTICE) {
-                Column { Label("PLANNED LENGTH, MIN (OPTIONAL)"); FieldTextField(target, { target = it }, "e.g. 10", keyboardType = KeyboardType.Number) }
-                Column {
-                    Label("DAYS")
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        (1..7).forEach { d ->
-                            Chip(DayOfWeek.of(d).name.take(3), d in days) { days = if (d in days) days - d else days + d }
-                        }
+        } else if (kind == ActivityKind.PRACTICE) {
+            Column { Label("PLANNED LENGTH, MIN (OPTIONAL)"); FieldTextField(target, { target = it }, "e.g. 10", keyboardType = KeyboardType.Number) }
+            Column {
+                Label("DAYS")
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    (1..7).forEach { d ->
+                        Chip(DayOfWeek.of(d).name.take(3), d in days) { days = if (d in days) days - d else days + d }
                     }
-                    Text(if (days.isEmpty()) "No days: an anytime practice, no reminder." else scheduleWords(days), style = FTType.Caption, color = FT.TextSecondary, modifier = Modifier.padding(top = 4.dp))
                 }
-                Column { Label("TIME (OPTIONAL)"); FieldTextField(time, { time = it }, "e.g. 07:00", keyboardType = KeyboardType.Text) }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("REMIND ME AT THAT TIME", style = FTType.LabelCaps, color = FT.TextPrimary, modifier = Modifier.weight(1f))
-                    FTSwitch(remind && days.isNotEmpty(), onCheckedChange = { remind = it }, enabled = days.isNotEmpty())
-                }
-            } else {
-                Column { Label("USUAL LENGTH, MIN (OPTIONAL)"); FieldTextField(target, { target = it }, "e.g. 60", keyboardType = KeyboardType.Number) }
+                Text(if (days.isEmpty()) "No days: an anytime practice, no reminder." else scheduleWords(days), style = FTType.Caption, color = FT.TextSecondary, modifier = Modifier.padding(top = 4.dp))
             }
-            problem?.let { Text(it, style = FTType.Caption, color = FT.Warn) }
-            FTButton("SAVE", enabled = problem == null, emphasis = FTButtonEmphasis.Primary, modifier = Modifier.fillMaxWidth()) {
-                onSave(
-                    initial.copy(
-                        name = name.trim(), kind = kind, category = category, targetMin = targetMin,
-                        days = days.takeIf { kind == ActivityKind.PRACTICE && it.isNotEmpty() },
-                        time = parsedTime.takeIf { kind == ActivityKind.PRACTICE },
-                        remind = kind == ActivityKind.PRACTICE && remind && days.isNotEmpty() && parsedTime != null,
-                    ),
-                )
+            Column { Label("TIME (OPTIONAL)"); FieldTextField(time, { time = it }, "e.g. 07:00", keyboardType = KeyboardType.Text) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("REMIND ME AT THAT TIME", style = FTType.LabelCaps, color = FT.TextPrimary, modifier = Modifier.weight(1f))
+                FTSwitch(remind && days.isNotEmpty(), onCheckedChange = { remind = it }, enabled = days.isNotEmpty())
             }
             if (!isNew) FTButton("REMOVE (KEEPS ITS HISTORY)", emphasis = FTButtonEmphasis.Tertiary, modifier = Modifier.fillMaxWidth(), onClick = onArchive)
-            Spacer(Modifier.height(8.dp))
+        } else {
+            Column { Label("USUAL LENGTH, MIN (OPTIONAL)"); FieldTextField(target, { target = it }, "e.g. 60", keyboardType = KeyboardType.Number) }
+            if (!isNew) FTButton("REMOVE (KEEPS ITS HISTORY)", emphasis = FTButtonEmphasis.Tertiary, modifier = Modifier.fillMaxWidth(), onClick = onArchive)
         }
     }
 }
@@ -407,7 +411,6 @@ private fun ActivitySheet(initial: RoutineActivity, isNew: Boolean, onDismiss: (
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun LogSheet(activities: List<RoutineActivity>, existing: RoutineLog?, onDismiss: () -> Unit, onSave: (Long?, NewLog) -> Unit, onDelete: (Long) -> Unit) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val today = LocalDate.now()
     var activityId by remember { mutableStateOf(existing?.activityId ?: activities.firstOrNull { it.kind == ActivityKind.PASTIME }?.id ?: activities.first().id) }
     var date by remember { mutableStateOf(existing?.date ?: today) }
@@ -429,15 +432,25 @@ private fun LogSheet(activities: List<RoutineActivity>, existing: RoutineLog?, o
         length <= 0 || length > 1440 -> "Between 1 minute and 24 hours."
         else -> null
     }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, shape = FT.SheetShape, containerColor = FT.Surface, contentColor = FT.TextPrimary) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(if (existing == null) "ADD TIME" else "CHANGE TIME", style = FTType.SectionTitle, color = FT.TextPrimary)
-            Column {
-                Label("WHAT")
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    activities.forEach { a -> Chip(a.name.uppercase(), a.id == activityId) { activityId = a.id } }
-                }
-            }
+    // WHAT (the activities, a grid paged when long), then WHEN: the day, from-to or minutes, a note.
+    FTFlow(
+        title = if (existing == null) "ADD TIME" else "CHANGE TIME",
+        pages = listOf(FlowPage("WHAT"), FlowPage("WHEN")), state = rememberFlowState(), onClose = onDismiss,
+        canSave = problem == null, error = problem?.takeIf { start.isNotBlank() || end.isNotBlank() || minutes.isNotBlank() },
+        onSave = {
+            val useBlock = startAt != null && endAt != null
+            onSave(
+                existing?.id,
+                NewLog(
+                    activityId, date, if (useBlock) startAt else null, if (useBlock) endAt else null, length,
+                    LogStatus.DONE, existing?.source ?: LogSource.MANUAL, note, "manual:" + UUID.randomUUID().toString(),
+                ),
+            )
+        },
+    ) { page ->
+        if (page == 0) {
+            FlowPickGrid(activities.map { it.id.toString() to it.name }, setOf(activityId.toString()), { id -> activities.firstOrNull { it.id.toString() == id }?.let { activityId = it.id } }, single = true)
+        } else {
             Column {
                 Label("DAY")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -453,19 +466,7 @@ private fun LogSheet(activities: List<RoutineActivity>, existing: RoutineLog?, o
             Column { Label("OR MINUTES"); FieldTextField(minutes, { minutes = it }, "e.g. 45", keyboardType = KeyboardType.Number) }
             Column { Label("NOTE (OPTIONAL)"); FieldTextField(note, { note = it }, "", singleLine = false) }
             length?.takeIf { problem == null }?.let { Text(minutesWords(it).uppercase(), style = FTType.LabelCaps, color = FT.TextPrimary) }
-            problem?.let { Text(it, style = FTType.Caption, color = FT.Warn) }
-            FTButton("SAVE", enabled = problem == null, emphasis = FTButtonEmphasis.Primary, modifier = Modifier.fillMaxWidth()) {
-                val useBlock = startAt != null && endAt != null
-                onSave(
-                    existing?.id,
-                    NewLog(
-                        activityId, date, if (useBlock) startAt else null, if (useBlock) endAt else null, length,
-                        LogStatus.DONE, existing?.source ?: LogSource.MANUAL, note, "manual:" + UUID.randomUUID().toString(),
-                    ),
-                )
-            }
             if (existing != null) FTButton("DELETE", emphasis = FTButtonEmphasis.Tertiary, modifier = Modifier.fillMaxWidth()) { onDelete(existing.id) }
-            Spacer(Modifier.height(8.dp))
         }
     }
 }

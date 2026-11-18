@@ -19,6 +19,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.bioscan.fieldterminal.domain.routine.Fix
+import com.bioscan.fieldterminal.domain.routine.hasLeft
 import com.bioscan.fieldterminal.domain.routine.isSettled
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -30,10 +31,11 @@ import com.google.android.gms.location.Priority
 // service of type location, because a background app gets location only a few times an hour, which cannot follow a commute.
 // Android requires its ongoing notification; it is on a silent, minimum-importance channel and is not a nudge.
 //
-// Fixes: every 30 s at high accuracy on foot or bicycle (the route matters for active minutes), every 60 s at balanced
-// power in a vehicle or before the activity is known. The trip ends 5 minutes after a STILL transition, when the last 10
-// minutes of fixes stay within 100 m (domain/routine/StayPoints.kt isSettled), or after 4 hours; then a geofence is armed
-// around the last fix and the service stops.
+// Fixes: every 30 s at high accuracy on foot or bicycle (the route matters for active minutes) once the phone has left
+// where the recording began (hasLeft), every 60 s at balanced power until then, in a vehicle, or before the activity is
+// known. High accuracy indoors is GPS searching at full power, so it waits for proof of a trip. The trip ends 5 minutes
+// after a STILL transition, when the last 5 minutes of fixes stay within 100 m (domain/routine/StayPoints.kt isSettled),
+// or after 4 hours; then a geofence is armed around the last fix and the service stops.
 class TripRecordingService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private val recent = ArrayDeque<Fix>()
@@ -41,6 +43,10 @@ class TripRecordingService : Service() {
     private var startedAt = 0L
     private var lastLocation: Location? = null
     private var updatesOn = false
+    // Where the recording began: the stay it left, else its first fix.
+    private var origin: Pair<Double, Double>? = null
+    private var left = false
+    private var highAccuracy = false
 
     private val callback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
@@ -70,7 +76,10 @@ class TripRecordingService : Service() {
                     if (newActivity != null) activity = newActivity
                     requestUpdates()
                 }
-                if (startedAt == 0L) startedAt = System.currentTimeMillis()
+                if (startedAt == 0L) {
+                    startedAt = System.currentTimeMillis()
+                    origin = RoutineSettingsStore.stayCentre(this)
+                }
             }
         }
         running = true
@@ -99,8 +108,8 @@ class TripRecordingService : Service() {
 
     @SuppressLint("MissingPermission") // canRun() checked the permissions in onStartCommand
     private fun requestUpdates() {
-        val onFoot = activity in setOf("walking", "running", "on_bicycle")
-        val request = if (onFoot) {
+        highAccuracy = wantsHighAccuracy()
+        val request = if (highAccuracy) {
             LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 30_000L).setMinUpdateIntervalMillis(15_000L).build()
         } else {
             LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 60_000L).setMinUpdateIntervalMillis(30_000L).build()
@@ -112,8 +121,15 @@ class TripRecordingService : Service() {
             .onFailure { Log.w("TripRecordingService", "updates: ${it.message}") }
     }
 
+    private fun wantsHighAccuracy() = left && activity in setOf("walking", "running", "on_bicycle")
+
     private fun onFix(loc: Location) {
         lastLocation = loc
+        if (!left) {
+            val from = origin ?: (loc.latitude to loc.longitude).also { origin = it }
+            left = hasLeft(from.first, from.second, loc.latitude, loc.longitude, if (loc.hasAccuracy()) loc.accuracy.toDouble() else null)
+            if (left && wantsHighAccuracy() != highAccuracy) requestUpdates()
+        }
         RoutineOutbox.addFix(
             this,
             OutboxFix(loc.time, loc.latitude, loc.longitude, if (loc.hasAccuracy()) loc.accuracy else null, "trip", activity),

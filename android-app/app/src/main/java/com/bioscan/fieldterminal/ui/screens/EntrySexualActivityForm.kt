@@ -35,6 +35,7 @@ import com.bioscan.fieldterminal.data.model.SexualActivityInstance
 import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.FTRatingSlider
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.FormSteps
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import kotlinx.coroutines.launch
@@ -117,35 +118,42 @@ internal fun SexualActivityForm(
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        if (lockedActivityType == null) {
-            Column {
-                FormLabel("TYPE")
-                TextChipRow(listOf("Masturbation", "Intercourse"), if (isMasturbation) "Masturbation" else "Intercourse") {
-                    activityType = if (it == "Intercourse") "intercourse" else "masturbation"
+    // WHAT (type and day), one step per instance (+ ADD INSTANCE on the last), then the notes.
+    val labels = listOf("WHAT") + instances.indices.map { if (instances.size > 1) "INSTANCE ${it + 1}" else "INSTANCE" } + "NOTES"
+    FormSteps(labels, canSave = true, saving = saving, onSave = {
+        onSave(date.toString(), activityType, instances.map { it.toDto() }, notes.trim().ifBlank { null })
+    }) { step ->
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            when {
+                step == 0 -> {
+                    if (lockedActivityType == null) {
+                        Column {
+                            FormLabel("TYPE")
+                            TextChipRow(listOf("Masturbation", "Intercourse"), if (isMasturbation) "Masturbation" else "Intercourse", perRow = 2) {
+                                activityType = if (it == "Intercourse") "intercourse" else "masturbation"
+                            }
+                        }
+                    }
+                    DateField("DATE", date, { date = it })
                 }
+                step <= instances.size -> {
+                    val i = step - 1
+                    SexualActivityInstanceEditor(
+                        instances[i], isMasturbation, canRemove = instances.size > 1,
+                        allPeople = allPeople,
+                        peopleRepo = peopleRepo,
+                    ) { instances.removeAt(i) }
+                    if (i == instances.lastIndex) {
+                        Text(
+                            "+ ADD INSTANCE",
+                            style = FTType.MonoCaption,
+                            color = FT.DomainLog,
+                            modifier = Modifier.ftClickable { instances.add(EditableSexualActivityInstance()) },
+                        )
+                    }
+                }
+                else -> Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Anything else worth noting", singleLine = false) }
             }
-        }
-        DateField("DATE", date, { date = it })
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            FormLabel("INSTANCES")
-            instances.forEachIndexed { i, instance ->
-                SexualActivityInstanceEditor(
-                    instance, isMasturbation, canRemove = instances.size > 1,
-                    allPeople = allPeople,
-                    peopleRepo = peopleRepo,
-                ) { instances.removeAt(i) }
-            }
-            Text(
-                "+ ADD INSTANCE",
-                style = FTType.MonoCaption,
-                color = FT.DomainLog,
-                modifier = Modifier.ftClickable { instances.add(EditableSexualActivityInstance()) },
-            )
-        }
-        Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Anything else worth noting", singleLine = false) }
-        SaveButton(saving, true) {
-            onSave(date.toString(), activityType, instances.map { it.toDto() }, notes.trim().ifBlank { null })
         }
     }
 }

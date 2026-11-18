@@ -333,6 +333,7 @@ private fun mergeBlock(
     val strengthDays = bp.layout.filter { it.strengthSession != null }.sortedBy { position(it.weekday) }
 
     var blockPos = 0
+    var leadPos = 0
     var skipProgress = false
     var normalOrdinal = 0
     var counted = 0
@@ -340,7 +341,7 @@ private fun mergeBlock(
     for ((i, kind) in bp.timeline.withIndex()) {
         val week = i + 1
         if (kind.countsTowardBlock) counted++
-        if (kind == WeekKind.Normal) normalOrdinal++
+        if (kind == WeekKind.Normal || kind == WeekKind.Lead) normalOrdinal++
         if (strength != null && variant != null) when (kind) {
             WeekKind.Normal -> {
                 if (blockPos == len) { blockPos = 0; if (!skipProgress) g.progress(strength, choice, week) }
@@ -353,6 +354,17 @@ private fun mergeBlock(
                     g.emit(week, true, position(d.weekday), 1, strength.domain, "progression", "strength:${strength.key}", "${strength.title}: ${sd.label}", items = g.resolveItems(strength, choice, ws.items), notes = notes)
                 }
                 blockPos++
+            }
+            // An early week repeats the cycle's opening weeks (all but its last, the peak) without moving the cycle on.
+            WeekKind.Lead -> {
+                val vw = variant.weeks[leadPos % (len - 1).coerceAtLeast(1)]
+                for (d in strengthDays) {
+                    val sd = strength.sessions.getOrNull(d.strengthSession!!) ?: continue
+                    val ws = vw.sessions.firstOrNull { it.session == sd.id } ?: continue
+                    g.emit(week, true, position(d.weekday), 1, strength.domain, "progression", "strength:${strength.key}", "${strength.title}: ${sd.label}",
+                        items = g.resolveItems(strength, choice, ws.items), notes = listOfNotNull(ws.note, "Early week: the opening weeks again before the full cycle"))
+                }
+                leadPos++
             }
             WeekKind.Deload -> strengthDays.firstOrNull()?.let { d ->
                 g.emit(week, false, position(d.weekday), 1, "recovery", "deload", "inline", "Deload week: reduced volume and intensity")
@@ -380,7 +392,7 @@ private fun addConditioning(
     g: Gen, p: ConditioningProtocolDef, layout: List<DayPlan>, position: (DayOfWeek) -> Int, week: Int, kind: WeekKind, normalOrdinal: Int, rotation: MutableMap<String, Int>,
 ) {
     val b = p.budget
-    val normal = kind == WeekKind.Normal
+    val normal = kind == WeekKind.Normal || kind == WeekKind.Lead
     val hicWeek = normal && (b?.highIntensityEveryNWeeks?.let { (normalOrdinal - 1) % it == 0 } ?: true)
     val slots = layout.filter { it.conditioning != null }.sortedBy { position(it.weekday) }
         .filter { d -> val k = d.conditioning!!.kind; normal && (k != "hic" || hicWeek) || !normal && k == "lic" }

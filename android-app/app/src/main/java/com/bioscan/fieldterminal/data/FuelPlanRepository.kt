@@ -405,7 +405,10 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
         val coded = (0 until 7).map { i ->
             codeMeals(plans[i], days[i], days.getOrNull(i + 1), kg, zone, settings.meals, settings.trainLow, energy.deficit, settings.toleratedGPerHour)
         }
-        WeekPlan(coded, foodsD.await(), kg)
+        val plan = WeekPlan(coded, foodsD.await(), kg)
+        // The web's MEAL PREP portions from this same week (data/WeekPlanPublisher.kt); a failed write never blocks the page.
+        catching { publishWeekPlan(supabase, weekStart, plan, zone) }
+        plan
     }
 
     /**

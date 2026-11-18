@@ -44,6 +44,10 @@ import com.bioscan.fieldterminal.domain.nextSlot
 import com.bioscan.fieldterminal.domain.parseReading
 import com.bioscan.fieldterminal.domain.tolerance
 import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTFlow
+import com.bioscan.fieldterminal.ui.components.FlowPage
+import com.bioscan.fieldterminal.ui.components.LocalFlowStartPage
+import com.bioscan.fieldterminal.ui.components.rememberFlowState
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
@@ -61,6 +65,7 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 private sealed interface CheckInStep {
     data object Setup : CheckInStep
+    data object Sections : CheckInStep
     data object Grip : CheckInStep
     data class Measure(val slot: BodySlot) : CheckInStep
     data object Review : CheckInStep
@@ -74,7 +79,6 @@ private const val PROTOCOL =
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BodyCheckInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val repo = remember { BodyCheckinRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
 
@@ -110,7 +114,19 @@ fun BodyCheckInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
     var skipped by remember { mutableStateOf<Set<BodySlot>>(emptySet()) }
     var notes by remember { mutableStateOf("") }
 
-    var step by remember { mutableStateOf<CheckInStep>(CheckInStep.Setup) }
+    // The fit test opens each kind of step in turn (LocalFlowStartPage); the app starts at the setup.
+    val startAt = LocalFlowStartPage.current
+    var step by remember {
+        mutableStateOf(
+            when (startAt) {
+                1 -> CheckInStep.Sections
+                2 -> CheckInStep.Grip
+                3 -> CheckInStep.Measure(activeSlots(true, true, false, false, true).first())
+                4 -> CheckInStep.Review
+                else -> CheckInStep.Setup
+            },
+        )
+    }
     var trail by remember { mutableStateOf<List<CheckInStep>>(emptyList()) }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -155,12 +171,48 @@ fun BodyCheckInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
         }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, shape = FT.SheetShape, containerColor = FT.Surface, contentColor = FT.TextPrimary) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(20.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text("BODY CHECK-IN", style = FTType.SectionTitle, color = FT.DomainFuel)
+    val stepLabel = when (val s = step) {
+        CheckInStep.Setup -> "CONDITIONS"
+        CheckInStep.Sections -> "WHAT TO MEASURE"
+        CheckInStep.Grip -> "GRIP"
+        is CheckInStep.Measure -> "${if (s.slot.site.method == MeasureMethod.TAPE) "TAPE" else "SKINFOLDS"} · ${slots.indexOf(s.slot) + 1} OF ${slots.size}"
+        CheckInStep.Review -> "REVIEW"
+    }
+    val doneAny = slots.any { it !in skipped && readings[it].orEmpty().isNotEmpty() } || gripRight.isNotBlank() || gripLeft.isNotBlank()
+    // Its own walk: one site to a page, each site's readings on it; the frame gives it the full screen and the header.
+    FTFlow(
+        title = "BODY CHECK-IN", pages = listOf(FlowPage(stepLabel)), state = rememberFlowState(), onClose = onDismiss,
+        canSave = doneAny, onSave = { save() }, saving = saving, wash = FT.DomainFuel,
+        error = error?.let { "Couldn't save: $it" },
+        subtitle = stepLabel,
+        onBack = { if (trail.isEmpty()) false else { back(); true } },
+        bottomBar = { _ ->
+            Row(Modifier.fillMaxWidth().background(FT.Surface).padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                when (val st = step) {
+                    CheckInStep.Setup -> FTButton("NEXT", emphasis = FTButtonEmphasis.Primary, modifier = Modifier.weight(1f)) { go(CheckInStep.Sections) }
+                    CheckInStep.Sections -> {
+                        FTButton("BACK") { back() }
+                        FTButton("START", emphasis = FTButtonEmphasis.Primary, modifier = Modifier.weight(1f)) { go(CheckInStep.Grip) }
+                    }
+                    CheckInStep.Grip -> {
+                        FTButton("SKIP", modifier = Modifier.weight(1f)) { gripRight = ""; gripLeft = ""; advanceFrom(null) }
+                        FTButton("NEXT", emphasis = FTButtonEmphasis.Primary, modifier = Modifier.weight(1f)) { advanceFrom(null) }
+                    }
+                    is CheckInStep.Measure -> {
+                        FTButton("SKIP SITE", modifier = Modifier.weight(1f)) { skipped = skipped + st.slot; advanceFrom(st.slot) }
+                        FTButton(if (st.slot.site.method == MeasureMethod.TAPE) "SKIP TAPE" else "SKIP FOLDS", modifier = Modifier.weight(1f)) {
+                            skipped = skipped + slots.filter { it.site.method == st.slot.site.method }
+                            advanceFrom(st.slot)
+                        }
+                    }
+                    CheckInStep.Review -> {
+                        FTButton("BACK") { back() }
+                        FTButton(if (saving) "SAVING…" else "SAVE", enabled = !saving && doneAny, emphasis = FTButtonEmphasis.Primary, modifier = Modifier.weight(1f)) { save() }
+                    }
+                }
+            }
+        },
+    ) { _ ->
             when (val s = step) {
                 CheckInStep.Setup -> {
                     Text(
@@ -178,7 +230,10 @@ fun BodyCheckInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                         Label("HEIGHT, CM (ONCE: FOR WAIST-TO-HEIGHT)")
                         FieldTextField(height, { height = it }, "e.g. 178", keyboardType = KeyboardType.Decimal)
                     }
-                    Label("SECTIONS")
+                }
+
+                CheckInStep.Sections -> {
+                    Label("WHAT TO MEASURE TODAY")
                     Toggle("Tape girths (about 8 minutes)", tape) { tape = it }
                     if (tape) Toggle("Also flexed upper arms", flexedArms) { flexedArms = it }
                     if (tape) Toggle("Wrist and ankle (frame size, for muscle potential)", frame) { frame = it }
@@ -187,10 +242,6 @@ fun BodyCheckInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                         Toggle("Also the chest skinfold", chestFold) { chestFold = it }
                         Label("CALIPER (MAKE AND MODEL; A DIFFERENT ONE IS NOT COMPARED)")
                         FieldTextField(caliper, { caliper = it }, "e.g. plastic slide caliper")
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        FTButton("CANCEL", modifier = Modifier.weight(1f), onClick = onDismiss)
-                        FTButton("START", emphasis = FTButtonEmphasis.Primary, modifier = Modifier.weight(1f)) { go(CheckInStep.Grip) }
                     }
                 }
 
@@ -209,11 +260,6 @@ fun BodyCheckInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                     FieldTextField(gripRight, { gripRight = it }, "e.g. 46.5", keyboardType = KeyboardType.Decimal)
                     Label("LEFT HAND, KG")
                     FieldTextField(gripLeft, { gripLeft = it }, "e.g. 44.0", keyboardType = KeyboardType.Decimal)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        FTButton("BACK", modifier = Modifier.weight(1f)) { back() }
-                        FTButton("SKIP", modifier = Modifier.weight(1f)) { gripRight = ""; gripLeft = ""; advanceFrom(null) }
-                        FTButton("NEXT", emphasis = FTButtonEmphasis.Primary, modifier = Modifier.weight(1f)) { advanceFrom(null) }
-                    }
                 }
 
                 is CheckInStep.Measure -> MeasureStep(
@@ -262,19 +308,8 @@ fun BodyCheckInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                     }
                     Label("NOTES (OPTIONAL)")
                     FieldTextField(notes, { notes = it }, "e.g. new tape, late night before", singleLine = false)
-                    error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Bad) }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        FTButton("BACK", modifier = Modifier.weight(1f)) { back() }
-                        FTButton(
-                            if (saving) "SAVING..." else "SAVE",
-                            enabled = !saving && (done.isNotEmpty() || gripRight.isNotBlank() || gripLeft.isNotBlank()),
-                            emphasis = FTButtonEmphasis.Primary,
-                            modifier = Modifier.weight(1f),
-                        ) { save() }
-                    }
                 }
             }
-        }
     }
 }
 
@@ -329,11 +364,6 @@ private fun MeasureStep(
             Text("Outside ${"%.0f".format(slot.site.range.start)}–${"%.0f".format(slot.site.range.endInclusive)} $unit for this site: check the reading.", style = FTType.Caption, color = FT.Warn)
         }
         FTButton("ENTER READING", enabled = parsed != null, emphasis = FTButtonEmphasis.Primary, modifier = Modifier.fillMaxWidth()) { parsed?.let(onReading) }
-    }
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        FTButton("BACK", modifier = Modifier.weight(1f), onClick = onBack)
-        FTButton("SKIP SITE", modifier = Modifier.weight(1f), onClick = onSkip)
-        FTButton(if (method == MeasureMethod.TAPE) "SKIP TAPE" else "SKIP FOLDS", modifier = Modifier.weight(1f), onClick = onSkipSection)
     }
 }
 

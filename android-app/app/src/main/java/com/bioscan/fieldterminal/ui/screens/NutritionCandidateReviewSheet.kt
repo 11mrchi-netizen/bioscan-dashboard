@@ -40,6 +40,13 @@ import com.bioscan.fieldterminal.data.model.FoodRow
 import com.bioscan.fieldterminal.data.model.FoodServingRow
 import com.bioscan.fieldterminal.domain.toAppIso
 import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTFlow
+import com.bioscan.fieldterminal.ui.components.FlowPage
+import com.bioscan.fieldterminal.ui.components.FlowPager
+import com.bioscan.fieldterminal.ui.components.rememberFlowState
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.draw.clipToBounds
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
@@ -86,7 +93,6 @@ fun NutritionCandidateReviewSheet(
     val resolverRepo = remember { NutritionResolverRepository(supabase) }
     val saveRepo = remember { NutritionMealSaveRepository(supabase, resolverRepo) }
     val scope = rememberCoroutineScope()
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var rows by remember { mutableStateOf(seedItems.mapIndexed { i, seed -> i.toString() to seed }) }
     var nextKey by remember { mutableIntStateOf(seedItems.size) }
@@ -95,67 +101,56 @@ fun NutritionCandidateReviewSheet(
     var saving by remember { mutableStateOf(false) }
     var saveError by remember { mutableStateOf<String?>(null) }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = FT.SheetShape,
-        containerColor = FT.Surface,
-        contentColor = FT.TextPrimary,
+    val allResolved = rows.isNotEmpty() && rows.all { confirmed.containsKey(it.first) }
+    var current by remember { mutableStateOf(0) }
+    val shown = current.coerceIn(0, (rows.size - 1).coerceAtLeast(0))
+    // One item at a time with "2 of 4": every card stays composed (its search and match keep running and are kept),
+    // only the one shown takes room on the page.
+    FTFlow(
+        title = "REVIEW & CONFIRM", pages = listOf(FlowPage("ITEMS")), state = rememberFlowState(), onClose = onDismiss,
+        canSave = allResolved, saving = saving, wash = FT.Domain.Fuel,
+        error = saveError ?: if (!allResolved) "Pick a match for every item before saving." else null,
+        onSave = {
+            saving = true
+            saveError = null
+            scope.launch {
+                try {
+                    saveRepo.saveMeal(mealDateTime.toAppIso(), description.trim(), rows.mapNotNull { confirmed[it.first] }, mealSlot)
+                    saving = false
+                    onSaved()
+                } catch (e: Exception) {
+                    saveError = e.message ?: "Could not save meal"
+                    saving = false
+                }
+            }
+        },
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(20.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            SheetBackHeader(label = "REVIEW & CONFIRM", onBack = onDismiss)
-
-            Column { FormLabel("MEAL DESCRIPTION"); FieldTextField(description, { description = it }, "e.g. Lunch") }
-
-            rows.forEach { (key, seed) ->
-                ReviewItemCard(
-                    seed = seed,
-                    searchRepo = searchRepo,
-                    resolverRepo = resolverRepo,
-                    onConfirmedChange = { confirmed[key] = it },
-                    onConfirmedClear = { confirmed.remove(key) },
-                    onRemove = {
-                        rows = rows.filter { it.first != key }
-                        confirmed.remove(key)
-                    },
-                )
-            }
-
-            FTButton(label = "ADD ITEM") {
-                val key = nextKey.toString()
-                nextKey += 1
-                rows = rows + (key to ReviewSeedItem(description = "", source = MealItemSource.Manual))
-            }
-
-            saveError?.let {
-                Text(it, style = FTType.BodySmall, color = FT.Bad)
-            }
-
-            val allResolved = rows.isNotEmpty() && rows.all { confirmed.containsKey(it.first) }
-            if (!allResolved) {
-                Text(
-                    "Pick a match from the search results for every item before saving.",
-                    style = FTType.Caption,
-                    color = FT.TextSecondary,
-                )
-            }
-            SaveButton(saving = saving, enabled = allResolved) {
-                saving = true
-                saveError = null
-                scope.launch {
-                    try {
-                        saveRepo.saveMeal(mealDateTime.toAppIso(), description.trim(), rows.mapNotNull { confirmed[it.first] }, mealSlot)
-                        saving = false
-                        onSaved()
-                    } catch (e: Exception) {
-                        saveError = e.message ?: "Could not save meal"
-                        saving = false
+        Column { FormLabel("MEAL DESCRIPTION"); FieldTextField(description, { description = it }, "e.g. Lunch") }
+        FlowPager(shown, rows.size, { current = it }, what = "items")
+        Box {
+            rows.forEachIndexed { i, (key, seed) ->
+                androidx.compose.runtime.key(key) {
+                    Box(if (i == shown) Modifier else Modifier.size(0.dp).clipToBounds()) {
+                        ReviewItemCard(
+                            seed = seed,
+                            searchRepo = searchRepo,
+                            resolverRepo = resolverRepo,
+                            onConfirmedChange = { confirmed[key] = it },
+                            onConfirmedClear = { confirmed.remove(key) },
+                            onRemove = {
+                                rows = rows.filter { it.first != key }
+                                confirmed.remove(key)
+                            },
+                        )
                     }
                 }
             }
+        }
+        FTButton(label = "ADD ITEM") {
+            val key = nextKey.toString()
+            nextKey += 1
+            rows = rows + (key to ReviewSeedItem(description = "", source = MealItemSource.Manual))
+            current = rows.size - 1
         }
     }
 }
@@ -284,7 +279,7 @@ private fun ReviewItemCard(
             }
         } else {
             FieldTextField(searchQuery, { searchQuery = it }, "Search foods...")
-            searchResults.take(6).forEach { food ->
+            searchResults.take(4).forEach { food ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

@@ -33,6 +33,9 @@ import com.bioscan.fieldterminal.data.ScannedLabel
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.formatAmount
 import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTFlow
+import com.bioscan.fieldterminal.ui.components.FlowPage
+import com.bioscan.fieldterminal.ui.components.rememberFlowState
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTChoiceChip
 import com.bioscan.fieldterminal.ui.components.FieldTextField
@@ -62,7 +65,6 @@ fun LabelEntrySheet(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val repo = remember { NutritionBarcodeLookupRepository(SupabaseClientProvider.client) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var name by remember { mutableStateOf(initialName) }
     var brand by remember { mutableStateOf(initialBrand ?: "") }
@@ -107,118 +109,111 @@ fun LabelEntrySheet(
         }
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = FT.SheetShape,
-        containerColor = FT.Surface,
-        contentColor = FT.TextPrimary,
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Text("NEW PRODUCT", style = FTType.SectionTitle, color = FT.Ok)
-            Text(
-                "Barcode $barcode isn't in any food database yet. Take a photo of its nutrition label (營養標示) and check the " +
-                    "numbers -- or type them in. It's saved under this barcode, so next time the scan is instant.",
-                style = FTType.Caption,
-                color = FT.TextMuted,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                FTButton("PHOTO OF LABEL", emphasis = FTButtonEmphasis.Secondary, onClick = onTakePhoto)
-                FTButton("CHOOSE PHOTO", emphasis = FTButtonEmphasis.Tertiary, onClick = onChoosePhoto)
+    val size = servingSize.toAmount()
+    val calories = values.getValue("calories").value.toAmount()
+    val valid = name.isNotBlank() && calories != null && (!perServing || (size != null && size > 0))
+    // PRODUCT (the label photo, name and brand), SERVING, then the label's NUMBERS and SAVE PRODUCT.
+    FTFlow(
+        title = "NEW PRODUCT", pages = listOf(FlowPage("PRODUCT", ready = name.isNotBlank()), FlowPage("SERVING"), FlowPage("NUMBERS")),
+        state = rememberFlowState(), onClose = onDismiss,
+        canSave = valid && !reading, saving = saving, saveLabel = "SAVE PRODUCT", wash = FT.Domain.Fuel,
+        error = saveError?.let { "Couldn't save ($it)." },
+        onSave = {
+        saving = true
+        saveError = null
+        val entered = LabelValues(
+            calories = calories,
+            proteinG = values.getValue("protein").value.toAmount(),
+            fatG = values.getValue("fat").value.toAmount(),
+            saturatedFatG = values.getValue("saturated_fat").value.toAmount(),
+            transFatG = values.getValue("trans_fat").value.toAmount(),
+            carbsG = values.getValue("carbs").value.toAmount(),
+            sugarG = values.getValue("sugar").value.toAmount(),
+            fiberG = values.getValue("fiber").value.toAmount(),
+            sodiumMg = values.getValue("sodium").value.toAmount(),
+        )
+        val label = ScannedLabel(
+            productName = name.trim(),
+            servingSize = size,
+            servingUnit = servingUnit,
+            servingsPerPackage = servingsPerPackage.toAmount(),
+            perServing = entered.takeIf { perServing },
+            per100 = entered.takeIf { !perServing },
+            energyUnit = "kcal",
+        )
+        scope.launch {
+            try {
+                val saved = repo.saveLabel(barcode, name.trim(), brand.trim().ifBlank { null }, label)
+                saved.food?.let(onSaved) ?: run { saveError = "no product returned" }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                saveError = e.message ?: "Unknown error"
+            } finally {
+                saving = false
             }
-            when {
-                reading -> Text("Reading the label...", style = FTType.Caption, color = FT.TextSecondary)
-                readError != null -> Text("$readError -- you can type the numbers in.", style = FTType.Caption, color = FT.Warn)
-            }
-            if (checks.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("CHECK THESE", style = FTType.LabelCaps, color = FT.Warn)
-                    checks.forEach { Text("• ${it.message}", style = FTType.Caption, color = FT.Warn) }
-                }
-            }
-
-            Column { LabelFormLabel("PRODUCT NAME"); FieldTextField(name, { name = it }, "e.g. 超能蛋白 咖啡口味") }
-            Column { LabelFormLabel("BRAND (OPTIONAL)"); FieldTextField(brand, { brand = it }, "e.g. 福樂") }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Column(Modifier.weight(1f)) {
-                    LabelFormLabel("SERVING SIZE (每一份量)")
-                    FieldTextField(servingSize, { servingSize = it }, "e.g. 30", keyboardType = KeyboardType.Number)
-                }
-                Column(Modifier.weight(1f)) {
-                    LabelFormLabel("SERVINGS / PACK")
-                    FieldTextField(servingsPerPackage, { servingsPerPackage = it }, "e.g. 3", keyboardType = KeyboardType.Number)
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ChoiceChip("g", servingUnit == "g") { servingUnit = "g" }
-                ChoiceChip("ml", servingUnit == "ml") { servingUnit = "ml" }
-                Spacer(Modifier.weight(1f))
-                ChoiceChip("PER SERVING", perServing) { perServing = true }
-                ChoiceChip("PER 100", !perServing) { perServing = false }
-            }
-
-            LABEL_FIELDS.chunked(3).forEach { row ->
+        }
+        },
+    ) { page ->
+        when (page) {
+            0 -> {
+                Text(
+                    "Barcode $barcode isn't in any food database yet. Take a photo of its nutrition label (營養標示) and check the " +
+                        "numbers, or type them in. It's saved under this barcode, so next time the scan is instant.",
+                    style = FTType.Caption,
+                    color = FT.TextMuted,
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    row.forEach { field ->
-                        Column(Modifier.weight(1f)) {
-                            LabelFormLabel(field.label)
-                            FieldTextField(values.getValue(field.key).value, { values.getValue(field.key).value = it }, "", keyboardType = KeyboardType.Number)
+                    FTButton("PHOTO OF LABEL", emphasis = FTButtonEmphasis.Secondary, onClick = onTakePhoto)
+                    FTButton("CHOOSE PHOTO", emphasis = FTButtonEmphasis.Tertiary, onClick = onChoosePhoto)
+                }
+                when {
+                    reading -> Text("Reading the label...", style = FTType.Caption, color = FT.TextSecondary)
+                    readError != null -> Text("$readError -- you can type the numbers in.", style = FTType.Caption, color = FT.Warn)
+                }
+                Column { LabelFormLabel("PRODUCT NAME"); FieldTextField(name, { name = it }, "e.g. 超能蛋白 咖啡口味") }
+                Column { LabelFormLabel("BRAND (OPTIONAL)"); FieldTextField(brand, { brand = it }, "e.g. 福樂") }
+            }
+            1 -> {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        LabelFormLabel("SERVING SIZE (每一份量)")
+                        FieldTextField(servingSize, { servingSize = it }, "e.g. 30", keyboardType = KeyboardType.Number)
+                    }
+                    Column(Modifier.weight(1f)) {
+                        LabelFormLabel("SERVINGS / PACK")
+                        FieldTextField(servingsPerPackage, { servingsPerPackage = it }, "e.g. 3", keyboardType = KeyboardType.Number)
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ChoiceChip("g", servingUnit == "g") { servingUnit = "g" }
+                    ChoiceChip("ml", servingUnit == "ml") { servingUnit = "ml" }
+                }
+                Text("The numbers on the label are", style = FTType.Caption, color = FT.TextSecondary)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ChoiceChip("PER SERVING", perServing) { perServing = true }
+                    ChoiceChip("PER 100", !perServing) { perServing = false }
+                }
+            }
+            else -> {
+                if (checks.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("CHECK THESE", style = FTType.LabelCaps, color = FT.Warn)
+                        checks.take(3).forEach { Text("• ${it.message}", style = FTType.Caption, color = FT.Warn) }
+                    }
+                }
+                LABEL_FIELDS.chunked(3).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        row.forEach { field ->
+                            Column(Modifier.weight(1f)) {
+                                LabelFormLabel(field.label)
+                                FieldTextField(values.getValue(field.key).value, { values.getValue(field.key).value = it }, "", keyboardType = KeyboardType.Number)
+                            }
                         }
-                    }
-                    repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
-                }
-            }
-
-            saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Bad) }
-
-            val size = servingSize.toAmount()
-            val calories = values.getValue("calories").value.toAmount()
-            val valid = name.isNotBlank() && calories != null && (!perServing || (size != null && size > 0))
-            FTButton(
-                label = if (saving) "SAVING..." else "SAVE PRODUCT",
-                enabled = valid && !saving && !reading,
-                emphasis = FTButtonEmphasis.Primary,
-            ) {
-                saving = true
-                saveError = null
-                val entered = LabelValues(
-                    calories = calories,
-                    proteinG = values.getValue("protein").value.toAmount(),
-                    fatG = values.getValue("fat").value.toAmount(),
-                    saturatedFatG = values.getValue("saturated_fat").value.toAmount(),
-                    transFatG = values.getValue("trans_fat").value.toAmount(),
-                    carbsG = values.getValue("carbs").value.toAmount(),
-                    sugarG = values.getValue("sugar").value.toAmount(),
-                    fiberG = values.getValue("fiber").value.toAmount(),
-                    sodiumMg = values.getValue("sodium").value.toAmount(),
-                )
-                val label = ScannedLabel(
-                    productName = name.trim(),
-                    servingSize = size,
-                    servingUnit = servingUnit,
-                    servingsPerPackage = servingsPerPackage.toAmount(),
-                    perServing = entered.takeIf { perServing },
-                    per100 = entered.takeIf { !perServing },
-                    energyUnit = "kcal",
-                )
-                scope.launch {
-                    try {
-                        val saved = repo.saveLabel(barcode, name.trim(), brand.trim().ifBlank { null }, label)
-                        saved.food?.let(onSaved) ?: run { saveError = "no product returned" }
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        saveError = e.message ?: "Unknown error"
-                    } finally {
-                        saving = false
+                        repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
             }
-            Spacer(Modifier.height(8.dp))
         }
     }
 }

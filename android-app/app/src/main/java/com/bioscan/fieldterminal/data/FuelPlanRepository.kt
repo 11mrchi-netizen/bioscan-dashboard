@@ -389,6 +389,11 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
     suspend fun loadWeekPlan(context: Context, overview: NutritionOverview?, weekStart: LocalDate, now: ZonedDateTime = ZonedDateTime.now()): WeekPlan? =
         ReadCache.get("fuel.week.v$FUEL_ENGINE_VERSION.$weekStart.${now.toLocalDate()}", tables = null, serializer = WeekPlan.serializer().nullable) { fetchLoadWeekPlan(context, overview, weekStart, now) }
 
+    /** Works out and publishes each week for the web's meal prep (WeekPlanPublishWorker), past the read cache. */
+    suspend fun publishPrepWeeks(context: Context, overview: NutritionOverview?, weeks: List<LocalDate>) {
+        for (w in weeks) fetchLoadWeekPlan(context, overview, w)
+    }
+
     private suspend fun fetchLoadWeekPlan(context: Context, overview: NutritionOverview?, weekStart: LocalDate, now: ZonedDateTime = ZonedDateTime.now()): WeekPlan? = coroutineScope {
         val zone = now.zone
         val settings = FuelSettingsStore.get(context)

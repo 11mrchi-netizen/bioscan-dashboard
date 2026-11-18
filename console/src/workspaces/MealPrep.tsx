@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLoadEffect } from '../lib/useLoadEffect'
-import { emptyWeek, loadBreakfast, loadPublished, loadWeek, type PrepWeek, type PublishedWeek, saveBreakfast, saveWeek } from '../lib/mealPrepData'
+import { emptyWeek, loadBreakfast, loadPublished, loadPublishedWeeks, loadWeek, type PrepWeek, type PublishedWeek, saveBreakfast, saveWeek } from '../lib/mealPrepData'
 import {
   addDays, BREAKFAST_MAX_SCALE, BREAKFAST_MIN_SCALE, type BreakfastItem, buildRecipes, carbMid, type CodedMeal, type Container, containerFromStored, cookSheet,
   currentPrepWeek, type FoodOption, letterFor, MAX_PICKS_PER_GROUP, type MealSlotKind, picksReady, type Plate, plateCarb, plateFat, plateKcal, plateLabel,
@@ -42,8 +42,10 @@ export default function MealPrep() {
   const [save, setSave] = useState<{ state: SaveState; message?: string }>({ state: 'idle' })
   const timer = useRef<number | null>(null)
 
+  const [sent, setSent] = useState<{ weekStart: string; computedAt: string }[]>([])
   const status = useLoadEffect(async (isCurrent) => {
-    const [p, w, b] = await Promise.all([loadPublished(weekStart), loadWeek(weekStart), loadBreakfast().catch(() => [] as BreakfastItem[])])
+    const [p, w, b, list] = await Promise.all([loadPublished(weekStart), loadWeek(weekStart), loadBreakfast().catch(() => [] as BreakfastItem[]), loadPublishedWeeks().catch(() => [])])
+    if (isCurrent()) setSent(list)
     if (!isCurrent()) return
     setPublished(p); setWeekState(w); setBreakfast(b); setSave({ state: 'idle' })
   }, [weekStart])
@@ -116,10 +118,25 @@ export default function MealPrep() {
       <main className="pb-main">
         {!plan && step !== 'breakfast' ? (
           <section className="pb-section">
-            <h3 className="pb-section-title mono">NO TARGETS FOR THIS WEEK YET</h3>
+            <h3 className="pb-section-title mono">WAITING FOR THE PHONE'S TARGETS FOR THIS WEEK</h3>
             <p className="pb-info">Meal prep portions each container for its own day's lunch or dinner, from the targets the phone works out
-              (training, energy, carbohydrate periodisation). Open <b>Fuel › Plan › Prep</b> on the phone for the week of {dayName(weekStart, 'long')}:
-              it publishes the week here, and this page fills in.</p>
+              (training, energy, carbohydrate periodisation, your usual foods and meal settings, which live on the phone). The phone has not
+              sent the week of {dayName(weekStart, 'long')} yet.</p>
+            <ul className="pb-rotation">
+              <li><span className="pb-info"><b>Automatic:</b> an up-to-date app sends this week and next every few hours, in the background.</span></li>
+              <li><span className="pb-info"><b>Now:</b> open <b>Fuel › Plan › Prep</b> on the phone and choose this week; then come back here and reload.</span></li>
+            </ul>
+            {sent.length > 0 ? (
+              <div className="pb-group">
+                <span className="pb-label">WEEKS THE PHONE HAS SENT</span>
+                <div className="pb-chips">
+                  {sent.map((x) => <button key={x.weekStart} className="pb-chip" onClick={() => setWeekStart(x.weekStart)}>{dayName(x.weekStart, 'long')} · sent {new Date(x.computedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</button>)}
+                </div>
+              </div>
+            ) : (
+              <p className="pb-warn">The phone has never sent a week. Update the app on the phone (it needs this month's version), open it once, then open Fuel › Plan › Prep.</p>
+            )}
+            <button className="btn-ghost mono" onClick={status.retry}>CHECK AGAIN</button>
             <p className="pb-hint">The breakfast template can be edited without it (BREAKFAST).</p>
           </section>
         ) : (

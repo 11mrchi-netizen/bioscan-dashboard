@@ -5,8 +5,9 @@
 import type { NumRange } from './definitions.ts'
 import type { Weekday } from './dates.ts'
 
-export type WeekKind = 'normal' | 'deload' | 'test'
-export const WEEK_KINDS: WeekKind[] = ['normal', 'deload', 'test']
+// An early week (Nov 2026) repeats the cycle's opening weeks before the first full cycle, when building toward a race.
+export type WeekKind = 'normal' | 'deload' | 'test' | 'lead'
+export const WEEK_KINDS: WeekKind[] = ['normal', 'deload', 'test', 'lead']
 export const countsTowardBlock = (k: WeekKind): boolean => k !== 'deload'
 
 export interface CondSlot { kind: string; minutes?: NumRange | null }
@@ -50,4 +51,27 @@ export function withTaper(timeline: WeekKind[], taper: number): WeekKind[] {
   if (taper <= 0 || timeline.length === 0) return timeline
   const from = Math.max(1, timeline.length - taper)
   return timeline.map((k, i) => (i >= from ? 'deload' : k))
+}
+
+/**
+ * Building toward a race: the last [taper] weeks light, whole cycles before them (a deload between), the last ending right
+ * before the taper so its peak is the week before it; the weeks that do not make a whole cycle go first as early weeks.
+ */
+export function raceTimeline(blockLength: number, weeks: number, taper: number, startWithTest = false): WeekKind[] {
+  const len = Math.max(1, blockLength)
+  const w = Math.max(0, weeks)
+  const t = Math.min(w, Math.max(0, taper))
+  const head = startWithTest && w - t > 0 ? 1 : 0
+  const avail = w - t - head
+  const cycles = Math.trunc((avail + 1) / (len + 1))
+  const lead = cycles === 0 ? avail : avail - (cycles * len + cycles - 1)
+  const out: WeekKind[] = []
+  if (head === 1) out.push('test')
+  for (let i = 0; i < lead; i++) out.push('lead')
+  for (let c = 0; c < cycles; c++) {
+    if (c > 0) out.push('deload')
+    for (let i = 0; i < len; i++) out.push('normal')
+  }
+  for (let i = 0; i < t; i++) out.push('deload')
+  return out
 }

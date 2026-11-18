@@ -321,6 +321,7 @@ function mergeBlock(bp: BlockBlueprint, strength: StrengthModuleDef | null, prot
   const strengthDays = bp.layout.filter((d) => d.strengthSession != null).sort((a, b) => position(a.weekday) - position(b.weekday))
 
   let blockPos = 0
+  let leadPos = 0
   let skipProgress = false
   let normalOrdinal = 0
   let counted = 0
@@ -328,7 +329,7 @@ function mergeBlock(bp: BlockBlueprint, strength: StrengthModuleDef | null, prot
   bp.timeline.forEach((kind, i) => {
     const week = i + 1
     if (countsTowardBlock(kind)) counted++
-    if (kind === 'normal') normalOrdinal++
+    if (kind === 'normal' || kind === 'lead') normalOrdinal++
     if (strength && variant) {
       if (kind === 'normal') {
         if (blockPos === len) { blockPos = 0; if (!skipProgress) g.progress(strength, choice, week) }
@@ -343,6 +344,18 @@ function mergeBlock(bp: BlockBlueprint, strength: StrengthModuleDef | null, prot
           g.emit(week, true, position(d.weekday), 1, strength.domain, 'progression', `strength:${strength.key}`, `${strength.title}: ${sd.label}`, g.resolveItems(strength, choice, ws.items), null, notes)
         }
         blockPos++
+      } else if (kind === 'lead') {
+        // An early week repeats the cycle's opening weeks (all but its last, the peak) without moving the cycle on.
+        const vw = variant.weeks[leadPos % Math.max(1, len - 1)]
+        for (const d of strengthDays) {
+          const sd = strength.sessions[d.strengthSession!]
+          if (!sd) continue
+          const ws = vw.sessions.find((s) => s.session === sd.id)
+          if (!ws) continue
+          g.emit(week, true, position(d.weekday), 1, strength.domain, 'progression', `strength:${strength.key}`, `${strength.title}: ${sd.label}`,
+            g.resolveItems(strength, choice, ws.items), null, [...(ws.note ? [ws.note] : []), 'Early week: the opening weeks again before the full cycle'])
+        }
+        leadPos++
       } else if (kind === 'deload') {
         const d = strengthDays[0]
         if (d) g.emit(week, false, position(d.weekday), 1, 'recovery', 'deload', 'inline', 'Deload week: reduced volume and intensity')
@@ -368,7 +381,7 @@ function mergeBlock(bp: BlockBlueprint, strength: StrengthModuleDef | null, prot
 
 function addConditioning(g: Gen, p: ConditioningProtocolDef, layout: DayPlan[], position: (d: Weekday) => number, week: number, kind: WeekKind, normalOrdinal: number, rotation: Map<string, number>): void {
   const b = p.budget
-  const normal = kind === 'normal'
+  const normal = kind === 'normal' || kind === 'lead'
   const hicWeek = normal && (b?.high_intensity_every_n_weeks != null ? (normalOrdinal - 1) % b.high_intensity_every_n_weeks === 0 : true)
   const slots = layout.filter((d) => d.conditioning != null).sort((a, b2) => position(a.weekday) - position(b2.weekday))
     .filter((d) => { const k = d.conditioning!.kind; return (normal && (k !== 'hic' || hicWeek)) || (!normal && k === 'lic') })

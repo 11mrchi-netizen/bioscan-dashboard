@@ -26,6 +26,7 @@ import com.bioscan.fieldterminal.domain.training.definition.StrengthModuleDef
 import com.bioscan.fieldterminal.domain.training.definition.TemplateDef
 import com.bioscan.fieldterminal.domain.training.generate.BlockBlueprint
 import com.bioscan.fieldterminal.domain.training.generate.DayPlan
+import com.bioscan.fieldterminal.domain.training.generate.raceTimeline
 import com.bioscan.fieldterminal.domain.training.generate.DefinitionIndex
 import com.bioscan.fieldterminal.domain.training.generate.GenChoices
 import com.bioscan.fieldterminal.domain.training.generate.GenEquipment
@@ -223,7 +224,6 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
         moduleChoices.remove(key)
         if (!lengthChosen) weeks = weeksForBlocks(2, blockLength())
         resetLayout(); resetTimeline()
-        targetEvent?.let { e -> timeline = withTaper(timeline, taperWeeks(e)) }
     }
 
     fun pickProtocol(key: String?) {
@@ -241,7 +241,15 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
         return (choice?.blockLength ?: m.blockLengths.lastOrNull() ?: variant.weeks.size).coerceIn(1, variant.weeks.size)
     }
 
-    fun resetTimeline() { timeline = if (strengthModule == null) List(weeks) { WeekKind.Normal } else defaultTimeline(blockLength(), weeks, startWithTest) }
+    // Toward an event the timeline is worked back from the race (raceTimeline): the last cycle peaks right before the taper.
+    fun resetTimeline() {
+        val e = targetEvent
+        timeline = when {
+            strengthModule == null -> withTaper(List(weeks) { WeekKind.Normal }, e?.let { taperWeeks(it) } ?: 0)
+            e != null -> raceTimeline(blockLength(), weeks, taperWeeks(e), startWithTest)
+            else -> defaultTimeline(blockLength(), weeks, startWithTest)
+        }
+    }
 
     fun changeWeeks(n: Int) {
         weeks = n.coerceIn(1, 52)
@@ -255,7 +263,6 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
         lengthChosen = true
         changeWeeks(weeksToEvent(startDate, event.date))
         resetTimeline()
-        timeline = withTaper(timeline, taperWeeks(event))
         if (name.isBlank()) name = "Toward ${event.name}"
     }
 

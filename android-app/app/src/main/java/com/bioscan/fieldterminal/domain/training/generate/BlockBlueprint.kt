@@ -18,11 +18,14 @@ data class DayPlan(val weekday: DayOfWeek, val strengthSession: Int? = null, val
 }
 
 // What a calendar week is. Deload weeks are invisible: they do not count toward the block's
-// length and pause the strength cycle (Tactical Barbell III). A test week schedules max tests.
+// length and pause the strength cycle (Tactical Barbell III). A test week schedules max tests. An early
+// week (Nov 2026, building toward a race) repeats the cycle's opening weeks before the first full cycle:
+// it fills the weeks that do not make a whole cycle, so the last cycle's peak lands right before the race.
 enum class WeekKind(val key: String, val label: String) {
     Normal("normal", "NORMAL"),
     Deload("deload", "DELOAD"),
     Test("test", "TEST"),
+    Lead("lead", "EARLY"),
     ;
 
     val countsTowardBlock: Boolean get() = this != Deload

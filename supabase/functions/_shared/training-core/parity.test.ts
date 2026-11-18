@@ -7,7 +7,7 @@ import { test } from 'node:test'
 import {
   type BlockBlueprint, type DayPlan, defaultTimeline, DefinitionIndex, deriveBlockDomains, estimateMaxFromHistory, type GenChoices,
   type GeneratedBlock, type GenEquipment, DEFAULT_EQUIPMENT, generateComposedBlock, generateMergedBlock, generateTemplateBlock, layoutWarnings,
-  loadableFor, loadableTotal, type MaxEntry, movementKey, parseDefinition, prescriptionJson, resizeTimeline, type Rounding, suggestLayout,
+  loadableFor, loadableTotal, raceTimeline, stepUpMaxes, loadStepKg, endEarlyPreview, type MaxEntry, movementKey, parseDefinition, prescriptionJson, resizeTimeline, type Rounding, suggestLayout,
   summaryLines, toNumRange, type WeekKind, weekdayOf, weeksForBlocks, withTaper, type Weekday,
 } from './index.ts'
 
@@ -66,7 +66,7 @@ for (const c of sc.cases) {
     const layout: DayPlan[] = Array.isArray(c.layout)
       ? c.layout.map((d: Record<string, any>) => ({ weekday: d.weekday as Weekday, strengthSession: d.strengthSession ?? null, conditioning: d.conditioning ? { kind: d.conditioning.kind, minutes: toNumRange(d.conditioning.minutes) } : null }))
       : suggestLayout(strength, protocol, weekdayOf(c.start), c.conditioningPerWeek ?? null)
-    const timeline: WeekKind[] = Array.isArray(c.timeline) ? c.timeline : defaultTimeline(c.timeline.default[0], c.timeline.default[1], c.timeline.default[2])
+    const timeline: WeekKind[] = Array.isArray(c.timeline) ? c.timeline : c.timeline.race ? raceTimeline(c.timeline.race[0], c.timeline.race[1], c.timeline.race[2], c.timeline.race[3]) : defaultTimeline(c.timeline.default[0], c.timeline.default[1], c.timeline.default[2])
     same(layout.map((d) => ({ weekday: d.weekday, strengthSession: d.strengthSession, conditioning: d.conditioning?.kind ?? null, minutes: d.conditioning?.minutes ? (d.conditioning.minutes.min === d.conditioning.minutes.max ? d.conditioning.minutes.min : d.conditioning.minutes) : null })), exp.layout)
     same(layoutWarnings(layout, strength, protocol), exp.layoutWarnings)
     same(timeline, exp.timeline)
@@ -79,6 +79,8 @@ test('plates, movement keys, timelines and max estimates', () => {
   const m = sc.misc
   same(m.plates.map(([t, b, p, r]: [number, number, number[], Rounding]) => { const l = loadableFor(t, b, p, r); return { total: loadableTotal(l), plates: l.platesPerSideKg } }), expected.misc.plates)
   same(m.movementKeys.map(movementKey), expected.misc.movementKeys)
-  same(m.timelines.map((a: any[]) => a[0] === 'default' ? defaultTimeline(a[1], a[2], a[3], a[4]) : a[0] === 'resize' ? resizeTimeline(a[1], a[2], a[3]) : a[0] === 'taper' ? withTaper(a[1], a[2]) : weeksForBlocks(a[1], a[2], a[3], a[4])), expected.misc.timelines)
+  same(m.timelines.map((a: any[]) => a[0] === 'default' ? defaultTimeline(a[1], a[2], a[3], a[4]) : a[0] === 'resize' ? resizeTimeline(a[1], a[2], a[3]) : a[0] === 'taper' ? withTaper(a[1], a[2]) : a[0] === 'race' ? raceTimeline(a[1], a[2], a[3], a[4]) : weeksForBlocks(a[1], a[2], a[3], a[4])), expected.misc.timelines)
+  same(m.stepUps.map((e: any) => stepUpMaxes(idx.strength(e.module)!, { exercises: e.exercises }, (n) => lookup(n)?.oneRmKg, loadStepKg(e.platesKg))), expected.misc.stepUps)
+  same(m.endEarly.map((e: any) => endEarlyPreview(e.sessions, e.lastDay)), expected.misc.endEarly)
   same(m.estimates.map((e: any) => estimateMaxFromHistory(e.sets, e.today)), expected.misc.estimates)
 })

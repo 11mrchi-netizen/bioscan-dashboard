@@ -24,6 +24,11 @@ import com.bioscan.fieldterminal.domain.training.generate.generateMergedBlock
 import com.bioscan.fieldterminal.domain.training.generate.generateTemplateBlock
 import com.bioscan.fieldterminal.domain.training.generate.layoutWarnings
 import com.bioscan.fieldterminal.domain.training.generate.prescriptionJson
+import com.bioscan.fieldterminal.domain.training.generate.raceTimeline
+import com.bioscan.fieldterminal.domain.training.generate.PlannedLite
+import com.bioscan.fieldterminal.domain.training.generate.endEarlyPreview
+import com.bioscan.fieldterminal.domain.training.generate.stepUpMaxes
+import com.bioscan.fieldterminal.domain.training.loadStepKg
 import com.bioscan.fieldterminal.domain.training.generate.resizeTimeline
 import com.bioscan.fieldterminal.domain.training.generate.suggestLayout
 import com.bioscan.fieldterminal.domain.training.generate.summaryLines
@@ -144,7 +149,8 @@ class TrainingParityTest {
                             }
                             val timeline = when (val t = c["timeline"]) {
                                 is JsonArray -> t.map { kind(it.str()!!) }
-                                else -> t!!.jsonObject["default"]!!.jsonArray.let { a -> defaultTimeline(a[0].jsonPrimitive.intOrNull!!, a[1].jsonPrimitive.intOrNull!!, a[2].jsonPrimitive.booleanOrNull!!) }
+                                else -> t!!.jsonObject["race"]?.jsonArray?.let { a -> raceTimeline(a[0].jsonPrimitive.intOrNull!!, a[1].jsonPrimitive.intOrNull!!, a[2].jsonPrimitive.intOrNull!!, a[3].jsonPrimitive.booleanOrNull!!) }
+                                    ?: t.jsonObject["default"]!!.jsonArray.let { a -> defaultTimeline(a[0].jsonPrimitive.intOrNull!!, a[1].jsonPrimitive.intOrNull!!, a[2].jsonPrimitive.booleanOrNull!!) }
                             }
                             put("layout", buildJsonArray {
                                 layout.forEach { d -> add(buildJsonObject { put("weekday", d.weekday.value); put("strengthSession", d.strengthSession); put("conditioning", d.conditioning?.kind); put("minutes", rangeJson(d.conditioning?.minutes)) }) }
@@ -175,9 +181,33 @@ class TrainingParityTest {
                     when (a[0].str()) {
                         "default" -> add(buildJsonArray { defaultTimeline(a[1].jsonPrimitive.intOrNull!!, a[2].jsonPrimitive.intOrNull!!, a[3].jsonPrimitive.booleanOrNull!!, a[4].jsonPrimitive.booleanOrNull!!).forEach { add(JsonPrimitive(it.key)) } })
                         "resize" -> add(buildJsonArray { resizeTimeline(a[1].jsonArray.map { kind(it.str()!!) }, a[2].jsonPrimitive.intOrNull!!, a[3].jsonPrimitive.intOrNull!!).forEach { add(JsonPrimitive(it.key)) } })
+                        "race" -> add(buildJsonArray { raceTimeline(a[1].jsonPrimitive.intOrNull!!, a[2].jsonPrimitive.intOrNull!!, a[3].jsonPrimitive.intOrNull!!, a[4].jsonPrimitive.booleanOrNull!!).forEach { add(JsonPrimitive(it.key)) } })
                         "taper" -> add(buildJsonArray { withTaper(a[1].jsonArray.map { kind(it.str()!!) }, a[2].jsonPrimitive.intOrNull!!).forEach { add(JsonPrimitive(it.key)) } })
                         else -> add(JsonPrimitive(weeksForBlocks(a[1].jsonPrimitive.intOrNull!!, a[2].jsonPrimitive.intOrNull!!, a[3].jsonPrimitive.booleanOrNull!!, a[4].jsonPrimitive.booleanOrNull!!)))
                     }
+                }
+            })
+            put("stepUps", buildJsonArray {
+                misc["stepUps"]!!.jsonArray.forEach { e ->
+                    val o = e.jsonObject
+                    val m = idx.strength(o["module"].str()!!)!!
+                    val choice = ModuleChoice(exercises = o["exercises"]!!.jsonObject.mapValues { v -> v.value.jsonArray.map { it.str()!! } })
+                    val steps = stepUpMaxes(m, choice, { lookup(it)?.oneRmKg }, loadStepKg(o["platesKg"]!!.jsonArray.map { it.jsonPrimitive.doubleOrNull!! }))
+                    add(buildJsonArray { steps.forEach { st -> add(buildJsonObject { put("exercise", st.exercise); put("fromKg", st.fromKg); put("toKg", st.toKg) }) } })
+                }
+            })
+            put("endEarly", buildJsonArray {
+                misc["endEarly"]!!.jsonArray.forEach { e ->
+                    val o = e.jsonObject
+                    val ss = o["sessions"]!!.jsonArray.map { x ->
+                        val so = x.jsonObject
+                        PlannedLite(so["id"]!!.jsonPrimitive.intOrNull!!.toLong(), LocalDate.parse(so["date"].str()!!), so["weekIndex"]!!.jsonPrimitive.intOrNull!!, so["status"].str()!!, so["topPct"]?.jsonPrimitive?.doubleOrNull)
+                    }
+                    val pv = endEarlyPreview(ss, LocalDate.parse(o["lastDay"].str()!!))
+                    add(buildJsonObject {
+                        put("kept", pv.kept); put("dropped", pv.dropped); put("heaviestDroppedPct", pv.heaviestDroppedPct)
+                        put("droppedWeeks", buildJsonArray { pv.droppedWeeks.forEach { w -> add(buildJsonObject { put("weekIndex", w.weekIndex); put("sessions", w.sessions); put("topPct", w.topPct) }) } })
+                    })
                 }
             })
             put("estimates", buildJsonArray {

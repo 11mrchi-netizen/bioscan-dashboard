@@ -1372,6 +1372,55 @@
    "weeks": 5,
    "deloadAfterBlock": false,
    "conditioningPerWeek": 2
+  },
+  {
+   "name": "merged_race_lead",
+   "kind": "merged",
+   "strength": "example.three_day",
+   "protocol": "example.black",
+   "start": "2026-01-05",
+   "layout": "suggest",
+   "timeline": {
+    "race": [
+     3,
+     10,
+     1,
+     false
+    ]
+   }
+  },
+  {
+   "name": "merged_race_long_lead",
+   "kind": "merged",
+   "strength": "example.two_day",
+   "protocol": "example.cadence",
+   "start": "2026-01-05",
+   "layout": "suggest",
+   "conditioningPerWeek": 2,
+   "timeline": {
+    "race": [
+     2,
+     12,
+     2,
+     true
+    ]
+   }
+  },
+  {
+   "name": "merged_race_too_short",
+   "kind": "merged",
+   "strength": "example.three_day",
+   "protocol": null,
+   "start": "2026-01-05",
+   "layout": "suggest",
+   "timeline": {
+    "race": [
+     3,
+     4,
+     2,
+     false
+    ]
+   }
   }
  ],
  "misc": {
@@ -1563,6 +1612,48 @@
     6,
     false,
     true
+   ],
+   [
+    "race",
+    3,
+    10,
+    1,
+    false
+   ],
+   [
+    "race",
+    3,
+    9,
+    1,
+    false
+   ],
+   [
+    "race",
+    3,
+    11,
+    2,
+    true
+   ],
+   [
+    "race",
+    6,
+    13,
+    2,
+    false
+   ],
+   [
+    "race",
+    2,
+    3,
+    2,
+    false
+   ],
+   [
+    "race",
+    3,
+    0,
+    1,
+    false
    ]
   ],
   "estimates": [
@@ -1616,6 +1707,103 @@
       "date": "2026-02-20",
       "reps": 15,
       "weightKg": 60
+     }
+    ]
+   }
+  ],
+  "stepUps": [
+   {
+    "module": "example.three_day",
+    "exercises": {},
+    "platesKg": [
+     1.25,
+     2.5,
+     5,
+     10,
+     15,
+     20
+    ]
+   },
+   {
+    "module": "example.three_day",
+    "exercises": {
+     "H": [
+      "Trap Bar Deadlift"
+     ],
+     "A": [
+      "Front Squat"
+     ]
+    },
+    "platesKg": [
+     2.5,
+     5,
+     10,
+     20
+    ]
+   },
+   {
+    "module": "example.two_day",
+    "exercises": {
+     "C": [
+      "Curl",
+      "Row"
+     ]
+    },
+    "platesKg": [
+     1.25,
+     2.5,
+     5,
+     10,
+     15,
+     20
+    ]
+   }
+  ],
+  "endEarly": [
+   {
+    "lastDay": "2026-01-18",
+    "sessions": [
+     {
+      "id": 1,
+      "date": "2026-01-12",
+      "weekIndex": 2,
+      "status": "confirmed",
+      "topPct": 75
+     },
+     {
+      "id": 2,
+      "date": "2026-01-18",
+      "weekIndex": 2,
+      "status": "planned",
+      "topPct": 75
+     },
+     {
+      "id": 3,
+      "date": "2026-01-19",
+      "weekIndex": 3,
+      "status": "planned",
+      "topPct": 80
+     },
+     {
+      "id": 4,
+      "date": "2026-01-21",
+      "weekIndex": 3,
+      "status": "skipped",
+      "topPct": 80
+     },
+     {
+      "id": 5,
+      "date": "2026-01-26",
+      "weekIndex": 4,
+      "status": "planned",
+      "topPct": null
+     },
+     {
+      "id": 6,
+      "date": "2026-01-28",
+      "weekIndex": 4,
+      "status": "planned",
+      "topPct": 95
      }
     ]
    }

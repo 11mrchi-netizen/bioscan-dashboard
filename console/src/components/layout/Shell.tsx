@@ -40,7 +40,16 @@ export function Shell() {
   }, [])
   const inspectionTarget = useInspection()
   const clearInspection = useClearInspection()
-  const [railCollapsed, setRailCollapsed] = useState(false)
+  const [railToggled, setRailCollapsed] = useState(false)
+  // Below 1280 px the rail is a bar across the top (Shell.css) that always shows every label.
+  const [narrow, setNarrow] = useState(() => window.matchMedia('(max-width: 1279px)').matches)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1279px)')
+    const on = () => setNarrow(mq.matches)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
+  const railCollapsed = railToggled && !narrow
 
   const inspectorOpen = inspectionTarget !== null
 

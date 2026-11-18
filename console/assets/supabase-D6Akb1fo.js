@@ -1,0 +1,1 @@
+import{t as e}from"./supabase-Bl13M3oS.js";var t=e(`https://ugfrglbcoivkprjqvjzz.supabase.co`,`sb_publishable_GyandyvuVbF0RxZLnugz4A_GlNIstPc`);export{t};

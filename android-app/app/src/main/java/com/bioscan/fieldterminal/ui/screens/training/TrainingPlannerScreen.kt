@@ -319,6 +319,11 @@ private fun DetailsStep(state: TrainingPlannerState) {
             warn = missing.isNotEmpty(),
         ) { open = "exercises" }
     }
+    modules.forEach { m ->
+        val acc = state.choiceFor(m.key).accessories
+        val n = acc.values.sumOf { it.size }
+        DetailRow("ACCESSORY WORK · ${m.title.uppercase()}", if (n == 0) "none: add curls, core, carries… to any session" else "$n exercise${if (n == 1) "" else "s"} added") { open = "accessories:${m.key}" }
+    }
     val hasConditioning = state.protocol != null || (state.program as? Program.Fixed)?.let { p -> templateVariables(p.template).any { it.kind != "strength_module" } } == true
     if (hasConditioning) {
         val chosen = state.conditioningChoices.values.sumOf { it.size } + state.variables.count { (k, _) -> (state.program as? Program.Fixed)?.let { p -> templateVariables(p.template).any { it.name == k && it.kind != "strength_module" } } == true }
@@ -334,7 +339,11 @@ private fun DetailsStep(state: TrainingPlannerState) {
         "progression" -> PlannerSheet("PROGRESSION", { open = null }) {
             Chips(listOf("project", "hold"), setOf(if (state.projectProgression) "project" else "hold"), { if (it == "project") "PROJECT MAX INCREASES" else "USE TODAY'S MAXES" }) { state.projectProgression = it == "project" }
         }
-        else -> modules.firstOrNull { "options:${it.key}" == o }?.let { m -> PlannerSheet(m.title.uppercase(), { open = null }) { ModuleOptions(state, m) } }
+        else -> if (o.startsWith("accessories:")) modules.firstOrNull { "accessories:${it.key}" == o }?.let { m ->
+            AccessoriesFlow("ACCESSORY WORK · ${m.title.uppercase()}", m.sessions.map { it.id to it.label }, state.choiceFor(m.key).accessories, onClose = { open = null }, onSave = { map ->
+                state.updateChoice(m.key) { it.copy(accessories = map) }; open = null
+            })
+        } else modules.firstOrNull { "options:${it.key}" == o }?.let { m -> PlannerSheet(m.title.uppercase(), { open = null }) { ModuleOptions(state, m) } }
     }
 }
 
@@ -462,6 +471,11 @@ internal fun ExercisesStep(state: TrainingPlannerState) {
                     }
                     MaxRow(state, chosen.firstOrNull() ?: slot.standard)
                 }
+            }
+            val pctAccessories = state.choiceFor(m.key).accessories.values.flatten().filter { it.load.kind == "pct_1rm" }.map { it.exercise }.distinct()
+            if (pctAccessories.isNotEmpty()) {
+                Label("ACCESSORIES LOADED BY % OF THE 1RM")
+                pctAccessories.forEach { Text(it, color = FT.TextPrimary, style = FTType.BodySmall, modifier = Modifier.padding(top = 6.dp)); MaxRow(state, it) }
             }
         }
     }

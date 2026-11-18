@@ -34,9 +34,15 @@ const T = {
     components: [{ role: 'strength', ref: { kind: 'strength_module', key: 'example.three_day' } }],
     choices: { clusters: { 'example.three_day': { H: ['Deadlift'] } } },
     definition_snapshot: { definitions: { 'example.three_day': sc.definitions.find((d) => d.key === 'example.three_day') } }, review: null,
+  }, {
+    // The block under way recorded outside the planner (a Notion import): dates only, mirrored in training_cycles.
+    id: 98, name: 'Recorded base', start_date: addDays(today, -30), end_date: addDays(today, 40), status: 'active', origin: 'imported', cycle_id: 5,
+    components: [], choices: { imported_focus: { template: 'Recorded base' } }, definition_snapshot: null, review: null,
   }],
   training_block_domains: [],
-  planned_sessions: Array.from({ length: 21 }, (_, i) => ({ id: 1000 + i, block_id: 99, scheduled_date: addDays(today, -14 + Math.floor(i / 3) * 7 + (i % 3) * 2), week_index: Math.floor(i / 3) + 1, status: i < 6 ? 'confirmed' : 'planned', prescription: [{ type: 'lift', exercise: 'Press', load: { kind: 'pct_1rm', pct: 70 + (Math.floor(i / 3) % 3) * 5 + (i >= 15 ? 15 : 0) } }] })),
+  planned_sessions: Array.from({ length: 21 }, (_, i) => ({ id: 1000 + i, block_id: 99, scheduled_date: addDays(today, -14 + Math.floor(i / 3) * 7 + (i % 3) * 2), week_index: Math.floor(i / 3) + 1, status: i < 6 ? 'confirmed' : 'planned',
+    module_ref: 'strength:example.three_day', title: `Example three-day: ${['One', 'Three', 'Five'][i % 3]}`, work_kind: 'progression',
+    prescription: [{ type: 'lift', exercise: 'Press', load: { kind: 'pct_1rm', pct: 70 + (Math.floor(i / 3) % 3) * 5 + (i >= 15 ? 15 : 0) } }, { type: 'note', text: 'keep it crisp' }] })),
   meal_prep_weeks: [], breakfast_templates: [{ items: [{ food_id: 'staple:oats', grams: 70 }, { food_id: 'staple:greek_yoghurt', grams: 200 }, { food_id: 'staple:banana', grams: 118 }] }],
 }
 // The meal prep fixture week (fuel-core/fixtures/week.json), published for next Monday as the phone would.
@@ -120,9 +126,14 @@ const check = (ok, what, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} 
     check((await page.textContent('.pb-table')).includes('TEST: MAXES'), 'a week can be made a test week')
 
     await step('DETAILS')
+    await page.click('.pb-section:has-text("EXAMPLE THREE-DAY") .pb-acc >> nth=0 >> button:has-text("ADD AN EXERCISE")')
+    await page.fill('.pb-section:has-text("EXAMPLE THREE-DAY") .pb-acc >> nth=0 >> input[placeholder="Exercise"]', 'Face Pull')
+    await page.click('.pb-section:has-text("EXAMPLE THREE-DAY") .pb-acc >> nth=1 >> button:has-text("ADD AN EXERCISE")')
+    await page.fill('.pb-section:has-text("EXAMPLE THREE-DAY") .pb-acc >> nth=1 >> input[placeholder="Exercise"]', 'Curl')
+    await page.selectOption('.pb-section:has-text("EXAMPLE THREE-DAY") .pb-acc >> nth=1 >> select', 'fixed')
     await page.fill('tr:has-text("Deadlift") input[placeholder="kg"]', '170')
     await shot('plan_5_details')
-    check((await page.textContent('.pb-section:has-text("MAXES")')).includes('estimate'), 'the deadlift max comes from logged sets')
+    check((await page.textContent('.pb-section:has-text("OVERRIDE 1RM")')).includes('estimate'), 'the deadlift max comes from logged sets')
 
     await step('REVIEW')
     await page.waitForSelector('.pb-sess')
@@ -140,6 +151,31 @@ const check = (ok, what, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} 
     const blk = writes.find((w) => w.table === 'training_blocks' && w.method === 'POST').body
     check(blk.origin === 'generated' && blk.status === 'scheduled' && blk.choices.timeline[1] === 'test', 'the block row keeps the choices', JSON.stringify(blk.choices.timeline))
     check(planned.every((p) => p.start_time === '06:30' || p.start_time === '19:00'), 'sessions carry the session times')
+    const acc = blk.choices.clusters['example.three_day']?.accessories
+    check(acc && acc['*'][0].exercise === 'Face Pull' && acc.D1[0].load.kg === 10, 'the accessory work is saved with the block', JSON.stringify(acc))
+    const lifts = planned.filter((p) => p.module_ref === 'strength:example.three_day' && p.title.endsWith(': One')).map((p) => p.prescription.filter((e) => e.role === 'accessory').map((e) => e.exercise).join('+'))
+    check(lifts.length > 0 && lifts.every((x) => x === 'Face Pull+Curl'), 'every session One gets the every-session work, then its own', lifts.slice(0, 3).join(' | '))
+    const tests = planned.filter((p) => p.work_kind === 'test')
+    check(tests.length > 0 && tests.every((p) => !p.prescription.some((e) => e.role === 'accessory')), 'test weeks leave accessory work out')
+
+    // ---- ACCESSORY WORK ON THE BLOCK UNDER WAY ----
+    await page.goto(`${BASE}#/plan-block`)
+    await page.waitForSelector('.pb-steps', { timeout: 15000 })
+    await page.click('.pb-step:has-text("WHEN")')
+    await page.click('.pb-detail:has-text("Velocity") button:has-text("ACCESSORIES")')
+    await page.click('.pb-acc >> nth=2 >> button:has-text("ADD AN EXERCISE")')
+    await page.fill('.pb-acc >> nth=2 >> input[placeholder="Exercise"]', 'Hanging Leg Raise')
+    await page.selectOption('.pb-acc >> nth=2 >> select', 'bodyweight')
+    await shot('plan_7b_accessories_running')
+    check(!(await page.textContent('.pb-detail:has-text("Recorded base")')).includes('ACCESSORIES'), 'a recorded block has no accessory action (no program behind it)')
+    await page.click('button:has-text("APPLY FROM TODAY")')
+    await page.waitForSelector('text=accessory work applied')
+    const accPatches = writes.filter((w) => w.method === 'PATCH' && w.table === 'planned_sessions' && Array.isArray(w.body.prescription))
+    const futureThree = T.planned_sessions.filter((p) => p.block_id === 99 && p.status === 'planned' && p.scheduled_date >= today && p.title.endsWith(': Three')).length
+    check(accPatches.length === futureThree && futureThree > 0, 'only the Three sessions still planned from today change', `${accPatches.length} of ${futureThree}`)
+    const pr = accPatches[0]?.body.prescription ?? []
+    check(pr.map((e) => e.type + ':' + (e.exercise ?? '')).join(',') === 'lift:Press,lift:Hanging Leg Raise,note:', 'the accessory goes after the program\'s lifts, before the notes', JSON.stringify(pr))
+    check(writes.some((w) => w.method === 'PATCH' && w.table === 'training_blocks' && w.body.choices?.clusters?.['example.three_day']?.accessories?.D3?.[0]?.exercise === 'Hanging Leg Raise'), 'the block\'s choices keep the accessory work')
 
     // ---- END A BLOCK EARLY, THEN BUILD TOWARD THE RACE ----
     await page.goto(`${BASE}#/plan-block`)
@@ -152,9 +188,9 @@ const check = (ok, what, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} 
     check((await page.textContent('.pb-section:has-text("BLOCKS UNDER WAY")')).includes('% of the 1RM'), 'ending early shows what is set aside')
     await page.click('button:has-text("END ON")')
     await page.waitForTimeout(800)
-    const sup = writes.find((w) => w.method === 'PATCH' && w.table === 'planned_sessions')
+    const sup = writes.find((w) => w.method === 'PATCH' && w.table === 'planned_sessions' && w.body.status === 'superseded')
     check(sup && sup.body.status === 'superseded' && sup.url.includes('status=eq.planned') && sup.url.includes('scheduled_date=gt.'), 'later planned sessions are superseded, not deleted', sup && sup.url)
-    const ended = writes.find((w) => w.method === 'PATCH' && w.table === 'training_blocks')
+    const ended = writes.find((w) => w.method === 'PATCH' && w.table === 'training_blocks' && w.body.status === 'completed')
     check(ended && ended.body.status === 'completed' && ended.body.review.ended_early.maxes_stepped_up === false, 'the block ends with its maxes kept by default')
     check(!writes.some((w) => w.table === 'athlete_maxes' && w.body.source === 'progression'), 'no max is stepped up unless asked')
     const lastDay = ended.body.end_date
@@ -164,6 +200,19 @@ const check = (ok, what, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} 
     await shot('plan_9_race_weeks')
     const kinds = await page.$$eval('.pb-table tbody tr', (rows) => rows.map((r) => r.className))
     check(kinds[0] === 'pb-week-lead' && kinds[kinds.length - 1] === 'pb-week-deload', 'toward the race: early weeks first, taper last', kinds.join(','))
+
+    // ---- END A RECORDED (IMPORTED) BLOCK EARLY ----
+    await page.click('.pb-step:has-text("WHEN")')
+    await page.click('.pb-detail:has-text("Recorded base") button:has-text("END EARLY")')
+    await page.waitForSelector('text=only its end date moves')
+    await shot('plan_9b_end_recorded')
+    check(!(await page.textContent('.pb-section:has-text("BLOCKS UNDER WAY")')).includes('MAXES FOR THE NEXT BLOCK'), 'a recorded block asks no maxes question')
+    await page.click('.pb-chip:has-text("END OF NEXT WEEK")')
+    await page.click('button:has-text("END ON")')
+    await page.waitForTimeout(800)
+    const rec = writes.find((w) => w.method === 'PATCH' && w.table === 'training_blocks' && w.url.includes('id=eq.98'))
+    const cyc = writes.find((w) => w.method === 'PATCH' && w.table === 'training_cycles')
+    check(rec && rec.body.status === 'completed' && cyc && cyc.url.includes('id=eq.5') && cyc.body.end_date === rec.body.end_date, 'a recorded block ends, and its training cycle with it', cyc && JSON.stringify(cyc.body))
 
     // ---- MEAL PREP ----
     await page.goto(`${BASE}#/meal-prep`)

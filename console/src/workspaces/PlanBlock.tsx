@@ -11,13 +11,15 @@ import {
   missingMaxes, newDraft, startAfterBlocks, pickProtocol, pickRoute, pickStrength, pickTemplate, type PlannerCatalog, type PlannerDraft, protocolOf, setDay, setWeek,
   strengthModules, strengthOf, templateOf, updateChoice, weekdayFor, weekStats, weekWarnings, withLayoutReset, withTimelineReset,
 } from '../lib/blockPlanner'
-import { type BlockForEnding, createBlock, endBlockEarly, type ExistingBlock, loadBlockForEnding, loadExistingBlocks, loadPlannerCatalog, saveSettingsAsDefault } from '../lib/blockPlannerData'
+import { type BlockForEnding, createBlock, endBlockEarly, type ExistingBlock, loadBlockForEnding, loadExistingBlocks, loadPlannerCatalog, saveSettingsAsDefault, updateBlockAccessories } from '../lib/blockPlannerData'
 import {
   type ConditioningProtocolDef, type ConditioningSessionDef, countedWeeks, type DayPlan, type GeneratedBlock, type GeneratedSession, isCluster,
   isMainProtocol, itemText, loadText, localToday, type NumRange, plusDays, plusWeekday, rangeText, slotsToChoose, STRENGTH_GROUPS, type StrengthModuleDef,
   type TemplateDef, templateVariables, versionsOf, WEEK_KINDS, type WeekKind, weekdayOf, weekdayShort, type Weekday, progressionIncrementKg, loadStepKg,
-  fmt, kgToLb, endEarlyPreview, stepUpMaxes, movementKey,
+  fmt, kgToLb, endEarlyPreview, stepUpMaxes, movementKey, type Accessory, DEFAULT_EQUIPMENT,
 } from '../../../supabase/functions/_shared/training-core/index.ts'
+import { AccessoryTables } from './AccessoryWork'
+import { accessorySummary, cleanAccessories } from '../lib/accessoryWork'
 import './PlanBlock.css'
 
 type Step = 'when' | 'program' | 'week' | 'weeks' | 'details' | 'review'
@@ -731,6 +733,12 @@ function ModuleDetails({ m, d, set, weeks, idx }: { m: StrengthModuleDef; d: Pla
           })}
         </tbody>
       </table>
+      <div className="pb-detail">
+        <span className="pb-label">ACCESSORY WORK</span>
+        <p className="pb-info">Exercises added after the program's own, in every session or in one. Full in normal and peak weeks, half the sets in deload and taper weeks, left out of test weeks. A load as a % of the 1RM needs a max (MAXES, below).</p>
+        <AccessoryTables sessions={m.sessions.map((x) => ({ id: x.id, label: x.label }))} value={c.accessories ?? {}}
+          onChange={(acc) => set((x) => updateChoice(x, m.key, (cc) => ({ ...cc, accessories: acc })))} />
+      </div>
       <WeekByWeek m={m} variantKey={variant?.key} idx={idx} />
     </Section>
   )
@@ -969,7 +977,7 @@ function Preview({ d, cat, block, genError, existing, selected, onSelect, creati
         {blocker && <p className="pb-hint">{blocker}</p>}
         {message && <p className="pb-warn">{message}</p>}
         <button className="pb-primary mono" disabled={!!blocker || creating} onClick={onCreate}>{creating ? 'CREATING…' : 'CREATE BLOCK'}</button>
-        <p className="pb-hint">Writes the block and its {block?.sessions.length ?? 0} planned sessions, exactly as the phone does. {existing.length} block{existing.length === 1 ? '' : 's'} already planned.</p>
+        <p className="pb-hint">Writes the block and its {block?.sessions.length ?? 0} planned sessions, exactly as the phone does. {(() => { const n = existing.filter((b) => b.end_date >= localToday()).length; return `${n} block${n === 1 ? '' : 's'} planned or under way.` })()}</p>
       </div>
     </div>
   )
@@ -1021,20 +1029,65 @@ function SessionDetail({ s, onClose }: { s: GeneratedSession; onClose: () => voi
 function RunningBlocks({ blocks, cat, onEnded }: { blocks: ExistingBlock[]; cat: PlannerCatalog; onEnded: (nextStart: string) => void }) {
   const today = localToday()
   const running = blocks.filter((b) => (b.status === 'scheduled' || b.status === 'active') && b.end_date > today)
-  const [open, setOpen] = useState<number | null>(null)
+  const [open, setOpen] = useState<{ id: number; what: 'end' | 'accessories' } | null>(null)
+  const [done, setDone] = useState<string | null>(null)
   if (running.length === 0) return null
   return (
-    <Section title="BLOCKS UNDER WAY" info="A new block starts the day after the latest one ends. To change course (more training now, the peak nearer the race), end the current block early: its later sessions are set aside, not deleted.">
+    <Section title="BLOCKS UNDER WAY" info="The block you are training now. A new block starts the day after the latest one ends. To change course (more training now, the peak nearer the race), end the current block early: its later sessions are set aside, not deleted. ACCESSORIES adds extra work to the sessions still ahead.">
       {running.map((b) => (
         <div key={b.id} className="pb-detail">
           <div className="pb-row tight" style={{ justifyContent: 'space-between' }}>
-            <span><b>{b.name}</b> <span className="pb-muted mono">{dateShort(b.start_date)} → {dateShort(b.end_date)} · {b.status.toUpperCase()}</span></span>
-            {open !== b.id && <button className="btn-ghost mono" onClick={() => setOpen(b.id)}>END EARLY</button>}
+            <span><b>{b.name}</b> <span className="pb-muted mono">{dateShort(b.start_date)} → {dateShort(b.end_date)} · {b.status.toUpperCase()}{b.origin && b.origin !== 'generated' ? ' · RECORDED' : ''}</span></span>
+            {open?.id !== b.id && (
+              <span className="pb-row tight">
+                {b.origin === 'generated' && <button className="btn-ghost mono" onClick={() => { setDone(null); setOpen({ id: b.id, what: 'accessories' }) }}>ACCESSORIES</button>}
+                <button className="btn-ghost mono" onClick={() => { setDone(null); setOpen({ id: b.id, what: 'end' }) }}>END EARLY</button>
+              </span>
+            )}
           </div>
-          {open === b.id && <EndEarly id={b.id} cat={cat} onCancel={() => setOpen(null)} onEnded={(last) => { setOpen(null); onEnded(plusDays(last, 1)) }} />}
+          {open?.id === b.id && open.what === 'end' && <EndEarly id={b.id} cat={cat} onCancel={() => setOpen(null)} onEnded={(last) => { setOpen(null); onEnded(plusDays(last, 1)) }} />}
+          {open?.id === b.id && open.what === 'accessories' && <BlockAccessories id={b.id} cat={cat} onCancel={() => setOpen(null)} onDone={(n) => { setOpen(null); setDone(`${b.name}: accessory work applied to ${n} session${n === 1 ? '' : 's'} from today.`) }} />}
         </div>
       ))}
+      {done && <p className="pb-ok">{done}</p>}
     </Section>
+  )
+}
+
+function BlockAccessories({ id, cat, onCancel, onDone }: { id: number; cat: PlannerCatalog; onCancel: () => void; onDone: (sessions: number) => void }) {
+  const [b, setB] = useState<BlockForEnding | null>(null)
+  const [acc, setAcc] = useState<Record<string, Accessory[]>>({})
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  useEffect(() => {
+    let live = true
+    loadBlockForEnding(id).then((x) => { if (live) { setB(x); setAcc(x.choice.accessories ?? {}) } }).catch((e) => setErr(e instanceof Error ? e.message : String(e)))
+    return () => { live = false }
+  }, [id])
+  if (!b) return <p className="pb-hint">{err ?? 'Loading the block…'}</p>
+  const m = b.module
+  if (!m) return <div className="pb-detail"><p className="pb-info">This block has no strength program, so there is nothing to add accessory work to.</p><button className="btn-ghost mono" onClick={onCancel}>CLOSE</button></div>
+  const today = localToday()
+  const ahead = b.sessions.filter((x) => x.status === 'planned' && x.date >= today).length
+  const clean = cleanAccessories(acc)
+  const lines = accessorySummary(acc)
+  return (
+    <div className="pb-detail">
+      <p className="pb-info">Extra work on the {m.title} sessions still planned from today ({ahead} planned session{ahead === 1 ? '' : 's'} ahead, strength and conditioning). Past and confirmed sessions stay as they were; the program's own exercises are never touched. Half the sets in deload weeks.</p>
+      <AccessoryTables sessions={m.sessions.map((x) => ({ id: x.id, label: x.label }))} value={acc} onChange={setAcc} />
+      {lines.length > 0 && <p className="pb-hint mono">{lines.join('   ')}</p>}
+      {err && <p className="pb-warn">{err}</p>}
+      <div className="pb-row">
+        <button className="pb-primary mono" disabled={busy} onClick={async () => {
+          setBusy(true); setErr(null)
+          try {
+            const eq = { ...DEFAULT_EQUIPMENT, platesKg: cat.settings.plates_kg, weightedBase: cat.settings.weighted_percent_base === 'total' ? 'total' as const : 'added' as const }
+            onDone(await updateBlockAccessories(b, clean, today, eq, (n) => cat.maxes[movementKey(n)]?.entry ?? null))
+          } catch (e) { setErr(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
+        }}>{busy ? 'APPLYING…' : 'APPLY FROM TODAY'}</button>
+        <button className="btn-ghost mono" onClick={onCancel}>CANCEL</button>
+      </div>
+    </div>
   )
 }
 
@@ -1072,15 +1125,17 @@ function EndEarly({ id, cat, onCancel, onEnded }: { id: number; cat: PlannerCata
         </Field>
       </div>
       {!valid && <p className="pb-warn">Choose a day from {dateShort(b.row.start_date)} to {dateShort(plusDays(b.row.end_date, -1))}.</p>}
+      {b.sessions.length === 0 ? <p className="pb-info">{b.row.origin === 'generated' ? 'No planned sessions left.' : 'A block recorded outside the planner: it has no planned sessions here, so only its end date moves'} (from {dateLong(b.row.end_date)} to {dateLong(lastDay)}).</p> : <>
       <p className="pb-info">Keeps {preview.kept} session{preview.kept === 1 ? '' : 's'}; sets aside the {preview.dropped} still planned after {dateLong(lastDay)}{preview.heaviestDroppedPct != null ? `, the heaviest at ${fmt(preview.heaviestDroppedPct)}% of the 1RM` : ''}.</p>
       {preview.droppedWeeks.length > 0 && <p className="pb-hint mono">{preview.droppedWeeks.map((w) => `W${w.weekIndex}: ${w.sessions}${w.topPct != null ? ` · ≤${fmt(w.topPct)}%` : ''}`).join('   ')}</p>}
-      <Field label="MAXES FOR THE NEXT BLOCK" hint="The program steps maxes up after a completed cycle; this one stops before its end.">
+      </>}
+      {b.module && <Field label="MAXES FOR THE NEXT BLOCK" hint="The program steps maxes up after a completed cycle; this one stops before its end.">
         <div className="pb-chips">
           <button className={`pb-chip ${!stepUp ? 'on' : ''}`} onClick={() => setStepUp(false)}>KEEP TODAY'S MAXES (RECOMMENDED)</button>
           <button className={`pb-chip ${stepUp ? 'on' : ''}`} onClick={() => setStepUp(true)}>STEP THEM UP AS IF THE CYCLE WAS DONE</button>
         </div>
-      </Field>
-      {stepUp && (steps.length === 0 ? <p className="pb-hint">Nothing to step up: no progression in the program, or no max recorded.</p>
+      </Field>}
+      {b.module && stepUp && (steps.length === 0 ? <p className="pb-hint">Nothing to step up: no progression in the program, or no max recorded.</p>
         : <p className="pb-hint mono">{steps.map((st) => `${st.exercise} ${fmt(Math.round(st.fromKg * 10) / 10)} → ${fmt(Math.round(st.toKg * 10) / 10)} kg`).join(' · ')}</p>)}
       {err && <p className="pb-warn">{err}</p>}
       <div className="pb-row">

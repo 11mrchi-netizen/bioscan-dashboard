@@ -30,6 +30,8 @@ data class ModuleChoice(
     val variant: String? = null,
     val blockLength: Int? = null,
     val exercises: Map<String, List<String>> = emptyMap(),
+    // Accessory work added on top of the book's slots, by session id ("*" for every session): Accessories.kt.
+    val accessories: Map<String, List<Accessory>> = emptyMap(),
 )
 
 data class GenChoices(

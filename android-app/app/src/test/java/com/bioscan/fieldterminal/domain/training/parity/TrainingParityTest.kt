@@ -26,6 +26,8 @@ import com.bioscan.fieldterminal.domain.training.generate.layoutWarnings
 import com.bioscan.fieldterminal.domain.training.generate.prescriptionJson
 import com.bioscan.fieldterminal.domain.training.generate.raceTimeline
 import com.bioscan.fieldterminal.domain.training.generate.PlannedLite
+import com.bioscan.fieldterminal.domain.training.generate.accessoriesFromJson
+import com.bioscan.fieldterminal.domain.training.generate.accessorySets
 import com.bioscan.fieldterminal.domain.training.generate.endEarlyPreview
 import com.bioscan.fieldterminal.domain.training.generate.stepUpMaxes
 import com.bioscan.fieldterminal.domain.training.loadStepKg
@@ -123,7 +125,7 @@ class TrainingParityTest {
                     variables = c["variables"]?.jsonObject?.mapValues { it.value.str()!! }.orEmpty(),
                     modules = c["modules"]?.jsonObject?.mapValues { (_, v) ->
                         val o = v.jsonObject
-                        ModuleChoice(o["variant"].str(), o["blockLength"]?.jsonPrimitive?.intOrNull, o["exercises"]?.jsonObject?.mapValues { e -> e.value.jsonArray.map { it.str()!! } }.orEmpty())
+                        ModuleChoice(o["variant"].str(), o["blockLength"]?.jsonPrimitive?.intOrNull, o["exercises"]?.jsonObject?.mapValues { e -> e.value.jsonArray.map { it.str()!! } }.orEmpty(), accessoriesFromJson(o["accessories"]))
                     }.orEmpty(),
                     conditioning = c["conditioning"]?.jsonObject?.mapValues { e -> e.value.jsonArray.map { it.str()!! } }.orEmpty(),
                     weeks = c["weeks"]?.jsonPrimitive?.intOrNull,
@@ -196,6 +198,7 @@ class TrainingParityTest {
                     add(buildJsonArray { steps.forEach { st -> add(buildJsonObject { put("exercise", st.exercise); put("fromKg", st.fromKg); put("toKg", st.toKg) }) } })
                 }
             })
+            put("accessorySets", buildJsonArray { misc["accessorySets"]!!.jsonArray.forEach { a -> add(JsonPrimitive(accessorySets(a.jsonArray[0].jsonPrimitive.intOrNull!!, a.jsonArray[1].str()!!))) } })
             put("endEarly", buildJsonArray {
                 misc["endEarly"]!!.jsonArray.forEach { e ->
                     val o = e.jsonObject

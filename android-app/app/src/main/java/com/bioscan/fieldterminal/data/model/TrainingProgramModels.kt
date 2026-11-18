@@ -138,6 +138,9 @@ data class GeneratedBlockRow(
     @SerialName("start_date") val startDate: String,
     @SerialName("end_date") val endDate: String,
     val status: String = "scheduled",
+    // generated (made by a planner) or imported / recorded elsewhere: dates only, mirrored in training_cycles.
+    val origin: String = "generated",
+    @SerialName("cycle_id") val cycleId: Long? = null,
 )
 
 @Serializable

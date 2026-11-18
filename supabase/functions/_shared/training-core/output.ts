@@ -78,16 +78,18 @@ export function loadJson(l: ResolvedLoad): Record<string, unknown> {
 }
 
 /** planned_sessions.prescription: "lift" entries, then "conditioning", then "note". */
+export function liftJson(i: GeneratedItem): Record<string, unknown> {
+  return {
+    type: 'lift', slot: i.slot, exercise: i.exercise, role: i.role,
+    ...(i.sets ? { sets: rangeJson(i.sets) } : {}), ...(i.reps ? { reps: rangeJson(i.reps) } : {}),
+    load: loadJson(i.load), ...(i.technique ? { technique: i.technique } : {}), ...(i.optional ? { optional: true } : {}),
+    ...(i.note ? { note: i.note } : {}), ...(i.projected ? { projected: true } : {}),
+  }
+}
+
 export function prescriptionJson(s: GeneratedSession): Record<string, unknown>[] {
   const out: Record<string, unknown>[] = []
-  for (const i of s.items) {
-    out.push({
-      type: 'lift', slot: i.slot, exercise: i.exercise, role: i.role,
-      ...(i.sets ? { sets: rangeJson(i.sets) } : {}), ...(i.reps ? { reps: rangeJson(i.reps) } : {}),
-      load: loadJson(i.load), ...(i.technique ? { technique: i.technique } : {}), ...(i.optional ? { optional: true } : {}),
-      ...(i.note ? { note: i.note } : {}), ...(i.projected ? { projected: true } : {}),
-    })
-  }
+  for (const i of s.items) out.push(liftJson(i))
   const c = s.conditioning
   if (c) {
     out.push({

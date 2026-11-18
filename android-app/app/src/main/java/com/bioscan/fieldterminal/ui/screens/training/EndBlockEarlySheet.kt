@@ -80,7 +80,8 @@ fun EndBlockEarlySheet(blockId: Long, onDismiss: () -> Unit, onDone: () -> Unit)
     val start = b?.let { LocalDate.parse(it.row.startDate) }
     val end = b?.let { LocalDate.parse(it.row.endDate) }
     val valid = b != null && start != null && end != null && !lastDay.isBefore(start) && lastDay.isBefore(end)
-    val pages = listOf(FlowPage("LAST DAY", ready = valid), FlowPage("MAXES"))
+    // A block recorded outside the planner (imported) has no program behind it: no maxes to step up, only dates to move.
+    val pages = if (b != null && b.module == null) listOf(FlowPage("LAST DAY", ready = valid)) else listOf(FlowPage("LAST DAY", ready = valid), FlowPage("MAXES"))
     FTFlow(
         title = "END ${b?.row?.name?.uppercase() ?: "THE BLOCK"} EARLY", pages = pages, state = rememberFlowState(), onClose = onDismiss,
         canSave = valid && !saving, saving = saving, saveLabel = "END THE BLOCK", wash = FT.DomainTraining, error = error,
@@ -105,7 +106,10 @@ fun EndBlockEarlySheet(blockId: Long, onDismiss: () -> Unit, onDone: () -> Unit)
             }
             DateField("OR A DAY", lastDay, { lastDay = it })
             if (!valid) Text("Choose a day from ${start.format(DAY)} to ${end.minusDays(1).format(DAY)}.", style = FTType.Caption, color = FT.Warn)
-            preview?.let { p ->
+            if (b.sessions.isEmpty()) Text(
+                "No planned sessions in the app for this block: only its end moves, from ${end.format(DAY)} to ${lastDay.format(DAY)}. The next block can start ${lastDay.plusDays(1).format(DAY)}.",
+                style = FTType.BodySmall, color = FT.TextPrimary,
+            ) else preview?.let { p ->
                 Text(
                     "Keeps ${p.kept} session${if (p.kept == 1) "" else "s"}; ${p.dropped} still planned after ${lastDay.format(DAY)} are set aside (kept, not deleted).",
                     style = FTType.BodySmall, color = FT.TextPrimary,

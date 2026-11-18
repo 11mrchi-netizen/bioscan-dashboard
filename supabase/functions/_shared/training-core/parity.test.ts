@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import {
-  type BlockBlueprint, type DayPlan, defaultTimeline, DefinitionIndex, deriveBlockDomains, estimateMaxFromHistory, type GenChoices,
+  accessoriesFrom, accessorySets, type BlockBlueprint, type DayPlan, defaultTimeline, DefinitionIndex, deriveBlockDomains, estimateMaxFromHistory, type GenChoices,
   type GeneratedBlock, type GenEquipment, DEFAULT_EQUIPMENT, generateComposedBlock, generateMergedBlock, generateTemplateBlock, layoutWarnings,
   loadableFor, loadableTotal, raceTimeline, stepUpMaxes, loadStepKg, endEarlyPreview, type MaxEntry, movementKey, parseDefinition, prescriptionJson, resizeTimeline, type Rounding, suggestLayout,
   summaryLines, toNumRange, type WeekKind, weekdayOf, weeksForBlocks, withTaper, type Weekday,
@@ -54,7 +54,8 @@ for (const c of sc.cases) {
     const eqo = c.equipment ?? {}
     const eq: GenEquipment = { ...DEFAULT_EQUIPMENT, barKg: eqo.barKg ?? 20, platesKg: eqo.platesKg ?? DEFAULT_EQUIPMENT.platesKg, weightedBase: eqo.weightedBase === 'total' ? 'total' : 'added' }
     const choices: GenChoices = {
-      startDate: c.start, weekdays: c.weekdays, slotTimes: c.slotTimes, variables: c.variables, modules: c.modules, conditioning: c.conditioning,
+      startDate: c.start, weekdays: c.weekdays, slotTimes: c.slotTimes, variables: c.variables, conditioning: c.conditioning,
+      modules: c.modules ? Object.fromEntries(Object.entries(c.modules as Record<string, any>).map(([k, v]) => [k, { ...v, accessories: accessoriesFrom(v.accessories) }])) : undefined,
       weeks: c.weeks ?? null, deloadAfterBlock: c.deloadAfterBlock ?? true, bodyweightKg: c.bodyweightKg ?? null,
       conditioningPerWeek: c.conditioningPerWeek ?? null, projectProgression: c.projectProgression ?? true,
     }
@@ -81,6 +82,7 @@ test('plates, movement keys, timelines and max estimates', () => {
   same(m.movementKeys.map(movementKey), expected.misc.movementKeys)
   same(m.timelines.map((a: any[]) => a[0] === 'default' ? defaultTimeline(a[1], a[2], a[3], a[4]) : a[0] === 'resize' ? resizeTimeline(a[1], a[2], a[3]) : a[0] === 'taper' ? withTaper(a[1], a[2]) : a[0] === 'race' ? raceTimeline(a[1], a[2], a[3], a[4]) : weeksForBlocks(a[1], a[2], a[3], a[4])), expected.misc.timelines)
   same(m.stepUps.map((e: any) => stepUpMaxes(idx.strength(e.module)!, { exercises: e.exercises }, (n) => lookup(n)?.oneRmKg, loadStepKg(e.platesKg))), expected.misc.stepUps)
+  same(m.accessorySets.map(([n, k]: [number, string]) => accessorySets(n, k)), expected.misc.accessorySets)
   same(m.endEarly.map((e: any) => endEarlyPreview(e.sessions, e.lastDay)), expected.misc.endEarly)
   same(m.estimates.map((e: any) => estimateMaxFromHistory(e.sets, e.today)), expected.misc.estimates)
 })

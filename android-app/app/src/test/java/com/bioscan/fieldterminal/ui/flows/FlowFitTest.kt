@@ -110,5 +110,19 @@ class FlowFitTest {
     @Test fun addSexual() = add("add_sexual", com.bioscan.fieldterminal.domain.AddEntryStart.Form(com.bioscan.fieldterminal.domain.AddEntryType.SexualActivity), 3)
     @Test fun addGrip() = add("add_grip", com.bioscan.fieldterminal.domain.AddEntryStart.Form(com.bioscan.fieldterminal.domain.AddEntryType.Grip))
     @Test fun shoes() = fits("shoes", 2) { com.bioscan.fieldterminal.ui.screens.shoes.ShoeFormSheet(com.bioscan.fieldterminal.ui.screens.shoes.ShoeFormRequest(null, "a1b2c3d4e5", null), onDismiss = {}, onSaved = {}) }
+    // Accessory work: a full session (the most a page holds) and the editor of one exercise.
+    private val curls = com.bioscan.fieldterminal.domain.training.generate.Accessory(
+        "Incline Dumbbell Hammer Curl", 3, com.bioscan.fieldterminal.domain.training.definition.NumRange(10.0, 12.0),
+        com.bioscan.fieldterminal.domain.training.definition.LoadDto("rpe", rpe = 8.0), note = "superset with pushdowns, slow eccentric",
+    )
+    @Test fun accessories() = fits("accessories", 3) {
+        com.bioscan.fieldterminal.ui.screens.training.AccessoriesFlow(
+            "ACCESSORY WORK · EXAMPLE THREE-DAY", listOf("D1" to "Squat and press day", "D3" to "Deadlift day"),
+            mapOf("*" to List(com.bioscan.fieldterminal.ui.screens.training.MAX_PER_SESSION) { curls }, "D1" to listOf(curls)), onClose = {}, onSave = {},
+        )
+    }
+    @Test fun accessoryEditor() = fits("accessory_editor", 2) {
+        com.bioscan.fieldterminal.ui.screens.training.AccessoryEditor(curls, onClose = {}, onSave = {})
+    }
     @Test fun illness() = fits("illness", 5) { IllnessSheet(onDismiss = {}, onSaved = {}) }
 }

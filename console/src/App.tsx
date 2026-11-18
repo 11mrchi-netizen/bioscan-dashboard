@@ -14,6 +14,19 @@ const Body         = lazy(() => import('./workspaces/Body'))
 // Planning (Nov 2026): the long-form work prepared on the web and carried out on the phone.
 const PlanBlock    = lazy(() => import('./workspaces/PlanBlock'))
 const MealPrep     = lazy(() => import('./workspaces/MealPrep'))
+// Web transition plan, phase 2: where the Dashboard's DAY LOG and OPEN IN CONSOLE land.
+const Log          = lazy(() => import('./workspaces/Log'))
+const History      = lazy(() => import('./workspaces/History'))
+// Phase 4: the Console catch-up (LAB, PLAN and SYSTEM pages).
+const Experiments   = lazy(() => import('./workspaces/LabExperiments'))
+const Interventions = lazy(() => import('./workspaces/LabInterventions'))
+const Regimen       = lazy(() => import('./workspaces/Regimen'))
+const Routine       = lazy(() => import('./workspaces/Routine'))
+const Tests         = lazy(() => import('./workspaces/Tests'))
+const PlanOverview  = lazy(() => import('./workspaces/PlanOverview'))
+const Sessions      = lazy(() => import('./workspaces/Sessions'))
+const Races         = lazy(() => import('./workspaces/Races'))
+const Connections   = lazy(() => import('./workspaces/Connections'))
 
 // Routes of the removed dashboards and the renamed workspaces, so bookmarks still land somewhere sensible.
 const LEGACY_ROUTES: Record<string, string> = {
@@ -40,7 +53,7 @@ export default function App() {
           </RequireAuth>
         }
       >
-        <Route index element={<Navigate to="integrity" replace />} />
+        <Route index element={<Navigate to="log" replace />} />
         <Route path="integrity" element={<Integrity />} />
         <Route path="evidence"  element={<Evidence />} />
         <Route path="explore"   element={<Explore />} />
@@ -49,6 +62,17 @@ export default function App() {
         <Route path="body"      element={<Body />} />
         <Route path="plan-block" element={<PlanBlock />} />
         <Route path="meal-prep" element={<MealPrep />} />
+        <Route path="log" element={<Log />} />
+        <Route path="history" element={<History />} />
+        <Route path="experiments" element={<Experiments />} />
+        <Route path="interventions" element={<Interventions />} />
+        <Route path="regimen" element={<Regimen />} />
+        <Route path="routine" element={<Routine />} />
+        <Route path="tests" element={<Tests />} />
+        <Route path="plan" element={<PlanOverview />} />
+        <Route path="sessions" element={<Sessions />} />
+        <Route path="races" element={<Races />} />
+        <Route path="connections" element={<Connections />} />
         {Object.entries(LEGACY_ROUTES).map(([from, to]) => (
           <Route key={from} path={from} element={<Navigate to={`/${to}`} replace />} />
         ))}

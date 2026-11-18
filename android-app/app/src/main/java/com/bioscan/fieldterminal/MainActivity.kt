@@ -135,6 +135,7 @@ private fun AuthGate(pendingNotificationKind: String?, onNotificationHandled: ()
             ZeppSyncWorker.enqueue(context)
             NotificationDispatchWorker.enqueue(context)
             com.bioscan.fieldterminal.data.WeekPlanPublishWorker.enqueue(context)
+            com.bioscan.fieldterminal.data.MeViewPublishWorker.enqueue(context)
             // Routine intelligence: both streams stay idle until switched on in Setup; this only keeps the schedule and
             // Play services' registrations alive.
             RoutineCaptureWorker.schedule(context)

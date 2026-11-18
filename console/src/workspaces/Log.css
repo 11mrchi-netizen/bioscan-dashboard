@@ -1,0 +1,33 @@
+/* DAY LOG: one day's entries, by kind, each with its wall-clock time. */
+.log { display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-4); max-width: 1100px; }
+.log-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-3) var(--sp-4); justify-content: space-between; }
+.log-title { font-size: 15px; letter-spacing: .1em; margin: 0; color: var(--color-text-primary); }
+.log-sub { margin: 4px 0 0; font-size: 12px; color: var(--color-text-muted); }
+.log-head .pb-row.tight { flex-wrap: wrap; }
+.log-dash { text-decoration: none; white-space: nowrap; }
+.log-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--sp-3); align-items: start; }
+.log-section { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; padding: var(--sp-3) var(--sp-4); min-width: 0; }
+.log-section-title { font-size: 11px; letter-spacing: .1em; margin: 0 0 var(--sp-2); color: var(--color-text-secondary); }
+.log-rows { list-style: none; margin: 0; padding: 0; }
+.log-row { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: var(--sp-3); padding: 8px 0; border-top: 1px solid var(--color-border); }
+.log-row:first-child { border-top: 0; }
+.log-time { font-size: 12px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; padding-top: 1px; }
+.log-body { min-width: 0; }
+.log-row-title { font-size: 13px; color: var(--color-text-primary); overflow-wrap: anywhere; }
+.log-source { margin-left: 8px; font-size: 9px; letter-spacing: .06em; color: var(--color-text-muted); border: 1px solid var(--color-border); border-radius: 4px; padding: 1px 5px; }
+.log-detail { font-size: 12px; color: var(--color-text-secondary); margin-top: 2px; }
+.log-items { margin: 4px 0 0; padding-left: 16px; font-size: 12px; color: var(--color-text-muted); }
+.log-filters { flex-wrap: wrap; }
+.log-day { display: flex; flex-direction: column; gap: var(--sp-2); }
+.log-day-title { font-size: 11px; letter-spacing: .1em; margin: var(--sp-2) 0 0; color: var(--color-text-secondary); }
+.log-day-title a { color: inherit; text-decoration: none; }
+.log-row-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.log-row-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.log-act { background: none; border: 1px solid var(--color-border); border-radius: 4px; color: var(--color-text-muted); font-size: 9px; letter-spacing: .06em; padding: 2px 6px; cursor: pointer; }
+.log-act:hover, .log-act:focus-visible { color: var(--color-text-primary); border-color: var(--color-text-muted); }
+.log-edit { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin-top: 8px; padding: 10px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-elevated); }
+.log-field { display: flex; flex-direction: column; gap: 3px; font-size: 9px; letter-spacing: .06em; color: var(--color-text-muted); min-width: 0; }
+.log-field.wide, .log-edit-msg { grid-column: 1 / -1; }
+.log-field .pb-input { width: 100%; box-sizing: border-box; }
+.log-edit-msg { margin: 0; }
+.log-danger { background: var(--color-critical); color: var(--color-text-primary); }

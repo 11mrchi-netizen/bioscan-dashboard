@@ -1,21 +1,15 @@
-// Dashboard › Today (phase 1): the scores the phone saved for the chosen day (score_history: CHARGE and the five rings),
-// and CHARGE over the 28 days before it. The scores are never recomputed here, so a past day reads as the phone showed it.
-// Phase 2 adds the ring overlays, the day's plan and eaten so far.
-import { supabase } from '../lib/supabase'
+// Dashboard › Today: the phone's TODAY for any day, read from what the phone saved (todayData.ts): CHARGE and the five
+// rings, the overlays behind them (what moved CHARGE, each ring's inputs against your usual), the day's plan as a
+// timeline and eaten so far. Deeper history opens in the Console (metric history, the day's log).
+import { useEffect, useState } from 'react'
 import { useLoadEffect } from '../lib/useLoadEffect'
-import { localDateString } from '../lib/dates'
+import { localDateString, localToday } from '../lib/dates'
 import { consoleHref } from '../lib/surfaces'
-import { useState } from 'react'
-
-interface ScoreDay { day: string; charge: number | null; recovery: number | null; sleep: number | null; load: number | null; fuel: number | null; balance: number | null }
-
-const RINGS: { key: keyof Omit<ScoreDay, 'day' | 'charge'>; label: string; hue: string }[] = [
-  { key: 'recovery', label: 'RECOVERY', hue: 'var(--ft-domain-cardio)' },
-  { key: 'sleep', label: 'SLEEP', hue: 'var(--ft-domain-sleep)' },
-  { key: 'load', label: 'LOAD', hue: 'var(--ft-domain-load)' },
-  { key: 'fuel', label: 'FUEL', hue: 'var(--ft-domain-fuel)' },
-  { key: 'balance', label: 'BALANCE', hue: 'var(--ft-domain-balance)' },
-]
+import {
+  bandWord, chargeRankLine, directionGlyph, directionWords, DOMAINS, domainSentence, driverSummary, formatJudgedValue, referenceLine,
+  type DayScores, type DomainKey,
+} from '../lib/scoreText'
+import { type DayPlan, loadToday, type PlanRowJson, shownScore, stripCharge, type TodayData } from './todayData'
 
 const STRIP_DAYS = 28
 
@@ -26,56 +20,74 @@ function shift(day: string, n: number): string {
 
 const longDate = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 const round = (x: number | null) => (x == null ? null : Math.round(x))
+const historyHref = (metric: string, day: string) => consoleHref(`#/history?metric=${encodeURIComponent(metric)}&day=${day}`)
+
+type Overlay = 'CHARGE' | DomainKey | null
 
 export function Today({ day, onDay }: { day: string; onDay: (d: string) => void }) {
-  const [rows, setRows] = useState<ScoreDay[]>([])
+  const [data, setData] = useState<TodayData | null>(null)
+  // An overlay belongs to the day it was opened on: picking another day closes it.
+  const [opened, setOpened] = useState<{ day: string; which: Overlay }>({ day, which: null })
+  const overlay = opened.day === day ? opened.which : null
+  const setOverlay = (which: Overlay) => setOpened({ day, which })
   const from = shift(day, -(STRIP_DAYS - 1))
   const status = useLoadEffect(async (isCurrent) => {
-    const r = await supabase.from('score_history').select('day,charge,recovery,sleep,load,fuel,balance').gte('day', from).lte('day', day).order('day')
-    if (r.error) throw new Error(`score_history: ${r.error.message}`)
-    if (isCurrent()) setRows((r.data ?? []) as ScoreDay[])
+    const d = await loadToday(day, from)
+    if (isCurrent()) setData(d)
   }, [day])
 
-  const byDay = new Map(rows.map((r) => [r.day, r]))
-  const today = byDay.get(day) ?? null
   const strip = Array.from({ length: STRIP_DAYS }, (_, i) => shift(from, i))
-  const charge = round(today?.charge ?? null)
+  const charge = data ? round(shownScore(data, day, 'CHARGE')) : null
+  const hasDay = data != null && (charge != null || DOMAINS.some((x) => shownScore(data, day, x.key) != null))
+  const details = data?.scores ?? null
 
   return (
     <div className="today">
       <section className="ft-card today-hero" aria-label="CHARGE">
         <div className="today-day">{longDate(day)}</div>
-        {status.loading && rows.length === 0 ? <div className="today-empty">Loading the day…</div>
+        {status.loading && !data ? <div className="today-empty">Loading the day…</div>
           : status.error ? <div className="today-empty">Could not load the scores: {status.error} <button className="dash-link" onClick={status.retry}>RETRY</button></div>
-          : !today ? <div className="today-empty">No scores were saved for this day. The phone saves them each day it is opened.</div>
+          : !hasDay ? <div className="today-empty">No scores were saved for this day. The phone saves them each day it is opened.</div>
           : (
-            <div className="today-scores">
-              <Ring value={charge} size={168} stroke="url(#charge-spectrum)" label="CHARGE" big />
-              <div className="today-rings">
-                {RINGS.map((r) => <Ring key={r.key} value={round(today[r.key])} size={92} stroke={r.hue} label={r.label} />)}
+            <>
+              <div className="today-scores">
+                <Ring value={charge} size={168} stroke="url(#charge-spectrum)" label="CHARGE" big onOpen={details ? () => setOverlay('CHARGE') : undefined} />
+                <div className="today-rings">
+                  {DOMAINS.map((r) => (
+                    <Ring key={r.key} value={round(shownScore(data!, day, r.key))} size={92} stroke={r.hue} label={r.label}
+                      onOpen={details?.domains[r.key] ? () => setOverlay(r.key) : undefined} />
+                  ))}
+                </div>
               </div>
-            </div>
+              {details ? <p className="today-hint">{chargeRankLine(details.charge) ?? ''} Tap a ring for what moved it.</p>
+                : <p className="today-hint">The scores of this day were saved without their detail (kept from 6 Oct 2026 on): the rings do not open.</p>}
+            </>
           )}
         <div className="today-links">
-          <a className="dash-link" href={consoleHref(`#/data?table=meals&date=${day}`)}>DAY LOG →</a>
-          <a className="dash-link" href={consoleHref(`#/explore`)}>HISTORY IN THE CONSOLE →</a>
+          <a className="dash-link" href={consoleHref(`#/log?day=${day}`)}>DAY LOG →</a>
+          <a className="dash-link" href={historyHref('charge', day)}>CHARGE HISTORY →</a>
         </div>
       </section>
+
+      {data && <PlanCard plan={data.plan} day={day} />}
 
       <section className="ft-card today-strip" aria-label={`CHARGE, the ${STRIP_DAYS} days to ${day}`}>
         <div className="today-strip-head"><span>CHARGE · {STRIP_DAYS} DAYS</span><span>tap a day</span></div>
         <div className="today-bars">
           {strip.map((d) => {
-            const v = round(byDay.get(d)?.charge ?? null)
+            const v = data ? round(stripCharge(data, d)) : null
             return (
               <button key={d} className={`today-bar ${d === day ? 'on' : ''}`} onClick={() => onDay(d)} title={`${d}: ${v ?? 'no score'}`} aria-label={`${d}, CHARGE ${v ?? 'none'}`}>
-                <span className="today-bar-fill" style={{ height: `${v == null ? 0 : Math.max(4, v)}%` }} />
+                <span className="today-bar-fill" style={{ height: `${v == null ? 0 : Math.max(4, Math.min(100, v))}%` }} />
                 <span className="today-bar-day">{Number(d.slice(8))}</span>
               </button>
             )
           })}
         </div>
       </section>
+
+      {overlay && details && <ScoreOverlay scores={details} which={overlay} day={day} onPick={setOverlay} onClose={() => setOverlay(null)} />}
+
       <svg width="0" height="0" aria-hidden="true" style={{ position: 'absolute' }}>
         <defs>
           <linearGradient id="charge-spectrum" x1="0" y1="0" x2="1" y2="1">
@@ -88,18 +100,162 @@ export function Today({ day, onDay }: { day: string; onDay: (d: string) => void 
   )
 }
 
-function Ring({ value, size, stroke, label, big }: { value: number | null; size: number; stroke: string; label: string; big?: boolean }) {
+function Ring({ value, size, stroke, label, big, onOpen }: { value: number | null; size: number; stroke: string; label: string; big?: boolean; onOpen?: () => void }) {
   const r = 42, c = 2 * Math.PI * r
   const frac = value == null ? 0 : Math.max(0, Math.min(100, value)) / 100
-  return (
-    <figure className={`ring ${big ? 'big' : ''}`} style={{ width: size }}>
+  const body = (
+    <>
       <svg viewBox="0 0 100 100" width={size} height={size} role="img" aria-label={`${label} ${value ?? 'no score'}`}>
         <circle cx="50" cy="50" r={r} fill="none" stroke="var(--ft-line)" strokeWidth={big ? 7 : 8} />
         {frac > 0 && <circle cx="50" cy="50" r={r} fill="none" stroke={stroke} strokeWidth={big ? 7 : 8} strokeLinecap="round"
           strokeDasharray={`${c * frac} ${c}`} transform="rotate(-90 50 50)" />}
         <text x="50" y={big ? 54 : 56} textAnchor="middle" className="ring-value">{value ?? '–'}</text>
       </svg>
-      <figcaption className="ring-label">{label}</figcaption>
-    </figure>
+      <span className="ring-label">{label}</span>
+    </>
+  )
+  return onOpen
+    ? <button type="button" className={`ring ring-btn ${big ? 'big' : ''}`} style={{ width: size }} onClick={onOpen}>{body}</button>
+    : <figure className={`ring ${big ? 'big' : ''}`} style={{ width: size }}>{body}</figure>
+}
+
+// ---------------- the day's plan and eaten so far ----------------
+
+const KIND_HUE: Record<PlanRowJson['kind'], string> = {
+  MEAL: 'var(--ft-domain-fuel)', SESSION: 'var(--ft-domain-load)', SUPPLEMENTS: 'var(--ft-domain-balance)', CLOSE: 'var(--ft-muted)',
+}
+
+function PlanCard({ plan, day }: { plan: DayPlan | null; day: string }) {
+  if (!plan) {
+    return (
+      <section className="ft-card today-plan">
+        <div className="today-strip-head"><span>THE DAY'S PLAN</span></div>
+        <p className="today-hint">No plan was saved for this day: the phone saves TODAY's plan from 18 Nov 2026 on, each time it is opened. What was logged is in the day's log.</p>
+        <a className="dash-link" href={consoleHref(`#/log?day=${day}`)}>DAY LOG →</a>
+      </section>
+    )
+  }
+  const isToday = day === localToday()
+  const saved = new Date(plan.builtAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  return (
+    <section className="ft-card today-plan">
+      <div className="today-strip-head"><span>THE DAY'S PLAN</span><span>{isToday ? `as of ${saved}` : 'as the phone last showed it'}</span></div>
+      {plan.so_far && <SoFarBar s={plan.so_far} />}
+      <ol className="plan-rows">
+        {plan.rows.map((r, i) => (
+          <li key={i} className={`plan-row ${r.done ? 'done' : ''}`}>
+            <span className="plan-time">{r.time ?? '—'}</span>
+            <span className="plan-dot" style={{ background: KIND_HUE[r.kind] ?? 'var(--ft-muted)' }} aria-hidden="true" />
+            <span className="plan-title">{r.title}</span>
+            {r.detail && <span className="plan-detail">{r.detail}</span>}
+            <span className="plan-state">{r.done ? 'DONE ✓' : ''}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  )
+}
+
+function SoFarBar({ s }: { s: NonNullable<DayPlan['so_far']> }) {
+  const parts = [
+    { label: 'Carbs', kcal: 4 * s.carbs_g, color: 'var(--m-carbs)', g: s.carbs_g },
+    { label: 'Protein', kcal: 4 * s.protein_g, color: 'var(--m-protein)', g: s.protein_g },
+    { label: 'Fat', kcal: 9 * s.fat_g, color: 'var(--m-fat)', g: s.fat_g },
+  ]
+  const target = s.target_kcal ?? null
+  const full = Math.max(target ? target * 1.2 : 0, s.kcal, 1)
+  return (
+    <div className="sofar">
+      <div className="sofar-head">
+        <span className="sofar-kcal">{Math.round(s.kcal)}</span>
+        <span className="sofar-of">{target ? `of ${Math.round(target)} kcal eaten` : 'kcal eaten'}</span>
+      </div>
+      <div className="sofar-track" role="img" aria-label={`${Math.round(s.kcal)} kcal${target ? ` of ${Math.round(target)}` : ''}`}>
+        {parts.map((p) => <span key={p.label} style={{ width: `${(p.kcal / full) * 100}%`, background: p.color }} />)}
+        {target && <i className="sofar-target" style={{ left: `${(target / full) * 100}%` }} />}
+      </div>
+      <div className="sofar-legend">
+        {parts.map((p) => <span key={p.label}><b style={{ background: p.color }} />{p.label} {Math.round(p.g)} g</span>)}
+      </div>
+    </div>
+  )
+}
+
+// ---------------- overlays: CHARGE and the five rings ----------------
+
+function ScoreOverlay({ scores, which, day, onPick, onClose }: { scores: DayScores; which: Exclude<Overlay, null>; day: string; onPick: (o: Overlay) => void; onClose: () => void }) {
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', k)
+    return () => window.removeEventListener('keydown', k)
+  }, [onClose])
+  return (
+    <div className="ov-scrim" onClick={onClose}>
+      <div className="ov ft-card" role="dialog" aria-modal="true" aria-label={`${which} overlay`} onClick={(e) => e.stopPropagation()}>
+        <button className="ov-close" onClick={onClose} aria-label="Close">×</button>
+        {which === 'CHARGE' ? <ChargeOverlay scores={scores} day={day} onPick={onPick} /> : <RingOverlay scores={scores} k={which} day={day} onPick={onPick} />}
+      </div>
+    </div>
+  )
+}
+
+function ChargeOverlay({ scores, day, onPick }: { scores: DayScores; day: string; onPick: (o: Overlay) => void }) {
+  const c = scores.charge
+  const max = Math.max(1, ...c.drivers.map((d) => Math.abs(d.points)))
+  return (
+    <>
+      <div className="ov-eyebrow">CHARGE · {longDate(day)}</div>
+      <div className="ov-head"><span className="ov-score">{c.score == null ? '–' : Math.round(c.score)}</span><span className="ov-band">{c.score == null ? '' : bandWord(null, c.score)}</span></div>
+      {c.cap && <p className="ov-warn">Capped: {c.cap.reason}.</p>}
+      {chargeRankLine(c) && <p className="ov-line">{chargeRankLine(c)}</p>}
+      {driverSummary(c) && <p className="ov-line">{driverSummary(c)}</p>}
+      <div className="ov-label">WHAT MOVED IT</div>
+      <div className="ov-drivers">
+        {c.drivers.map((d) => {
+          const hue = DOMAINS.find((x) => x.key === d.key)?.hue
+          return (
+            <button key={d.key} className="ov-driver" onClick={() => onPick(d.key)}>
+              <span className="ov-driver-name">{d.key}</span>
+              <span className="ov-driver-axis">
+                <i style={{ [d.points >= 0 ? 'left' : 'right']: '50%', width: `${(Math.abs(d.points) / max) * 50}%`, background: hue }} />
+              </span>
+              <span className="ov-driver-pts">{d.points >= 0 ? '+' : ''}{Math.round(d.points)}</span>
+            </button>
+          )
+        })}
+      </div>
+      <a className="dash-link" href={historyHref('charge', day)}>OPEN IN CONSOLE →</a>
+    </>
+  )
+}
+
+function RingOverlay({ scores, k, day, onPick }: { scores: DayScores; k: DomainKey; day: string; onPick: (o: Overlay) => void }) {
+  const d = scores.domains[k]
+  if (!d) return <p className="ov-line">No detail was saved for {k} on this day.</p>
+  const meta = DOMAINS.find((x) => x.key === k)!
+  return (
+    <>
+      <div className="ov-eyebrow" style={{ color: meta.hue }}>{k} · {longDate(day)}</div>
+      <div className="ov-head"><span className="ov-score">{d.score == null ? '–' : Math.round(d.score)}</span><span className="ov-band">{d.score == null ? 'NOT SCORED' : bandWord(k, d.score)}</span></div>
+      <p className="ov-line">{domainSentence(d)}</p>
+      {d.raw.groups.map((g) => (
+        <div key={g.group.key} className="ov-group">
+          {d.raw.groups.length > 1 && <div className="ov-label">{g.group.label.toUpperCase()}{g.score != null ? ` · ${Math.round(g.score)}` : ''}</div>}
+          {g.inputs.length === 0 && <p className="today-hint">Nothing recorded.</p>}
+          {g.inputs.map((x) => (
+            <a key={x.spec.key} className="ov-input" href={historyHref(x.spec.key, day)}>
+              <span className="ov-input-name">{x.spec.label}</span>
+              <span className="ov-input-value">{formatJudgedValue(x)}</span>
+              <span className={`ov-input-dir dir-${x.direction}`}>{directionGlyph(x.direction)} {directionWords(x.direction)}</span>
+              <span className="ov-input-ref">{referenceLine(x) ?? ''}</span>
+            </a>
+          ))}
+        </div>
+      ))}
+      <div className="today-links">
+        <button className="dash-link" onClick={() => onPick('CHARGE')}>← CHARGE</button>
+        <a className="dash-link" href={historyHref(k.toLowerCase(), day)}>OPEN IN CONSOLE →</a>
+      </div>
+    </>
   )
 }

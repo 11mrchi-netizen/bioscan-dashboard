@@ -1,7 +1,7 @@
 // Three-zone shell: left rail · central canvas · right inspector
 // IA.md §3.2 — inspector visibility driven by AnalysisContext.inspectionTarget
 import { Suspense, useEffect, useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useInspection, useClearInspection } from '../../lib/analysisStore'
 import { ErrorBoundary } from '../shared/ErrorBoundary'
@@ -11,21 +11,27 @@ import { SavedViews } from './SavedViews'
 import { dashboardHref } from '../../lib/surfaces'
 import './Shell.css'
 
-// docs/analysis-console/IA.md §3.1
-const NAV = [
-  { to: 'integrity', label: 'Integrity' },
-  { to: 'evidence',  label: 'Evidence' },
-  { to: 'explore',   label: 'Explore' },
-  { to: 'data',      label: 'Data' },
-  { to: 'models',    label: 'Models' },
-  { to: 'body',      label: 'Body' },
+// Web transition plan, phase 4: five groups in the phone's language. The Console is where the data is dug into, fixed and
+// planned; logging stays on the phone and glancing on the Dashboard.
+const GROUPS: { title: string; items: { to: string; label: string }[] }[] = [
+  { title: 'LOG', items: [{ to: 'log', label: 'Day log' }] },
+  { title: 'LAB', items: [
+    { to: 'regimen', label: 'Regimen' }, { to: 'experiments', label: 'Experiments' }, { to: 'interventions', label: 'Interventions' },
+    { to: 'routine', label: 'Routine' }, { to: 'tests', label: 'Tests' },
+  ] },
+  { title: 'PLAN', items: [
+    { to: 'plan', label: 'Overview' }, { to: 'plan-block', label: 'Plan block' }, { to: 'meal-prep', label: 'Meal prep' },
+    { to: 'sessions', label: 'Sessions' }, { to: 'races', label: 'Races' },
+  ] },
+  { title: 'ANALYSIS', items: [
+    { to: 'history', label: 'History' }, { to: 'evidence', label: 'Evidence' }, { to: 'explore', label: 'Explore' },
+    { to: 'data', label: 'Data' }, { to: 'models', label: 'Models' }, { to: 'body', label: 'Body' },
+  ] },
+  { title: 'SYSTEM', items: [{ to: 'integrity', label: 'Integrity' }, { to: 'connections', label: 'Connections' }] },
 ]
 
-// Planning: the long-form work done here and carried out on the phone.
-const PLAN_NAV = [
-  { to: 'plan-block', label: 'Plan block' },
-  { to: 'meal-prep',  label: 'Meal prep' },
-]
+/** Where to land after Google's consent page sends the browser back (set by Connections before it leaves). */
+export const RETURN_KEY = 'ft.console.returnTo'
 
 export function Shell() {
   const { user, signOut } = useAuth()
@@ -39,6 +45,13 @@ export function Shell() {
     const t = idle ? idle(() => { void import('../../lib/echarts') }) : window.setTimeout(() => { void import('../../lib/echarts') }, 1500)
     return () => { if (!idle) window.clearTimeout(t) }
   }, [])
+  // Back from Google's consent page: the browser returns to the Console's root, so go on to the page that sent it there.
+  const navigate = useNavigate()
+  useEffect(() => {
+    let to: string | null = null
+    try { to = sessionStorage.getItem(RETURN_KEY); sessionStorage.removeItem(RETURN_KEY) } catch { /* storage off */ }
+    if (to && /^\/[a-z-]+$/.test(to)) navigate(to, { replace: true })
+  }, [navigate])
   const inspectionTarget = useInspection()
   const clearInspection = useClearInspection()
   const [railToggled, setRailCollapsed] = useState(false)
@@ -72,16 +85,15 @@ export function Shell() {
 
       <div className="shell-body">
         <nav className="shell-rail" aria-label="Workspace navigation">
-          {NAV.map(({ to, label }) => (
-            <NavLink key={to} to={to} className={({ isActive }) => `rail-item mono ${isActive ? 'active' : ''}`}>
-              {railCollapsed ? label.slice(0, 2).toUpperCase() : label}
-            </NavLink>
-          ))}
-          <span className="rail-section mono">{railCollapsed ? '—' : 'PLANNING'}</span>
-          {PLAN_NAV.map(({ to, label }) => (
-            <NavLink key={to} to={to} className={({ isActive }) => `rail-item mono ${isActive ? 'active' : ''}`}>
-              {railCollapsed ? label.slice(0, 2).toUpperCase() : label}
-            </NavLink>
+          {GROUPS.map((g) => (
+            <div key={g.title} className="rail-group" role="group" aria-label={g.title}>
+              <span className="rail-section mono">{railCollapsed ? '—' : g.title}</span>
+              {g.items.map(({ to, label }) => (
+                <NavLink key={to} to={to} className={({ isActive }) => `rail-item mono ${isActive ? 'active' : ''}`}>
+                  {railCollapsed ? label.slice(0, 2).toUpperCase() : label}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
 

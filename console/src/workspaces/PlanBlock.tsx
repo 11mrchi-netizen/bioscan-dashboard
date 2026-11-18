@@ -1026,7 +1026,7 @@ function SessionDetail({ s, onClose }: { s: GeneratedSession; onClose: () => voi
 
 // ---------------- blocks under way: end one early ----------------
 
-function RunningBlocks({ blocks, cat, onEnded }: { blocks: ExistingBlock[]; cat: PlannerCatalog; onEnded: (nextStart: string) => void }) {
+export function RunningBlocks({ blocks, cat, onEnded }: { blocks: ExistingBlock[]; cat: PlannerCatalog; onEnded: (nextStart: string) => void }) {
   const today = localToday()
   const running = blocks.filter((b) => (b.status === 'scheduled' || b.status === 'active') && b.end_date > today)
   const [open, setOpen] = useState<{ id: number; what: 'end' | 'accessories' } | null>(null)

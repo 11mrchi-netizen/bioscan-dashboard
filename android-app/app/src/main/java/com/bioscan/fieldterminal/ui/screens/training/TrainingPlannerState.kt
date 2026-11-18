@@ -39,6 +39,7 @@ import com.bioscan.fieldterminal.domain.training.generate.cycleWeekKind
 import com.bioscan.fieldterminal.domain.training.generate.defaultTimeline
 import com.bioscan.fieldterminal.domain.training.generate.generateMergedBlock
 import com.bioscan.fieldterminal.domain.training.generate.generateTemplateBlock
+import com.bioscan.fieldterminal.domain.training.generate.accessoriesJson
 import com.bioscan.fieldterminal.domain.training.generate.isCluster
 import com.bioscan.fieldterminal.domain.training.generate.layoutWarnings
 import com.bioscan.fieldterminal.domain.training.generate.resizeTimeline
@@ -350,7 +351,8 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
                 else -> listOf(chosen.firstOrNull() ?: slot.standard)
             }
         }
-    }.distinct().filter { maxEntry(it)?.oneRmKg == null }
+    }.plus(strengthModules.flatMap { m -> choiceFor(m.key).accessories.values.flatten().filter { it.load.kind == "pct_1rm" }.map { it.exercise } })
+        .distinct().filter { maxEntry(it)?.oneRmKg == null }
 
     fun generate(): GeneratedBlock? {
         val idx = index ?: return null
@@ -421,6 +423,7 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
                     c.variant?.let { put("variant", it) }
                     c.blockLength?.let { put("block_length", it) }
                     c.exercises.forEach { (slot, names) -> putJsonArray(slot) { names.forEach { add(JsonPrimitive(it)) } } }
+                    if (c.accessories.isNotEmpty()) put("accessories", accessoriesJson(c.accessories))
                 }
             }
         }

@@ -13,12 +13,13 @@ import { lbToKg, loadStepKg, roundToStep } from './plates.ts'
 import { type LoadSpec, type Missing, type PercentBase, type ResolvedLoad, resolveLoad } from './prescription.ts'
 import { type BlockBlueprint, countsTowardBlock, type DayPlan, defaultTimeline, type WeekKind } from './timeline.ts'
 import { suggestLayout } from './layout.ts'
+import { type Accessory, ALL_SESSIONS, accessoriesFor, accessorySets } from './accessories.ts'
 
 export interface GenEquipment { barKg: number; trapBarKg: number; platesKg: number[]; addedStepKg: number; weightedBase: PercentBase }
 export const DEFAULT_EQUIPMENT: GenEquipment = { barKg: 20, trapBarKg: 25, platesKg: [1.25, 2.5, 5, 10, 15, 20], addedStepKg: 1.25, weightedBase: 'added' }
 
 export interface SlotTime { start: string; durationMin: number } // start 'HH:MM'
-export interface ModuleChoice { variant?: string | null; blockLength?: number | null; exercises?: Record<string, string[]> }
+export interface ModuleChoice { variant?: string | null; blockLength?: number | null; exercises?: Record<string, string[]>; accessories?: Record<string, Accessory[]> }
 
 export interface GenChoices {
   startDate: LocalDate
@@ -167,6 +168,36 @@ class Gen {
     return out
   }
 
+  /** The lifter's accessory work for one session, after the book's items (accessories.ts for the week rules). */
+  accessoryItems(choice: ModuleChoice, sessionId: string | null | undefined, weekKind: string): GeneratedItem[] {
+    const out: GeneratedItem[] = []
+    for (const a of accessoriesFor(choice, sessionId)) {
+      const sets = accessorySets(a.sets, weekKind)
+      if (sets === 0) continue
+      const entry = this.maxes(a.exercise)
+      // Accessories are rarely plate-loaded barbells (dumbbells, cables, machines): a kilogram load is shown as it is, a
+      // percentage of the 1RM as kilograms on the lifter's smallest step, never as bar + plates.
+      const spec = loadSpecOf(a.load)
+      const oneRm = this.currentOneRm(a.exercise)
+      const load: ResolvedLoad = spec.kind === 'fixed' ? { kind: 'fixed_kg', kg: spec.kg, loadable: { barKg: spec.kg, platesPerSideKg: [] } }
+        : spec.kind === 'pct_1rm' ? (oneRm == null ? { kind: 'unresolved', missing: 'OneRm' } : (() => { const kg = roundToStep(oneRm * spec.pct / 100, this.stepKg); return { kind: 'fixed_kg', kg, loadable: { barKg: kg, platesPerSideKg: [] } } as ResolvedLoad })())
+        : resolveLoad(
+        { slot: 'ACC', load: spec, weightedCalisthenics: false },
+        {
+          oneRmKg: this.currentOneRm(a.exercise), trainingMaxKg: entry?.trainingMaxKg ?? null, maxReps: entry?.maxReps ?? null, bodyweightKg: this.c.bodyweightKg ?? null,
+          barKg: a.exercise.toLowerCase().includes('trap') ? this.eq.trapBarKg : this.eq.barKg, platesKg: this.eq.platesKg, addedStepKg: this.eq.addedStepKg, weightedBase: this.eq.weightedBase,
+        },
+      )
+      if (load.kind === 'unresolved' && !this.warnedMissing.has(nameKey(a.exercise))) {
+        this.warnedMissing.add(nameKey(a.exercise))
+        this.warnings.push(`No ${MISSING_WORDS[load.missing]} for ${a.exercise}: its loads stay unresolved until one is recorded`)
+      }
+      const note = [...(a.note ? [a.note] : []), ...(spec.kind === 'pct_1rm' ? [`${spec.pct}% of the 1RM`] : []), ...(sets < a.sets ? ['half the sets this week'] : [])].join('; ')
+      out.push({ slot: 'ACC', exercise: a.exercise, role: 'accessory', sets: rangeOf(sets), reps: a.reps, load, technique: null, optional: false, note: note || null, projected: this.liveMax.has(nameKey(a.exercise)) })
+    }
+    return out
+  }
+
   /** Forced progression at the start of a new block of the same module (upper and lower body increments). */
   progress(m: StrengthModuleDef, choice: ModuleChoice, week: number): void {
     if (this.c.projectProgression === false) return
@@ -276,7 +307,7 @@ function strengthCell(g: Gen, idx: DefinitionIndex, c: GenChoices, cell: Cell, t
     }
     const notes = [...(ws.note ? [ws.note] : []), ...(vw.kind === 'peak' && strength.peak?.note ? [strength.peak.note] : [])]
     g.emit(week, counts, day, slotInDay, strength.domain, vw.kind === 'deload' ? 'deload' : 'progression', `strength:${strength.key}`, `${strength.title}: ${sessionDef.label}`,
-      g.resolveItems(strength, choice, ws.items), null, notes)
+      [...g.resolveItems(strength, choice, ws.items), ...g.accessoryItems(choice, sessionId, vw.kind)], null, notes)
   } else {
     const se = seMod!
     const pos = Math.min(cyc.seg, se.weeks.length - 1)
@@ -341,7 +372,7 @@ function mergeBlock(bp: BlockBlueprint, strength: StrengthModuleDef | null, prot
           const ws = vw.sessions.find((s) => s.session === sd.id)
           if (!ws) continue
           const notes = [...(ws.note ? [ws.note] : []), ...(vw.kind === 'peak' && strength.peak?.note ? [strength.peak.note] : [])]
-          g.emit(week, true, position(d.weekday), 1, strength.domain, 'progression', `strength:${strength.key}`, `${strength.title}: ${sd.label}`, g.resolveItems(strength, choice, ws.items), null, notes)
+          g.emit(week, true, position(d.weekday), 1, strength.domain, 'progression', `strength:${strength.key}`, `${strength.title}: ${sd.label}`, [...g.resolveItems(strength, choice, ws.items), ...g.accessoryItems(choice, sd.id, vw.kind)], null, notes)
         }
         blockPos++
       } else if (kind === 'lead') {
@@ -353,7 +384,7 @@ function mergeBlock(bp: BlockBlueprint, strength: StrengthModuleDef | null, prot
           const ws = vw.sessions.find((s) => s.session === sd.id)
           if (!ws) continue
           g.emit(week, true, position(d.weekday), 1, strength.domain, 'progression', `strength:${strength.key}`, `${strength.title}: ${sd.label}`,
-            g.resolveItems(strength, choice, ws.items), null, [...(ws.note ? [ws.note] : []), 'Early week: the opening weeks again before the full cycle'])
+            [...g.resolveItems(strength, choice, ws.items), ...g.accessoryItems(choice, sd.id, vw.kind)], null, [...(ws.note ? [ws.note] : []), 'Early week: the opening weeks again before the full cycle'])
         }
         leadPos++
       } else if (kind === 'deload') {
@@ -414,4 +445,10 @@ function finish(g: Gen, c: GenChoices, counted: number, plannedWeeks?: number): 
   const weeks = plannedWeeks ?? g.sessions.reduce((m, s) => Math.max(m, s.weekIndex), 0)
   const end = plusDays(c.startDate, 7 * Math.max(1, weeks) - 1)
   return { sessions: g.sessions, calendarWeeks: weeks, countedWeeks: counted, endDate: end, progressions: g.progressions, warnings: [...new Set(g.warnings)] }
+}
+
+/** Accessory items for one session outside a generation (a block under way): the generator's own rules and loads. */
+export function accessoryItemsFor(accessories: Accessory[], weekKind: string, eq: GenEquipment, maxes: (name: string) => MaxEntry | null | undefined, bodyweightKg: number | null = null): GeneratedItem[] {
+  const g = new Gen(new DefinitionIndex([]), { startDate: '2000-01-03', bodyweightKg }, eq, maxes)
+  return g.accessoryItems({ accessories: { [ALL_SESSIONS]: accessories } }, null, weekKind)
 }

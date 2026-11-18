@@ -1,5 +1,7 @@
 package com.bioscan.fieldterminal.domain.training.generate
 
+import com.bioscan.fieldterminal.domain.training.LoadSpec
+import com.bioscan.fieldterminal.domain.training.Loadable
 import com.bioscan.fieldterminal.domain.training.Missing
 import com.bioscan.fieldterminal.domain.training.PrescriptionItem
 import com.bioscan.fieldterminal.domain.training.ResolveContext
@@ -168,6 +170,36 @@ private class Gen(
         return out
     }
 
+    // The lifter's accessory work for one session, after the book's items (Accessories.kt for the week rules).
+    fun accessoryItems(choice: ModuleChoice, sessionId: String?, weekKind: String): List<GeneratedItem> =
+        accessoriesFor(choice, sessionId).mapNotNull { a ->
+            val sets = accessorySets(a.sets, weekKind)
+            if (sets == 0) return@mapNotNull null
+            val entry = maxes(a.exercise)
+            val ctx = ResolveContext(
+                oneRmKg = currentOneRm(a.exercise), trainingMaxKg = entry?.trainingMaxKg, maxReps = entry?.maxReps, bodyweightKg = c.bodyweightKg,
+                barKg = if (a.exercise.contains("trap", ignoreCase = true)) eq.trapBarKg else eq.barKg, platesKg = eq.platesKg, addedStepKg = eq.addedStepKg, weightedBase = eq.weightedBase,
+            )
+            // Accessories are rarely plate-loaded barbells (dumbbells, cables, machines): a kilogram load is shown as it is,
+            // a percentage of the 1RM as kilograms on the lifter's smallest step, never as bar + plates.
+            val oneRm = currentOneRm(a.exercise)
+            val load = when (val spec = a.load.toSpec()) {
+                is LoadSpec.Fixed -> ResolvedLoad.FixedKg(spec.kg, Loadable(spec.kg, emptyList()))
+                is LoadSpec.Pct1rm -> if (oneRm == null) ResolvedLoad.Unresolved(Missing.OneRm)
+                    else roundToStep(oneRm * spec.pct / 100.0, stepKg).let { kg -> ResolvedLoad.FixedKg(kg, Loadable(kg, emptyList())) }
+                else -> resolveLoad(PrescriptionItem(slot = "ACC", sets = sets..sets, reps = a.reps?.let { it.min.toInt()..it.max.toInt() }, load = spec), ctx)
+            }
+            if (load is ResolvedLoad.Unresolved && warnedMissing.add(nameKey(a.exercise))) {
+                val what = when (load.missing) {
+                    Missing.OneRm -> "a 1RM"; Missing.TrainingMax -> "a training max"; Missing.MaxReps -> "a max-reps test"; Missing.Bodyweight -> "bodyweight"
+                }
+                warnings += "No $what for ${a.exercise}: its loads stay unresolved until one is recorded"
+            }
+            val pct = (a.load.toSpec() as? LoadSpec.Pct1rm)?.let { "${if (it.pct % 1.0 == 0.0) it.pct.toLong().toString() else it.pct.toString()}% of the 1RM" }
+            val note = listOfNotNull(a.note, pct, if (sets < a.sets) "half the sets this week" else null).joinToString("; ").ifEmpty { null }
+            GeneratedItem("ACC", a.exercise, "accessory", NumRange.of(sets), a.reps, load, null, false, note, projected = nameKey(a.exercise) in liveMax)
+        }
+
     // Forced progression at the start of a new block of the same module: every exercise the
     // module used so far moves up by the module's own increment (upper vs lower body).
     fun progress(m: StrengthModuleDef, choice: ModuleChoice, week: Int) {
@@ -283,7 +315,7 @@ private fun generateStrengthCell(
         }
         val notes = buildList { ws.note?.let { add(it) }; if (vw.kind == "peak") strength.peak?.note?.let { add(it) } }
         g.emit(week, counts, day, slotInDay, strength.domain, if (vw.kind == "deload") "deload" else "progression", "strength:${strength.key}", "${strength.title}: ${sessionDef.label}",
-            items = g.resolveItems(strength, choice, ws.items), notes = notes)
+            items = g.resolveItems(strength, choice, ws.items) + g.accessoryItems(choice, sessionId, vw.kind), notes = notes)
     } else {
         val se = seMod!!
         val choice = c.modules[moduleKey] ?: ModuleChoice()
@@ -351,7 +383,7 @@ private fun mergeBlock(
                     val sd = strength.sessions.getOrNull(d.strengthSession!!) ?: continue
                     val ws = vw.sessions.firstOrNull { it.session == sd.id } ?: continue
                     val notes = buildList { ws.note?.let { add(it) }; if (vw.kind == "peak") strength.peak?.note?.let { add(it) } }
-                    g.emit(week, true, position(d.weekday), 1, strength.domain, "progression", "strength:${strength.key}", "${strength.title}: ${sd.label}", items = g.resolveItems(strength, choice, ws.items), notes = notes)
+                    g.emit(week, true, position(d.weekday), 1, strength.domain, "progression", "strength:${strength.key}", "${strength.title}: ${sd.label}", items = g.resolveItems(strength, choice, ws.items) + g.accessoryItems(choice, sd.id, vw.kind), notes = notes)
                 }
                 blockPos++
             }
@@ -362,7 +394,7 @@ private fun mergeBlock(
                     val sd = strength.sessions.getOrNull(d.strengthSession!!) ?: continue
                     val ws = vw.sessions.firstOrNull { it.session == sd.id } ?: continue
                     g.emit(week, true, position(d.weekday), 1, strength.domain, "progression", "strength:${strength.key}", "${strength.title}: ${sd.label}",
-                        items = g.resolveItems(strength, choice, ws.items), notes = listOfNotNull(ws.note, "Early week: the opening weeks again before the full cycle"))
+                        items = g.resolveItems(strength, choice, ws.items) + g.accessoryItems(choice, sd.id, vw.kind), notes = listOfNotNull(ws.note, "Early week: the opening weeks again before the full cycle"))
                 }
                 leadPos++
             }
@@ -426,4 +458,10 @@ private fun finish(g: Gen, c: GenChoices, counted: Int, plannedWeeks: Int? = nul
     val weeks = plannedWeeks ?: g.sessions.maxOfOrNull { it.weekIndex } ?: 0
     val end = c.startDate.plusDays(7L * weeks.coerceAtLeast(1) - 1)
     return GeneratedBlock(g.sessions.toList(), weeks, counted, end, g.progressions.toList(), g.warnings.distinct())
+}
+
+/** Accessory items for one session outside a generation (a block under way): the generator's own rules and loads. */
+fun accessoryItemsFor(accessories: List<Accessory>, weekKind: String, eq: GenEquipment, maxes: (String) -> MaxEntry?, bodyweightKg: Double? = null): List<GeneratedItem> {
+    val g = Gen(DefinitionIndex(emptyList()), GenChoices(startDate = LocalDate.of(2000, 1, 3), bodyweightKg = bodyweightKg), eq, maxes)
+    return g.accessoryItems(ModuleChoice(accessories = mapOf(ALL_SESSIONS to accessories)), null, weekKind)
 }

@@ -9,7 +9,7 @@ import {
   DefinitionIndex, generateMergedBlock, generateTemplateBlock, type GenChoices, type GeneratedBlock, type GenEquipment, isCluster, layoutWarnings,
   type LocalDate, type MaxEntry, type ModuleChoice, movementKey, nextOrSame, plusWeekday, resizeTimeline, type ResolvedMax, slotsToChoose,
   type SlotTime, type StrengthModuleDef, suggestLayout, type TemplateDef, templateDayPositions, templateModuleKeys, type WeekKind, weekdayOf,
-  weeksForBlocks, type Weekday, withTaper, daysBetween, WEEKDAY_NAMES, raceTimeline,
+  weeksForBlocks, type Weekday, withTaper, daysBetween, WEEKDAY_NAMES, raceTimeline, accessoriesJson, accessoriesFrom, type Accessory,
 } from '../../../supabase/functions/_shared/training-core/index.ts'
 
 export type Route = 'build' | 'published'
@@ -192,9 +192,13 @@ export function maxEntry(d: PlannerDraft, cat: PlannerCatalog, name: string): Ma
   return { ...(base ?? {}), ...(manual.oneRmKg != null ? { oneRmKg: manual.oneRmKg } : {}), ...(manual.maxReps != null ? { maxReps: manual.maxReps } : {}) }
 }
 
+/** The accessories that are complete (a row still being typed is left out): the same reader the phone uses on the saved JSON. */
+export const validAccessories = (m: Record<string, Accessory[]> | undefined): Record<string, Accessory[]> => accessoriesFrom(accessoriesJson(m ?? {}))
+
 export function genChoices(d: PlannerDraft): GenChoices {
+  const modules = Object.fromEntries(Object.entries(d.modules).map(([k, c]) => [k, { ...c, accessories: validAccessories(c.accessories) }]))
   return {
-    startDate: d.startDate, weekdays: d.weekdays, slotTimes: d.slotTimes, variables: d.variables, modules: d.modules, conditioning: d.conditioning,
+    startDate: d.startDate, weekdays: d.weekdays, slotTimes: d.slotTimes, variables: d.variables, modules, conditioning: d.conditioning,
     projectProgression: d.projectProgression, bodyweightKg: d.bodyweightKg, conditioningPerWeek: d.conditioningPerWeek,
   }
 }
@@ -230,7 +234,12 @@ export function missingMaxes(d: PlannerDraft, cat: PlannerCatalog): string[] {
       return [chosen[0] ?? slot.standard]
     })
   })
-  return [...new Set(names)].filter((n) => maxEntry(d, cat, n)?.oneRmKg == null)
+  return [...new Set([...names, ...accessoryPctNames(d, cat)])].filter((n) => maxEntry(d, cat, n)?.oneRmKg == null)
+}
+
+/** Accessories loaded as a percentage of the 1RM: they need a max like the program's own lifts. */
+export function accessoryPctNames(d: PlannerDraft, cat: PlannerCatalog): string[] {
+  return strengthModules(d, cat.index).flatMap((m) => Object.values(validAccessories(choiceFor(d, m.key).accessories)).flat().filter((a) => a.load.kind === 'pct_1rm').map((a) => a.exercise))
 }
 
 /** Every exercise the block will load, with the max it uses and where it came from. */
@@ -244,6 +253,7 @@ export function exercisesInPlay(d: PlannerDraft, cat: PlannerCatalog): { name: s
       else names.add(chosen[0] ?? slot.standard)
     }
   }
+  accessoryPctNames(d, cat).forEach((n) => names.add(n))
   return [...names].map((name) => {
     const key = movementKey(name)
     const r = cat.maxes[key]
@@ -274,7 +284,8 @@ export function componentsJson(d: PlannerDraft): unknown[] {
 export function choicesJson(d: PlannerDraft, idx: DefinitionIndex): Record<string, unknown> {
   const clusters: Record<string, unknown> = {}
   for (const [module, c] of Object.entries(d.modules)) {
-    clusters[module] = { ...(c.variant ? { variant: c.variant } : {}), ...(c.blockLength ? { block_length: c.blockLength } : {}), ...(c.exercises ?? {}) }
+    const acc = accessoriesJson(validAccessories(c.accessories))
+    clusters[module] = { ...(c.variant ? { variant: c.variant } : {}), ...(c.blockLength ? { block_length: c.blockLength } : {}), ...(c.exercises ?? {}), ...(Object.keys(acc).length > 0 ? { accessories: acc } : {}) }
   }
   return {
     path: d.route === 'build' ? 'build' : 'published',

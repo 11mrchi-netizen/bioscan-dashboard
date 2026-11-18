@@ -59,6 +59,7 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {})
     var eventDays by remember { mutableStateOf<Map<LocalDate, String>>(emptyMap()) }
     var cycles by remember { mutableStateOf<List<TrainingCycle>?>(null) }
     var endingBlock by remember { mutableStateOf<Long?>(null) }
+    var accessoriesBlock by remember { mutableStateOf<Long?>(null) }
     var history by remember { mutableStateOf<List<TrainingBlockSummaryRow>?>(null) }
     var confirmingDelete by remember { mutableStateOf<Long?>(null) }
     var deleting by remember { mutableStateOf(false) }
@@ -122,18 +123,16 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {})
             deleteError?.let { Text("Couldn't delete: $it", color = FT.Bad, style = FTType.BodySmall) }
             b.forEach { blk ->
                 Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(blk.name, color = FT.TextPrimary, style = FTType.BodySmall)
-                            Text("${blk.startDate} to ${blk.endDate} · ${blk.status.uppercase()}", color = FT.TextSecondary, style = FTType.MonoCaption)
-                        }
-                        // A block under way can end early (its later sessions set aside, kept); DELETE removes all of it.
-                        if (confirmingDelete != blk.id && (blk.status == "scheduled" || blk.status == "active") && LocalDate.parse(blk.endDate).isAfter(LocalDate.now())) {
-                            FTButton("END EARLY") { endingBlock = blk.id }
-                        }
-                        if (confirmingDelete != blk.id) {
-                            FTButton("DELETE", emphasis = FTButtonEmphasis.Destructive) { confirmingDelete = blk.id; deleteError = null }
-                        }
+                    Column(Modifier.fillMaxWidth()) {
+                        Text(blk.name, color = FT.TextPrimary, style = FTType.BodySmall)
+                        Text("${blk.startDate} to ${blk.endDate} · ${blk.status.uppercase()}" + if (blk.origin != "generated") " · RECORDED" else "", color = FT.TextSecondary, style = FTType.MonoCaption)
+                    }
+                    val running = (blk.status == "scheduled" || blk.status == "active") && LocalDate.parse(blk.endDate).isAfter(LocalDate.now())
+                    if (confirmingDelete != blk.id) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // A block under way can end early (its later sessions set aside, kept) and take accessory work; DELETE removes all of it.
+                        if (running) FTButton("END EARLY") { endingBlock = blk.id }
+                        if (running && blk.origin == "generated") FTButton("ACCESSORIES") { accessoriesBlock = blk.id }
+                        if (blk.origin == "generated") FTButton("DELETE", emphasis = FTButtonEmphasis.Destructive) { confirmingDelete = blk.id; deleteError = null }
                     }
                     if (confirmingDelete == blk.id) {
                         FTConfirmDestructive(
@@ -159,6 +158,9 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {})
         BlockHistoryCard(history, onViewAll = onOpenAllBlocks)
     }
 
+    accessoriesBlock?.let { id ->
+        BlockAccessoriesSheet(id, onDismiss = { accessoriesBlock = null }, onDone = { accessoriesBlock = null; guard.retry() })
+    }
     endingBlock?.let { id ->
         EndBlockEarlySheet(id, onDismiss = { endingBlock = null }, onDone = { endingBlock = null; guard.retry() })
     }

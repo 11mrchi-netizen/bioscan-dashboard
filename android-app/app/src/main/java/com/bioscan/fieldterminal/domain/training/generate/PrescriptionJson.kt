@@ -34,17 +34,20 @@ fun ResolvedLoad.toJson(): JsonObject = buildJsonObject {
     }
 }
 
+fun GeneratedItem.liftJson(): JsonObject = buildJsonObject {
+    val i = this@liftJson
+    put("type", "lift"); put("slot", i.slot); put("exercise", i.exercise); put("role", i.role)
+    i.sets?.let { put("sets", it.json()) }
+    i.reps?.let { put("reps", it.json()) }
+    put("load", i.load.toJson())
+    i.technique?.let { put("technique", it) }
+    if (i.optional) put("optional", true)
+    i.note?.let { put("note", it) }
+    if (i.projected) put("projected", true)
+}
+
 fun GeneratedSession.prescriptionJson(): JsonArray = buildJsonArray {
-    for (i in items) add(buildJsonObject {
-        put("type", "lift"); put("slot", i.slot); put("exercise", i.exercise); put("role", i.role)
-        i.sets?.let { put("sets", it.json()) }
-        i.reps?.let { put("reps", it.json()) }
-        put("load", i.load.toJson())
-        i.technique?.let { put("technique", it) }
-        if (i.optional) put("optional", true)
-        i.note?.let { put("note", it) }
-        if (i.projected) put("projected", true)
-    })
+    for (i in items) add(i.liftJson())
     conditioning?.let { c ->
         add(buildJsonObject {
             put("type", "conditioning"); c.sessionKey?.let { put("session_key", it) }; put("label", c.label); c.category?.let { put("category", it) }

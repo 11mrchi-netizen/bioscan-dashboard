@@ -1,5 +1,21 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.training.generate.MaxEntry
+
+import com.bioscan.fieldterminal.domain.training.generate.GenEquipment
+
+import com.bioscan.fieldterminal.domain.training.generate.Accessory
+
+import com.bioscan.fieldterminal.domain.training.generate.liftJson
+
+import com.bioscan.fieldterminal.domain.training.generate.accessoryItemsFor
+
+import com.bioscan.fieldterminal.domain.training.generate.accessoriesFor
+
+import com.bioscan.fieldterminal.domain.training.generate.accessoriesJson
+
+import com.bioscan.fieldterminal.domain.training.generate.accessoriesFromJson
+
 import com.bioscan.fieldterminal.data.model.AthleteMaxRow
 import com.bioscan.fieldterminal.data.model.BlockNameRow
 import com.bioscan.fieldterminal.data.model.GeneratedBlockRow
@@ -123,12 +139,16 @@ class TrainingProgramRepository(private val supabase: SupabaseClient) {
     suspend fun loadGeneratedBlocks(): List<GeneratedBlockRow> =
         ReadCache.get("program.blocks", tables = setOf("training_blocks", "planned_sessions"), serializer = ListSerializer(GeneratedBlockRow.serializer())) { fetchLoadGeneratedBlocks() }
 
-    private suspend fun fetchLoadGeneratedBlocks(): List<GeneratedBlockRow> =
-        supabase.postgrest.from("training_blocks")
-            .select(columns = Columns.list("id,name,start_date,end_date,status")) {
-                filter { eq("origin", "generated"); neq("status", "abandoned") }
+    // Generated blocks, plus the block under way when it was imported or recorded elsewhere: it can end early too.
+    private suspend fun fetchLoadGeneratedBlocks(): List<GeneratedBlockRow> {
+        val today = LocalDate.now().toString()
+        return supabase.postgrest.from("training_blocks")
+            .select(columns = Columns.list("id,name,start_date,end_date,status,origin,cycle_id")) {
+                filter { neq("status", "abandoned") }
                 order("start_date", Order.DESCENDING)
             }.decodeList<GeneratedBlockRow>()
+            .filter { it.origin == "generated" || (it.status == "active" || it.status == "scheduled") && it.endDate >= today }
+    }
 
     // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun loadUpcoming(from: LocalDate, limit: Int = 14): List<UpcomingSessionRow> =
@@ -300,6 +320,8 @@ private data class BlockEndRow(
     @kotlinx.serialization.SerialName("start_date") val startDate: String,
     @kotlinx.serialization.SerialName("end_date") val endDate: String,
     val status: String = "scheduled",
+    val origin: String = "generated",
+    @kotlinx.serialization.SerialName("cycle_id") val cycleId: Long? = null,
     val components: JsonElement? = null,
     val choices: JsonElement? = null,
     @kotlinx.serialization.SerialName("definition_snapshot") val definitionSnapshot: JsonElement? = null,
@@ -323,7 +345,7 @@ internal fun topPct(prescription: JsonElement?): Double? = (prescription as? Jso
 
 suspend fun loadBlockForEnding(supabase: SupabaseClient, id: Long): BlockForEnding {
     val b = supabase.postgrest.from("training_blocks")
-        .select(columns = Columns.list("id,name,start_date,end_date,status,components,choices,definition_snapshot,review")) { filter { eq("id", id) } }
+        .select(columns = Columns.list("id,name,start_date,end_date,status,origin,cycle_id,components,choices,definition_snapshot,review")) { filter { eq("id", id) } }
         .decodeSingle<BlockEndRow>()
     val sessions = supabase.postgrest.from("planned_sessions")
         .select(columns = Columns.list("id,scheduled_date,week_index,status,prescription")) { filter { eq("block_id", id); neq("status", "superseded") } }
@@ -342,8 +364,9 @@ suspend fun loadBlockForEnding(supabase: SupabaseClient, id: Long): BlockForEndi
         blockLength = cluster?.get("block_length")?.jsonPrimitive?.intOrNull,
         exercises = cluster?.filterKeys { it != "variant" && it != "block_length" }
             ?.mapNotNull { (k, v) -> (v as? JsonArray)?.let { a -> k to a.mapNotNull { it.jsonPrimitive.contentOrNull } } }?.toMap().orEmpty(),
+        accessories = accessoriesFromJson(cluster?.get("accessories")),
     )
-    return BlockForEnding(GeneratedBlockRow(b.id, b.name, b.startDate, b.endDate, b.status), sessions, module, choice, b.review as? JsonObject)
+    return BlockForEnding(GeneratedBlockRow(b.id, b.name, b.startDate, b.endDate, b.status, b.origin, b.cycleId), sessions, module, choice, b.review as? JsonObject)
 }
 
 /**
@@ -366,6 +389,10 @@ suspend fun endBlockEarly(supabase: SupabaseClient, block: BlockForEnding, lastD
     supabase.postgrest.from("training_blocks").update({
         set("end_date", lastDay.toString()); set("status", "completed"); set("review", review); set("updated_at", java.time.Instant.now().toString())
     }) { filter { eq("id", block.row.id) } }
+    // An imported or recorded block lives on as a training_cycles row (the CURRENT BLOCK card reads it): it ends too.
+    block.row.cycleId?.let { cid ->
+        supabase.postgrest.from("training_cycles").update({ set("end_date", lastDay.toString()) }) { filter { eq("id", cid) } }
+    }
     for (st in steps) {
         supabase.postgrest.from("athlete_maxes").insert(
             NewAthleteMaxRow(movementKey(st.exercise), st.exercise, "1rm", st.toKg, "kg", LocalDate.now().toString(), "progression",
@@ -388,3 +415,52 @@ private fun Definition.toRow(): NewTrainingDefinitionRow = NewTrainingDefinition
     methodology = key.substringBefore('.'), kind = kindName(), key = key, version = version, schemaVersion = schemaVersion,
     title = title, body = json.parseToJsonElement(encodeDefinition(this)), sourceRef = sourceRef,
 )
+
+@kotlinx.serialization.Serializable
+private data class ChoicesRow(val choices: JsonElement? = null)
+
+@kotlinx.serialization.Serializable
+private data class AccessorySessionRow(
+    val id: Long,
+    val title: String,
+    @kotlinx.serialization.SerialName("work_kind") val workKind: String = "progression",
+    val prescription: JsonElement? = null,
+)
+
+/**
+ * Replaces the accessory work of a block under way: its choices, and the accessory lines of its strength sessions still
+ * planned from [from] (earlier and confirmed sessions stay as they were). A session's own lines are never touched.
+ * Returns how many sessions changed.
+ */
+suspend fun updateBlockAccessories(
+    supabase: SupabaseClient, block: BlockForEnding, accessories: Map<String, List<Accessory>>, from: LocalDate, eq: GenEquipment, maxes: (String) -> MaxEntry?,
+): Int {
+    val m = block.module ?: error("This block has no strength program to add accessory work to")
+    val choices = (supabase.postgrest.from("training_blocks").select(columns = Columns.list("choices")) { filter { eq("id", block.row.id) } }
+        .decodeSingle<ChoicesRow>().choices as? JsonObject) ?: JsonObject(emptyMap())
+    val clusters = choices["clusters"] as? JsonObject ?: JsonObject(emptyMap())
+    val cluster = (clusters[m.key] as? JsonObject ?: JsonObject(emptyMap())).filterKeys { it != "accessories" } +
+        (if (accessories.isEmpty()) emptyMap() else mapOf("accessories" to accessoriesJson(accessories)))
+    val updated = JsonObject(choices + ("clusters" to JsonObject(clusters + (m.key to JsonObject(cluster)))))
+    supabase.postgrest.from("training_blocks").update({ set("choices", updated); set("updated_at", java.time.Instant.now().toString()) }) { filter { eq("id", block.row.id) } }
+
+    val sessions = supabase.postgrest.from("planned_sessions")
+        .select(columns = Columns.list("id,title,work_kind,prescription")) {
+            filter { eq("block_id", block.row.id); eq("status", "planned"); gte("scheduled_date", from.toString()); eq("module_ref", "strength:${m.key}") }
+        }.decodeList<AccessorySessionRow>()
+    val byTitle = m.sessions.associateBy { "${m.title}: ${it.label}" }
+    val choice = ModuleChoice(accessories = accessories)
+    var changed = 0
+    for (s in sessions) {
+        val items = accessoryItemsFor(accessoriesFor(choice, byTitle[s.title]?.id), if (s.workKind == "deload") "deload" else "normal", eq, maxes)
+        val before = (s.prescription as? JsonArray)?.toList().orEmpty()
+        fun JsonElement.field(k: String) = ((this as? JsonObject)?.get(k) as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull
+        val kept = before.filterNot { it.field("type") == "lift" && it.field("role") == "accessory" }
+        val at = kept.indexOfLast { it.field("type") == "lift" } + 1
+        val after = JsonArray(kept.take(at) + items.map { it.liftJson() } + kept.drop(at))
+        if (after == JsonArray(before)) continue
+        supabase.postgrest.from("planned_sessions").update({ set("prescription", after); set("updated_at", java.time.Instant.now().toString()) }) { filter { eq("id", s.id) } }
+        changed++
+    }
+    return changed
+}

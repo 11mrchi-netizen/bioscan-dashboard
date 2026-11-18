@@ -2,7 +2,7 @@
    say how something is, the training accent marks strength sessions in the calendar. */
 .pb { display: grid; grid-template-columns: 220px minmax(0, 1fr) 340px; gap: var(--sp-4); padding: var(--sp-4); align-items: start; min-height: 100%; }
 .pb-title { font-size: 13px; letter-spacing: 0.1em; margin: 0 0 var(--sp-3); color: var(--color-text-primary); }
-.pb-steps { position: sticky; top: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-1); }
+.pb-steps { position: sticky; top: var(--sp-4); max-height: calc(100dvh - var(--header-h) - 2 * var(--sp-4)); overflow-y: auto; display: flex; flex-direction: column; gap: var(--sp-1); }
 .pb-step { display: grid; grid-template-columns: 22px 1fr; grid-template-rows: auto auto; text-align: left; background: none; border: 1px solid transparent; border-radius: 8px; padding: var(--sp-2) var(--sp-3); color: var(--color-text-secondary); }
 .pb-step:hover { background: var(--color-glass); }
 .pb-step.active { background: var(--color-glass-strong); border-color: var(--color-border); color: var(--color-text-primary); }
@@ -101,13 +101,22 @@
 
 @media (max-width: 1280px) {
   .pb { grid-template-columns: 180px minmax(0, 1fr); }
-  .pb-preview { grid-column: 1 / -1; position: static; }
+  /* The preview goes under the editor, in its column: spanning both, it slid under the sticky step list. */
+  .pb-preview { grid-column: 2; position: static; }
+  .pb-steps { max-height: calc(100dvh - var(--header-h) - 56px - 2 * var(--sp-4)); } /* the shell's nav is a top bar here */
   .pb-pv { max-height: none; }
 }
 @media (max-width: 900px) {
   .pb { grid-template-columns: 1fr; }
-  .pb-steps { position: static; flex-direction: row; overflow-x: auto; }
+  .pb-steps { position: static; flex-direction: row; overflow-x: auto; max-height: none; }
+  .pb-preview { grid-column: 1; }
   .pb-week { grid-template-columns: repeat(2, 1fr); }
 }
 
 .pb-table td .pb-row.tight { flex-wrap: wrap; }
+
+/* Accessory work: one compact table per session; it scrolls inside its card rather than past it. */
+.pb-acc { display: flex; flex-direction: column; gap: 6px; overflow-x: auto; }
+.pb-acc .pb-table td .pb-row.tight { flex-wrap: nowrap; }
+.pb-acc .pb-table td { padding-right: 6px; }
+.pb-detail .btn-ghost, .pb-acc .pb-chip { white-space: nowrap; }

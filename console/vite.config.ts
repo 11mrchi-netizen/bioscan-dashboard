@@ -9,7 +9,7 @@ export default defineConfig({
   // the dev server only serves files from the allowed folders.
   server: {
     fs: {
-      allow: [fileURLToPath(new URL('.', import.meta.url)), fileURLToPath(new URL('../supabase/functions/_shared', import.meta.url))],
+      allow: [fileURLToPath(new URL('.', import.meta.url)), fileURLToPath(new URL('../supabase/functions/_shared', import.meta.url)), fileURLToPath(new URL('../design/tokens', import.meta.url))],
     },
   },
   build: {
@@ -17,7 +17,8 @@ export default defineConfig({
     rolldownOptions: {
       // The source entry is app.html. console/index.html is the SERVED build output: the deploy workflow copies dist/app.html
       // over it, so building from index.html (the default) re-bundled the previous build instead of src/ from 2026-09-30 on.
-      input: fileURLToPath(new URL('./app.html', import.meta.url)),
+      // Two entry pages, one app (Nov 2026): app.html is the Console, dashboard.html the Dashboard; they share the chunks.
+      input: { app: fileURLToPath(new URL('./app.html', import.meta.url)), dashboard: fileURLToPath(new URL('./dashboard.html', import.meta.url)) },
       output: {
         codeSplitting: true,
         manualChunks(id) {

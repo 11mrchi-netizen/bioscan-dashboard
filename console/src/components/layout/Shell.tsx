@@ -8,6 +8,7 @@ import { ErrorBoundary } from '../shared/ErrorBoundary'
 import { Inspector } from '../shared/Inspector'
 import { DateRangeControl } from './DateRangeControl'
 import { SavedViews } from './SavedViews'
+import { dashboardHref } from '../../lib/surfaces'
 import './Shell.css'
 
 // docs/analysis-console/IA.md §3.1
@@ -59,6 +60,7 @@ export function Shell() {
         <button className="rail-toggle mono" onClick={() => setRailCollapsed(v => !v)} aria-label="Toggle navigation">
           {railCollapsed ? '›' : '‹'}
         </button>
+        <a className="btn-ghost mono shell-dash-link" href={dashboardHref()} title="The Dashboard: Today and Me">← DASHBOARD</a>
         <span className="shell-wordmark mono">FIELD TERMINAL · CONSOLE</span>
         <DateRangeControl />
         <div className="header-actions">

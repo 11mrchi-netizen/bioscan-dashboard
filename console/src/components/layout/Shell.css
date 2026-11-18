@@ -20,6 +20,8 @@
   flex-shrink: 0;
 }
 
+.shell-dash-link { text-decoration: none; white-space: nowrap; }
+
 .shell-wordmark {
   font-size: 11px;
   letter-spacing: 0.12em;

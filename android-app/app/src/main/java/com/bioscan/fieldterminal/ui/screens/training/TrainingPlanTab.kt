@@ -58,6 +58,7 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {})
     // Fuel planning phase 9: a planned session on an event's day is shown as such (the event is the day's real work).
     var eventDays by remember { mutableStateOf<Map<LocalDate, String>>(emptyMap()) }
     var cycles by remember { mutableStateOf<List<TrainingCycle>?>(null) }
+    var endingBlock by remember { mutableStateOf<Long?>(null) }
     var history by remember { mutableStateOf<List<TrainingBlockSummaryRow>?>(null) }
     var confirmingDelete by remember { mutableStateOf<Long?>(null) }
     var deleting by remember { mutableStateOf(false) }
@@ -126,6 +127,10 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {})
                             Text(blk.name, color = FT.TextPrimary, style = FTType.BodySmall)
                             Text("${blk.startDate} to ${blk.endDate} · ${blk.status.uppercase()}", color = FT.TextSecondary, style = FTType.MonoCaption)
                         }
+                        // A block under way can end early (its later sessions set aside, kept); DELETE removes all of it.
+                        if (confirmingDelete != blk.id && (blk.status == "scheduled" || blk.status == "active") && LocalDate.parse(blk.endDate).isAfter(LocalDate.now())) {
+                            FTButton("END EARLY") { endingBlock = blk.id }
+                        }
                         if (confirmingDelete != blk.id) {
                             FTButton("DELETE", emphasis = FTButtonEmphasis.Destructive) { confirmingDelete = blk.id; deleteError = null }
                         }
@@ -152,6 +157,10 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {})
             }
         }
         BlockHistoryCard(history, onViewAll = onOpenAllBlocks)
+    }
+
+    endingBlock?.let { id ->
+        EndBlockEarlySheet(id, onDismiss = { endingBlock = null }, onDone = { endingBlock = null; guard.retry() })
     }
 
     if (addingCycle || editingCycle != null) {

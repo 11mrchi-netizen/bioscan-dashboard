@@ -47,8 +47,8 @@ import com.bioscan.fieldterminal.ui.components.DateTimeField
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.FormSteps
 import com.bioscan.fieldterminal.ui.components.ftClickable
-import com.bioscan.fieldterminal.ui.screens.fuel.RunFuelEntry
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.util.PendingCameraCapture
 import com.bioscan.fieldterminal.util.createCameraCaptureUri
@@ -109,7 +109,7 @@ internal fun FuelForm(
                 externalActivityActive = externalActivityActive,
             )
             FuelSubType.Supplements -> SupplementsForm(saving, preselectBundle = supplementBundle, onSave = { takenAt, items, source, quantities, sites -> onSubmit { it.addSupplementsTaken(takenAt, items, source, quantities, sites) } })
-            FuelSubType.Endurance -> RunFuelEntry(onSaved = onCanonicalSaved)
+            FuelSubType.Endurance -> com.bioscan.fieldterminal.ui.screens.fuel.RunFuelFlow(onDismiss = { subType = FuelSubType.Food }, onSaved = onCanonicalSaved)
         }
     }
 }
@@ -155,21 +155,29 @@ internal fun FoodForm(
     )
     val photos = state.rememberPhotoSources(externalActivityActive)
 
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        DateTimeField("WHEN", state.dateTime, { state.dateTime = it })
-        MealSlotChips(state.dateTime, mealSlotOf(state.mealSlot), { state.mealSlot = it.name.lowercase() }, editingMealId)
-        Column { FormLabel("DESCRIPTION"); FieldTextField(state.description, { state.description = it }, "e.g. Chicken rice bowl") }
-
-        // Photo, description and barcode go through the server-side estimate and lookup functions; a candidate from any of
-        // them opens a confirm or review sheet, and nothing in this block writes to `meals` directly.
-        Column {
-            FormLabel("LOG WITH AI OR BARCODE")
-            state.PhotoEstimateSection(photos)
-            state.BarcodeSection()
-            state.RecentMealsSection(onCanonicalSaved)
+    // WHEN AND WHAT (time, meal, description), then HOW: photos, the description estimate, a barcode or a recent meal,
+    // each of which opens its own confirm flow; or BY HAND, the numbers typed, and SAVE.
+    FormSteps(
+        listOf("WHEN AND WHAT", "PHOTO · BARCODE · RECENT", "BY HAND"),
+        canSave = state.description.isNotBlank(), saving = saving, onSave = { state.saveManual(onSave) },
+    ) { step ->
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            when (step) {
+                0 -> {
+                    DateTimeField("WHEN", state.dateTime, { state.dateTime = it })
+                    MealSlotChips(state.dateTime, mealSlotOf(state.mealSlot), { state.mealSlot = it.name.lowercase() }, editingMealId)
+                    Column { FormLabel("DESCRIPTION"); FieldTextField(state.description, { state.description = it }, "e.g. Chicken rice bowl") }
+                }
+                // Photo, description and barcode go through the server-side estimate and lookup functions; a candidate from
+                // any of them opens a confirm or review flow, and nothing on this step writes to `meals` directly.
+                1 -> Column {
+                    state.PhotoEstimateSection(photos)
+                    state.BarcodeSection()
+                    state.RecentMealsSection(onCanonicalSaved)
+                }
+                else -> state.ManualFields()
+            }
         }
-
-        state.ManualFields(saving, onSave)
     }
 
     state.Sheets(photos, onCanonicalSaved)
@@ -363,7 +371,7 @@ private fun FoodLogState.RecentMealsSection(onCanonicalSaved: () -> Unit) {
             Text("No recent meals yet.", style = FTType.BodySmall, color = FT.TextSecondary, modifier = Modifier.padding(top = 8.dp))
         } else {
             Column(modifier = Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                meals.forEach { meal ->
+                meals.take(5).forEach { meal ->
                     Text(
                         meal.description ?: "Meal",
                         style = FTType.BodySmall,
@@ -394,10 +402,7 @@ private fun FoodLogState.RecentMealsSection(onCanonicalSaved: () -> Unit) {
 
 // The fields typed by hand, and SAVE for a meal logged from them alone.
 @Composable
-private fun FoodLogState.ManualFields(
-    saving: Boolean,
-    onSave: (String, String, Double?, Double?, Double?, Double?, Double?, Double?, Double?, String?) -> Unit,
-) {
+private fun FoodLogState.ManualFields() {
     Column { FormLabel("CALORIES (OPTIONAL)"); FieldTextField(calories, { calories = it }, "e.g. 650", keyboardType = KeyboardType.Number) }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Column(Modifier.weight(1f)) { FormLabel("PROTEIN G"); FieldTextField(protein, { protein = it }, "0", keyboardType = KeyboardType.Number) }
@@ -412,20 +417,22 @@ private fun FoodLogState.ManualFields(
         Column(Modifier.weight(1f)) { FormLabel("SUGAR G"); FieldTextField(sugar, { sugar = it }, "0", keyboardType = KeyboardType.Number) }
         Column(Modifier.weight(1f)) { FormLabel("SODIUM MG"); FieldTextField(sodium, { sodium = it }, "0", keyboardType = KeyboardType.Number) }
     }
-    SaveButton(saving, description.isNotBlank()) {
-        onSave(
-            dateTime.toAppIso(),
-            description.trim(),
-            calories.toDoubleOrNull(),
-            protein.toDoubleOrNull(),
-            carbs.toDoubleOrNull(),
-            fat.toDoubleOrNull(),
-            fiber.toDoubleOrNull(),
-            sugar.toDoubleOrNull(),
-            sodium.toDoubleOrNull(),
-            mealSlot,
-        )
-    }
+}
+
+/** SAVE for a meal logged from the typed fields alone. */
+private fun FoodLogState.saveManual(onSave: (String, String, Double?, Double?, Double?, Double?, Double?, Double?, Double?, String?) -> Unit) {
+    onSave(
+        dateTime.toAppIso(),
+        description.trim(),
+        calories.toDoubleOrNull(),
+        protein.toDoubleOrNull(),
+        carbs.toDoubleOrNull(),
+        fat.toDoubleOrNull(),
+        fiber.toDoubleOrNull(),
+        sugar.toDoubleOrNull(),
+        sodium.toDoubleOrNull(),
+        mealSlot,
+    )
 }
 
 // The sheets the form opens: the review of candidates, the label scan of an unknown barcode, and the estimate to confirm.

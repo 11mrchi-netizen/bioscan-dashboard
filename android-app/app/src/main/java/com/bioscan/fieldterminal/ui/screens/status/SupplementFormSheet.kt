@@ -51,6 +51,10 @@ import com.bioscan.fieldterminal.domain.formRule
 import com.bioscan.fieldterminal.domain.formatAmount
 import com.bioscan.fieldterminal.domain.spec
 import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTFlow
+import com.bioscan.fieldterminal.ui.components.FlowPage
+import com.bioscan.fieldterminal.ui.components.FlowPager
+import com.bioscan.fieldterminal.ui.components.rememberFlowState
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
@@ -79,7 +83,6 @@ fun SupplementFormSheet(
     roster: List<RosterItem> = emptyList(),
     interactions: List<InteractionRecord> = emptyList(),
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val repo = remember { SupplementsRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -120,47 +123,100 @@ fun SupplementFormSheet(
         } catch (_: Exception) {}
     }
 
-    ModalBottomSheet(
-        onDismissRequest = { if (!ExternalActivityGuard.active) onDismiss() },
-        sheetState = sheetState,
-        shape = FT.SheetShape,
-        containerColor = FT.Surface,
-        contentColor = FT.TextPrimary,
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Text(
-                if (existing == null) "ADD TO YOUR REGIMEN" else "EDIT ${regimen.kind.label.uppercase()}",
-                style = sheetHeaderTitleStyle,
-                color = FT.Ok,
-            )
+    val (draft, missing) = regimen.draft(name)
+    fun save() {
+        if (draft != null && !saving) {
+            saving = true
+            error = null
+            scope.launch {
+                try {
+                    // Supplement Intelligence Phase 1: only ingredient
+                    // rows with a real name count -- a blank row left
+                    // over from "+ ADD INGREDIENT" is silently dropped
+                    // rather than saved as an empty ingredient.
+                    val perDose = ingredients.mapNotNull { it.toInputOrNull() }
+                    // The ingredients are entered per dose; the product keeps them per label serving, so the
+                    // pantry (which counts servings) and the nutrient totals stay right. A label serving that can
+                    // be compared with the dose sets servings per dose; otherwise the serving becomes one unit
+                    // (capsules, tablets...) or the dose itself (measured forms).
+                    val wholeUnits = formRule(draft.form)?.splitting != Splitting.MEASURED
+                    val pid = existing?.productId
+                    val (labelSize, labelUnit) = pid?.let { catching { repo.loadProductServing(it) }.getOrDefault(null to null) } ?: (null to null)
+                    val known = com.bioscan.fieldterminal.domain.servingsPerDose(draft.amount, draft.unit, labelSize, labelUnit)
+                    val spd = known ?: if (wholeUnits) draft.amount else 1.0
+                    val servingSize = if (known != null) labelSize!! else if (wholeUnits) 1.0 else draft.amount
+                    fun perServing(list: List<IngredientInput>) = list.map { i ->
+                        i.copy(compoundAmount = i.compoundAmount / spd, elementalAmount = i.elementalAmount?.let { it / spd })
+                    }
+                    val productId = when {
+                        perDose.isNotEmpty() && pid != null -> {
+                            repo.replaceProductIngredients(pid, perServing(perDose))
+                            if (known == null) repo.setProductServing(pid, servingSize, draft.unit)
+                            pid
+                        }
+                        perDose.isNotEmpty() -> repo.createProductWithIngredients(name.trim(), servingSize, draft.unit, perServing(perDose))
+                        pid != null && known == null && labelSize == null -> { repo.setProductServing(pid, servingSize, draft.unit); pid }
+                        else -> null
+                    }
+                    // Servings per dose change only with a label they were worked out from (compared, or just set).
+                    val draft = draft.copy(servingsPerDose = if (known != null || productId != null) spd else null)
 
-            Column { FormFieldLabel("NAME"); FieldTextField(name, { name = it }, "e.g. Vitamin D3 (NOW Foods)") }
-            RegimenFields(regimen)
+                    if (existing == null) {
+                        // DAV-83: best-effort only -- a failed or
+                        // missing-key blurb attempt never blocks
+                        // adding the supplement itself, same as
+                        // NutritionEstimationRepository's own
+                        // review-before-save stance on estimation
+                        // failures elsewhere in this app.
+                        val aiNote = GeminiApiKeyStore.get(context)?.let { key ->
+                            try {
+                                SupplementImpactRepository(key).describeImpact(name.trim(), "${formatAmount(draft.amount)} ${draft.unit}")
+                            } catch (e: Exception) {
+                                null
+                            }
+                        }
+                        repo.saveRegimen(null, draft, productId, aiNote)
+                    } else {
+                        repo.saveRegimen(existing.id, draft, productId)
+                    }
+                    onSaved()
+                } catch (e: Exception) {
+                    error = e.message ?: "Unknown error"
+                } finally {
+                    saving = false
+                }
+            }
+        }
+    }
 
-            // One dose: how much of the form, then what that dose contains.
-            DoseCountField(regimen)
-
-            IngredientsSection(ingredients)
-
-            // The edited item against everyone else; only pairs that involve it. A new item has no id yet.
-            val draftId = existing?.id ?: -1L
-            val mine = detectInteractions(
-                roster.filter { it.id != draftId } + RosterItem(
-                    id = draftId,
-                    name = name,
-                    timeOfDay = regimen.firstSlot,
-                    everyNDays = regimen.everyNDaysOrNull,
-                    slots = if (regimen.asNeeded) emptyList() else REGIMEN_SLOTS.filter { it in regimen.slots },
-                    ingredientKeys = roster.firstOrNull { it.id == draftId }?.ingredientKeys.orEmpty(),
-                    ingredientNames = ingredients.map { it.name },
-                ),
-                interactions,
-            ).filter { it.a.id == draftId || it.b?.id == draftId }
-            if (name.isNotBlank()) InteractionNotice(mine)
-
+    var ingredientIndex by remember { mutableStateOf(0) }
+    // Asked, a page each: WHAT (name, kind, the barcode), FORM, WHEN, ONE DOSE. The rest is optional: the ingredients one
+    // to a page, a cycle and dose changes, and for a medication, hormone or peptide its reference card. An item already
+    // taken adds what is read rather than typed: labs to watch, what changed since, the vial, the history, STOP / RESTART.
+    val pages = buildList {
+        add(FlowPage("WHAT", ready = name.isNotBlank()))
+        add(FlowPage("FORM"))
+        add(FlowPage("WHEN"))
+        add(FlowPage("ONE DOSE"))
+        add(FlowPage("INGREDIENTS", optional = true))
+        add(FlowPage("CYCLE · DOSE CHANGES", optional = true))
+        if (regimen.kind != RegimenKind.SUPPLEMENT || existing?.productId != null) add(FlowPage("REFERENCE", optional = true))
+        if (existing != null) add(FlowPage("LABS · EFFECTS", optional = true))
+        if (existing != null && regimen.injectable) add(FlowPage("VIAL · SITES", optional = true))
+        if (existing != null) add(FlowPage("HISTORY", optional = true))
+    }
+    val flow = rememberFlowState()
+    FTFlow(
+        title = if (existing == null) "ADD TO YOUR REGIMEN" else "EDIT ${regimen.kind.label.uppercase()}",
+        pages = pages, state = flow, onClose = onDismiss,
+        canSave = draft != null, saving = saving, onSave = { if (draft != null && !saving) save() },
+        wash = FT.Domain.Fuel,
+        error = error?.let { "Couldn't save ($it)." } ?: missing?.takeIf { name.isNotBlank() && flow.page >= 3 },
+    ) { page ->
+        when (pages.getOrNull(page)?.label) {
+            "WHAT" -> {
+                Column { FormFieldLabel("NAME"); FieldTextField(name, { name = it }, "e.g. Vitamin D3 (NOW Foods)") }
+                RegimenKindField(regimen)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     if (scanningBarcode) "SCANNING..." else "SCAN BARCODE TO IMPORT INGREDIENTS",
@@ -222,7 +278,124 @@ fun SupplementFormSheet(
                 }
             }
 
-            if (showEnrichConfirm) {
+                if (existing != null) {
+                if (existing != null && existing.status == "active") {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        if (ending) "ENDING..." else "STOP TAKING IT",
+                        style = FTType.BodySmall,
+                        color = FT.Bad,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .ftClickable {
+                                if (!ending) {
+                                    ending = true
+                                    scope.launch {
+                                        try {
+                                            repo.endSupplement(existing.id)
+                                            onSaved()
+                                        } catch (e: Exception) {
+                                            error = e.message ?: "Unknown error"
+                                            ending = false
+                                        }
+                                    }
+                                }
+                            },
+                    )
+                }
+                if (existing != null && existing.status == "ended") {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        if (ending) "RESTARTING..." else "START TAKING IT AGAIN",
+                        style = FTType.LabelCaps,
+                        color = FT.Ok,
+                        modifier = Modifier.fillMaxWidth().ftClickable {
+                            if (!ending) {
+                                ending = true
+                                scope.launch {
+                                    try {
+                                        // Saves any edits first, so a restart can come back at a new dose or schedule.
+                                        draft?.let { repo.saveRegimen(existing.id, it, existing.productId) }
+                                        repo.restartSupplement(existing.id)
+                                        onSaved()
+                                    } catch (e: Exception) {
+                                        error = e.message ?: "Unknown error"
+                                        ending = false
+                                    }
+                                }
+                            }
+                        },
+                    )
+                }
+                }
+            }
+            "FORM" -> RegimenFormField(regimen)
+            "WHEN" -> RegimenWhenField(regimen)
+            "ONE DOSE" -> {
+                // One dose: how much of the form, then what that dose contains.
+                DoseCountField(regimen)
+                val named = ingredients.count { it.name.isNotBlank() }
+                Text(
+                    if (named == 0) "No ingredients yet: add them on the next page, or scan the barcode on the first."
+                    else "$named ingredient${if (named == 1) "" else "s"} in one dose: ${ingredients.filter { it.name.isNotBlank() }.take(3).joinToString { it.name }}${if (named > 3) "…" else ""}",
+                    style = FTType.Caption, color = FT.TextSecondary,
+                )
+            // The edited item against everyone else; only pairs that involve it. A new item has no id yet.
+            val draftId = existing?.id ?: -1L
+            val mine = detectInteractions(
+                roster.filter { it.id != draftId } + RosterItem(
+                    id = draftId,
+                    name = name,
+                    timeOfDay = regimen.firstSlot,
+                    everyNDays = regimen.everyNDaysOrNull,
+                    slots = if (regimen.asNeeded) emptyList() else REGIMEN_SLOTS.filter { it in regimen.slots },
+                    ingredientKeys = roster.firstOrNull { it.id == draftId }?.ingredientKeys.orEmpty(),
+                    ingredientNames = ingredients.map { it.name },
+                ),
+                interactions,
+            ).filter { it.a.id == draftId || it.b?.id == draftId }
+            if (name.isNotBlank()) InteractionNotice(mine)
+
+            }
+            "INGREDIENTS" -> {
+                Text("Amounts for one dose. Scanned labels list one serving: check they match your dose.", style = FTType.Caption, color = FT.TextMuted)
+                val i = ingredientIndex.coerceIn(0, (ingredients.size - 1).coerceAtLeast(0))
+                if (ingredients.isNotEmpty()) {
+                    FlowPager(i, ingredients.size, { ingredientIndex = it }, what = "ingredients")
+                    IngredientEditor(ingredients[i]) { ingredients.removeAt(i); ingredientIndex = (i - 1).coerceAtLeast(0) }
+                }
+                FTButton("+ ADD INGREDIENT", modifier = Modifier.fillMaxWidth()) { ingredients.add(EditableIngredient()); ingredientIndex = ingredients.size - 1 }
+            }
+            "CYCLE · DOSE CHANGES" -> {
+                RegimenCycleField(regimen)
+                RegimenStepsField(regimen)
+            }
+            "REFERENCE" -> {
+            // Medications, hormones, peptides: a reference card from RxNorm and the FDA label (or PubMed); supplements keep
+            // their label-database check below.
+            if (regimen.kind != RegimenKind.SUPPLEMENT) {
+                RegimenReferenceSection(existing?.id, name.trim(), roster.filter { it.id != existing?.id }.map { it.id to it.name },
+                    unit = regimen.unit, dose = regimen.amount.replace(',', '.').toDoubleOrNull())
+            }
+
+            existing?.productId?.let { ProductVerifySection(it) }
+
+            }
+            "LABS · EFFECTS" -> if (existing != null) {
+                var itemWatches by remember(existing.id) { mutableStateOf<List<LabWatch>>(emptyList()) }
+                LaunchedEffect(existing.id) {
+                    itemWatches = catching { LabWatchRepository(SupabaseClientProvider.client).watches() }
+                        .getOrDefault(emptyList()).filter { it.itemId == existing.id }
+                }
+                LabWatchSection(itemWatches, title = "LABS TO WATCH", showItem = false)
+                RegimenEffectsSection(existing.id)
+            }
+            "VIAL · SITES" -> if (existing != null) {
+                InjectableSection(existing.id, existing.spec(), regimen.syringeUnits.replace(',', '.').toDoubleOrNull() ?: existing.syringeUnits)
+            }
+            "HISTORY" -> if (existing != null) RegimenHistory(existing.id)
+        }
+        if (showEnrichConfirm) {
                 AlertDialog(
                     onDismissRequest = { showEnrichConfirm = false; enrichPending = null },
                     title = { Text("REPLACE INGREDIENTS?", style = FTType.Telemetry) },
@@ -248,149 +421,6 @@ fun SupplementFormSheet(
                 )
             }
 
-            // Medications, hormones, peptides: a reference card from RxNorm and the FDA label (or PubMed); supplements keep
-            // their label-database check below.
-            if (regimen.kind != RegimenKind.SUPPLEMENT) {
-                RegimenReferenceSection(existing?.id, name.trim(), roster.filter { it.id != existing?.id }.map { it.id to it.name },
-                    unit = regimen.unit, dose = regimen.amount.replace(',', '.').toDoubleOrNull())
-            }
-
-            existing?.productId?.let { ProductVerifySection(it) }
-
-            error?.let {
-                Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Bad)
-            }
-
-            val (draft, missing) = regimen.draft(name)
-            if (missing != null && name.isNotBlank()) Text(missing, style = FTType.Caption, color = FT.TextMuted)
-            FTButton(label = if (saving) "SAVING..." else "SAVE", emphasis = FTButtonEmphasis.Primary) {
-                if (draft != null && !saving) {
-                    saving = true
-                    error = null
-                    scope.launch {
-                        try {
-                            // Supplement Intelligence Phase 1: only ingredient
-                            // rows with a real name count -- a blank row left
-                            // over from "+ ADD INGREDIENT" is silently dropped
-                            // rather than saved as an empty ingredient.
-                            val perDose = ingredients.mapNotNull { it.toInputOrNull() }
-                            // The ingredients are entered per dose; the product keeps them per label serving, so the
-                            // pantry (which counts servings) and the nutrient totals stay right. A label serving that can
-                            // be compared with the dose sets servings per dose; otherwise the serving becomes one unit
-                            // (capsules, tablets...) or the dose itself (measured forms).
-                            val wholeUnits = formRule(draft.form)?.splitting != Splitting.MEASURED
-                            val pid = existing?.productId
-                            val (labelSize, labelUnit) = pid?.let { catching { repo.loadProductServing(it) }.getOrDefault(null to null) } ?: (null to null)
-                            val known = com.bioscan.fieldterminal.domain.servingsPerDose(draft.amount, draft.unit, labelSize, labelUnit)
-                            val spd = known ?: if (wholeUnits) draft.amount else 1.0
-                            val servingSize = if (known != null) labelSize!! else if (wholeUnits) 1.0 else draft.amount
-                            fun perServing(list: List<IngredientInput>) = list.map { i ->
-                                i.copy(compoundAmount = i.compoundAmount / spd, elementalAmount = i.elementalAmount?.let { it / spd })
-                            }
-                            val productId = when {
-                                perDose.isNotEmpty() && pid != null -> {
-                                    repo.replaceProductIngredients(pid, perServing(perDose))
-                                    if (known == null) repo.setProductServing(pid, servingSize, draft.unit)
-                                    pid
-                                }
-                                perDose.isNotEmpty() -> repo.createProductWithIngredients(name.trim(), servingSize, draft.unit, perServing(perDose))
-                                pid != null && known == null && labelSize == null -> { repo.setProductServing(pid, servingSize, draft.unit); pid }
-                                else -> null
-                            }
-                            // Servings per dose change only with a label they were worked out from (compared, or just set).
-                            val draft = draft.copy(servingsPerDose = if (known != null || productId != null) spd else null)
-
-                            if (existing == null) {
-                                // DAV-83: best-effort only -- a failed or
-                                // missing-key blurb attempt never blocks
-                                // adding the supplement itself, same as
-                                // NutritionEstimationRepository's own
-                                // review-before-save stance on estimation
-                                // failures elsewhere in this app.
-                                val aiNote = GeminiApiKeyStore.get(context)?.let { key ->
-                                    try {
-                                        SupplementImpactRepository(key).describeImpact(name.trim(), "${formatAmount(draft.amount)} ${draft.unit}")
-                                    } catch (e: Exception) {
-                                        null
-                                    }
-                                }
-                                repo.saveRegimen(null, draft, productId, aiNote)
-                            } else {
-                                repo.saveRegimen(existing.id, draft, productId)
-                            }
-                            onSaved()
-                        } catch (e: Exception) {
-                            error = e.message ?: "Unknown error"
-                        } finally {
-                            saving = false
-                        }
-                    }
-                }
-            }
-
-            if (existing != null && existing.status == "active") {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    if (ending) "ENDING..." else "STOP TAKING IT",
-                    style = FTType.BodySmall,
-                    color = FT.Bad,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .ftClickable {
-                            if (!ending) {
-                                ending = true
-                                scope.launch {
-                                    try {
-                                        repo.endSupplement(existing.id)
-                                        onSaved()
-                                    } catch (e: Exception) {
-                                        error = e.message ?: "Unknown error"
-                                        ending = false
-                                    }
-                                }
-                            }
-                        },
-                )
-            }
-            if (existing != null && existing.status == "ended") {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    if (ending) "RESTARTING..." else "START TAKING IT AGAIN",
-                    style = FTType.LabelCaps,
-                    color = FT.Ok,
-                    modifier = Modifier.fillMaxWidth().ftClickable {
-                        if (!ending) {
-                            ending = true
-                            scope.launch {
-                                try {
-                                    // Saves any edits first, so a restart can come back at a new dose or schedule.
-                                    draft?.let { repo.saveRegimen(existing.id, it, existing.productId) }
-                                    repo.restartSupplement(existing.id)
-                                    onSaved()
-                                } catch (e: Exception) {
-                                    error = e.message ?: "Unknown error"
-                                    ending = false
-                                }
-                            }
-                        }
-                    },
-                )
-            }
-            if (existing != null) {
-                var itemWatches by remember(existing.id) { mutableStateOf<List<LabWatch>>(emptyList()) }
-                LaunchedEffect(existing.id) {
-                    itemWatches = catching { LabWatchRepository(SupabaseClientProvider.client).watches() }
-                        .getOrDefault(emptyList()).filter { it.itemId == existing.id }
-                }
-                LabWatchSection(itemWatches, title = "LABS TO WATCH", showItem = false)
-                RegimenEffectsSection(existing.id)
-                if (regimen.injectable) {
-                    InjectableSection(existing.id, existing.spec(), regimen.syringeUnits.replace(',', '.').toDoubleOrNull() ?: existing.syringeUnits)
-                }
-                RegimenHistory(existing.id)
-            }
-            Spacer(Modifier.height(8.dp))
-        }
     }
 }
 

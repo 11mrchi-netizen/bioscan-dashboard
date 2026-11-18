@@ -50,6 +50,13 @@ import com.bioscan.fieldterminal.domain.health.buildSymptomCheck
 import com.bioscan.fieldterminal.domain.health.questionsFor
 import com.bioscan.fieldterminal.ui.components.BodyMap
 import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTFlow
+import com.bioscan.fieldterminal.ui.components.FlowField
+import com.bioscan.fieldterminal.ui.components.FlowPage
+import com.bioscan.fieldterminal.ui.components.FlowPickGrid
+import com.bioscan.fieldterminal.ui.components.FlowQuestion
+import com.bioscan.fieldterminal.ui.components.rememberFlowState
+import androidx.compose.foundation.background
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
@@ -69,7 +76,6 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SymptomCheckSheet(onDismiss: () -> Unit, onSaved: () -> Unit, onTrackIllness: (Set<String>, List<Long>) -> Unit, onTrackInjury: () -> Unit) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
     val vocab = remember { HealthConcernsRepository.vocab(context) }
     val repo = remember { HealthConcernsRepository(SupabaseClientProvider.client) }
@@ -98,72 +104,90 @@ fun SymptomCheckSheet(onDismiss: () -> Unit, onSaved: () -> Unit, onTrackIllness
         hints = p.mapValues { it.value.second }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, shape = FT.SheetShape, containerColor = FT.Surface, contentColor = FT.TextPrimary) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("SYMPTOM CHECK", style = FTType.SectionTitle, color = FT.DomainHeart)
-            val o = outcome
-            if (o != null && a != null) {
-                Outcome(o, a, symptoms, vocab::symptomLabel)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    when (o.track) {
-                        TrackAs.ILLNESS -> FTButton("TRACK AS ILLNESS", modifier = Modifier.weight(1f)) { onTrackIllness(symptoms, signalIds) }
-                        TrackAs.INJURY -> FTButton("TRACK AS INJURY", modifier = Modifier.weight(1f), onClick = onTrackInjury)
-                        null -> Unit
-                    }
-                    FTButton("DONE", emphasis = FTButtonEmphasis.Primary, modifier = Modifier.weight(1f), onClick = onSaved)
+    val o = outcome
+    val muscles = a == CheckArea.MUSCLES
+    val questionPages = questions.chunked(3)
+    val ready = a != null && symptoms.isNotEmpty() && intensity != null && since != null
+    // WHERE, WHAT, (the body map for muscles and joints), HOW, then the questions three to a page, red flags first;
+    // SEE WHAT FITS saves and turns the flow into its result.
+    val pages = if (o != null) listOf(FlowPage("WHAT FITS")) else buildList {
+        add(FlowPage("WHERE", ready = a != null))
+        add(FlowPage("WHAT", ready = symptoms.isNotEmpty()))
+        if (muscles) add(FlowPage("ON THE BODY"))
+        add(FlowPage("HOW", ready = intensity != null && since != null))
+        questionPages.indices.forEach { add(FlowPage(if (questionPages.size > 1) "QUESTIONS ${it + 1}" else "QUESTIONS")) }
+    }
+    val flow = rememberFlowState()
+    FTFlow(
+        title = "SYMPTOM CHECK", pages = pages, state = flow, onClose = onDismiss,
+        canSave = ready, saving = saving, saveLabel = "SEE WHAT FITS", wash = FT.Domain.Cardio,
+        error = error?.let { "Couldn't save: $it" },
+        onSave = save@{
+            val area0 = a ?: return@save
+            val answered = CheckAnswers(area0, symptoms, intensity ?: return@save, since ?: return@save, course, answers.toMap(), region?.code, region?.side)
+            val result = assess(answered)
+            saving = true
+            scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { saving = false }) {
+                signalIds = repo.saveCheck(buildSymptomCheck(answered, result, ZonedDateTime.now()))
+                outcome = result
+            }
+        },
+        bottomBar = if (o == null) null else { _ ->
+            Row(Modifier.fillMaxWidth().background(FT.Surface).padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                when (o.track) {
+                    TrackAs.ILLNESS -> FTButton("TRACK AS ILLNESS", modifier = Modifier.weight(1f)) { onTrackIllness(symptoms, signalIds) }
+                    TrackAs.INJURY -> FTButton("TRACK AS INJURY", modifier = Modifier.weight(1f), onClick = onTrackInjury)
+                    null -> Unit
                 }
-                return@Column
+                FTButton("DONE", emphasis = FTButtonEmphasis.Primary, modifier = Modifier.weight(1f), onClick = onSaved)
             }
-
-            Text("For the small things: an ache, a headache, a stuffed nose. A fixed set of questions, red flags first. Not a diagnosis.", style = FTType.BodySmall, color = FT.TextSecondary)
-            Label("WHERE")
-            TextChipRow(CheckArea.entries.map { it.label.uppercase() }, a?.label?.uppercase(), perRow = 3) { picked ->
-                area = CheckArea.entries.firstOrNull { it.label.uppercase() == picked }
-                symptoms = emptySet(); answers.clear(); region = null
+        },
+    ) { page ->
+        if (o != null && a != null) {
+            Outcome(o, a, symptoms, vocab::symptomLabel)
+            return@FTFlow
+        }
+        val label = pages.getOrNull(page)?.label.orEmpty()
+        when {
+            label == "WHERE" -> {
+                FlowQuestion("Where is it?", "For the small things: an ache, a headache, a stuffed nose. A fixed set of questions, red flags first. Not a diagnosis.")
+                TextChipRow(CheckArea.entries.map { it.label.uppercase() }, a?.label?.uppercase(), perRow = 3) { picked ->
+                    area = CheckArea.entries.firstOrNull { it.label.uppercase() == picked }
+                    symptoms = emptySet(); answers.clear(); region = null
+                }
             }
-            if (a == null) return@Column
-
-            Label("WHAT")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                a.symptoms.forEach { code -> Chip(vocab.symptomLabel(code).uppercase(), code in symptoms) { symptoms = if (code in symptoms) symptoms - code else symptoms + code } }
+            label == "WHAT" && a != null -> {
+                FlowQuestion("What is it?")
+                FlowPickGrid(a.symptoms.map { it to vocab.symptomLabel(it) }, symptoms, { code -> symptoms = if (code in symptoms) symptoms - code else symptoms + code })
             }
-            if (a == CheckArea.MUSCLES) {
-                Label("WHERE ON THE BODY (OPTIONAL)")
-                BodyMap(selected = region, onTap = { region = it }, height = 240.dp)
+            label == "ON THE BODY" -> {
+                FlowQuestion("Where on the body?", "Optional: tap the spot.")
+                BodyMap(selected = region, onTap = { region = it }, height = 300.dp)
                 region?.let { Text(vocab.regionLabel(it.code, it.side), style = FTType.RowTitle, color = FT.TextPrimary) }
             }
-            if (symptoms.isEmpty()) return@Column
-
-            Label("HOW STRONG")
-            TextChipRow(CheckIntensity.entries.map { it.label }, intensity?.label, perRow = 3) { picked -> intensity = CheckIntensity.entries.firstOrNull { it.label == picked } }
-            Label("SINCE")
-            TextChipRow(CheckSince.entries.map { it.label }, since?.label, perRow = 2) { picked -> since = CheckSince.entries.firstOrNull { it.label == picked } }
-            Label("SINCE IT STARTED, IT IS")
-            TextChipRow(CheckCourse.entries.map { it.label }, course.label, perRow = 3) { picked -> course = CheckCourse.entries.firstOrNull { it.label == picked } ?: course }
-
-            Label("A FEW QUESTIONS")
-            questions.forEach { q ->
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(q.text, style = FTType.BodySmall, color = if (q.flag?.level == FlagLevel.URGENT) FT.TextPrimary else FT.TextSecondary)
-                    hints[q.id]?.let { Text("From your data: $it", style = FTType.Caption, color = FT.TextMuted) }
-                    TextChipRow(listOf("NO", "YES"), answers[q.id]?.let { if (it) "YES" else "NO" }, perRow = 2) { picked ->
-                        if (picked == null) answers.remove(q.id) else answers[q.id] = picked == "YES"
+            label == "HOW" -> {
+                FlowField("HOW STRONG") {
+                    TextChipRow(CheckIntensity.entries.map { it.label }, intensity?.label, perRow = 3) { picked -> intensity = CheckIntensity.entries.firstOrNull { it.label == picked } }
+                }
+                FlowField("SINCE") {
+                    TextChipRow(CheckSince.entries.map { it.label }, since?.label, perRow = 2) { picked -> since = CheckSince.entries.firstOrNull { it.label == picked } }
+                }
+                FlowField("SINCE IT STARTED, IT IS") {
+                    TextChipRow(CheckCourse.entries.map { it.label }, course.label, perRow = 3) { picked -> course = CheckCourse.entries.firstOrNull { it.label == picked } ?: course }
+                }
+            }
+            label.startsWith("QUESTIONS") -> {
+                val first = pages.indexOfFirst { it.label.startsWith("QUESTIONS") }
+                questionPages.getOrNull(page - first).orEmpty().forEach { q ->
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(q.text, style = FTType.BodySmall, color = if (q.flag?.level == FlagLevel.URGENT) FT.TextPrimary else FT.TextSecondary)
+                        hints[q.id]?.let { Text("From your data: $it", style = FTType.Caption, color = FT.TextMuted) }
+                        TextChipRow(listOf("NO", "YES"), answers[q.id]?.let { if (it) "YES" else "NO" }, perRow = 2) { picked ->
+                            if (picked == null) answers.remove(q.id) else answers[q.id] = picked == "YES"
+                        }
                     }
                 }
             }
-
-            error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Bad) }
-            val ready = intensity != null && since != null
-            FTButton(if (saving) "SAVING…" else "SEE WHAT FITS", enabled = ready && !saving, emphasis = FTButtonEmphasis.Primary, modifier = Modifier.fillMaxWidth()) {
-                val answered = CheckAnswers(a, symptoms, intensity!!, since!!, course, answers.toMap(), region?.code, region?.side)
-                val result = assess(answered)
-                saving = true
-                scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { saving = false }) {
-                    signalIds = repo.saveCheck(buildSymptomCheck(answered, result, ZonedDateTime.now()))
-                    outcome = result
-                }
-            }
-            Spacer(Modifier.height(8.dp))
         }
     }
 }

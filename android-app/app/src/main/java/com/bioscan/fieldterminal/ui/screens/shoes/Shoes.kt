@@ -73,6 +73,9 @@ import com.bioscan.fieldterminal.domain.shoe
 import com.bioscan.fieldterminal.domain.shoeStats
 import com.bioscan.fieldterminal.domain.unknownGear
 import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTFlow
+import com.bioscan.fieldterminal.ui.components.FlowPage
+import com.bioscan.fieldterminal.ui.components.rememberFlowState
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTChevron
@@ -306,7 +309,6 @@ fun ShoeFormSheet(req: ShoeFormRequest, onDismiss: () -> Unit, onSaved: () -> Un
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val repo = remember { ShoesRepository(SupabaseClientProvider.client) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val s = req.shoe
     var name by remember { mutableStateOf(s?.name.orEmpty()) }
     var use by remember { mutableStateOf(s?.use?.let { ShoeUse.of(it) } ?: req.use ?: ShoeUse.ROAD) }
@@ -339,9 +341,25 @@ fun ShoeFormSheet(req: ShoeFormRequest, onDismiss: () -> Unit, onSaved: () -> Un
     val retire = retireKm.trim().toDoubleOrNull()
     val ready = name.isNotBlank() && start != null && start in 0.0..10000.0 && retire != null && retire in 100.0..5000.0
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, shape = FT.SheetShape, containerColor = FT.Surface, contentColor = FT.TextPrimary) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(if (s == null) "ADD SHOES" else "EDIT SHOES", style = FTType.SectionTitle, color = FT.TextPrimary)
+    // THE SHOES (photo, name, what for), then KM AND STATUS (the Zepp code, km so far, retire at, in use or retired, note,
+    // and DELETE for shoes already saved).
+    FTFlow(
+        title = if (s == null) "ADD SHOES" else "EDIT SHOES",
+        pages = listOf(FlowPage("THE SHOES", ready = name.isNotBlank()), FlowPage("KM AND STATUS")),
+        state = rememberFlowState(), onClose = onDismiss, canSave = ready, saving = saving,
+        error = error?.let { "Couldn't save: $it" },
+        onSave = {
+            saving = true
+            val draft = ShoeDraft(
+                name = name, use = use.code, zeppGearId = code, startKm = start ?: 0.0, retireKm = retire ?: 700.0,
+                startedOn = s?.startedOn ?: LocalDate.now(),
+                retiredOn = if (retired) (s?.retiredOn ?: LocalDate.now()) else null,
+                notes = notes, photoJpeg = photo,
+            )
+            scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { saving = false }) { repo.save(s?.id, draft); onSaved() }
+        },
+    ) { page ->
+        if (page == 0) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 ShoeIcon(Shoe(0, name.ifBlank { "?" }, photoJpeg = photo), 72.dp)
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -362,6 +380,7 @@ fun ShoeFormSheet(req: ShoeFormRequest, onDismiss: () -> Unit, onSaved: () -> Un
             TextChipRow(ShoeUse.entries.map { it.label.uppercase() }, use.label.uppercase(), perRow = 4) { picked ->
                 use = ShoeUse.entries.firstOrNull { it.label.uppercase() == picked } ?: use
             }
+        } else {
             Label("ZEPP CODE")
             if (code != null) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -371,29 +390,14 @@ fun ShoeFormSheet(req: ShoeFormRequest, onDismiss: () -> Unit, onSaved: () -> Un
             } else {
                 Text("None yet: match one from Setup › SHOES or from a run in these shoes.", style = FTType.Caption, color = FT.TextMuted)
             }
-            Label("KM ALREADY ON THEM WHEN ADDED")
-            FieldTextField(startKm, { startKm = it }, "0", keyboardType = KeyboardType.Decimal)
-            Label("RETIRE AT KM")
-            FieldTextField(retireKm, { retireKm = it }, "700", keyboardType = KeyboardType.Number)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) { Label("KM ON THEM WHEN ADDED"); FieldTextField(startKm, { startKm = it }, "0", keyboardType = KeyboardType.Decimal) }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) { Label("RETIRE AT KM"); FieldTextField(retireKm, { retireKm = it }, "700", keyboardType = KeyboardType.Number) }
+            }
             Label("STATUS")
             TextChipRow(listOf("IN USE", "RETIRED"), if (retired) "RETIRED" else "IN USE", perRow = 2) { retired = it == "RETIRED" }
             Label("NOTE (OPTIONAL)")
             FieldTextField(notes, { notes = it }, "", singleLine = false)
-
-            error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Bad) }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                FTButton("CANCEL", modifier = Modifier.weight(1f), onClick = onDismiss)
-                FTButton(if (saving) "SAVING…" else "SAVE", enabled = ready && !saving, emphasis = FTButtonEmphasis.Primary, modifier = Modifier.weight(1f)) {
-                    saving = true
-                    val draft = ShoeDraft(
-                        name = name, use = use.code, zeppGearId = code, startKm = start ?: 0.0, retireKm = retire ?: 700.0,
-                        startedOn = s?.startedOn ?: LocalDate.now(),
-                        retiredOn = if (retired) (s?.retiredOn ?: LocalDate.now()) else null,
-                        notes = notes, photoJpeg = photo,
-                    )
-                    scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { saving = false }) { repo.save(s?.id, draft); onSaved() }
-                }
-            }
             if (s != null) {
                 if (!confirmDelete) {
                     Text("DELETE", style = FTType.LabelCaps, color = FT.Bad, modifier = Modifier.ftClickable { confirmDelete = true }.padding(vertical = 6.dp))
@@ -404,7 +408,6 @@ fun ShoeFormSheet(req: ShoeFormRequest, onDismiss: () -> Unit, onSaved: () -> Un
                     }
                 }
             }
-            Spacer(Modifier.height(8.dp))
         }
     }
 }

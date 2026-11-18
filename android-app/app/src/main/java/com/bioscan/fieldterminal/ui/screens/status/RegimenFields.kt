@@ -182,13 +182,32 @@ class RegimenEditorState(existing: SupplementRow?, today: LocalDate = LocalDate.
 @Composable
 fun RegimenFields(state: RegimenEditorState) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        RegimenKindField(state)
+        RegimenFormField(state)
+        RegimenWhenField(state)
+        RegimenCycleField(state)
+        RegimenStepsField(state)
+    }
+}
+
+// The same fields one page at a time, for the regimen flow (SupplementFormSheet.kt).
+/** What it is: supplement, medication, peptide, hormone, other. */
+@Composable
+fun RegimenKindField(state: RegimenEditorState) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Column {
             Label("WHAT IT IS")
             Chips(RegimenKind.entries.map { it.label }, listOf(state.kind.label), perRow = 3) { picked ->
                 RegimenKind.entries.firstOrNull { it.label == picked }?.let(state::chooseKind)
             }
         }
+    }
+}
 
+/** The form (and route where it can vary), and the prescriber's syringe units for an injection. */
+@Composable
+fun RegimenFormField(state: RegimenEditorState) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Column {
             Label("FORM")
             Chips(FORM_RULES.map { it.label }, listOfNotNull(formRule(state.form)?.label), perRow = 4) { picked ->
@@ -218,7 +237,13 @@ fun RegimenFields(state: RegimenEditorState) {
                 Hint("Shown on each dose as given. The app never works out a dose; it only checks these units against the vial's mix below.")
             }
         }
+    }
+}
 
+/** When (times of day or as needed) and how often. */
+@Composable
+fun RegimenWhenField(state: RegimenEditorState) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Column {
             Label("WHEN")
             Chips(REGIMEN_SLOTS.map { it.uppercase() } + "AS NEEDED", if (state.asNeeded) listOf("AS NEEDED") else state.slots.map { it.uppercase() }, perRow = 4) { picked ->
@@ -258,6 +283,15 @@ fun RegimenFields(state: RegimenEditorState) {
                 }
             }
 
+        }
+    }
+}
+
+/** An on/off cycle (not for as-needed items). */
+@Composable
+fun RegimenCycleField(state: RegimenEditorState) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        if (!state.asNeeded) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Switch("On/off cycle", state.cycleOn) { state.cycleOn = it }
                 if (state.cycleOn) {
@@ -274,7 +308,13 @@ fun RegimenFields(state: RegimenEditorState) {
                 }
             }
         }
+    }
+}
 
+/** Planned dose changes: a titration or a taper. */
+@Composable
+fun RegimenStepsField(state: RegimenEditorState) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Switch("Planned dose changes (titration or taper)", state.stepsOn) { on ->
                 state.stepsOn = on

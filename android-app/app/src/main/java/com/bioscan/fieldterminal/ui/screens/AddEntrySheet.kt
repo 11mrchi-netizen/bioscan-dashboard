@@ -61,6 +61,9 @@ import com.bioscan.fieldterminal.domain.target
 import com.bioscan.fieldterminal.ui.components.AddEntryStartSaver
 import com.bioscan.fieldterminal.ui.components.AddEntryTargetSaver
 import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTFlow
+import com.bioscan.fieldterminal.ui.components.FlowPage
+import com.bioscan.fieldterminal.ui.components.rememberFlowState
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.Toasts
@@ -151,83 +154,79 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
         AddEntryTarget.EventForm -> EventFormSheet(onDismiss = onDismiss, onSaved = { onSaved() })
         AddEntryTarget.SweatTest -> SweatTestSheet(onDismiss = onDismiss, onSaved = onSaved)
         AddEntryTarget.ScaleWeighIn -> ScaleWeighInSheet(onDismiss = onDismiss, onSaved = onSaved)
-        else -> ModalBottomSheet(
-            onDismissRequest = { if (!externalActivityActive.value && !ExternalActivityGuard.active) onDismiss() },
-            sheetState = sheetState,
-            shape = FT.SheetShape,
-            containerColor = FT.Surface,
-            contentColor = FT.TextPrimary,
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp)
-                    .verticalScroll(rememberScrollState()),
+        else -> {
+            val type = selectedType
+            // Full screen (owner's request, Nov 2026): the menu is one page of tiles, each form a page of its own. Back from a
+            // form returns to the menu, as before; the forms keep their own SAVE.
+            FTFlow(
+                title = when {
+                    sayIt -> "SAY IT"
+                    type == null -> "LOG NEW ENTRY"
+                    else -> type.label
+                },
+                pages = listOf(FlowPage("")), state = rememberFlowState(),
+                onClose = { if (!externalActivityActive.value && !ExternalActivityGuard.active) onDismiss() },
+                canSave = false, onSave = {}, wash = FT.DomainLog,
+                onBack = {
+                    when {
+                        sayIt -> { sayIt = false; true }
+                        type != null -> { selectedType = null; foodPrefill = null; fuelStart = null; true }
+                        else -> false
+                    }
+                },
+                bottomBar = { },
             ) {
-                val type = selectedType
-                // System back inside a form goes back to the picker, as BACK does, instead of closing the sheet and
-                // dropping what was typed.
-                BackHandler(enabled = sayIt || type != null) {
-                    if (sayIt) sayIt = false else { selectedType = null; foodPrefill = null; fuelStart = null }
+            if (sayIt) {
+                LogAgentForm(
+                    onSaved = onSaved,
+                    onFoodHandoff = { text, at ->
+                        foodPrefill = text to at
+                        sayIt = false
+                        selectedType = AddEntryType.Fuel
+                    },
+                )
+            } else if (type == null) {
+                // SAY IT is no longer offered here (the menu goes straight to the types).
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    if (recent.isNotEmpty()) ChoiceSection("RECENT", recent, pick)
+                    AddEntryGroup.entries.forEach { group -> ChoiceSection(group.label, AddEntryChoice.entries.filter { it.group == group }, pick) }
                 }
-                if (sayIt) {
-                    SheetBackHeader(label = "SAY IT", onBack = { sayIt = false })
-                    Spacer(Modifier.height(16.dp))
-                    LogAgentForm(
-                        onSaved = onSaved,
-                        onFoodHandoff = { text, at ->
-                            foodPrefill = text to at
-                            sayIt = false
-                            selectedType = AddEntryType.Fuel
+            } else {
+                // Optimistic (ui/components/UndoToast.kt): the sheet closes at once and the write runs in the app's
+                // scope; the page refreshes when it lands. A rejected write says so with RETRY, which runs the same
+                // write again (the values are already in it), so nothing typed is lost.
+                val onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit = { write ->
+                    Toasts.optimistic(
+                        apply = onDismiss,
+                        save = {
+                            write(repo)
+                            onSaved()
+                        },
+                        revert = {},
+                        what = "Couldn't save the entry",
+                    )
+                }
+                saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Bad) }
+                when (type) {
+                    AddEntryType.Fuel -> FuelForm(
+                        saving, onSubmit, onCanonicalSaved = onSaved, externalActivityActive = externalActivityActive, foodPrefill = foodPrefill,
+                        initialSubType = (fuelStart as? AddEntryStart.Fuel)?.subType ?: FuelSubType.Food,
+                        supplementBundle = (fuelStart as? AddEntryStart.Fuel)?.supplementBundle,
+                    )
+                    AddEntryType.Encounter -> EncounterForm(
+                        saving,
+                        onSave = { date, occurredAt, et, loc, dur, acts, rating, n ->
+                            onSubmit { it.addEncounter(date = date, encounterType = et, notes = n, occurredAt = occurredAt, locationType = loc, durationMin = dur, activities = acts, myRating = rating) }
                         },
                     )
-                } else if (type == null) {
-                    Text("LOG NEW ENTRY", style = sheetHeaderTitleStyle, color = FT.DomainLog)
-                    // SAY IT is no longer offered here (the menu goes straight to the types).
-                    Spacer(Modifier.height(16.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        if (recent.isNotEmpty()) ChoiceSection("RECENT", recent, pick)
-                        AddEntryGroup.entries.forEach { group -> ChoiceSection(group.label, AddEntryChoice.entries.filter { it.group == group }, pick) }
-                    }
-                } else {
-                    SheetBackHeader(label = type.label, onBack = { selectedType = null; foodPrefill = null; fuelStart = null })
-                    Spacer(Modifier.height(16.dp))
-                    // Optimistic (ui/components/UndoToast.kt): the sheet closes at once and the write runs in the app's
-                    // scope; the page refreshes when it lands. A rejected write says so with RETRY, which runs the same
-                    // write again (the values are already in it), so nothing typed is lost.
-                    val onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit = { write ->
-                        Toasts.optimistic(
-                            apply = onDismiss,
-                            save = {
-                                write(repo)
-                                onSaved()
-                            },
-                            revert = {},
-                            what = "Couldn't save the entry",
-                        )
-                    }
-                    saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Bad) }
-                    when (type) {
-                        AddEntryType.Fuel -> FuelForm(
-                            saving, onSubmit, onCanonicalSaved = onSaved, externalActivityActive = externalActivityActive, foodPrefill = foodPrefill,
-                            initialSubType = (fuelStart as? AddEntryStart.Fuel)?.subType ?: FuelSubType.Food,
-                            supplementBundle = (fuelStart as? AddEntryStart.Fuel)?.supplementBundle,
-                        )
-                        AddEntryType.Encounter -> EncounterForm(
-                            saving,
-                            onSave = { date, occurredAt, et, loc, dur, acts, rating, n ->
-                                onSubmit { it.addEncounter(date = date, encounterType = et, notes = n, occurredAt = occurredAt, locationType = loc, durationMin = dur, activities = acts, myRating = rating) }
-                            },
-                        )
-                        AddEntryType.Stool -> StoolForm(saving, onSave = { occurredAt, bt, d, empty -> onSubmit { it.addStool(occurredAt, bt, d, empty) } })
-                        AddEntryType.Wellness -> WellnessForm(saving, onSave = { date, e, m, s, so, mw, al -> onSubmit { it.addWellbeing(date, e, m, s, so, mw, al) } })
-                        AddEntryType.Note -> NoteForm(saving, onSave = { occurredAt, text -> onSubmit { it.addNote(occurredAt, text) } })
-                        AddEntryType.Ostrc -> OstrcForm(saving, onSave = { date, ba, q1, q2, q3, q4, n -> onSubmit { it.addOstrc(date, ba, q1, q2, q3, q4, n) } })
-                        AddEntryType.SexualActivity -> SexualActivityForm(saving, onSave = { date, type, instances, n -> onSubmit { it.addSexualActivity(date, type, instances, n) } })
-                        AddEntryType.Grip -> GripForm(saving, onSave = { occurredAt, hand, kg -> onSubmit { it.addGrip(occurredAt, hand, kg) } })
-                    }
+                    AddEntryType.Stool -> StoolForm(saving, onSave = { occurredAt, bt, d, empty -> onSubmit { it.addStool(occurredAt, bt, d, empty) } })
+                    AddEntryType.Wellness -> WellnessForm(saving, onSave = { date, e, m, s, so, mw, al -> onSubmit { it.addWellbeing(date, e, m, s, so, mw, al) } })
+                    AddEntryType.Note -> NoteForm(saving, onSave = { occurredAt, text -> onSubmit { it.addNote(occurredAt, text) } })
+                    AddEntryType.Ostrc -> OstrcForm(saving, onSave = { date, ba, q1, q2, q3, q4, n -> onSubmit { it.addOstrc(date, ba, q1, q2, q3, q4, n) } })
+                    AddEntryType.SexualActivity -> SexualActivityForm(saving, onSave = { date, type, instances, n -> onSubmit { it.addSexualActivity(date, type, instances, n) } })
+                    AddEntryType.Grip -> GripForm(saving, onSave = { occurredAt, hand, kg -> onSubmit { it.addGrip(occurredAt, hand, kg) } })
                 }
-                Spacer(Modifier.height(12.dp))
+            }
             }
         }
     }
@@ -315,21 +314,11 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
         }
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = FT.SheetShape,
-        containerColor = FT.Surface,
-        contentColor = FT.TextPrimary,
+    FTFlow(
+        title = "EDIT ${entry.kind.label}", pages = listOf(FlowPage("")), state = rememberFlowState(), onClose = onDismiss,
+        canSave = false, onSave = {}, wash = FT.DomainLog, bottomBar = { },
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp)
-                .verticalScroll(rememberScrollState()),
-        ) {
-            SheetBackHeader(label = "EDIT ${entry.kind.label}", onBack = onDismiss)
-            Spacer(Modifier.height(16.dp))
+        Column {
 
             val row = loaded
             val onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit = { write ->

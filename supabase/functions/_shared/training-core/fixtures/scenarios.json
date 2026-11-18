@@ -1,0 +1,1812 @@
+{
+ "definitions": [
+  {
+   "kind": "strength_module",
+   "key": "example.two_day",
+   "title": "Example two-day",
+   "family": "example",
+   "domain": "max_strength",
+   "sessions_per_week": 2,
+   "day_positions": [
+    1,
+    4
+   ],
+   "block_lengths": [
+    2
+   ],
+   "slots": [
+    {
+     "id": "A",
+     "role": "press",
+     "standard": "Press"
+    },
+    {
+     "id": "B",
+     "role": "squat",
+     "standard": "Squat"
+    },
+    {
+     "id": "C",
+     "role": "accessory",
+     "standard": "Accessory",
+     "pick": {
+      "min": 2,
+      "max": 3
+     },
+     "optional": true
+    }
+   ],
+   "sessions": [
+    {
+     "id": "D1",
+     "label": "One",
+     "slots": [
+      "A",
+      "B"
+     ]
+    },
+    {
+     "id": "D4",
+     "label": "Two",
+     "slots": [
+      "A",
+      "B",
+      "C"
+     ]
+    }
+   ],
+   "variants": [
+    {
+     "key": "std",
+     "title": "Standard",
+     "weeks": [
+      {
+       "week": 1,
+       "sessions": [
+        {
+         "session": "D1",
+         "items": [
+          {
+           "slot": "A",
+           "sets": {
+            "min": 3,
+            "max": 5
+           },
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 70
+           }
+          },
+          {
+           "slot": "B",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 70
+           }
+          }
+         ]
+        },
+        {
+         "session": "D4",
+         "items": [
+          {
+           "slot": "A",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 70
+           }
+          },
+          {
+           "slot": "C",
+           "sets": 3,
+           "reps": 10,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 60
+           }
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "week": 2,
+       "kind": "peak",
+       "sessions": [
+        {
+         "session": "D1",
+         "items": [
+          {
+           "slot": "A",
+           "sets": 1,
+           "reps": 3,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 85
+           },
+           "technique": "peak"
+          }
+         ]
+        },
+        {
+         "session": "D4",
+         "items": [
+          {
+           "slot": "B",
+           "sets": 1,
+           "reps": 3,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 85
+           },
+           "technique": "peak"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "peak": {
+    "techniques": [
+     "peak",
+     "none"
+    ],
+    "note": "Peak note."
+   },
+   "progression": {
+    "unit": "lb",
+    "upper": 5,
+    "lower": 10,
+    "after_weeks": {
+     "min": 3,
+     "max": 6
+    }
+   }
+  },
+  {
+   "kind": "strength_module",
+   "key": "example.three_day",
+   "title": "Example three-day",
+   "family": "example",
+   "domain": "max_strength",
+   "sessions_per_week": 3,
+   "day_positions": [
+    1,
+    3,
+    5
+   ],
+   "block_lengths": [
+    3
+   ],
+   "slots": [
+    {
+     "id": "A",
+     "role": "press",
+     "standard": "Press"
+    },
+    {
+     "id": "B",
+     "role": "squat",
+     "standard": "Squat"
+    },
+    {
+     "id": "H",
+     "role": "hinge",
+     "standard": "Deadlift"
+    },
+    {
+     "id": "P",
+     "role": "pull",
+     "standard": "Weighted Pull-up",
+     "weighted_calisthenics": true
+    },
+    {
+     "id": "X",
+     "role": "accessory",
+     "standard": "Push-up",
+     "optional": true
+    }
+   ],
+   "sessions": [
+    {
+     "id": "D1",
+     "label": "One",
+     "slots": [
+      "A",
+      "B"
+     ]
+    },
+    {
+     "id": "D3",
+     "label": "Three",
+     "slots": [
+      "A",
+      "H",
+      "P"
+     ]
+    },
+    {
+     "id": "D5",
+     "label": "Five",
+     "slots": [
+      "A",
+      "B",
+      "X"
+     ]
+    }
+   ],
+   "variants": [
+    {
+     "key": "std",
+     "title": "Standard",
+     "weeks": [
+      {
+       "week": 1,
+       "sessions": [
+        {
+         "session": "D1",
+         "items": [
+          {
+           "slot": "A",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 70
+           }
+          },
+          {
+           "slot": "B",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 70
+           }
+          }
+         ]
+        },
+        {
+         "session": "D3",
+         "items": [
+          {
+           "slot": "A",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 70
+           }
+          },
+          {
+           "slot": "H",
+           "sets": 1,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 70
+           }
+          },
+          {
+           "slot": "P",
+           "sets": {
+            "min": 3,
+            "max": 5
+           },
+           "reps": {
+            "min": 3,
+            "max": 5
+           },
+           "load": {
+            "kind": "pct_1rm",
+            "value": 70
+           }
+          }
+         ]
+        },
+        {
+         "session": "D5",
+         "items": [
+          {
+           "slot": "A",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 70
+           }
+          },
+          {
+           "slot": "B",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 70
+           }
+          },
+          {
+           "slot": "X",
+           "sets": 2,
+           "reps": 20,
+           "load": {
+            "kind": "pct_max_reps",
+            "value": 60
+           }
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "week": 2,
+       "sessions": [
+        {
+         "session": "D1",
+         "items": [
+          {
+           "slot": "A",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 75
+           }
+          },
+          {
+           "slot": "B",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 75
+           }
+          }
+         ]
+        },
+        {
+         "session": "D3",
+         "items": [
+          {
+           "slot": "A",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 75
+           }
+          },
+          {
+           "slot": "H",
+           "sets": 1,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 75
+           }
+          },
+          {
+           "slot": "P",
+           "sets": {
+            "min": 3,
+            "max": 5
+           },
+           "reps": {
+            "min": 3,
+            "max": 5
+           },
+           "load": {
+            "kind": "pct_1rm",
+            "value": 75
+           }
+          }
+         ]
+        },
+        {
+         "session": "D5",
+         "items": [
+          {
+           "slot": "A",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 75
+           }
+          },
+          {
+           "slot": "B",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 75
+           }
+          },
+          {
+           "slot": "X",
+           "sets": 2,
+           "reps": 20,
+           "load": {
+            "kind": "pct_max_reps",
+            "value": 60
+           }
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "week": 3,
+       "sessions": [
+        {
+         "session": "D1",
+         "items": [
+          {
+           "slot": "A",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 80
+           }
+          },
+          {
+           "slot": "B",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 80
+           }
+          }
+         ]
+        },
+        {
+         "session": "D3",
+         "items": [
+          {
+           "slot": "A",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 80
+           }
+          },
+          {
+           "slot": "H",
+           "sets": 1,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 80
+           }
+          },
+          {
+           "slot": "P",
+           "sets": {
+            "min": 3,
+            "max": 5
+           },
+           "reps": {
+            "min": 3,
+            "max": 5
+           },
+           "load": {
+            "kind": "pct_1rm",
+            "value": 80
+           }
+          }
+         ]
+        },
+        {
+         "session": "D5",
+         "items": [
+          {
+           "slot": "A",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 80
+           }
+          },
+          {
+           "slot": "B",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 80
+           }
+          },
+          {
+           "slot": "X",
+           "sets": 2,
+           "reps": 20,
+           "load": {
+            "kind": "pct_max_reps",
+            "value": 60
+           }
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "key": "heavy",
+     "title": "Heavy",
+     "weeks": [
+      {
+       "week": 1,
+       "sessions": [
+        {
+         "session": "D1",
+         "items": [
+          {
+           "slot": "A",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 80
+           }
+          },
+          {
+           "slot": "B",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 80
+           }
+          }
+         ]
+        },
+        {
+         "session": "D3",
+         "items": [
+          {
+           "slot": "A",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 80
+           }
+          },
+          {
+           "slot": "H",
+           "sets": 1,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 80
+           }
+          },
+          {
+           "slot": "P",
+           "sets": {
+            "min": 3,
+            "max": 5
+           },
+           "reps": {
+            "min": 3,
+            "max": 5
+           },
+           "load": {
+            "kind": "pct_1rm",
+            "value": 80
+           }
+          }
+         ]
+        },
+        {
+         "session": "D5",
+         "items": [
+          {
+           "slot": "A",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 80
+           }
+          },
+          {
+           "slot": "B",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 80
+           }
+          },
+          {
+           "slot": "X",
+           "sets": 2,
+           "reps": 20,
+           "load": {
+            "kind": "pct_max_reps",
+            "value": 60
+           }
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "week": 2,
+       "sessions": [
+        {
+         "session": "D1",
+         "items": [
+          {
+           "slot": "A",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 85
+           }
+          },
+          {
+           "slot": "B",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 85
+           }
+          }
+         ]
+        },
+        {
+         "session": "D3",
+         "items": [
+          {
+           "slot": "A",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 85
+           }
+          },
+          {
+           "slot": "H",
+           "sets": 1,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 85
+           }
+          },
+          {
+           "slot": "P",
+           "sets": {
+            "min": 3,
+            "max": 5
+           },
+           "reps": {
+            "min": 3,
+            "max": 5
+           },
+           "load": {
+            "kind": "pct_1rm",
+            "value": 85
+           }
+          }
+         ]
+        },
+        {
+         "session": "D5",
+         "items": [
+          {
+           "slot": "A",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 85
+           }
+          },
+          {
+           "slot": "B",
+           "sets": 3,
+           "reps": 5,
+           "load": {
+            "kind": "pct_1rm",
+            "value": 85
+           }
+          },
+          {
+           "slot": "X",
+           "sets": 2,
+           "reps": 20,
+           "load": {
+            "kind": "pct_max_reps",
+            "value": 60
+           }
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "progression": {
+    "unit": "lb",
+    "upper": 5,
+    "lower": 10,
+    "after_weeks": {
+     "min": 3,
+     "max": 6
+    }
+   }
+  },
+  {
+   "kind": "conditioning_session",
+   "key": "example.run",
+   "title": "Example run",
+   "category": "lic",
+   "domains": [
+    "aerobic_base"
+   ],
+   "aliases": [
+    "run"
+   ],
+   "prescription": {
+    "by": [
+     "minutes"
+    ],
+    "minutes": {
+     "min": 30,
+     "max": 90
+    }
+   },
+   "structure": {
+    "type": "continuous"
+   }
+  },
+  {
+   "kind": "conditioning_session",
+   "key": "example.hills",
+   "title": "Example hills",
+   "category": "hic",
+   "domains": [
+    "anaerobic_capacity"
+   ],
+   "prescription": {
+    "by": [
+     "rounds"
+    ],
+    "rounds": {
+     "min": 5,
+     "max": 10
+    }
+   },
+   "structure": {
+    "type": "repeats"
+   }
+  },
+  {
+   "kind": "conditioning_session",
+   "key": "example.ruck",
+   "title": "Example ruck",
+   "category": "lic",
+   "domains": [
+    "specific_endurance",
+    "aerobic_base"
+   ],
+   "prescription": {
+    "by": [
+     "minutes"
+    ],
+    "minutes": {
+     "min": 45,
+     "max": 120
+    }
+   },
+   "structure": {
+    "type": "continuous"
+   }
+  },
+  {
+   "kind": "template",
+   "key": "example.grid",
+   "title": "Example grid",
+   "weeks": 5,
+   "domains": [
+    "max_strength"
+   ],
+   "variables": {
+    "MS": {
+     "kind": "strength_module",
+     "choose_from": [
+      "example.two_day"
+     ]
+    }
+   },
+   "grid": [
+    {
+     "week": 1,
+     "days": [
+      {
+       "day": 1,
+       "cells": [
+        {
+         "ref": "strength:$MS"
+        }
+       ]
+      },
+      {
+       "day": 2,
+       "cells": [
+        {
+         "ref": "cond:example.run",
+         "params": {
+          "minutes": {
+           "min": 30,
+           "max": 60
+          }
+         }
+        }
+       ]
+      },
+      {
+       "day": 4,
+       "cells": [
+        {
+         "ref": "strength:$MS"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "week": 2,
+     "days": [
+      {
+       "day": 1,
+       "cells": [
+        {
+         "ref": "strength:$MS"
+        }
+       ]
+      },
+      {
+       "day": 2,
+       "cells": [
+        {
+         "ref": "cond:example.run"
+        }
+       ]
+      },
+      {
+       "day": 4,
+       "cells": [
+        {
+         "ref": "strength:$MS"
+        },
+        {
+         "ref": "cond:$EXTRA"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "week": 3,
+     "kind": "deload",
+     "counts_toward_block": false,
+     "days": [
+      {
+       "day": 1,
+       "cells": [
+        {
+         "ref": "inline",
+         "label": "Deload"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "week": 4,
+     "days": [
+      {
+       "day": 1,
+       "cells": [
+        {
+         "ref": "strength:$MS"
+        }
+       ]
+      },
+      {
+       "day": 2,
+       "cells": [
+        {
+         "ref": "cond:$HILL"
+        }
+       ]
+      },
+      {
+       "day": 4,
+       "cells": [
+        {
+         "ref": "strength:$MS"
+        }
+       ]
+      },
+      {
+       "day": 6,
+       "cells": [
+        {
+         "ref": "test:ruck_benchmark",
+         "label": "Benchmark"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "week": 5,
+     "days": [
+      {
+       "day": 1,
+       "cells": [
+        {
+         "ref": "strength:$MS"
+        }
+       ]
+      },
+      {
+       "day": 4,
+       "cells": [
+        {
+         "ref": "strength:$MS"
+        }
+       ]
+      },
+      {
+       "day": 7,
+       "cells": [
+        {
+         "ref": "mystery:thing"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "conditioning_protocol",
+   "key": "example.black",
+   "title": "Example black",
+   "protocol_type": "polarized",
+   "budget": {
+    "low_intensity_minutes_per_week": {
+     "min": 120,
+     "max": 180
+    },
+    "session_min_minutes": 30,
+    "high_intensity_per_week": 1,
+    "min_rest_days_per_week": 1
+   },
+   "week_adjustments": [
+    {
+     "when": "week_without_high_intensity",
+     "low_intensity_minutes_per_week": {
+      "min": 150,
+      "max": 200
+     }
+    }
+   ],
+   "default_layout": [
+    {
+     "day": 2,
+     "kind": "lic"
+    },
+    {
+     "day": 4,
+     "kind": "lic"
+    },
+    {
+     "day": 6,
+     "kind": "hic"
+    }
+   ],
+   "suggested": {
+    "lic": [
+     "example.run",
+     "example.ruck"
+    ],
+    "hic": [
+     "example.hills"
+    ]
+   }
+  },
+  {
+   "kind": "conditioning_protocol",
+   "key": "example.cadence",
+   "title": "Example cadence",
+   "protocol_type": "polarized",
+   "budget": {
+    "low_intensity_minutes_per_week": {
+     "min": 90,
+     "max": 150
+    },
+    "session_min_minutes": 30,
+    "high_intensity_every_n_weeks": 2,
+    "sessions_per_week": {
+     "min": 3,
+     "max": 4
+    }
+   },
+   "suggested": {
+    "lic": [
+     "example.run"
+    ],
+    "hic": [
+     "example.hills"
+    ]
+   }
+  },
+  {
+   "kind": "conditioning_protocol",
+   "key": "example.hiconly",
+   "title": "Example HIC only",
+   "protocol_type": "work_capacity",
+   "budget": {
+    "min_conditioning_sessions_per_week": 2,
+    "min_rest_days_per_week": 2
+   },
+   "suggested": {
+    "hic": [
+     "example.hills"
+    ]
+   }
+  }
+ ],
+ "maxes": {
+  "press": {
+   "oneRmKg": 80
+  },
+  "squat": {
+   "oneRmKg": 100
+  },
+  "deadlift": {
+   "oneRmKg": 140
+  },
+  "weighted pull-up": {
+   "oneRmKg": 30,
+   "maxReps": 12
+  },
+  "front squat": {
+   "oneRmKg": 87.3
+  },
+  "trap bar deadlift": {
+   "oneRmKg": 151
+  },
+  "curl": {
+   "oneRmKg": 30
+  },
+  "row": {
+   "oneRmKg": 70
+  }
+ },
+ "cases": [
+  {
+   "name": "template_basic",
+   "kind": "template",
+   "template": "example.grid",
+   "start": "2026-01-05",
+   "variables": {
+    "MS": "example.two_day",
+    "HILL": "example.hills",
+    "EXTRA": "example.run,example.ruck"
+   }
+  },
+  {
+   "name": "template_weekdays_clusters",
+   "kind": "template",
+   "template": "example.grid",
+   "start": "2026-01-07",
+   "weekdays": {
+    "1": 3,
+    "4": 6
+   },
+   "slotTimes": {
+    "1": {
+     "start": "07:00",
+     "durationMin": 60
+    },
+    "2": {
+     "start": "20:00",
+     "durationMin": 120
+    }
+   },
+   "variables": {
+    "MS": "example.two_day",
+    "HILL": "example.hills"
+   },
+   "modules": {
+    "example.two_day": {
+     "exercises": {
+      "C": [
+       "Curl",
+       "Row",
+       "Dip"
+      ],
+      "A": [
+       "Front Squat"
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "template_unchosen",
+   "kind": "template",
+   "template": "example.grid",
+   "start": "2026-01-05",
+   "variables": {}
+  },
+  {
+   "name": "merged_suggest",
+   "kind": "merged",
+   "strength": "example.three_day",
+   "protocol": "example.black",
+   "start": "2026-01-05",
+   "layout": "suggest",
+   "timeline": {
+    "default": [
+     3,
+     8,
+     false
+    ]
+   },
+   "slotTimes": {
+    "1": {
+     "start": "07:00",
+     "durationMin": 60
+    },
+    "2": {
+     "start": "20:00",
+     "durationMin": 120
+    }
+   },
+   "bodyweightKg": 78
+  },
+  {
+   "name": "merged_test_total_base",
+   "kind": "merged",
+   "strength": "example.three_day",
+   "protocol": "example.black",
+   "start": "2026-01-05",
+   "layout": "suggest",
+   "timeline": [
+    "test",
+    "normal",
+    "normal",
+    "deload",
+    "normal",
+    "normal",
+    "normal",
+    "deload",
+    "test",
+    "normal"
+   ],
+   "bodyweightKg": 78,
+   "equipment": {
+    "weightedBase": "total",
+    "platesKg": [
+     1.25,
+     2.5,
+     5,
+     10,
+     15,
+     20,
+     25
+    ]
+   },
+   "modules": {
+    "example.three_day": {
+     "variant": "heavy",
+     "exercises": {
+      "H": [
+       "Trap Bar Deadlift"
+      ]
+     }
+    }
+   },
+   "conditioning": {
+    "lic": [
+     "example.ruck",
+     "example.run"
+    ]
+   }
+  },
+  {
+   "name": "merged_no_progression",
+   "kind": "merged",
+   "strength": "example.three_day",
+   "protocol": null,
+   "start": "2026-01-07",
+   "layout": "suggest",
+   "timeline": {
+    "default": [
+     2,
+     9,
+     true
+    ]
+   },
+   "projectProgression": false,
+   "modules": {
+    "example.three_day": {
+     "blockLength": 2
+    }
+   }
+  },
+  {
+   "name": "merged_edited_layout",
+   "kind": "merged",
+   "strength": "example.three_day",
+   "protocol": "example.black",
+   "start": "2026-01-05",
+   "layout": [
+    {
+     "weekday": 1,
+     "strengthSession": 0
+    },
+    {
+     "weekday": 2,
+     "strengthSession": 1,
+     "conditioning": {
+      "kind": "lic"
+     }
+    },
+    {
+     "weekday": 3,
+     "conditioning": {
+      "kind": "hic"
+     }
+    },
+    {
+     "weekday": 4,
+     "strengthSession": 2,
+     "conditioning": {
+      "kind": "lic",
+      "minutes": {
+       "min": 40,
+       "max": 40
+      }
+     }
+    },
+    {
+     "weekday": 5,
+     "conditioning": {
+      "kind": "hic"
+     }
+    },
+    {
+     "weekday": 6,
+     "conditioning": {
+      "kind": "lic"
+     }
+    },
+    {
+     "weekday": 7
+    }
+   ],
+   "timeline": {
+    "default": [
+     3,
+     6,
+     false
+    ]
+   }
+  },
+  {
+   "name": "merged_cadence_only",
+   "kind": "merged",
+   "strength": null,
+   "protocol": "example.cadence",
+   "start": "2026-01-05",
+   "layout": "suggest",
+   "conditioningPerWeek": 3,
+   "timeline": [
+    "normal",
+    "normal",
+    "normal",
+    "deload",
+    "normal"
+   ]
+  },
+  {
+   "name": "merged_hic_only",
+   "kind": "merged",
+   "strength": "example.two_day",
+   "protocol": "example.hiconly",
+   "start": "2026-01-08",
+   "layout": "suggest",
+   "timeline": {
+    "default": [
+     2,
+     6,
+     false
+    ]
+   },
+   "equipment": {
+    "barKg": 15
+   }
+  },
+  {
+   "name": "composed_default",
+   "kind": "composed",
+   "strength": "example.three_day",
+   "protocol": "example.black",
+   "start": "2026-01-05",
+   "weeks": 7,
+   "deloadAfterBlock": true
+  },
+  {
+   "name": "composed_no_deload",
+   "kind": "composed",
+   "strength": "example.three_day",
+   "protocol": "example.cadence",
+   "start": "2026-01-05",
+   "weeks": 5,
+   "deloadAfterBlock": false,
+   "conditioningPerWeek": 2
+  },
+  {
+   "name": "merged_race_lead",
+   "kind": "merged",
+   "strength": "example.three_day",
+   "protocol": "example.black",
+   "start": "2026-01-05",
+   "layout": "suggest",
+   "timeline": {
+    "race": [
+     3,
+     10,
+     1,
+     false
+    ]
+   }
+  },
+  {
+   "name": "merged_race_long_lead",
+   "kind": "merged",
+   "strength": "example.two_day",
+   "protocol": "example.cadence",
+   "start": "2026-01-05",
+   "layout": "suggest",
+   "conditioningPerWeek": 2,
+   "timeline": {
+    "race": [
+     2,
+     12,
+     2,
+     true
+    ]
+   }
+  },
+  {
+   "name": "merged_race_too_short",
+   "kind": "merged",
+   "strength": "example.three_day",
+   "protocol": null,
+   "start": "2026-01-05",
+   "layout": "suggest",
+   "timeline": {
+    "race": [
+     3,
+     4,
+     2,
+     false
+    ]
+   }
+  }
+ ],
+ "misc": {
+  "plates": [
+   [
+    61.3,
+    20,
+    [
+     1.25,
+     2.5,
+     5,
+     10,
+     15,
+     20
+    ],
+    "nearest"
+   ],
+   [
+    61.25,
+    20,
+    [
+     1.25,
+     2.5,
+     5,
+     10,
+     15,
+     20
+    ],
+    "nearest"
+   ],
+   [
+    100,
+    20,
+    [
+     1.25,
+     2.5,
+     5,
+     10,
+     15,
+     20
+    ],
+    "nearest"
+   ],
+   [
+    95,
+    20,
+    [
+     2.5,
+     5,
+     10,
+     15,
+     20,
+     25
+    ],
+    "nearest"
+   ],
+   [
+    17,
+    20,
+    [
+     1.25,
+     2.5,
+     5,
+     10,
+     15,
+     20
+    ],
+    "nearest"
+   ],
+   [
+    143.7,
+    25,
+    [
+     1.25,
+     2.5,
+     5,
+     10,
+     15,
+     20
+    ],
+    "up"
+   ],
+   [
+    143.7,
+    25,
+    [
+     1.25,
+     2.5,
+     5,
+     10,
+     15,
+     20
+    ],
+    "down"
+   ],
+   [
+    57.5,
+    20,
+    [
+     1,
+     2.5,
+     5,
+     10,
+     15,
+     20
+    ],
+    "nearest"
+   ]
+  ],
+  "movementKeys": [
+   "Standing Military Press",
+   "Overhead Press",
+   "Pull Up (Weighted)",
+   "Weighted Pull Ups",
+   "Barbell Bench Press",
+   "Chest Press",
+   "Bent Over Barbell Row",
+   "Squats",
+   "Standing Barbell Press (BB)",
+   "Chinups"
+  ],
+  "timelines": [
+   [
+    "default",
+    3,
+    8,
+    false,
+    true
+   ],
+   [
+    "default",
+    3,
+    9,
+    true,
+    true
+   ],
+   [
+    "default",
+    6,
+    10,
+    false,
+    false
+   ],
+   [
+    "resize",
+    [
+     "normal",
+     "normal",
+     "deload",
+     "test"
+    ],
+    3,
+    9
+   ],
+   [
+    "resize",
+    [
+     "normal",
+     "normal",
+     "normal",
+     "deload",
+     "normal"
+    ],
+    3,
+    3
+   ],
+   [
+    "taper",
+    [
+     "normal",
+     "normal",
+     "normal",
+     "deload",
+     "normal",
+     "normal"
+    ],
+    2
+   ],
+   [
+    "weeksForBlocks",
+    2,
+    3,
+    true,
+    false
+   ],
+   [
+    "weeksForBlocks",
+    3,
+    6,
+    false,
+    true
+   ],
+   [
+    "race",
+    3,
+    10,
+    1,
+    false
+   ],
+   [
+    "race",
+    3,
+    9,
+    1,
+    false
+   ],
+   [
+    "race",
+    3,
+    11,
+    2,
+    true
+   ],
+   [
+    "race",
+    6,
+    13,
+    2,
+    false
+   ],
+   [
+    "race",
+    2,
+    3,
+    2,
+    false
+   ],
+   [
+    "race",
+    3,
+    0,
+    1,
+    false
+   ]
+  ],
+  "estimates": [
+   {
+    "today": "2026-03-01",
+    "sets": [
+     {
+      "date": "2026-02-20",
+      "reps": 5,
+      "weightKg": 100
+     },
+     {
+      "date": "2026-02-25",
+      "reps": 3,
+      "weightKg": 110
+     },
+     {
+      "date": "2025-10-01",
+      "reps": 1,
+      "weightKg": 150
+     }
+    ]
+   },
+   {
+    "today": "2026-03-01",
+    "sets": [
+     {
+      "date": "2026-02-20",
+      "reps": 5,
+      "weightKg": 42.5,
+      "percentOneRm": 75
+     },
+     {
+      "date": "2026-02-27",
+      "reps": 3,
+      "weightKg": 47.5,
+      "percentOneRm": 85
+     },
+     {
+      "date": "2026-02-27",
+      "reps": 3,
+      "weightKg": 46,
+      "percentOneRm": 82
+     }
+    ]
+   },
+   {
+    "today": "2026-03-01",
+    "sets": [
+     {
+      "date": "2026-02-20",
+      "reps": 15,
+      "weightKg": 60
+     }
+    ]
+   }
+  ],
+  "stepUps": [
+   {
+    "module": "example.three_day",
+    "exercises": {},
+    "platesKg": [
+     1.25,
+     2.5,
+     5,
+     10,
+     15,
+     20
+    ]
+   },
+   {
+    "module": "example.three_day",
+    "exercises": {
+     "H": [
+      "Trap Bar Deadlift"
+     ],
+     "A": [
+      "Front Squat"
+     ]
+    },
+    "platesKg": [
+     2.5,
+     5,
+     10,
+     20
+    ]
+   },
+   {
+    "module": "example.two_day",
+    "exercises": {
+     "C": [
+      "Curl",
+      "Row"
+     ]
+    },
+    "platesKg": [
+     1.25,
+     2.5,
+     5,
+     10,
+     15,
+     20
+    ]
+   }
+  ],
+  "endEarly": [
+   {
+    "lastDay": "2026-01-18",
+    "sessions": [
+     {
+      "id": 1,
+      "date": "2026-01-12",
+      "weekIndex": 2,
+      "status": "confirmed",
+      "topPct": 75
+     },
+     {
+      "id": 2,
+      "date": "2026-01-18",
+      "weekIndex": 2,
+      "status": "planned",
+      "topPct": 75
+     },
+     {
+      "id": 3,
+      "date": "2026-01-19",
+      "weekIndex": 3,
+      "status": "planned",
+      "topPct": 80
+     },
+     {
+      "id": 4,
+      "date": "2026-01-21",
+      "weekIndex": 3,
+      "status": "skipped",
+      "topPct": 80
+     },
+     {
+      "id": 5,
+      "date": "2026-01-26",
+      "weekIndex": 4,
+      "status": "planned",
+      "topPct": null
+     },
+     {
+      "id": 6,
+      "date": "2026-01-28",
+      "weekIndex": 4,
+      "status": "planned",
+      "topPct": 95
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -103,7 +103,8 @@ class MergedBlockTest {
         assertEquals(7, weeksForBlocks(2, 3, trailingDeload = false))
         assertEquals(6, countedWeeks(defaultTimeline(3, 8)))
         assertEquals(WeekKind.Deload, cycleWeekKind(WeekKind.Normal))
-        assertEquals(WeekKind.Normal, cycleWeekKind(WeekKind.Test))
+        assertEquals(WeekKind.Lead, cycleWeekKind(WeekKind.Test))
+        assertEquals(WeekKind.Normal, cycleWeekKind(WeekKind.Lead))
         assertEquals("NNNDNNNDNN", resizeTimeline(defaultTimeline(3, 8), 3, 10).joinToString("") { it.label.take(1) })
     }
 

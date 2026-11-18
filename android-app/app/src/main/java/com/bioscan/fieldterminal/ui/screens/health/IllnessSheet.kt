@@ -36,6 +36,12 @@ import com.bioscan.fieldterminal.domain.health.buildIllness
 import com.bioscan.fieldterminal.domain.health.checkInDate
 import com.bioscan.fieldterminal.domain.score.IllnessCheckIn
 import com.bioscan.fieldterminal.domain.score.gravityOf
+import com.bioscan.fieldterminal.ui.components.FTFlow
+import com.bioscan.fieldterminal.ui.components.FlowField
+import com.bioscan.fieldterminal.ui.components.FlowPage
+import com.bioscan.fieldterminal.ui.components.FlowPickGrid
+import com.bioscan.fieldterminal.ui.components.FlowQuestion
+import com.bioscan.fieldterminal.ui.components.rememberFlowState
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTChoiceChip
@@ -69,7 +75,6 @@ fun IllnessSheet(
     /** A symptom check's signals to give to the new illness. */
     adoptSignalIds: List<Long> = emptyList(),
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
     val vocab = remember { HealthConcernsRepository.vocab(context) }
     val repo = remember { HealthConcernsRepository(SupabaseClientProvider.client) }
@@ -94,97 +99,104 @@ fun IllnessSheet(
     val temp = temperature.replace(',', '.').trim().toDoubleOrNull()
     val ready = type != null && severity != null && (temperature.isBlank() || (temp != null && temp in 34.0..43.0))
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, shape = FT.SheetShape, containerColor = FT.Surface, contentColor = FT.TextPrimary) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("ILLNESS OR INFECTION", style = FTType.SectionTitle, color = FT.DomainHeart)
-            Text("What you have, in your words: no diagnosis needed. Small things (a headache, a stuffed nose for a day) are quicker as a SYMPTOM CHECK.", style = FTType.BodySmall, color = FT.TextSecondary)
+    val save: () -> Unit = save@{
+        val t = type ?: return@save
+        val now = ZonedDateTime.now()
+        val plan = buildIllness(
+            IllnessDraft(
+                type = t, title = title, start = checkInDate(now).minusDays(startDaysAgo), symptoms = symptoms,
+                severity = severity ?: return@save, impact = impact, temperatureC = temp, test = test, testResult = testResult,
+                sawClinician = clinician, diagnosis = diagnosis.takeIf { clinician }, medication = medication, note = note,
+            ),
+            now,
+        )
+        saving = true
+        scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { saving = false }) {
+            repo.saveIllness(plan)
+            repo.assignSignals(adoptSignalIds, plan.checkIn.concerns.first().id)
+            repo.refresh()
+            onSaved()
+        }
+    }
 
-            Label("WHAT IS IT")
-            TextChipRow(ILLNESS_TYPES.map { it.label.uppercase() }, type?.label?.uppercase(), perRow = 3) { picked ->
-                val t = ILLNESS_TYPES.firstOrNull { it.label.uppercase() == picked }
-                type = t
-                if (t != null) {
-                    if (!titleEdited) title = t.label
-                    if (prefillSymptoms.isEmpty() && symptoms.isEmpty()) symptoms = t.symptoms.take(3).toSet()
+    // Three pages ask what is needed (what and since when, the symptoms, how bad); two optional ones hold the rest.
+    val flow = rememberFlowState()
+    val tempOk = temperature.isBlank() || (temp != null && temp in 34.0..43.0)
+    val pages = listOf(
+        FlowPage("WHAT", ready = type != null),
+        FlowPage("SYMPTOMS"),
+        FlowPage("HOW BAD", ready = severity != null && tempOk),
+        FlowPage("TEST · CLINICIAN", optional = true),
+        FlowPage("NAME · NOTES", optional = true),
+    )
+    FTFlow(
+        title = "ILLNESS OR INFECTION", pages = pages, state = flow, onClose = onDismiss,
+        canSave = ready, onSave = save, saving = saving, wash = FT.Domain.Cardio,
+        error = error?.let { "Couldn't save: $it" },
+    ) { page ->
+        when (page) {
+            0 -> {
+                FlowQuestion("What is it?", "In your words, no diagnosis needed. A small thing for a day is quicker as a SYMPTOM CHECK.")
+                TextChipRow(ILLNESS_TYPES.map { it.label.uppercase() }, type?.label?.uppercase(), perRow = 3) { picked ->
+                    val t = ILLNESS_TYPES.firstOrNull { it.label.uppercase() == picked }
+                    type = t
+                    if (t != null) {
+                        if (!titleEdited) title = t.label
+                        if (prefillSymptoms.isEmpty() && symptoms.isEmpty()) symptoms = t.symptoms.take(3).toSet()
+                    }
                 }
-            }
-            if (type != null) {
-                Label("NAME IT")
-                FieldTextField(title, { title = it; titleEdited = true }, "e.g. Cold after the race")
-            }
-
-            Label("STARTED")
-            TextChipRow(STARTS.map { it.second }, STARTS.firstOrNull { it.first == startDaysAgo }?.second, perRow = 3) { picked ->
-                startDaysAgo = STARTS.firstOrNull { it.second == picked }?.first ?: 0L
-            }
-
-            Label("SYMPTOMS")
-            val usual = type?.symptoms.orEmpty()
-            val options = (usual + vocab.systemicSymptoms.map { it.code }).distinct().filter { it != "sym.other" } + "sym.other"
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                options.forEach { code ->
-                    Chip((vocab.symptom(code)?.label ?: code).uppercase(), code in symptoms) {
-                        symptoms = if (code in symptoms) symptoms - code else symptoms + code
+                FlowField("STARTED") {
+                    TextChipRow(STARTS.map { it.second }, STARTS.firstOrNull { it.first == startDaysAgo }?.second, perRow = 3) { picked ->
+                        startDaysAgo = STARTS.firstOrNull { it.second == picked }?.first ?: 0L
                     }
                 }
             }
-
-            FTRatingSlider("HOW BAD, AT WORST NOW", severity, 0..10, FT.Metric.Soreness, { severity = it }, lowWord = "barely", highWord = "worst", reversed = true)
-            Label("TRAINING")
-            TextChipRow(IMPACT_LABELS, impact?.let { IMPACT_LABELS[it] }, perRow = 2) { picked -> impact = picked?.let { IMPACT_LABELS.indexOf(it) } }
-            Label("TEMPERATURE °C (OPTIONAL)")
-            FieldTextField(temperature, { temperature = it }, "e.g. 38.2", keyboardType = KeyboardType.Decimal)
-
-            // What it does to CHARGE, as the score will read it.
-            severity?.let { s ->
-                val g = gravityOf(IllnessCheckIn(LocalDate.now(), impact, temp, s, symptoms))
-                Text(
-                    "Reads as ${g.label.uppercase()}" + (g.ceiling?.let { " · CHARGE held at ${it.roundToInt()} or below" } ?: " · no ceiling on CHARGE") +
-                        ". It eases as you check in better, or by itself after two days.",
-                    style = FTType.Caption, color = FT.TextSecondary,
-                )
+            1 -> {
+                FlowQuestion("What do you have?", type?.let { "The usual ones for ${it.label.lowercase()} come first." })
+                val usual = type?.symptoms.orEmpty()
+                val options = (usual + vocab.systemicSymptoms.map { it.code }).distinct().filter { it != "sym.other" } + "sym.other"
+                FlowPickGrid(options.map { it to (vocab.symptom(it)?.label ?: it) }, symptoms, { code ->
+                    symptoms = if (code in symptoms) symptoms - code else symptoms + code
+                })
             }
-
-            Label("A TEST (OPTIONAL)")
-            TextChipRow(TESTS.map { it.second }, TESTS.firstOrNull { it.first == test }?.second, perRow = 4) { picked ->
-                test = TESTS.firstOrNull { it.second == picked }?.first
-                if (test == null) testResult = null
-            }
-            if (test != null) {
-                TextChipRow(TestResult.entries.map { it.label }, testResult?.label, perRow = 2) { picked -> testResult = TestResult.entries.firstOrNull { it.label == picked } }
-            }
-            Label("SAW A CLINICIAN")
-            TextChipRow(listOf("NO", "YES"), if (clinician) "YES" else "NO", perRow = 2) { clinician = it == "YES" }
-            if (clinician) FieldTextField(diagnosis, { diagnosis = it }, "What they said (optional)")
-            Label("MEDICATION (OPTIONAL)")
-            FieldTextField(medication, { medication = it }, "e.g. paracetamol, antibiotics")
-            Label("NOTE (OPTIONAL)")
-            FieldTextField(note, { note = it }, "", singleLine = false)
-
-            error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Bad) }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                FTButton("CANCEL", modifier = Modifier.weight(1f), onClick = onDismiss)
-                FTButton(if (saving) "SAVING…" else "SAVE", enabled = ready && !saving, emphasis = FTButtonEmphasis.Primary, modifier = Modifier.weight(1f)) {
-                    val t = type ?: return@FTButton
-                    val now = ZonedDateTime.now()
-                    val plan = buildIllness(
-                        IllnessDraft(
-                            type = t, title = title, start = checkInDate(now).minusDays(startDaysAgo), symptoms = symptoms,
-                            severity = severity ?: return@FTButton, impact = impact, temperatureC = temp, test = test, testResult = testResult,
-                            sawClinician = clinician, diagnosis = diagnosis.takeIf { clinician }, medication = medication, note = note,
-                        ),
-                        now,
+            2 -> {
+                FTRatingSlider("HOW BAD, AT WORST NOW", severity, 0..10, FT.Metric.Soreness, { severity = it }, lowWord = "barely", highWord = "worst", reversed = true)
+                FlowField("TRAINING") {
+                    TextChipRow(IMPACT_LABELS, impact?.let { IMPACT_LABELS[it] }, perRow = 2) { picked -> impact = picked?.let { IMPACT_LABELS.indexOf(it) } }
+                }
+                FlowField("TEMPERATURE °C (OPTIONAL)") {
+                    FieldTextField(temperature, { temperature = it }, "e.g. 38.2", keyboardType = KeyboardType.Decimal)
+                }
+                // What it does to CHARGE, as the score will read it.
+                severity?.let { s ->
+                    val g = gravityOf(IllnessCheckIn(LocalDate.now(), impact, temp, s, symptoms))
+                    Text(
+                        "Reads as ${g.label.uppercase()}" + (g.ceiling?.let { " · CHARGE held at ${it.roundToInt()} or below" } ?: " · no ceiling on CHARGE") +
+                            ". It eases as you check in better, or by itself after two days.",
+                        style = FTType.Caption, color = FT.TextSecondary,
                     )
-                    saving = true
-                    scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { saving = false }) {
-                        repo.saveIllness(plan)
-                        repo.assignSignals(adoptSignalIds, plan.checkIn.concerns.first().id)
-                        repo.refresh()
-                        onSaved()
-                    }
                 }
             }
-            Spacer(Modifier.height(8.dp))
+            3 -> {
+                FlowField("A TEST") {
+                    TextChipRow(TESTS.map { it.second }, TESTS.firstOrNull { it.first == test }?.second, perRow = 4) { picked ->
+                        test = TESTS.firstOrNull { it.second == picked }?.first
+                        if (test == null) testResult = null
+                    }
+                    if (test != null) {
+                        TextChipRow(TestResult.entries.map { it.label }, testResult?.label, perRow = 2) { picked -> testResult = TestResult.entries.firstOrNull { it.label == picked } }
+                    }
+                }
+                FlowField("SAW A CLINICIAN") {
+                    TextChipRow(listOf("NO", "YES"), if (clinician) "YES" else "NO", perRow = 2) { clinician = it == "YES" }
+                    if (clinician) FieldTextField(diagnosis, { diagnosis = it }, "What they said (optional)")
+                }
+            }
+            else -> {
+                FlowField("NAME IT") { FieldTextField(title, { title = it; titleEdited = true }, "e.g. Cold after the race") }
+                FlowField("MEDICATION") { FieldTextField(medication, { medication = it }, "e.g. paracetamol, antibiotics") }
+                FlowField("NOTE") { FieldTextField(note, { note = it }, "", singleLine = false) }
+            }
         }
     }
 }

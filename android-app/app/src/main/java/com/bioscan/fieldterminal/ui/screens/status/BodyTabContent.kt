@@ -34,6 +34,8 @@ import com.bioscan.fieldterminal.data.ScaleReadingRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.UserProfileRepository
 import com.bioscan.fieldterminal.data.catching
+import com.bioscan.fieldterminal.data.MeViewPublisher
+import com.bioscan.fieldterminal.domain.meview.bodyMeView
 import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
 import com.bioscan.fieldterminal.data.model.UserProfileRow
 import com.bioscan.fieldterminal.domain.BodyCheckinRecord
@@ -124,6 +126,10 @@ fun BodyTabContent() {
         heightCm = catching { repo.latestHeightCm() }.getOrNull() ?: heightCm
         profile = catching { UserProfileRepository(SupabaseClientProvider.client).loadProfile() }.getOrNull() ?: profile
         scaleSeries = catching { ScaleReadingRepository(SupabaseClientProvider.client).loadCompositionSeries() }.getOrElse { scaleSeries }
+        // The web Dashboard's Me › Body shows this same tab (domain/meview); a failed write never touches the page.
+        bodyMetrics?.let { bm ->
+            catching { MeViewPublisher.publish(SupabaseClientProvider.client, bodyMeView(bm, checkins, profile?.heightCm ?: heightCm, profile, scaleSeries, LocalDate.now())) }
+        }
     }
 
     var range by rememberRange("me:body", ChartRange.M3)

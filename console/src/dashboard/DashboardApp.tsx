@@ -38,7 +38,7 @@ function DashShell({ tab }: { tab: 'today' | 'me' }) {
         <span className="dash-wordmark">FIELD TERMINAL · DASHBOARD</span>
         <nav className="ft-seg dash-tabs" aria-label="Dashboard">
           <NavLink to={`/today${q}`}>{({ isActive }) => <span aria-current={isActive}>TODAY</span>}</NavLink>
-          <NavLink to={`/me${q}`}>{({ isActive }) => <span aria-current={isActive}>ME</span>}</NavLink>
+          <NavLink to={`/me`}>{({ isActive }) => <span aria-current={isActive}>ME</span>}</NavLink>
         </nav>
         {tab === 'today' && (
           <input className="dash-date" type="date" value={day} max={localToday()} aria-label="Day" onChange={(e) => e.target.value && setDay(e.target.value)} />

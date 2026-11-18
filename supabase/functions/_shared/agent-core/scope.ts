@@ -81,6 +81,9 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     'fuel_week_plans',
     // the day's plan as the phone drew it, for the web Dashboard: its sessions can carry calendar entry titles
     'today_plans',
+    // the Me tabs as the phone worked them out, for the web Dashboard: a derived copy that mixes every group (health,
+    // routine, sexual health); the assistant reads the source tables under their own groups instead
+    'me_views',
     // free text by nature
     'notes',
     // the home's environment (docs/home-environment): light and changes in the readings show when someone is home, so

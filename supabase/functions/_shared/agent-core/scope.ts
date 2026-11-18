@@ -77,6 +77,8 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     'phone_app_usage_daily', 'phone_app_categories', 'daily_context', 'planned_routes', 'routine_activities', 'routine_logs',
     // other people and the calendar
     'people', 'calendar_events', 'calendar_event_overrides', 'calendar_strength_staging', 'calendar_strength_staging_review',
+    // the phone's copy of a prep week for the web's meal prep: its planned sessions can carry calendar entry titles
+    'fuel_week_plans',
     // free text by nature
     'notes',
     // the home's environment (docs/home-environment): light and changes in the readings show when someone is home, so

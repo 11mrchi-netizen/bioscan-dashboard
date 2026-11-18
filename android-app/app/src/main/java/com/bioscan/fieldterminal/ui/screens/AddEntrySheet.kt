@@ -213,17 +213,17 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
                         initialSubType = (fuelStart as? AddEntryStart.Fuel)?.subType ?: FuelSubType.Food,
                         supplementBundle = (fuelStart as? AddEntryStart.Fuel)?.supplementBundle,
                     )
-                    AddEntryType.Encounter -> EncounterForm(
+                    AddEntryType.Encounter -> IntimacyForm(
                         saving,
-                        onSave = { date, occurredAt, et, loc, dur, acts, rating, n ->
-                            onSubmit { it.addEncounter(date = date, encounterType = et, notes = n, occurredAt = occurredAt, locationType = loc, durationMin = dur, activities = acts, myRating = rating) }
-                        },
+                        onSaveEncounter = { rows -> onSubmit { it.addEncounters(rows) } },
+                        onSaveSolo = { date, instances, n -> onSubmit { it.addSexualActivity(date, "masturbation", instances, n) } },
                     )
                     AddEntryType.Stool -> StoolForm(saving, onSave = { occurredAt, bt, d, empty -> onSubmit { it.addStool(occurredAt, bt, d, empty) } })
                     AddEntryType.Wellness -> WellnessForm(saving, onSave = { date, e, m, s, so, mw, al -> onSubmit { it.addWellbeing(date, e, m, s, so, mw, al) } })
                     AddEntryType.Note -> NoteForm(saving, onSave = { occurredAt, text -> onSubmit { it.addNote(occurredAt, text) } })
                     AddEntryType.Ostrc -> OstrcForm(saving, onSave = { date, ba, q1, q2, q3, q4, n -> onSubmit { it.addOstrc(date, ba, q1, q2, q3, q4, n) } })
-                    AddEntryType.SexualActivity -> SexualActivityForm(saving, onSave = { date, type, instances, n -> onSubmit { it.addSexualActivity(date, type, instances, n) } })
+                    // No picker entry leads here (solo is inside IntimacyForm); kept for a start saved by an older build.
+                    AddEntryType.SexualActivity -> SexualActivityForm(saving, onSave = { date, instances, n -> onSubmit { it.addSexualActivity(date, "masturbation", instances, n) } })
                     AddEntryType.Grip -> GripForm(saving, onSave = { occurredAt, hand, kg -> onSubmit { it.addGrip(occurredAt, hand, kg) } })
                 }
             }
@@ -365,18 +365,12 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                     initialMl = row.ml,
                     onSave = { date, ml -> onSubmit { it.updateDrink(row.id, date, ml) } },
                 )
+                // A saved encounter is one partner's row, so the edit form has exactly one partner block.
                 is LogEncounterRow -> EncounterForm(
                     saving,
+                    initial = row,
                     initialDateTime = row.occurredAt?.let { parseIsoToLocalDateTime(it) } ?: LocalDateTime.of(LocalDate.parse(row.date), LocalTime.of(21, 0)),
-                    initialType = row.encounterType ?: "",
-                    initialLocationType = row.locationType ?: "",
-                    initialDurationMin = row.durationMin,
-                    initialActivities = row.activities?.joinToString(", ") ?: "",
-                    initialMyRating = row.myRating,
-                    initialNotes = row.notes ?: "",
-                    onSave = { date, occurredAt, et, loc, dur, acts, rating, n ->
-                        onSubmit { it.updateEncounter(row.id, date, occurredAt, et, loc, dur, acts, rating, n) }
-                    },
+                    onSave = { edited -> onSubmit { it.updateEncounter(row.id, edited.single()) } },
                 )
                 is LogStoolRow -> StoolForm(
                     saving,
@@ -395,11 +389,10 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                 )
                 is LogSexualActivityRow -> SexualActivityForm(
                     saving,
-                    lockedActivityType = row.activityType,
                     initialDate = LocalDate.parse(row.date),
                     initialInstances = row.instances,
                     initialNotes = row.notes ?: "",
-                    onSave = { date, type, instances, n -> onSubmit { it.updateSexualActivity(row.id, date, type, instances, n) } },
+                    onSave = { date, instances, n -> onSubmit { it.updateSexualActivity(row.id, date, row.activityType, instances, n) } },
                 )
                 is LogNoteRow -> NoteForm(
                     saving,

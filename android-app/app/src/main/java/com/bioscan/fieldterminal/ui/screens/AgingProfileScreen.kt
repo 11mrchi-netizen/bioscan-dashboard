@@ -15,7 +15,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -23,8 +22,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AgingProfileOverview
-import com.bioscan.fieldterminal.data.AgingProfileRepository
-import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.domain.DataAvailability
 import com.bioscan.fieldterminal.domain.DisplayValue
 import com.bioscan.fieldterminal.domain.aging.BiologicalAgeResult
@@ -35,10 +32,10 @@ import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.InfoHelpButton
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
+import com.bioscan.fieldterminal.ui.components.RefreshOnCacheUpdates
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.ageAccelerationState
 import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.screens.status.FitnessAgeSection
 import com.bioscan.fieldterminal.ui.theme.FTType
 import java.time.format.DateTimeFormatter
@@ -50,15 +47,14 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 // organ-system sections are added here later without restructuring the page.
 @Composable
 fun AgingProfileScreen(onBack: () -> Unit) {
-    var overview by remember { mutableStateOf<AgingProfileOverview?>(null) }
-    val guard = rememberLoadGuard()
-    LaunchedEffect(guard.attempt) {
-        guard.run { overview = AgingProfileRepository(SupabaseClientProvider.client).loadOverview() }
-    }
+    val page = remember { AgingProfileState() }
+    val guard = page.guard
+    RefreshOnCacheUpdates(guard)
+    LaunchedEffect(guard.attempt) { page.load() }
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).ftPlatinumWash()) {
         TileHeader(onBack = onBack, title = "AGING PROFILE", subtitle = "BIOLOGICAL AGE · DIMENSIONS · HISTORY", accent = FT.DomainUser)
 
-        val current = overview
+        val current = page.overview
         when {
             current == null && guard.error != null -> LoadErrorCard(guard)
             current == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

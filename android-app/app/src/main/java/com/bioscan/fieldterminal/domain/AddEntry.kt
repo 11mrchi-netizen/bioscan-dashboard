@@ -65,8 +65,8 @@ enum class AddEntryChoice(val label: String, val group: AddEntryGroup) {
     SymptomCheck("Symptom check", AddEntryGroup.Body),
     // A race, long day or other hard day outside the training plan (domain/events/AthleteEvent.kt).
     Event("Event", AddEntryGroup.Other),
-    SexualActivity("Sexual activity", AddEntryGroup.Intimacy),
-    Encounter("Encounter", AddEntryGroup.Intimacy),
+    // One entry for an encounter with a partner (with or without sex) and for solo; the form splits them (IntimacyForm).
+    Intimacy("Sex / encounter", AddEntryGroup.Intimacy),
     Note("Note", AddEntryGroup.Other),
 }
 
@@ -99,8 +99,7 @@ val AddEntryChoice.target: AddEntryTarget
         AddEntryChoice.Event -> AddEntryTarget.EventForm
         AddEntryChoice.SweatTest -> AddEntryTarget.SweatTest
         AddEntryChoice.ScaleWeighIn -> AddEntryTarget.ScaleWeighIn
-        AddEntryChoice.SexualActivity -> AddEntryTarget.Form(AddEntryType.SexualActivity)
-        AddEntryChoice.Encounter -> AddEntryTarget.Form(AddEntryType.Encounter)
+        AddEntryChoice.Intimacy -> AddEntryTarget.Form(AddEntryType.Encounter)
         AddEntryChoice.Note -> AddEntryTarget.Form(AddEntryType.Note)
     }
 
@@ -109,11 +108,14 @@ val AddEntryChoice.target: AddEntryTarget
 const val RECENT_ADD_CHOICES = 3
 
 // Redesign (spec §6): Injury check-in, Injury / pain and Illness / symptom were folded into the one Health entry, which
-// opens the same check-in. These are the only choices ever removed since RECENT was introduced (checked in git history).
+// opens the same check-in.
 private val RETIRED_CHOICE_NAMES = mapOf(
     "InjuryCheckIn" to AddEntryChoice.HealthCheckIn,
     "Injury" to AddEntryChoice.HealthCheckIn,
     "Illness" to AddEntryChoice.HealthCheckIn,
+    // Sexual activity and Encounter became the one Intimacy entry.
+    "SexualActivity" to AddEntryChoice.Intimacy,
+    "Encounter" to AddEntryChoice.Intimacy,
 )
 
 fun recordRecentChoice(recent: List<AddEntryChoice>, picked: AddEntryChoice, keep: Int = RECENT_ADD_CHOICES): List<AddEntryChoice> =

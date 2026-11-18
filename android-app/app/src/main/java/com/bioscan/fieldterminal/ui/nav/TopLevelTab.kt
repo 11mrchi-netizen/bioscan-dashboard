@@ -44,6 +44,8 @@ enum class MeTab(val label: String) {
     Body("BODY"),
     Health("HEALTH"),
     Bloodwork("BLOODWORK"),
+    // Sex and encounters: stats, trends, correlations, STI tests and the partners (ui/screens/me/IntimacyPage.kt).
+    Intimacy("INTIMACY"),
     // Routine R8: the long view of the routine (ui/screens/me/RoutinePage.kt).
     Routine("ROUTINE"),
 }

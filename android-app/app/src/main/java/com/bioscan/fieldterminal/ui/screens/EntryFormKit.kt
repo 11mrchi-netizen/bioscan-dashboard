@@ -104,7 +104,7 @@ private fun choiceColor(choice: AddEntryChoice): Color = when (choice) {
     AddEntryChoice.HealthCheckIn, AddEntryChoice.IllnessLog, AddEntryChoice.SymptomCheck -> FT.DomainHeart
     AddEntryChoice.Grip, AddEntryChoice.BodyCheckIn, AddEntryChoice.SweatTest, AddEntryChoice.ScaleWeighIn -> FT.Category.Activity.c500
     AddEntryChoice.Event -> FT.DomainTraining
-    AddEntryChoice.SexualActivity, AddEntryChoice.Encounter -> FT.Category.Arousal.c500
+    AddEntryChoice.Intimacy -> FT.Category.Arousal.c500
     AddEntryChoice.Note -> FT.TextSecondary
 }
 
@@ -258,12 +258,17 @@ internal val YES_NO_OPTIONS = listOf("Yes", "No")
 // optional (unlike Bristol), so tapping the already-selected chip again
 // clears it back to null rather than always leaving exactly one selected.
 @Composable
-internal fun TextChipRow(options: List<String>, selected: String?, perRow: Int = 4, onSelect: (String?) -> Unit) {
+internal fun TextChipRow(options: List<String>, selected: String?, perRow: Int = 4, onSelect: (String?) -> Unit) =
+    ChipGrid(options, perRow, Role.RadioButton, isSelected = { it == selected }) { onSelect(if (it == selected) null else it) }
+
+// The chips themselves: single choice through TextChipRow, multiple choice through MultiChipSection.
+@Composable
+internal fun ChipGrid(options: List<String>, perRow: Int, role: Role, isSelected: (String) -> Boolean, onClick: (String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         options.chunked(perRow).forEach { rowOptions ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 rowOptions.forEach { option ->
-                    val isSelected = option == selected
+                    val isSelected = isSelected(option)
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -272,7 +277,7 @@ internal fun TextChipRow(options: List<String>, selected: String?, perRow: Int =
                             .semantics { this.selected = isSelected }
                             .border(FT.BorderWidth, if (isSelected) Color.Transparent else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
                             .background(if (isSelected) FT.PlatinumSolid else FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
-                            .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall), role = Role.RadioButton, onClickLabel = option) { onSelect(if (isSelected) null else option) }
+                            .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall), role = role, onClickLabel = option) { onClick(option) }
                             .padding(vertical = 10.dp, horizontal = 2.dp),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -280,6 +285,8 @@ internal fun TextChipRow(options: List<String>, selected: String?, perRow: Int =
                             option.uppercase(),
                             style = FTType.MonoCaption,
                             color = if (isSelected) FT.PlatinumInk else FT.TextSecondary,
+                            // a label that wraps to two lines stays centred in its chip
+                            textAlign = TextAlign.Center,
                         )
                     }
                 }

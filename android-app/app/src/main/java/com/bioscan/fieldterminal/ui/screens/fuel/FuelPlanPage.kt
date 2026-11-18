@@ -45,12 +45,10 @@ import com.bioscan.fieldterminal.ui.components.FTIconSize
 import com.bioscan.fieldterminal.ui.components.FTIcons
 import com.bioscan.fieldterminal.ui.components.NutrientColor
 import com.bioscan.fieldterminal.ui.components.barAlpha
-import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.drawBar
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.rememberCacheVersion
 import com.bioscan.fieldterminal.ui.theme.FTType
-import kotlinx.coroutines.CancellationException
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -80,27 +78,17 @@ fun FuelPlanPage(
     onOpenFullPlan: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
-    var result by remember { mutableStateOf<TodayFuelResult?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val page = remember { FuelPlanPageState() }
     var attempt by remember { mutableIntStateOf(0) }
     var settingsOpen by remember { mutableStateOf(false) }
     val cacheVersion = rememberCacheVersion()
-    LaunchedEffect(attempt, overview, cacheVersion) {
-        error = null
-        try {
-            result = FuelPlanRepository(SupabaseClientProvider.client).loadToday(context, overview)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            error = describeLoadFailure(e)
-        }
-    }
+    LaunchedEffect(attempt, overview, cacheVersion) { page.load(context, overview) }
 
     Column(modifier.padding(horizontal = 22.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        val horizon = (result as? TodayFuelResult.Ready)?.fuel?.horizon.orEmpty().take(days)
+        val horizon = (page.result as? TodayFuelResult.Ready)?.fuel?.horizon.orEmpty().take(days)
         CalendarReviewCard(horizon.flatMap { it.day.reviews }, onAnswered = { attempt++ })
-        TodaysFuelCard(result, error, onRetry = { attempt++ }, onOpenSettings = { settingsOpen = true })
-        val recent = (result as? TodayFuelResult.Ready)?.fuel?.recentDays.orEmpty()
+        TodaysFuelCard(page.result, page.error, onRetry = { attempt++ }, onOpenSettings = { settingsOpen = true })
+        val recent = (page.result as? TodayFuelResult.Ready)?.fuel?.recentDays.orEmpty()
         val today = LocalDate.now()
         MatchedSessionsCard(recent, today, onChanged = { attempt++ })
         LongSessionFuelCard(recent, today)

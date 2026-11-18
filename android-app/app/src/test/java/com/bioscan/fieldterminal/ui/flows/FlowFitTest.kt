@@ -103,7 +103,7 @@ class FlowFitTest {
     @Test fun addFood() = add("add_food", com.bioscan.fieldterminal.domain.AddEntryStart.Fuel(com.bioscan.fieldterminal.domain.FuelSubType.Food), 3)
     @Test fun addDrink() = add("add_drink", com.bioscan.fieldterminal.domain.AddEntryStart.Fuel(com.bioscan.fieldterminal.domain.FuelSubType.Drink))
     @Test fun addSupplements() = add("add_supps", com.bioscan.fieldterminal.domain.AddEntryStart.Fuel(com.bioscan.fieldterminal.domain.FuelSubType.Supplements))
-    @Test fun addEncounter() = add("add_encounter", com.bioscan.fieldterminal.domain.AddEntryStart.Form(com.bioscan.fieldterminal.domain.AddEntryType.Encounter))
+    @Test fun addEncounter() = add("add_encounter", com.bioscan.fieldterminal.domain.AddEntryStart.Form(com.bioscan.fieldterminal.domain.AddEntryType.Encounter), 9)
     @Test fun addStool() = add("add_stool", com.bioscan.fieldterminal.domain.AddEntryStart.Form(com.bioscan.fieldterminal.domain.AddEntryType.Stool))
     @Test fun addWellness() = add("add_wellness", com.bioscan.fieldterminal.domain.AddEntryStart.Form(com.bioscan.fieldterminal.domain.AddEntryType.Wellness), 2)
     @Test fun addNote() = add("add_note", com.bioscan.fieldterminal.domain.AddEntryStart.Form(com.bioscan.fieldterminal.domain.AddEntryType.Note))

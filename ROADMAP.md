@@ -7,6 +7,13 @@ Sept 12 calendar event description (which hit Google Calendar's length limit).*
 (evenings/weekends style), not full-time effort, and don't account for debugging or platform
 surprises. Treat them as "roughly this scale," not a deadline.
 
+> **Nov 2026, web transition (phases 1–5 done).** The old dashboard page (`index.html` with `login.html` and the Web Push
+> worker `sw.js`) is retired. The web is now two surfaces built from `console/`: the **Dashboard** at the site root (Today,
+> any past day, and Me) and the **Console** at `/console/` (Log with fixes, Lab, Plan, Analysis, System › Connections with
+> the Google Calendar connection). `/legacy/` and `/login.html` redirect to the Dashboard; `sw.js` only unregisters itself
+> and its push subscription. Browser push alerts were dropped (the phone sends notifications), so the notes below on
+> `login.html`, `sw.js` and browser push describe history.
+
 ---
 
 ## ⚠ CORRECTED AUTOMATION MODEL (read this first)

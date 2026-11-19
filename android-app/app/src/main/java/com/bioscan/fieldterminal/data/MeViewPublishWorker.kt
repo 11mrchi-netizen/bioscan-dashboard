@@ -24,7 +24,7 @@ class MeViewPublishWorker(context: Context, params: WorkerParameters) : Coroutin
             { MeViewSources.performance(supabase) },
             { com.bioscan.fieldterminal.ui.screens.user.HealthspanMeSource.build() },
             { MeViewSources.routine(supabase) },
-            { MeViewSources.exposures(supabase) },
+            { MeViewSources.exposures(applicationContext, supabase) },
         )
         val results = tabs.map { build -> catching { MeViewPublisher.publish(supabase, build()) } }
         return if (results.any { it.isSuccess }) Result.success() else Result.retry()

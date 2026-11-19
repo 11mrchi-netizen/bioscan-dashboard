@@ -2,6 +2,8 @@ package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.domain.BloodworkMarkerEvaluation
 import com.bioscan.fieldterminal.domain.evaluateBloodworkMarker
+import com.bioscan.fieldterminal.domain.risk.InstrumentAnswer
+import com.bioscan.fieldterminal.domain.risk.summaries
 import com.bioscan.fieldterminal.domain.meview.MeViewDoc
 import com.bioscan.fieldterminal.domain.meview.bloodworkMeView
 import com.bioscan.fieldterminal.domain.meview.bodyMeView
@@ -64,8 +66,13 @@ object MeViewSources {
             d.apps.map { Triple(it.label ?: it.pkg, it.category, it.minutes) },
         )
 
-    suspend fun exposures(supabase: SupabaseClient): MeViewDoc =
-        com.bioscan.fieldterminal.domain.meview.exposuresMeView(ExposuresRepository(supabase).load())
+    suspend fun exposures(context: android.content.Context, supabase: SupabaseClient): MeViewDoc {
+        val defs = InstrumentsRepository.definitions(context)
+        // The questionnaires are read softly: before their migration, the air part still publishes.
+        val rows = catching { InstrumentsRepository(supabase).loadResponses() }.getOrElse { emptyList() }
+        val summaries = defs.summaries(rows.map { InstrumentAnswer(it.instrument, it.date, it.score, it.band, it.flags) }, LocalDate.now())
+        return com.bioscan.fieldterminal.domain.meview.exposuresMeView(ExposuresRepository(supabase).load(), summaries)
+    }
 
     suspend fun routine(supabase: SupabaseClient): MeViewDoc =
         routine(com.bioscan.fieldterminal.data.routine.RoutinePageRepository(supabase).load())

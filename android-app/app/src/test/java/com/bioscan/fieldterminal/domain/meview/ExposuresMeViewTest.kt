@@ -4,6 +4,9 @@ import com.bioscan.fieldterminal.data.AirDayRow
 import com.bioscan.fieldterminal.data.AirSessionRow
 import com.bioscan.fieldterminal.data.AirSummary
 import com.bioscan.fieldterminal.data.ExposuresData
+import com.bioscan.fieldterminal.domain.risk.InstrumentAnswer
+import com.bioscan.fieldterminal.domain.risk.parseInstruments
+import com.bioscan.fieldterminal.domain.risk.summaries
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -46,5 +49,22 @@ class ExposuresMeViewTest {
     fun anEmptyAccountSaysSo() {
         val doc = exposuresMeView(ExposuresData(emptyList(), null, null, null))
         assertEquals("No air days yet.", (doc.sections.single().items.single() as MeNote).text)
+    }
+
+    @Test
+    fun theQuestionnairesComeFirstByDomainEachInItsHue() {
+        val defs = parseInstruments(java.io.File("../../supabase/functions/_shared/instruments/instruments.json").readText())
+        val today = java.time.LocalDate.of(2026, 11, 19)
+        val summaries = defs.summaries(listOf(InstrumentAnswer("phq9", today.minusDays(3), 6.0, "Mild", emptyList())), today)
+        val doc = exposuresMeView(ExposuresData(emptyList(), summary, "2026-11-10", "READY"), summaries)
+        assertEquals(listOf("MIND", "CONNECTION", "WORK", "AIR · LAST 30 DAYS"), doc.sections.map { it.title }.take(4))
+        val phq = doc.sections[0].items.first() as MeTile
+        assertEquals("6", phq.value)
+        assertEquals("m-phq9", phq.hue)
+        assertEquals(Tone.WARN, phq.tone)
+        assertTrue(phq.sub!!.contains("next 2026-12-14"))
+        val ucla = doc.sections[1].items.single() as MeTile
+        assertEquals("—", ucla.value)
+        assertTrue(ucla.sub!!.contains("due now"))
     }
 }

@@ -157,6 +157,13 @@
   --m-ozone:             #8fd0ff;
   --m-uv-index:          #c8e04a;
   --m-co2:               #9fb4c8;
+  /* risk profile R2: questionnaire scores */
+  --m-phq9:              #b58cff;
+  --m-gad7:              #ff8fd0;
+  --m-who5:              #7ad7a8;
+  --m-loneliness:        #8fb8ff;
+  --m-burnout:           #e0a26b;
+  --m-work-hours:        #c2c27a;
   --m-time-logged:       #b8e04a;
   --m-time-phone:        #a7b0ff;
 

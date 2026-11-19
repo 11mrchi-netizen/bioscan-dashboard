@@ -90,6 +90,8 @@ android {
             assets.srcDir("../../supabase/functions/_shared/metric-registry")
             // Health concerns: the region and symptom vocabulary, shared with the analysis core and the migration's seed.
             assets.srcDir("../../supabase/functions/_shared/health-vocab")
+            // Risk profile R2: the questionnaires (instruments.json), shared with the console and its tests.
+            assets.srcDir("../../supabase/functions/_shared/instruments")
             // Running form analyser: MediaPipe's pose model, downloaded at build time (downloadPoseModel below).
             // A plain folder: AGP 9 refuses a Provider here. The download still runs first (preBuild dependsOn downloadPoseModel below).
             assets.srcDir(layout.buildDirectory.dir("generated/pose-model").get().asFile)

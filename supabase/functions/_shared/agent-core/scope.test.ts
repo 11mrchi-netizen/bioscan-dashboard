@@ -77,6 +77,8 @@ test('results about routine series are withheld, whatever the result kind', () =
   assert.equal(resultAllowed({ kind: 'air_exposure', key: 'summary' }, { enabled: true, optIn: ['notes', 'sexual_health', 'health_concerns', 'digestive'] }), false)
   assert.equal(tableAccess('air_exposure_daily', on).ok, false)
   assert.equal(tableAccess('bp_readings', on).ok, true)
+  // questionnaire answers (R2) stay closed even with every group shared
+  assert.equal(tableAccess('instrument_responses', all).ok, false)
 })
 
 test('health-concern results need the health concerns group', () => {

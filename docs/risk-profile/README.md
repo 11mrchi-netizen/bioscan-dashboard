@@ -32,13 +32,29 @@ Clinic readings stay where they were (`lab_results`: `SBP, Sitting`, `DBP, Sitti
 Without an indoor PM2.5 sensor (the ALPSTUGA is not bought yet) home hours use the outdoor level at home, and every view
 says so; the first suggestion is then to measure indoors.
 
+## R2: mental health, connection, work
+
+| Part | Where | Tested by |
+|---|---|---|
+| The questionnaires as published: PHQ-9, GAD-7, WHO-5, UCLA-3, the Copenhagen Burnout Inventory's work scale, working hours; items, options, scoring (sum / mean / multiplier / reversed items), bands with their state, flags, intervals (4 or 8 weeks), sources, and worked cases | `supabase/functions/_shared/instruments/instruments.json` (an Android asset too) | the cases, by both scorers below |
+| `instrument_responses`: one row per completed questionnaire (answers, score, band, flags, the definitions version), append-only (no update policy: a mistake is deleted and answered again); `answered_at` real instant, `local_date` the local calendar date. `questionnaire_due` reminder, Sunday 10:00, sent only when one is due | `supabase/migrations/20261119120000_instrument_responses.sql` | applied on Postgres 16 with stubs: RLS, the update refused, the rule seeded |
+| Scorer, due dates, summaries (latest, state, previous, history) | `android-app/.../domain/risk/Instruments.kt`; `console/src/lib/instruments.ts` | `InstrumentsTest` (6), `instruments.test.ts` (6, including the local date in UTC+8) |
+| Phone: Me › EXPOSURES › MIND, CONNECTION, WORK (each score in its hue, band, the score before, due; a row opens its history; TAKE opens the questionnaire), the one-page questionnaire flow with its result in place; the reminder (Setup › Notifications › QUESTIONNAIRES) opens the tab; published to `me_views` | `ui/screens/me/QuestionnaireSheet.kt`, `QuestionnaireCards.kt`, `ExposuresPage.kt`, `data/InstrumentsRepository.kt`, notification files | `ExposuresMeViewTest`, `NavigationMapTest`, routing in `InstrumentsTest` |
+| Console: ANALYSIS › Risk › MIND, CONNECTION, WORK (results over time, answer any questionnaire there) | `console/src/workspaces/RiskQuestionnaires.tsx` | `e2e/risk.mts` (a PHQ-9 answered in the browser: scored 9, Mild, the flag saved and shown, a local date) |
+| Metric hues: PHQ-9, GAD-7, WHO-5, loneliness, burnout, working hours | `design/tokens`, `FT.Metric` | — |
+
+PHQ-9 item 9 (thoughts of being better off dead or of self-harm) shows a plain line at any total; no crisis line and no
+notification to anyone (owner decision). Passive context (encounters, phone use at night) is not folded in: encounters
+became the partnered record in `main`'s sex-tracking work, so they no longer measure social contact.
+
 ## The health assistant's scope
 
 `agent-core/scope.ts` classifies every table (a test fails on one that is not). `bp_readings` is `shared`, like
 `grip_strength_log` and `lab_results`; its free-text note is dropped unless notes are shared. `air_exposure_daily` and
 `outdoor_air_hourly` are `never`: they are built from where the person was, hour by hour, the same rule as
 `place_visits` and `home_env_readings`. The `air_exposure` summary in `analysis_results` is withheld too
-(`resultAllowed`), since it carries the share of the dose breathed at home. These take effect in the assistant when
+(`resultAllowed`), since it carries the share of the dose breathed at home. `instrument_responses` (R2) is `never`:
+mental health answers, including the self-harm item, stay closed until the owner opens them as an opt-in group of their own. These take effect in the assistant when
 `health-agent` is redeployed; the live one (v3) would still serve an `air_exposure` row once `analysis-run` writes one.
 
 ## Deploy, in this order

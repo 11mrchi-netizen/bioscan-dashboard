@@ -96,6 +96,9 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     // the air breathed (docs/risk-profile R1): built from where the person was, hour by hour (which grid cells, home or
     // away), so it is location data; the outdoor cache's cells alone say where they went
     'air_exposure_daily', 'outdoor_air_hourly',
+    // questionnaire answers (docs/risk-profile R2): mental health, loneliness and burnout, including PHQ-9's self-harm item.
+    // Closed until the owner decides to open them, as an opt-in group of their own, not by default
+    'instrument_responses',
   ),
   ...internal(
     'sync_log', 'zepp_raw_extracts', 'zepp_history_pull', 'zepp_sync_state', 'calendar_sync_state', 'notification_log',

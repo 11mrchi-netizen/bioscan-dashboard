@@ -121,6 +121,14 @@ private val DEFAULT_RULES = listOf(
         conditions = NotificationConditions(skipIfLogged = true),
         limits = NotificationLimits(maxPerDay = 6, minGapMin = 15, snoozeMin = 15),
     ),
+    // Risk profile R2: Sunday 10:00, only when a questionnaire is due (the dispatcher checks).
+    NewNotificationRuleRow(
+        kind = NotificationKind.QUESTIONNAIRE_DUE,
+        enabled = true,
+        schedule = NotificationSchedule(times = listOf("10:00"), days = listOf(7)),
+        conditions = NotificationConditions(skipIfLogged = true),
+        limits = NotificationLimits(maxPerDay = 1, minGapMin = 60, snoozeMin = 60),
+    ),
     // Fuel planning: no clock times; the worker reads the planned sessions and races (domain/notifications/FuelPrompts.kt).
     NewNotificationRuleRow(
         kind = NotificationKind.FUEL_SESSION,

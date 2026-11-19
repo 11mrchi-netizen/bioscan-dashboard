@@ -207,6 +207,13 @@ object FuturisticMaterialTokens {
         val Ozone = Color(0xFF8FD0FF)
         val UvIndex = Color(0xFFC8E04A)
         val Co2 = Color(0xFF9FB4C8)
+        // risk profile R2: questionnaire scores (Me › EXPOSURES)
+        val Phq9 = Color(0xFFB58CFF)
+        val Gad7 = Color(0xFFFF8FD0)
+        val Who5 = Color(0xFF7AD7A8)
+        val Loneliness = Color(0xFF8FB8FF)
+        val Burnout = Color(0xFFE0A26B)
+        val WorkHours = Color(0xFFC2C27A)
         val TimeLogged = Color(0xFFB8E04A)
         val TimePhone = Color(0xFFA7B0FF)
     }

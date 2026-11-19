@@ -1,6 +1,8 @@
 package com.bioscan.fieldterminal.domain.meview
 
 import com.bioscan.fieldterminal.data.ExposuresData
+import com.bioscan.fieldterminal.domain.risk.INSTRUMENT_DOMAINS
+import com.bioscan.fieldterminal.domain.risk.InstrumentSummary
 import java.time.LocalDate
 import java.util.Locale
 
@@ -16,9 +18,33 @@ const val AIR_GUIDELINES =
 private fun f1(v: Double) = "%.1f".format(Locale.ENGLISH, v)
 private fun tone(s: String?): Tone? = when (s) { "ok" -> Tone.OK; "warn" -> Tone.WARN; "bad" -> Tone.BAD; else -> null }
 
-fun exposuresMeView(d: ExposuresData): MeViewDoc {
+/** Each questionnaire's hue token (design/tokens --m-*), as ui/screens/me/QuestionnaireCards.kt's instrumentInk. */
+fun instrumentHue(id: String): String = when (id) {
+    "phq9" -> "m-phq9"; "gad7" -> "m-gad7"; "who5" -> "m-who5"; "ucla3" -> "m-loneliness"; "cbi_work" -> "m-burnout"; "work_hours" -> "m-work-hours"
+    else -> "ft-fg"
+}
+
+private fun qTone(state: String?): Tone? = when (state) { "ok" -> Tone.OK; "warn" -> Tone.WARN; "bad" -> Tone.BAD; else -> null }
+private fun qScore(v: Double) = if (v % 1.0 == 0.0) v.toInt().toString() else "%.1f".format(Locale.ENGLISH, v)
+
+/** Risk profile R2: the questionnaires by domain, each its latest score, band, date and when it is due. */
+private fun questionnaireSections(summaries: List<InstrumentSummary>): List<MeSection> = INSTRUMENT_DOMAINS.mapNotNull { (domain, title) ->
+    val rows = summaries.filter { it.instrument.domain == domain }
+    if (rows.isEmpty()) return@mapNotNull null
+    MeSection(title, rows.map { s ->
+        val l = s.latest
+        MeTile(
+            "${s.instrument.name} (${s.instrument.short})", l?.let { qScore(it.score) } ?: "—", l?.let { s.instrument.unit },
+            sub = listOfNotNull(l?.band, l?.let { "taken ${it.date}" } ?: "not taken yet", if (s.due) "due now" else s.dueOn?.let { "next $it" }).joinToString(" · "),
+            tone = qTone(s.state), hue = instrumentHue(s.instrument.id), series = s.series.toList(),
+        )
+    }, info = "Validated questionnaires, answered on the phone or in the console. Screens, not diagnoses.")
+}
+
+fun exposuresMeView(d: ExposuresData, questionnaires: List<InstrumentSummary> = emptyList()): MeViewDoc {
     val s = d.summary
     val sections = mutableListOf<MeSection>()
+    sections += questionnaireSections(questionnaires)
     sections += MeSection("AIR · LAST 30 DAYS", if (s == null || s.daysWithData == 0) listOf(MeNote("No air days yet.")) else listOfNotNull(
         MeTile("PM2.5 breathed", s.pm25Mean?.let(::f1) ?: "—", "µg/m³", tone = tone(s.states["pm25"]), hue = "m-pm25",
             sub = "${s.pm25DaysOver} of ${s.fullDays} full days above 15", series = d.series { it.pm25 }.toList()),

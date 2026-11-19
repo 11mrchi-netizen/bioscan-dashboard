@@ -46,6 +46,7 @@ class FieldTerminalApp : Application() {
             Triple(NotificationKind.FUEL_SESSION, "Fuel before and after sessions", NotificationManager.IMPORTANCE_DEFAULT),
             Triple(NotificationKind.FUEL_EVENT, "Race week fuelling", NotificationManager.IMPORTANCE_HIGH),
             Triple(NotificationKind.PRACTICE_DUE, "Practices", NotificationManager.IMPORTANCE_DEFAULT),
+            Triple(NotificationKind.QUESTIONNAIRE_DUE, "Questionnaires", NotificationManager.IMPORTANCE_DEFAULT),
             // The running routine timer: silent, it only carries STOP.
             Triple(RoutineTimerStore.CHANNEL, "Routine timer", NotificationManager.IMPORTANCE_LOW),
         ).forEach { (id, name, importance) ->

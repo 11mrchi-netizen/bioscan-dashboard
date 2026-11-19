@@ -24,6 +24,12 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AirDayRow
 import com.bioscan.fieldterminal.data.ExposuresData
 import com.bioscan.fieldterminal.data.ExposuresRepository
+import com.bioscan.fieldterminal.data.InstrumentResponseRow
+import com.bioscan.fieldterminal.data.InstrumentsRepository
+import com.bioscan.fieldterminal.domain.risk.InstrumentAnswer
+import com.bioscan.fieldterminal.domain.risk.InstrumentSummary
+import com.bioscan.fieldterminal.domain.risk.summaries
+import androidx.compose.ui.platform.LocalContext
 import com.bioscan.fieldterminal.data.MeViewPublisher
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.catching
@@ -78,13 +84,35 @@ fun ExposuresPage() {
     var error by remember { mutableStateOf<String?>(null) }
     var reload by remember { mutableIntStateOf(0) }
     var history by remember { mutableStateOf<AirMetric?>(null) }
+    // Risk profile R2: the questionnaires, loaded on their own so a failure on one side never hides the other.
+    val context = LocalContext.current
+    val defs = remember { InstrumentsRepository.definitions(context) }
+    var answers by remember { mutableStateOf<List<InstrumentResponseRow>?>(null) }
+    var answersError by remember { mutableStateOf<String?>(null) }
+    var taking by remember { mutableStateOf<String?>(null) }
+    var questionnaireHistory by remember { mutableStateOf<InstrumentSummary?>(null) }
     val cacheVersion = rememberCacheVersion()
+    LaunchedEffect(reload, cacheVersion) {
+        try {
+            answers = InstrumentsRepository(SupabaseClientProvider.client).loadResponses()
+            answersError = null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            answersError = describeLoadFailure(e)
+        }
+    }
+    val today = LocalDate.now()
+    val summaries = answers?.let { rows -> defs.summaries(rows.map { InstrumentAnswer(it.instrument, it.date, it.score, it.band, it.flags) }, today) }
     LaunchedEffect(reload, cacheVersion) {
         try {
             val loaded = ExposuresRepository(SupabaseClientProvider.client).load()
             data = loaded
             error = null
-            catching { MeViewPublisher.publish(SupabaseClientProvider.client, exposuresMeView(loaded)) }
+            catching {
+                val rows = InstrumentsRepository(SupabaseClientProvider.client).loadResponses()
+                MeViewPublisher.publish(SupabaseClientProvider.client, exposuresMeView(loaded, defs.summaries(rows.map { InstrumentAnswer(it.instrument, it.date, it.score, it.band, it.flags) }, LocalDate.now())))
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -97,6 +125,10 @@ fun ExposuresPage() {
             Text("Couldn't load: $it", style = FTType.BodySmall, color = FT.Bad)
             FTButton("RETRY") { reload++ }
         }
+        when {
+            summaries != null -> QuestionnaireCards(summaries, today, onTake = { taking = it }, onOpen = { questionnaireHistory = it })
+            answersError != null -> Text("Couldn't load the questionnaires: $answersError", style = FTType.BodySmall, color = FT.Bad)
+        }
         val d = data
         when {
             d == null && error == null -> Text("Loading…", style = FTType.BodySmall, color = FT.TextSecondary)
@@ -108,6 +140,13 @@ fun ExposuresPage() {
         val series = data?.series(m.pick).orEmpty()
         MetricHistoryOverlay(HistorySpec(m.label, series, m.unit, { fmt(it, m.decimals) }, m.color, betterHigher = false, info = m.guide)) { history = null }
     }
+    questionnaireHistory?.let { q ->
+        val inst = q.instrument
+        MetricHistoryOverlay(
+            HistorySpec("${inst.name} (${inst.short})", q.series, inst.unit, { fmtScore(it) }, instrumentInk(inst.id), betterHigher = inst.better == "higher", info = inst.source),
+        ) { questionnaireHistory = null }
+    }
+    taking?.let { id -> QuestionnaireSheet(id, onDismiss = { taking = null }, onSaved = { reload++ }) }
 }
 
 @Composable

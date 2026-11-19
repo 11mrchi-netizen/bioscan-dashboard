@@ -11,6 +11,7 @@ import type { EChartsCoreOption } from '../lib/echarts'
 import { dashboardHref } from '../lib/surfaces'
 import { type BpRow, categorize, series as bpSeries, sittings } from '../lib/bp'
 import { CO2_POOR, CO2_VENTILATE, WHO_NO2_24H, WHO_O3_8H, WHO_PM25_24H, WHO_PM25_ANNUAL } from '../../../supabase/functions/_shared/analysis-core/airExposure.ts'
+import { RiskQuestionnaires, type Response } from './RiskQuestionnaires'
 import './Pages.css'
 
 // Metric hues for canvas charts: the values of design/tokens (--m-pm25, --m-no2, --m-ozone, --m-co2, --m-uv-index,
@@ -68,6 +69,19 @@ export default function Risk() {
   const [clinic, setClinic] = useState<Clinic[]>([])
   const [day, setDay] = useState<string | null>(null)
   const [notes, setNotes] = useState<string[]>([])
+  // Risk profile R2: the questionnaires, read on their own (reloaded after one is answered here).
+  const [responses, setResponses] = useState<Response[]>([])
+  const [responsesMissing, setResponsesMissing] = useState(false)
+  const [answered, setAnswered] = useState(0)
+  useEffect(() => {
+    let live = true
+    void supabase.from('instrument_responses').select('id,instrument,local_date,score,band,flags,source').order('answered_at').then(({ data, error }) => {
+      if (!live) return
+      setResponsesMissing(!!error)
+      setResponses((data ?? []) as Response[])
+    })
+    return () => { live = false }
+  }, [answered])
 
   const st = useLoadEffect(async (cur) => {
     const since = new Date(Date.now() - 120 * 86400000).toISOString().slice(0, 10)
@@ -160,6 +174,8 @@ export default function Risk() {
       {st.error && <p className="pb-warn">Could not load: {st.error}</p>}
       {st.loading && days.length === 0 && bp.length === 0 && <p className="state-loading">LOADING…</p>}
       {notes.length > 0 && <p className="pg-note">Not on this database yet: {notes.join(', ')}.</p>}
+
+      <RiskQuestionnaires responses={responses} missing={responsesMissing} onChanged={() => setAnswered((n) => n + 1)} />
 
       <div className="pg-grid">
         <section className="pg-card">

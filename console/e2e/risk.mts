@@ -69,6 +69,8 @@ const T: Record<string, Record<string, unknown>[]> = {
   bp_readings: [],
   lab_results: [{ draw_id: 1, marker_name: 'SBP, Sitting', value: 136 }, { draw_id: 1, marker_name: 'DBP, Sitting', value: 84 }],
   lab_draws: [{ id: 1, draw_date: '2026-04-25' }],
+  // R2: one WHO-5 from a month ago, so it is due, and nothing else yet
+  instrument_responses: [{ id: 1, instrument: 'who5', local_date: '2026-10-15', answered_at: '2026-10-15T02:00:00Z', score: 64, band: 'Good', flags: [], source: 'phone' }],
 }
 let id = 1
 for (let d = 0; d < 7; d++) for (const t of ['07:05', '07:06', '19:30', '19:31']) {
@@ -92,6 +94,7 @@ function postgrest(table: string, sp: URLSearchParams): Record<string, unknown>[
 }
 
 const failures: string[] = []
+const posted: { table: string; rows: Record<string, unknown>[] }[] = []
 const check = (ok: boolean, what: string, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${what}${detail ? ` (${detail})` : ''}`); if (!ok) failures.push(what) }
 
 const server = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], { cwd: path.join(here, '..'), stdio: 'ignore' })
@@ -105,7 +108,15 @@ try {
   await ctx.route(`https://${REF}.supabase.co/**`, async (route: any) => {
     const u = new URL(route.request().url())
     if (!u.pathname.startsWith('/rest/v1/')) return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
-    const rows = postgrest(u.pathname.split('/').pop()!, u.searchParams)
+    const table = u.pathname.split('/').pop()!
+    if (route.request().method() === 'POST') {
+      const body = JSON.parse(route.request().postData() || '{}')
+      const rows = (Array.isArray(body) ? body : [body]).map((r: Record<string, unknown>, i: number) => ({ id: 1000 + i, answered_at: new Date().toISOString(), ...r }))
+      posted.push({ table, rows })
+      T[table] = [...(T[table] ?? []), ...rows]
+      return route.fulfill({ status: 201, contentType: 'application/json', body: '[]' })
+    }
+    const rows = postgrest(table, u.searchParams)
     return route.fulfill({ status: 200, headers: { 'content-type': 'application/json', 'content-range': `0-${rows.length}/*` }, body: JSON.stringify(rows) })
   })
   const exp = Math.floor(Date.now() / 1000) + 3600
@@ -119,6 +130,18 @@ try {
   check(text.includes('Ventilate the bedroom at night'), 'bedroom CO2 suggestion fires')
   check(text.includes('HOME MEAN · 2026-11-12') && text.includes('CLINIC · 2026-04-25'), 'blood pressure home mean and clinic reading show', text.slice(text.indexOf('BLOOD PRESSURE'), text.indexOf('BLOOD PRESSURE') + 300))
   check((await page.locator('canvas').count()) >= 4, 'charts render', String(await page.locator('canvas').count()))
+  check(text.includes('MIND') && text.includes('WELLBEING · WHO-5') && text.includes('due now'), 'questionnaires show, with WHO-5 due')
+
+  // R2: answer a PHQ-9 here: every item "several days" except item 9 "several days" too, so 9 / 27 Mild and the flag shows.
+  await page.locator('li.pg-row', { hasText: 'LOW MOOD · PHQ-9' }).getByRole('button', { name: 'TAKE' }).click()
+  for (let i = 0; i < 9; i++) await page.getByRole('radiogroup').nth(i).getByRole('radio', { name: 'SEVERAL DAYS' }).click()
+  await page.getByRole('button', { name: 'SAVE' }).click()
+  await page.getByText('SAVED').waitFor({ timeout: 5000 })
+  const saved = posted.find((p) => p.table === 'instrument_responses')?.rows[0]
+  check(saved?.score === 9 && saved?.band === 'Mild' && (saved?.flags as string[])?.[0] === 'self_harm' && saved?.source === 'console', 'PHQ-9 scored and saved from the console', JSON.stringify(saved))
+  check(/^\d{4}-\d{2}-\d{2}$/.test(String(saved?.local_date)), 'saved with a local date', String(saved?.local_date))
+  check(((await page.textContent('.pg')) ?? '').includes('Please talk about it with someone you trust'), 'the self-harm answer shows its plain line')
+  await page.screenshot({ path: path.join(OUT, 'risk-phq9.png'), fullPage: true })
   check(errors.length === 0, 'no page errors', errors.join(' | '))
   await page.screenshot({ path: path.join(OUT, 'risk.png'), fullPage: true })
   console.log('engine:', JSON.stringify({ days: out.days, cells: out.cells }), 'screenshot:', path.join(OUT, 'risk.png'))

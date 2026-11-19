@@ -65,7 +65,7 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
   user_profile: { scope: 'shared', columns: ['sex'] },
   // shoes and their distance; the photo stays out
   shoes: { scope: 'shared', columns: ['id', 'name', 'use', 'zepp_gear_id', 'start_km', 'retire_km', 'started_on', 'retired_on'] },
-  ...optIn('sexual_health', 'encounters', 'sexual_activity_daily', 'arousal_daily', 'masturbation_log'),
+  ...optIn('sexual_health', 'encounters', 'sexual_activity_daily', 'arousal_daily', 'masturbation_log', 'sti_tests'),
   ...optIn('health_concerns', 'health_concerns', 'health_observations', 'health_signals', 'health_episode_marks', 'intervention_concerns'),
   // v_health_events unions injuries, illnesses and health concerns, so it is as private as its most private part.
   ...optIn('health_concerns', 'v_health_events'),
@@ -75,6 +75,8 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     // routine and location
     'location_fixes', 'place_visits', 'places', 'trips', 'mobility_daily', 'activity_transitions', 'phone_usage_daily',
     'phone_app_usage_daily', 'phone_app_categories', 'daily_context', 'planned_routes', 'routine_activities', 'routine_logs',
+    // breathwork sessions are a practice log, kept with the routine's
+    'breathwork_sessions',
     // other people and the calendar
     'people', 'calendar_events', 'calendar_event_overrides', 'calendar_strength_staging', 'calendar_strength_staging_review',
     // the phone's copy of a prep week for the web's meal prep: its planned sessions can carry calendar entry titles

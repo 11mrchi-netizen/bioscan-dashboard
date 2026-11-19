@@ -1,6 +1,7 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain
 
+import com.bioscan.fieldterminal.data.model.LogBreathworkRow
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
 import com.bioscan.fieldterminal.data.model.LogExerciseRow
 import com.bioscan.fieldterminal.data.model.LogGripRow
@@ -13,8 +14,10 @@ import com.bioscan.fieldterminal.data.model.LogSleepRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
+import com.bioscan.fieldterminal.domain.breath.BreathworkLog
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
+import com.bioscan.fieldterminal.data.model.SexualActivityInstance
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -28,7 +31,7 @@ enum class LogEntryKind(val label: String) {
     Exercise("EXERCISE"), Food("FOOD"), Sleep("SLEEP"), Stool("STOOL"),
     Encounter("ENC"), Note("NOTE"), Drink("DRINK"),
     Wellness("WELL"), Supplement("SUPP"), Ostrc("CHECK-IN"), Masturbation("MASTURBATION"),
-    Intercourse("INTERCOURSE"), Grip("GRIP"),
+    Intercourse("INTERCOURSE"), Grip("GRIP"), Breathwork("BREATH"),
 }
 
 // DAV-219 (24/9 fixes): a few named groups the Log page clusters same-day
@@ -48,7 +51,8 @@ val LogEntryKind.category: LogCategory
     get() = when (this) {
         LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement -> LogCategory.Intake
         LogEntryKind.Exercise, LogEntryKind.Ostrc -> LogCategory.Activity
-        LogEntryKind.Sleep, LogEntryKind.Wellness, LogEntryKind.Stool, LogEntryKind.Masturbation, LogEntryKind.Intercourse, LogEntryKind.Grip -> LogCategory.Body
+        LogEntryKind.Sleep, LogEntryKind.Wellness, LogEntryKind.Stool, LogEntryKind.Masturbation, LogEntryKind.Intercourse, LogEntryKind.Grip,
+        LogEntryKind.Breathwork -> LogCategory.Body
         LogEntryKind.Note, LogEntryKind.Encounter -> LogCategory.Notes
     }
 
@@ -66,6 +70,8 @@ enum class LogSource(val table: String) {
     Stool("stool_log"), Encounter("encounters"), Note("notes"), Hydration("hydration_daily"),
     Wellbeing("wellbeing_daily"), Supplement("supplement_log"), Ostrc("ostrc_checkins"),
     Masturbation("sexual_activity_daily"), Grip("grip_strength_log"),
+    // Lab › BREATHWORK sessions: delete-only (a session is not edited after the fact).
+    Breathwork("breathwork_sessions"),
 }
 
 @Serializable
@@ -130,6 +136,7 @@ fun buildLogEntries(
     ostrc: List<LogOstrcRow> = emptyList(),
     sexualActivity: List<LogSexualActivityRow> = emptyList(),
     grip: List<LogGripRow> = emptyList(),
+    breathwork: List<LogBreathworkRow> = emptyList(),
 ): List<LogEntry> {
     val entries = mutableListOf<LogEntry>()
 
@@ -205,14 +212,30 @@ fun buildLogEntries(
         )
     }
 
+    breathwork.forEach { b ->
+        entries += LogEntry(
+            id = b.id,
+            source = LogSource.Breathwork,
+            kind = LogEntryKind.Breathwork,
+            timestamp = parseTimestamp(b.startedAt),
+            headline = "Breathwork " + BreathworkLog.headline(b),
+            detail = BreathworkLog.detail(b),
+        )
+    }
+
     encounters.forEach { e ->
         entries += LogEntry(
             id = e.id,
             source = LogSource.Encounter,
-            kind = LogEntryKind.Encounter,
+            kind = if (e.sexual) LogEntryKind.Intercourse else LogEntryKind.Encounter,
             timestamp = e.occurredAt?.let { parseTimestamp(it) } ?: LocalDateTime.of(LocalDate.parse(e.date), ENCOUNTER_NOMINAL_TIME),
-            headline = e.calendarEventTitle?.takeIf { it.isNotBlank() } ?: e.status.replaceFirstChar { it.uppercase() },
-            detail = e.myRating?.let { "Rating $it/5" },
+            headline = e.calendarEventTitle?.takeIf { it.isNotBlank() } ?: e.people?.name?.takeIf { it.isNotBlank() }
+                ?: e.status.replaceFirstChar { it.uppercase() },
+            detail = listOfNotNull(
+                e.rounds?.takeIf { e.sexual }?.let { "$it round${if (it == 1) "" else "s"}" },
+                e.orgasmCount?.takeIf { e.sexual && it > 0 }?.let { "$it orgasm${if (it == 1) "" else "s"}" },
+                e.myRating?.let { "Rating $it/5" },
+            ).joinToString(" · ").ifEmpty { null },
         )
     }
 
@@ -291,7 +314,7 @@ fun buildLogEntries(
         entries += LogEntry(
             id = sa.id,
             source = LogSource.Masturbation,
-            kind = if (sa.activityType == "intercourse") LogEntryKind.Intercourse else LogEntryKind.Masturbation,
+            kind = LogEntryKind.Masturbation,
             timestamp = LocalDateTime.of(LocalDate.parse(sa.date), SEXUAL_ACTIVITY_NOMINAL_TIME),
             headline = headline,
             detail = sa.notes,
@@ -300,6 +323,24 @@ fun buildLogEntries(
 
     return entries.sortedByDescending { it.timestamp }
 }
+
+// Partnered sex is stored per encounter (one row per partner); the Sexual Health cards and N=1 read one row per day and
+// type. This folds a day's sexual encounters into that shape: one instance per round, the first `orgasms` with orgasm.
+// An encounter with no round count is one round. Ids are negative: these rows exist only in memory.
+fun intercourseDayRows(encounters: List<LogEncounterRow>): List<LogSexualActivityRow> =
+    encounters.filter { it.sexual }.groupBy { it.date }.map { (date, day) ->
+        LogSexualActivityRow(
+            id = -day.first().id,
+            date = date,
+            activityType = "intercourse",
+            instances = day.flatMap { e ->
+                val orgasms = e.orgasmCount ?: 0
+                List(maxOf(e.rounds ?: 1, orgasms, 1)) { i ->
+                    SexualActivityInstance(orgasm = i < orgasms, orgasmIntensity = e.orgasmIntensity.takeIf { i < orgasms }, partnerId = e.personId)
+                }
+            },
+        )
+    }
 
 // Mirrors dedupeRunSessions from Training.kt but operates on LogExerciseRow
 // and applies to all exercise types (with a same-type guard so a run and a

@@ -12,6 +12,8 @@ import com.bioscan.fieldterminal.data.model.LabResultAnalysisRow
 import com.bioscan.fieldterminal.data.model.LagCurveRow
 import com.bioscan.fieldterminal.data.model.LedgerEntry
 import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
+import com.bioscan.fieldterminal.data.model.LogEncounterRow
+import com.bioscan.fieldterminal.domain.intercourseDayRows
 import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.data.model.NewRegisteredQuestion
 import com.bioscan.fieldterminal.data.model.OstrcAnalysisRow
@@ -451,16 +453,27 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 
     // Arousal folded into wellbeing_daily -- see loadWellbeingDaily() above;
     // morning-wood/arousal history now reads from the same wellbeing rows.
-    suspend fun loadSexualActivityDaily(): List<LogSexualActivityRow> = ReadCache.get("analysis.SexualActivityDaily", tables = setOf("sexual_activity_daily"), serializer = ListSerializer(LogSexualActivityRow.serializer())) { fetchSexualActivityDaily() }
+    suspend fun loadSexualActivityDaily(): List<LogSexualActivityRow> = ReadCache.get("analysis.SexualActivityDaily", tables = setOf("sexual_activity_daily", "encounters"), serializer = ListSerializer(LogSexualActivityRow.serializer())) { fetchSexualActivityDaily() }
 
-    private suspend fun fetchSexualActivityDaily(): List<LogSexualActivityRow> =
-        supabase.postgrest.from("sexual_activity_daily")
+    // Solo rows as stored, plus one intercourse row per day built from the sexual encounters (intercourseDayRows), so the
+    // Sexual Health cards and N=1 keep reading one per-day shape.
+    private suspend fun fetchSexualActivityDaily(): List<LogSexualActivityRow> {
+        val solo = supabase.postgrest.from("sexual_activity_daily")
             .select(columns = Columns.list("id,date,activity_type,instances,notes")) {
+                filter { eq("activity_type", "masturbation") }
                 order("date", Order.DESCENDING)
                 limit(200)
             }
             .decodeList<LogSexualActivityRow>()
-            .reversed()
+        val encounters = supabase.postgrest.from("encounters")
+            .select(columns = Columns.list("id,date,status,person_id,sexual,rounds,orgasm_count,orgasm_intensity")) {
+                filter { eq("sexual", true) }
+                order("date", Order.DESCENDING)
+                limit(400)
+            }
+            .decodeList<LogEncounterRow>()
+        return (solo + intercourseDayRows(encounters)).sortedBy { it.date }
+    }
 
     // Phase A4 (Category 8, OSTRC-H2 half).
     suspend fun loadOstrcCheckins(): List<OstrcAnalysisRow> = ReadCache.get("analysis.OstrcCheckins", tables = setOf("ostrc_checkins"), serializer = ListSerializer(OstrcAnalysisRow.serializer())) { fetchOstrcCheckins() }

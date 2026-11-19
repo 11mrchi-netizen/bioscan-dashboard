@@ -14,9 +14,16 @@ class AddEntryChoiceTest {
         assertEquals(AddEntryTarget.Form(AddEntryType.Fuel, FuelSubType.Endurance), AddEntryChoice.RunFuel.target)
         assertEquals(AddEntryTarget.HealthCheckIn, AddEntryChoice.HealthCheckIn.target)
         assertEquals(AddEntryTarget.EventForm, AddEntryChoice.Event.target)
-        // Every form the sheet has is reachable from the picker, except the weekly OSTRC form (kept only to edit saved rows).
+        // Every form the sheet has is reachable from the picker, except the weekly OSTRC form (kept only to edit saved rows)
+        // and the solo form, which the one Intimacy entry opens from inside its own form.
         val reachable = AddEntryChoice.entries.mapNotNull { (it.target as? AddEntryTarget.Form)?.type }.toSet()
-        assertEquals(AddEntryType.entries.toSet() - AddEntryType.Ostrc, reachable)
+        assertEquals(AddEntryType.entries.toSet() - AddEntryType.Ostrc - AddEntryType.SexualActivity, reachable)
+        assertEquals(AddEntryTarget.Form(AddEntryType.Encounter), AddEntryChoice.Intimacy.target)
+    }
+
+    @Test
+    fun recentsSavedBeforeTheIntimacyEntryUpgradeToIt() {
+        assertEquals(listOf(AddEntryChoice.Intimacy, AddEntryChoice.Food), parseRecentChoices("SexualActivity,Food,Encounter"))
     }
 
     @Test

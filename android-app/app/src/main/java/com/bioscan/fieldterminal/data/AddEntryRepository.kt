@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.data.model.ENCOUNTER_COLUMNS
 import com.bioscan.fieldterminal.data.model.EncounterEditRow
 import com.bioscan.fieldterminal.data.model.ExerciseDetailsUpdateRow
 import com.bioscan.fieldterminal.data.model.ExerciseSessionDetails
@@ -117,37 +118,16 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         ) { onConflict = "user_id,date" }
     }
 
-    // personId/calendarEventTitle are only ever passed by the Map
-    // tab's "LOG ENCOUNTER" action -- defaulted null so that call site
-    // (date/encounterType/notes only) is unchanged. occurredAt/locationType/
-    // durationMin/activities/myRating (DAV-158/159) default null too, for
-    // the same reason -- Map's minimal flow stays exactly as it was.
-    suspend fun addEncounter(
-        date: String,
-        encounterType: String?,
-        notes: String?,
-        personId: Long? = null,
-        calendarEventTitle: String? = null,
-        occurredAt: String? = null,
-        locationType: String? = null,
-        durationMin: Int? = null,
-        activities: List<String>? = null,
-        myRating: Int? = null,
-    ) {
+    // The Map tab's "LOG ENCOUNTER" action: a pin's partner and calendar event title.
+    suspend fun addEncounter(date: String, encounterType: String?, notes: String?, personId: Long? = null, calendarEventTitle: String? = null) {
         supabase.postgrest.from("encounters").insert(
-            NewEncounterRow(
-                date = date,
-                occurredAt = occurredAt,
-                encounterType = encounterType,
-                locationType = locationType,
-                durationMin = durationMin,
-                activities = activities,
-                myRating = myRating,
-                notes = notes,
-                personId = personId,
-                calendarEventTitle = calendarEventTitle,
-            )
+            NewEncounterRow(date = date, encounterType = encounterType, notes = notes, personId = personId, calendarEventTitle = calendarEventTitle)
         )
+    }
+
+    // The add sheet's EncounterForm: one row per partner of the encounter.
+    suspend fun addEncounters(rows: List<EncounterEditRow>) {
+        supabase.postgrest.from("encounters").insert(rows)
     }
 
     suspend fun addStool(occurredAt: String, bristolType: Int, discomfort: Int?, completeEvacuation: String? = null) {
@@ -409,35 +389,9 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         ) { filter { eq("id", id) } }
     }
 
-    // Uses EncounterEditRow, not NewEncounterRow -- a real bug found live:
-    // NewEncounterRow carries personId/calendarEventTitle (defaulted null
-    // here), and Postgrest writes every field a DTO carries, so this used to
-    // silently null out an already-linked encounter's person_id/
-    // calendar_event_title on every edit. EncounterEditRow structurally
-    // can't touch those two columns.
-    suspend fun updateEncounter(
-        id: Long,
-        date: String,
-        occurredAt: String?,
-        encounterType: String?,
-        locationType: String?,
-        durationMin: Int?,
-        activities: List<String>?,
-        myRating: Int?,
-        notes: String?,
-    ) {
-        supabase.postgrest.from("encounters").update(
-            EncounterEditRow(
-                date = date,
-                occurredAt = occurredAt,
-                encounterType = encounterType,
-                locationType = locationType,
-                durationMin = durationMin,
-                activities = activities,
-                myRating = myRating,
-                notes = notes,
-            )
-        ) { filter { eq("id", id) } }
+    // EncounterEditRow cannot touch calendar_event_title (see the type).
+    suspend fun updateEncounter(id: Long, row: EncounterEditRow) {
+        supabase.postgrest.from("encounters").update(row) { filter { eq("id", id) } }
     }
 
     suspend fun updateStool(id: Long, occurredAt: String, bristolType: Int, discomfort: Int?, completeEvacuation: String? = null) {
@@ -521,7 +475,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
     suspend fun fetchHydration(id: Long) = fetchById<LogHydrationRow>("hydration_daily", "id,date,ml", id)
     suspend fun fetchEncounter(id: Long) = fetchById<LogEncounterRow>(
         "encounters",
-        "id,date,status,occurred_at,encounter_type,location_type,duration_min,activities,my_rating,notes,calendar_event_title,person_id",
+        ENCOUNTER_COLUMNS,
         id,
     )
     suspend fun fetchStool(id: Long) = fetchById<LogStoolRow>("stool_log", "id,occurred_at,bristol_type,discomfort,complete_evacuation", id)

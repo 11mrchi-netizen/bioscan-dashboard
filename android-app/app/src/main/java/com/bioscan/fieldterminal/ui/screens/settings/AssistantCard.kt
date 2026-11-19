@@ -22,10 +22,8 @@ import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTConfirmDestructive
-import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.theme.FTType
-import kotlinx.coroutines.CancellationException
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Personal health agent, phase 1 (docs/personal-health-agent): the assistant's switch and what it may read, in the same
@@ -35,32 +33,20 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 fun AssistantCard() {
     val repo = remember { AgentRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
-    var enabled by remember { mutableStateOf<Boolean?>(null) }
-    var groups by remember { mutableStateOf(emptySet<AgentShareGroup>()) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val page = remember { AssistantState() }
     var saving by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var deleted by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        try {
-            val s = repo.loadSettings()
-            enabled = s.enabled
-            groups = AgentShareGroup.entries.filter { it.key in s.optIn }.toSet()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            error = describeLoadFailure(e)
-        }
-    }
+    LaunchedEffect(Unit) { page.load() }
 
     fun save(on: Boolean, next: Set<AgentShareGroup>) {
         saving = true
-        scope.launchSafe(onError = { error = it.message ?: "Could not save"; saving = false }) {
+        scope.launchSafe(onError = { page.error = it.message ?: "Could not save"; saving = false }) {
             repo.saveSettings(on, next)
-            enabled = on
-            groups = next
-            error = null
+            page.enabled = on
+            page.groups = next
+            page.error = null
             saving = false
         }
     }
@@ -72,15 +58,15 @@ fun AssistantCard() {
             "record of each question. Replies are checked against the data before they are shown. The model runs at a " +
             "provider that keeps no data and does not train on it.",
     ) {
-        error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
-        val on = enabled
-        if (on == null && error == null) Text("Loading…", style = FTType.BodySmall, color = FT.TextSecondary)
+        page.error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
+        val on = page.enabled
+        if (on == null && page.error == null) Text("Loading…", style = FTType.BodySmall, color = FT.TextSecondary)
         if (on != null) {
             Text(if (on) "ON" else "OFF", style = FTType.LabelCaps, color = if (on) FT.Ok else FT.TextSecondary)
             if (on) {
-                FTButton("TURN OFF", modifier = Modifier.fillMaxWidth(), enabled = !saving) { save(false, groups) }
+                FTButton("TURN OFF", modifier = Modifier.fillMaxWidth(), enabled = !saving) { save(false, page.groups) }
             } else {
-                FTButton("TURN ON", modifier = Modifier.fillMaxWidth(), enabled = !saving, emphasis = FTButtonEmphasis.Primary) { save(true, groups) }
+                FTButton("TURN ON", modifier = Modifier.fillMaxWidth(), enabled = !saving, emphasis = FTButtonEmphasis.Primary) { save(true, page.groups) }
             }
             Text("ALSO SHARE", style = FTType.LabelCaps, color = FT.TextSecondary)
             Text(
@@ -90,13 +76,13 @@ fun AssistantCard() {
                 color = FT.TextMuted,
             )
             AgentShareGroup.entries.forEach { g ->
-                val shared = g in groups
+                val shared = g in page.groups
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Column(Modifier.weight(1f)) {
                         Text(g.label, style = FTType.Body, color = FT.TextPrimary)
                         Text(if (shared) "SHARED" else "NOT SHARED", style = FTType.Micro, color = FT.TextSecondary)
                     }
-                    FTButton(if (shared) "STOP" else "SHARE", enabled = !saving) { save(on, if (shared) groups - g else groups + g) }
+                    FTButton(if (shared) "STOP" else "SHARE", enabled = !saving) { save(on, if (shared) page.groups - g else page.groups + g) }
                 }
             }
             when {
@@ -108,7 +94,7 @@ fun AssistantCard() {
                     onCancel = { confirmDelete = false },
                 ) {
                     saving = true
-                    scope.launchSafe(onError = { error = it.message ?: "Could not delete"; saving = false }) {
+                    scope.launchSafe(onError = { page.error = it.message ?: "Could not delete"; saving = false }) {
                         repo.deleteHistory()
                         deleted = true
                         confirmDelete = false

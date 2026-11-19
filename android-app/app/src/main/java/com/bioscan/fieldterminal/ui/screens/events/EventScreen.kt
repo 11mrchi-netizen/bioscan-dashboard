@@ -32,6 +32,7 @@ import com.bioscan.fieldterminal.ui.components.FTCardEmphasis
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.PinnedPage
+import com.bioscan.fieldterminal.ui.components.RefreshOnCacheUpdates
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TrailElevationChart
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
@@ -78,15 +79,16 @@ private enum class EventTab(val label: String) { Overview("OVERVIEW"), Fuel("FUE
 fun EventScreen(eventId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit) {
     val repo = remember { AthleteEventsRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
-    var event by remember { mutableStateOf<AthleteEvent?>(null) }
+    val page = remember { EventState() }
     var editing by rememberSaveable { mutableStateOf(false) }
     var actionError by remember { mutableStateOf<String?>(null) }
     var tab by rememberSaveable { mutableStateOf(EventTab.Overview) }
     var reviewing by remember { mutableStateOf(false) }
-    val guard = rememberLoadGuard()
-    LaunchedEffect(guard.attempt) { guard.run { event = repo.load(eventId) } }
+    val guard = page.guard
+    RefreshOnCacheUpdates(guard)
+    LaunchedEffect(guard.attempt) { page.load(eventId) }
 
-    val e = event
+    val e = page.event
     PinnedPage(
         onBack = onBack,
         title = e?.name ?: "EVENT",

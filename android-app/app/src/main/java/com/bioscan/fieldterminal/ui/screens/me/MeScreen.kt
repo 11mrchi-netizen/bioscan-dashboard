@@ -71,6 +71,7 @@ fun MeScreen(
                 MeTab.Body -> "WEIGHT · BODY FAT · MEASUREMENTS"
                 MeTab.Health -> "INJURIES · PAIN · SYMPTOMS · ILLNESS"
                 MeTab.Bloodwork -> "LAB DRAWS · MARKERS"
+                MeTab.Intimacy -> "STATS · TRENDS · STI TESTS · PARTNERS"
                 MeTab.Routine -> "THE DAYS · TIME · PLACES · PHONE · PRACTICES"
             },
             accent = FT.DomainUser,
@@ -102,6 +103,8 @@ fun MeScreen(
                     },
                     showHeader = false,
                 )
+                // Intimacy scrolls itself too: its three views (overview, partners, one partner) each start at the top.
+                MeTab.Intimacy -> IntimacyPage()
                 else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                     when (tab) {
                         MeTab.Performance -> Column(Modifier.padding(16.dp)) {
@@ -111,7 +114,7 @@ fun MeScreen(
                         MeTab.Health -> ConcernsTab(onOpenConcern = onOpenConcern)
                         MeTab.Bloodwork -> LabsScreen()
                         MeTab.Routine -> RoutinePage(onOpenDay = onOpenDayMap)
-                        MeTab.Healthspan -> Unit
+                        MeTab.Healthspan, MeTab.Intimacy -> Unit
                     }
                 }
             }

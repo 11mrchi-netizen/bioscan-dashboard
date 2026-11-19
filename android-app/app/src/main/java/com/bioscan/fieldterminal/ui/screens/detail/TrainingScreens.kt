@@ -4,30 +4,20 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.RunningHistory
-import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.buildTrainingSessionLoads
-import com.bioscan.fieldterminal.data.model.FitnessFatigueRow
-import com.bioscan.fieldterminal.data.model.OstrcAnalysisRow
-import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
-import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
-import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.data.restingSeries
 import com.bioscan.fieldterminal.data.softLoad
-import com.bioscan.fieldterminal.domain.LoadSpans
 import com.bioscan.fieldterminal.domain.evaluateRestCadence
 import com.bioscan.fieldterminal.domain.evaluateSubjective
 import com.bioscan.fieldterminal.domain.evaluateTrainingLoad
 import com.bioscan.fieldterminal.domain.levels.formatPace
 import com.bioscan.fieldterminal.domain.trainingLoadSeries
 import com.bioscan.fieldterminal.domain.weeklyRestCadenceHistory
-import com.bioscan.fieldterminal.ui.components.parallel
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.components.RefreshOnCacheUpdates
 import com.bioscan.fieldterminal.ui.screens.health.ConcernsTab
 import com.bioscan.fieldterminal.ui.screens.status.ActiveTravelCard
 import com.bioscan.fieldterminal.ui.screens.status.IntensityCard
@@ -52,25 +42,14 @@ private const val WEEKS_INFO =
 
 @Composable
 fun LoadScreen(onBack: () -> Unit, onOpenSessions: () -> Unit) {
-    var sessions by remember { mutableStateOf<List<TrainingLoadSessionRow>?>(null) }
-    var wearable by remember { mutableStateOf<List<WearableAnalysisRow>?>(null) }
-    var fitnessFatigue by remember { mutableStateOf<FitnessFatigueRow?>(null) }
-    var spans by remember { mutableStateOf(LoadSpans.STANDARD) }
-    val guard = rememberLoadGuard()
-    LaunchedEffect(guard.attempt) {
-        guard.run {
-            val repo = AnalysisRepository(SupabaseClientProvider.client)
-            parallel(
-                { sessions = repo.loadExerciseSessionsForTrainingLoad() },
-                { wearable = repo.loadWearableDaily() },
-                { fitnessFatigue = repo.loadFitnessFatigue(); spans = repo.loadLoadSpans() },
-            )
-        }
-    }
+    val page = remember { LoadState() }
+    val guard = page.guard
+    RefreshOnCacheUpdates(guard)
+    LaunchedEffect(guard.attempt) { page.load() }
     val running by produceState<RunningHistory?>(null, guard.attempt) { value = softLoad { UserDataCache.running() } ?: value }
     DetailScreen("TRAINING LOAD", onBack, eyebrow = "LOAD", domain = FT.Domain.Load) {
-        val s = sessions
-        val w = wearable
+        val s = page.sessions
+        val w = page.wearable
         if (s == null || w == null) {
             Loading(guard)
             return@DetailScreen
@@ -78,8 +57,8 @@ fun LoadScreen(onBack: () -> Unit, onOpenSessions: () -> Unit) {
         val today = LocalDate.now()
         val days = LocalRangeDays.current
         val loads = remember(s, w) { buildTrainingSessionLoads(s, restingSeries(w)) }
-        val eval = remember(loads, spans) { evaluateTrainingLoad(loads, spans = spans) }
-        val points = remember(loads, spans) { trainingLoadSeries(loads, spans = spans) }
+        val eval = remember(loads, page.spans) { evaluateTrainingLoad(loads, spans = page.spans) }
+        val points = remember(loads, page.spans) { trainingLoadSeries(loads, spans = page.spans) }
         val tsb = remember(points) { points.associate { it.date to it.tsb } }
 
         Section("FORM (TSB)", info = TSB_INFO, trailing = eval.tsb?.let { "%+.0f".format(it) }) {
@@ -91,12 +70,12 @@ fun LoadScreen(onBack: () -> Unit, onOpenSessions: () -> Unit) {
             }
         }
 
-        Section("FITNESS AND FATIGUE", info = CTL_ATL_INFO + (fitnessFatigue?.payload?.summary?.takeIf { it.isNotBlank() }?.let { "\n\n$it" } ?: "")) {
+        Section("FITNESS AND FATIGUE", info = CTL_ATL_INFO + (page.fitnessFatigue?.payload?.summary?.takeIf { it.isNotBlank() }?.let { "\n\n$it" } ?: "")) {
             StatTileGrid(
                 listOf(
-                    Stat("FITNESS · CTL", eval.ctl?.let { "%.0f".format(it) } ?: "—", "${spans.ctlDays.toInt()}-day average",
+                    Stat("FITNESS · CTL", eval.ctl?.let { "%.0f".format(it) } ?: "—", "${page.spans.ctlDays.toInt()}-day average",
                         HistorySpec("Fitness (CTL)", points.associate { it.date to it.ctl }, "", Fmt.int, FT.Metric.Ctl, info = CTL_ATL_INFO)),
-                    Stat("FATIGUE · ATL", eval.atl?.let { "%.0f".format(it) } ?: "—", "${spans.atlDays.toInt()}-day average",
+                    Stat("FATIGUE · ATL", eval.atl?.let { "%.0f".format(it) } ?: "—", "${page.spans.atlDays.toInt()}-day average",
                         HistorySpec("Fatigue (ATL)", points.associate { it.date to it.atl }, "", Fmt.int, FT.Metric.Atl, info = CTL_ATL_INFO)),
                 ),
                 today,
@@ -108,7 +87,7 @@ fun LoadScreen(onBack: () -> Unit, onOpenSessions: () -> Unit) {
                 ),
                 today, days, Fmt.int,
             )
-            if (spans.personal) Text("Spans fitted to you: they forecast your HRV better than the standard 42 and 7 days.", style = FTType.Caption, color = FT.TextMuted)
+            if (page.spans.personal) Text("Spans fitted to you: they forecast your HRV better than the standard 42 and 7 days.", style = FTType.Caption, color = FT.TextMuted)
         }
 
         Section("WEEKS", info = WEEKS_INFO) {
@@ -147,39 +126,25 @@ private const val CONTEXT_INFO =
 
 @Composable
 fun InjuryScreen(onBack: () -> Unit, onOpenConcern: (String) -> Unit) {
-    var sessions by remember { mutableStateOf<List<TrainingLoadSessionRow>?>(null) }
-    var wearable by remember { mutableStateOf<List<WearableAnalysisRow>?>(null) }
-    var wellbeing by remember { mutableStateOf<List<WellbeingAnalysisRow>?>(null) }
-    var ostrc by remember { mutableStateOf<List<OstrcAnalysisRow>?>(null) }
-    var spans by remember { mutableStateOf(LoadSpans.STANDARD) }
-    val guard = rememberLoadGuard()
-    LaunchedEffect(guard.attempt) {
-        guard.run {
-            val repo = AnalysisRepository(SupabaseClientProvider.client)
-            parallel(
-                { sessions = repo.loadExerciseSessionsForTrainingLoad() },
-                { wearable = repo.loadWearableDaily() },
-                { wellbeing = repo.loadWellbeingDaily() },
-                { ostrc = repo.loadOstrcCheckins() },
-                { spans = repo.loadLoadSpans() },
-            )
-        }
-    }
+    val page = remember { InjuryState() }
+    val guard = page.guard
+    RefreshOnCacheUpdates(guard)
+    LaunchedEffect(guard.attempt) { page.load() }
     DetailScreen("INJURY", onBack, eyebrow = "LOAD", domain = FT.Domain.Load) {
         Section("INJURIES AND PAIN", info = "Body concerns you are tracking (injuries and recurring pain). Tap one for its own page.") {
             ConcernsTab(onOpenConcern = onOpenConcern, anatomicalOnly = true)
         }
-        val s = sessions
-        val w = wearable
-        val wb = wellbeing
-        val os = ostrc
+        val s = page.sessions
+        val w = page.wearable
+        val wb = page.wellbeing
+        val os = page.ostrc
         if (s == null || w == null || wb == null || os == null) {
             Loading(guard)
             return@DetailScreen
         }
         val today = LocalDate.now()
         val loads = remember(s, w) { buildTrainingSessionLoads(s, restingSeries(w)) }
-        val eval = remember(loads, spans) { evaluateTrainingLoad(loads, spans = spans) }
+        val eval = remember(loads, page.spans) { evaluateTrainingLoad(loads, spans = page.spans) }
         val rest = remember(loads, eval) { evaluateRestCadence(loads, eval.tsb, eval.confidence.met) }
         val soreness = remember(wb) { evaluateSubjective(wb.mapNotNull { r -> r.soreness?.let { LocalDate.parse(r.date) to it.toDouble() } }) }
 

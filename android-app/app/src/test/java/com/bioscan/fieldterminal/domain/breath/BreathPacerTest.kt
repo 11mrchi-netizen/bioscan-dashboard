@@ -5,6 +5,11 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import com.bioscan.fieldterminal.data.model.LogBreathworkRow
+import com.bioscan.fieldterminal.domain.LogEntryKind
+import com.bioscan.fieldterminal.domain.LogSource
+import com.bioscan.fieldterminal.domain.buildLogEntries
+import java.time.LocalDateTime
 
 class BreathPacerTest {
     private val box = BreathPresets.all.first { it.id == "preset:box" }
@@ -55,5 +60,38 @@ class BreathPacerTest {
         assertEquals(p.copy(name = "Mine   evening"), back)
         assertEquals("4.5 · 7", back.rhythm)
         assertNull(BreathPatternCodec.decode("broken"))
+    }
+
+    private val start = LocalDateTime.of(2026, 11, 18, 7, 20, 5, 123_000_000)
+
+    @Test
+    fun aFinishedSessionIsSavedWithItsWallClockStart() {
+        val row = BreathworkLog.record(box, box.totalSeconds, start)!!
+        assertEquals("2026-11-18T07:20:05Z", row.startedAt)
+        assertEquals("preset:box", row.patternKey)
+        assertEquals(8, row.roundsDone)
+        assertEquals(128, row.durationS)
+        assertTrue(row.completed)
+        assertEquals(listOf("INHALE", "HOLD_IN", "EXHALE", "HOLD_OUT"), row.steps.map { it.kind })
+    }
+
+    @Test
+    fun anEarlyEndIsSavedFromThirtySecondsWithTheRoundsDone() {
+        assertNull(BreathworkLog.record(box, 29.0, start))
+        val row = BreathworkLog.record(box, 40.0, start)!!
+        assertFalse(row.completed)
+        assertEquals(2, row.roundsDone)
+        assertEquals(40, row.durationS)
+    }
+
+    @Test
+    fun aSessionReadsInTheLogAsBreathwork() {
+        val row = LogBreathworkRow(7, "2026-11-18T07:20:05+00:00", "Box", BreathPresets.all.first().steps.map { com.bioscan.fieldterminal.data.model.BreathStepJson(it.kind.name, it.seconds) }, 8, 3, 48, completed = false)
+        val e = buildLogEntries(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), breathwork = listOf(row)).single()
+        assertEquals(LogSource.Breathwork, e.source)
+        assertEquals(LogEntryKind.Breathwork, e.kind)
+        assertEquals(LocalDateTime.of(2026, 11, 18, 7, 20, 5), e.timestamp)
+        assertEquals("Breathwork Box · 0:48", e.headline)
+        assertEquals("ended early · 3 of 8 rounds · 4 · 4 · 4 · 4", e.detail)
     }
 }

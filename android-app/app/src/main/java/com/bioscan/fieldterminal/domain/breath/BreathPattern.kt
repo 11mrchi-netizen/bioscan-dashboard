@@ -1,5 +1,10 @@
 package com.bioscan.fieldterminal.domain.breath
 
+import com.bioscan.fieldterminal.data.model.BreathStepJson
+import com.bioscan.fieldterminal.data.model.LogBreathworkRow
+import com.bioscan.fieldterminal.data.model.NewBreathworkRow
+import com.bioscan.fieldterminal.domain.WallClock
+import java.time.LocalDateTime
 import kotlin.math.roundToInt
 
 // Breathwork (Lab › TESTS › BREATHWORK): a breathing pattern is a list of steps (breathe in, hold, breathe out, hold
@@ -152,4 +157,41 @@ object BreathPatternCodec {
         }
         return BreathPattern(parts[0], parts[1], steps, rounds)
     }
+}
+
+// ---- logging a session (breathwork_sessions) ----
+
+/** A session shorter than this when it is ended is not saved: an accidental START, or a look at the guide. */
+const val MIN_LOGGED_SECONDS = 30.0
+
+object BreathworkLog {
+    /**
+     * The row to save for a session of [pattern] that ran [breathingSeconds] (pauses and the lead-in left out) from
+     * [startedAt], the local wall-clock time the breathing began; null when it is too short to keep.
+     */
+    fun record(pattern: BreathPattern, breathingSeconds: Double, startedAt: LocalDateTime): NewBreathworkRow? {
+        if (!pattern.isRunnable) return null
+        val done = breathingSeconds.coerceIn(0.0, pattern.totalSeconds)
+        val completed = done >= pattern.totalSeconds - 1e-6
+        if (!completed && done < MIN_LOGGED_SECONDS) return null
+        return NewBreathworkRow(
+            startedAt = WallClock.write(startedAt.withNano(0)),
+            patternKey = pattern.id,
+            patternName = pattern.name,
+            steps = pattern.steps.map { BreathStepJson(it.kind.name, it.seconds) },
+            roundsPlanned = pattern.rounds,
+            roundsDone = if (completed) pattern.rounds else (done / pattern.cycleSeconds).toInt(),
+            durationS = done.roundToInt(),
+            completed = completed,
+        )
+    }
+
+    /** "Box · 4:16" and "8 of 8 rounds · 4 · 4 · 4 · 4" (or "ended early · 3 of 8 rounds · ..."), for the Log and RECENT. */
+    fun headline(row: LogBreathworkRow): String = "${row.patternName} · ${formatDuration(row.durationS.toDouble())}"
+
+    fun detail(row: LogBreathworkRow): String = listOfNotNull(
+        if (row.completed) null else "ended early",
+        "${row.roundsDone} of ${row.roundsPlanned} rounds",
+        row.steps.takeIf { it.isNotEmpty() }?.joinToString(" · ") { formatSeconds(it.seconds) },
+    ).joinToString(" · ")
 }

@@ -118,9 +118,23 @@ internal fun FormLabel(text: String) {
     )
 }
 
+/**
+ * A form's SAVE. Inside a flow that hosts forms (the + LOG sheet, the edit sheet) it docks in that flow's bottom bar, so it
+ * is on screen however long the form is (Logging Flows Redesign Plan); anywhere else it is a button in place.
+ */
 @Composable
-internal fun SaveButton(saving: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    FTButton(label = if (saving) "SAVING..." else "SAVE", enabled = enabled && !saving, onClick = onClick, emphasis = FTButtonEmphasis.Primary)
+internal fun SaveButton(saving: Boolean, enabled: Boolean, label: String = "SAVE", onClick: () -> Unit) {
+    val slot = com.bioscan.fieldterminal.ui.components.LocalFormSave.current
+    if (slot == null) {
+        FTButton(label = if (saving) "SAVING..." else label, enabled = enabled && !saving, onClick = onClick, emphasis = FTButtonEmphasis.Primary)
+        return
+    }
+    val owner = androidx.compose.runtime.remember { Any() }
+    val latest = androidx.compose.runtime.rememberUpdatedState(onClick)
+    androidx.compose.runtime.SideEffect {
+        slot.value = com.bioscan.fieldterminal.ui.components.FormSaveAction(owner, label, saving, enabled) { latest.value() }
+    }
+    androidx.compose.runtime.DisposableEffect(slot) { onDispose { if (slot.value?.owner === owner) slot.value = null } }
 }
 
 @Composable

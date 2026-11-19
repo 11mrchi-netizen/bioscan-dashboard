@@ -102,7 +102,7 @@ internal fun RunFuelFlow(onDismiss: () -> Unit, onSaved: () -> Unit) {
                         FlowQuestion("Which activity?", "The debrief is checked against the fuel schedule made for it.")
                         FlowPickGrid(sessions.map { it.id.toString() to label(it) }, setOfNotNull(picked?.id?.toString()), { id ->
                             picked = sessions.firstOrNull { it.id.toString() == id }
-                        }, columns = 1, perPage = 6, single = true)
+                        }, columns = 1, single = true)
                         LoadErrorLine(targetGuard, "the debrief for this activity")
                         FTButton("LOG ONE INTAKE INSTEAD", emphasis = FTButtonEmphasis.Tertiary, modifier = Modifier.fillMaxWidth()) { single = true }
                     }

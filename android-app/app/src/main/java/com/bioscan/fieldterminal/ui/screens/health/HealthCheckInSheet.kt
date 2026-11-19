@@ -291,7 +291,7 @@ private fun NewProblemStep(
                     Text("Not in one place: fever, tiredness, a cold. Pick what it is next.", style = FTType.BodySmall, color = FT.TextSecondary)
                 }
             }
-            "WHAT" -> FlowPickGrid(symptomOptions.map { it.code to it.label }, setOfNotNull(symptom), { code -> symptom = if (symptom == code) null else code }, columns = 3, perPage = 18, single = true)
+            "WHAT" -> FlowPickGrid(symptomOptions.map { it.code to it.label }, setOfNotNull(symptom), { code -> symptom = if (symptom == code) null else code }, columns = 3, single = true)
             "HOW BAD" -> {
                 FTRatingSlider("SEVERITY", severity, 0..10, FT.Metric.Soreness, { severity = it }, lowWord = "none", highWord = "worst", reversed = true)
                 Text("TRAINING", style = FTType.Micro, color = FT.TextMuted)

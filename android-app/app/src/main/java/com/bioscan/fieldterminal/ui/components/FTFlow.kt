@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -46,13 +47,15 @@ import androidx.compose.ui.window.DialogProperties
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// The frame every logging and building flow uses (owner's request, Nov 2026: no page that needs scrolling, a multi-page
-// flow instead). Full screen, three fixed parts: the header (back, title, "2 / 4 · WHAT", the step dots, close), one
-// page of controls, and the bottom bar (BACK, NEXT / ADD DETAIL, SAVE). Each page is sized to fit a 360 × 640 dp phone;
-// the body can still scroll as a last resort (a large font, the keyboard up), never by design. Optional pages come last
-// and SAVE is offered as soon as the required pages are done, so the extras can always be skipped.
+// The frame every logging and building flow uses. Full screen, three fixed parts: the header (back, title, and
+// "2 / 3 · WHAT" with the step dots only in a flow that has steps, close), one page of controls, and the bottom bar
+// (BACK, NEXT, SAVE). The rule (Logging Flows Redesign Plan, Nov 2026): a flow gets a new page only when the task changes
+// (a choice that changes what comes next, a different action, a different moment, a check of something worked out);
+// everything else stays on one page, which may scroll, with optional detail in a MORE DETAIL fold-out (FlowMore). The
+// required fields sit at the top of a page (FlowEssentials marks them) and SAVE is in the bottom bar from the moment it
+// is allowed, on whichever page: the fit test checks that both are visible without scrolling on a 360 × 640 dp phone.
 
-/** One page of a flow. [optional]: an ADD DETAIL page (SAVE is already offered before it); [ready]: NEXT may leave it. */
+/** One page of a flow. [optional]: a page the flow may end before (its dot is thinner); [ready]: NEXT may leave it. */
 data class FlowPage(val label: String, val optional: Boolean = false, val ready: Boolean = true)
 
 /** Where a flow is: the page shown, the furthest page reached (its dots open with a tap) and the review page to return to. */
@@ -111,6 +114,39 @@ fun rememberFlowState(): FlowState {
 /** The page a new flow opens on: 0 in the app; the fit test opens each page in turn. */
 val LocalFlowStartPage = staticCompositionLocalOf { 0 }
 
+/**
+ * A form shown inside a flow's page that has steps of its own (food: HOW, then the path): the flow's back (the header
+ * arrow, the system back) asks it first. Provided by the flow that hosts forms (the + LOG sheet).
+ */
+val LocalFormBack = staticCompositionLocalOf<androidx.compose.runtime.MutableState<(() -> Boolean)?>?> { null }
+
+/** A form's SAVE, docked in the hosting flow's bottom bar (so it is always on screen, however long the form). */
+class FormSaveAction(internal val owner: Any, val label: String, val saving: Boolean, val enabled: Boolean, val onClick: () -> Unit)
+
+/** Where a hosted form's SAVE goes: the flow that hosts forms (the + LOG sheet, the edit sheet) draws it in its bottom bar. */
+val LocalFormSave = staticCompositionLocalOf<androidx.compose.runtime.MutableState<FormSaveAction?>?> { null }
+
+/** The bottom bar of a flow that hosts forms: the form's SAVE when it has one, nothing on a page without one (a choice). */
+@Composable
+fun FormSaveBar(slot: androidx.compose.runtime.MutableState<FormSaveAction?>) {
+    val a = slot.value ?: return
+    Row(Modifier.fillMaxWidth().background(FT.Surface).padding(horizontal = 16.dp, vertical = 10.dp)) {
+        FTButton(if (a.saving) "SAVING…" else a.label, modifier = Modifier.weight(1f), enabled = a.enabled && !a.saving, emphasis = FTButtonEmphasis.Primary, onClick = a.onClick)
+    }
+}
+
+/** While [enabled], back goes to [onBack] (one of the form's own steps) instead of leaving the form. */
+@Composable
+fun FormBackHandler(enabled: Boolean, onBack: () -> Unit) {
+    val slot = LocalFormBack.current ?: return
+    val latest = androidx.compose.runtime.rememberUpdatedState(onBack)
+    androidx.compose.runtime.DisposableEffect(slot, enabled) {
+        val handler: () -> Boolean = { latest.value(); true }
+        if (enabled) slot.value = handler
+        onDispose { if (slot.value === handler) slot.value = null }
+    }
+}
+
 /** Draw flows in place instead of in a dialog (the screenshot tests). */
 val LocalInlineFlows = staticCompositionLocalOf { false }
 
@@ -144,7 +180,7 @@ fun FTFlow(
             Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
                 FlowHeader(title, pages, state, subtitle, goBack, onClose)
                 key(state.page) {
-                    // A fresh scroll per page: a page always opens at its top (and is built not to need it at all).
+                    // A fresh scroll per page: a page always opens at its top, the essentials first.
                     val scroll = rememberScrollState()
                     Column(
                         Modifier.weight(1f).fillMaxWidth().testTag(FLOW_BODY_TAG).verticalScroll(scroll).padding(horizontal = 16.dp, vertical = 8.dp),
@@ -209,26 +245,25 @@ private fun FlowBottomBar(pages: List<FlowPage>, state: FlowState, canSave: Bool
     val i = state.page
     val last = i >= pages.lastIndex
     val current = pages.getOrNull(i) ?: FlowPage("")
-    val nextOptional = !last && pages[i + 1].optional
     val returning = state.returnTo != null
     Row(
         Modifier.fillMaxWidth().background(FT.Surface).padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // BACK here too when there is room (the header's arrow and the system back always go back); with ADD DETAIL
-        // and SAVE side by side it would squeeze them onto two lines.
-        val threeWide = !returning && !last && (nextOptional || current.optional)
-        if (i > 0 && !returning && !threeWide) FTButton("BACK", enabled = !saving) { state.back() }
+        // BACK when there is room: with NEXT and SAVE side by side it would squeeze them (the header's arrow and the system
+        // back always go back).
+        val both = !returning && !last && canSave
+        if (i > 0 && !returning && !both) FTButton("BACK", enabled = !saving) { state.back() }
         val save = @Composable { m: Modifier ->
             FTButton(if (saving) "SAVING…" else saveLabel, modifier = m, enabled = canSave && !saving, emphasis = FTButtonEmphasis.Primary, onClick = onSave)
         }
         when {
             returning -> FTButton("BACK TO REVIEW", modifier = Modifier.weight(1f), enabled = current.ready, emphasis = FTButtonEmphasis.Primary) { state.next() }
             last -> save(Modifier.weight(1f))
-            nextOptional || current.optional -> {
-                // The rest is optional: SAVE now, or go on to the extras.
-                FTButton(if (current.optional) "NEXT" else "ADD DETAIL", modifier = Modifier.weight(1f), enabled = current.ready && !saving) { state.next() }
+            // SAVE is offered on every page once it is allowed; the pages after it are never a gate to saving.
+            canSave -> {
+                FTButton("NEXT", modifier = Modifier.weight(1f), enabled = current.ready && !saving) { state.next() }
                 save(Modifier.weight(1f))
             }
             else -> FTButton("NEXT", modifier = Modifier.weight(1f), enabled = current.ready, emphasis = FTButtonEmphasis.Primary) { state.next() }
@@ -253,6 +288,45 @@ fun FlowField(label: String, content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(label, style = FTType.LabelCaps, color = FT.TextMuted)
         content()
+    }
+}
+
+/** The test tag of a page's required fields: the fit test checks they show without scrolling. */
+const val FLOW_ESSENTIALS_TAG = "ft_flow_essentials"
+
+/** A page's required fields, at its top: the fit test checks that they are visible on a 360 × 640 dp phone without scrolling. */
+@Composable
+fun FlowEssentials(content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.fillMaxWidth().testTag(FLOW_ESSENTIALS_TAG), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
+}
+
+/**
+ * MORE DETAIL ▾: optional fields folded under the essentials, on the same page. Open or closed is remembered per [key]
+ * (one form's fold-out), so someone who always fills them finds it open next time. [summary]: what is in it, shown folded.
+ */
+@Composable
+fun FlowMore(key: String, label: String = "MORE DETAIL", summary: String? = null, content: @Composable ColumnScope.() -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = remember(context) { context.getSharedPreferences("flow_more", android.content.Context.MODE_PRIVATE) }
+    var open by rememberSaveable(key) { mutableStateOf(prefs.getBoolean(key, false)) }
+    val shape = RoundedCornerShape(FT.RadiusSmall)
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            Modifier.fillMaxWidth().border(FT.BorderWidth, FT.GlassBorder, shape)
+                .ftClickable(shape = shape, onClickLabel = if (open) "Fold $label" else "Open $label") {
+                    open = !open
+                    prefs.edit().putBoolean(key, open).apply()
+                }
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(label, style = FTType.LabelCaps, color = FT.TextSecondary)
+                if (!open && summary != null) Text(summary, style = FTType.Caption, color = FT.TextMuted, maxLines = 1)
+            }
+            FTIcon(if (open) FTIcons.Minus else FTIcons.Plus, null, tint = FT.TextSecondary, size = FTIconSize.Inline)
+        }
+        if (open) content()
     }
 }
 
@@ -291,8 +365,8 @@ fun FlowPager(index: Int, count: Int, onIndex: (Int) -> Unit, what: String = "")
 fun ColumnScope.FlowSpacer() = Spacer(Modifier.weight(1f, fill = false))
 
 /**
- * Pick any number from a list that may be long: a grid of [columns], [perPage] at a time, with "1 of 3 ›" under it when
- * there is more than one page (a list never scrolls). [options] are key to label; the count picked shows on every page.
+ * Pick any number from a list: a grid of [columns]. Every option shows (the page scrolls when the list is long); [perPage]
+ * splits it with "1 of 3 ›" only where a caller asks for that. [options] are key to label.
  */
 @Composable
 fun FlowPickGrid(
@@ -300,7 +374,7 @@ fun FlowPickGrid(
     selected: Set<String>,
     onToggle: (String) -> Unit,
     columns: Int = 2,
-    perPage: Int = 12,
+    perPage: Int = Int.MAX_VALUE,
     single: Boolean = false,
 ) {
     val pages = options.chunked(perPage.coerceAtLeast(1))
@@ -337,30 +411,3 @@ fun FlowTile(label: String, selected: Boolean, modifier: Modifier = Modifier, mu
     }
 }
 
-/**
- * A form split into steps inside a page that already has its frame (the add-entry and edit-entry forms, which are shown
- * both from the + LOG menu and from the Log): "1 / 2 · MIND" on top, one step's fields, then BACK and NEXT, or SAVE on
- * the last step. SAVE is offered from the first step once [canSave], so the later steps can be skipped.
- */
-@Composable
-fun FormSteps(
-    labels: List<String>,
-    canSave: Boolean,
-    saving: Boolean,
-    onSave: () -> Unit,
-    content: @Composable (Int) -> Unit,
-) {
-    val start = LocalFlowStartPage.current.coerceIn(0, (labels.size - 1).coerceAtLeast(0))
-    var step by rememberSaveable { mutableIntStateOf(start) }
-    if (step > labels.lastIndex) step = labels.lastIndex.coerceAtLeast(0)
-    val last = step >= labels.lastIndex
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (labels.size > 1) Text("${step + 1} / ${labels.size} · ${labels[step]}", style = FTType.MonoCaption, color = FT.TextSecondary)
-        content(step)
-        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (step > 0) FTButton("BACK", enabled = !saving) { step -= 1 }
-            if (!last) FTButton("NEXT", modifier = Modifier.weight(1f), emphasis = if (canSave) FTButtonEmphasis.Secondary else FTButtonEmphasis.Primary) { step += 1 }
-            if (last || canSave) FTButton(if (saving) "SAVING…" else "SAVE", modifier = Modifier.weight(1f), enabled = canSave && !saving, emphasis = FTButtonEmphasis.Primary, onClick = onSave)
-        }
-    }
-}

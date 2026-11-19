@@ -32,6 +32,15 @@ Clinic readings stay where they were (`lab_results`: `SBP, Sitting`, `DBP, Sitti
 Without an indoor PM2.5 sensor (the ALPSTUGA is not bought yet) home hours use the outdoor level at home, and every view
 says so; the first suggestion is then to measure indoors.
 
+## The health assistant's scope
+
+`agent-core/scope.ts` classifies every table (a test fails on one that is not). `bp_readings` is `shared`, like
+`grip_strength_log` and `lab_results`; its free-text note is dropped unless notes are shared. `air_exposure_daily` and
+`outdoor_air_hourly` are `never`: they are built from where the person was, hour by hour, the same rule as
+`place_visits` and `home_env_readings`. The `air_exposure` summary in `analysis_results` is withheld too
+(`resultAllowed`), since it carries the share of the dose breathed at home. These take effect in the assistant when
+`health-agent` is redeployed; the live one (v3) would still serve an `air_exposure` row once `analysis-run` writes one.
+
 ## Deploy, in this order
 
 Status (19 Nov 2026): step 1 done on live (both migrations applied and checked: tables, RLS, `run_analysis` accepting

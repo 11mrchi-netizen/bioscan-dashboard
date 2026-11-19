@@ -2,6 +2,12 @@ package com.bioscan.fieldterminal.domain.meview
 
 import com.bioscan.fieldterminal.data.ExposuresData
 import com.bioscan.fieldterminal.data.RiskScreens
+import com.bioscan.fieldterminal.domain.risk.ALCOHOL_LOW_RISK_G_PER_WEEK
+import com.bioscan.fieldterminal.domain.risk.CAFFEINE_SAFE_MG_PER_DAY
+import com.bioscan.fieldterminal.domain.risk.ChecklistState
+import com.bioscan.fieldterminal.domain.risk.PreventiveState
+import com.bioscan.fieldterminal.domain.risk.PreventiveStatus
+import com.bioscan.fieldterminal.domain.risk.SubstanceSummary
 import com.bioscan.fieldterminal.domain.risk.FactorState
 import com.bioscan.fieldterminal.domain.risk.PreventOutcome
 import com.bioscan.fieldterminal.domain.risk.PreventOutcomeOrWhy
@@ -79,10 +85,37 @@ fun screenSections(s: RiskScreens): List<MeSection> {
     return out
 }
 
-fun exposuresMeView(d: ExposuresData, questionnaires: List<InstrumentSummary> = emptyList(), screens: RiskScreens? = null): MeViewDoc {
+/** Risk profile R4: preventive care, substances, home and water, as ui/screens/me/PreventionCards.kt shows them. */
+fun preventionSections(preventive: List<PreventiveStatus>, substances: SubstanceSummary?, checklist: List<ChecklistState>): List<MeSection> {
+    val out = mutableListOf<MeSection>()
+    if (preventive.isNotEmpty()) out += MeSection("PREVENTIVE CARE", preventive.map { s ->
+        MeRow(s.item.name, value = s.state.word, sub = listOfNotNull(
+            s.last?.let { "last $it" }, s.next?.let { "next $it" }, s.check?.let { "check: $it" }, s.item.layer.takeIf { it != "core" },
+        ).joinToString(" · ").ifEmpty { null }, tone = if (s.state == PreventiveState.DUE) Tone.WARN else null)
+    }, info = "A layered schedule: USPSTF A/B and CDC vaccines, then ESC/EAS cardiovascular prevention, regional, then optional. Not medical advice.")
+    substances?.let { sub ->
+        out += MeSection("SUBSTANCES", listOfNotNull(
+            sub.alcoholGramsPerWeek?.let { MeRow("Alcohol", value = "%.1f units a week".format(Locale.ENGLISH, it / 8), tone = if (it > ALCOHOL_LOW_RISK_G_PER_WEEK) Tone.WARN else Tone.OK) },
+            sub.caffeineMgPerDay?.let { MeRow("Caffeine", value = "${it.toInt()} mg a day", tone = if (it > CAFFEINE_SAFE_MG_PER_DAY) Tone.WARN else Tone.OK) },
+            sub.lateCaffeineDays?.let { MeRow("Caffeine at 14:00 or later", value = "$it of ${sub.days} days") },
+        ).ifEmpty { listOf(MeNote("No logged drinks in the last 4 weeks.")) }, info = "Logged drinks, last 4 weeks.")
+    }
+    if (checklist.isNotEmpty()) out += MeSection("HOME AND WATER", checklist.filter { it.flagged }.map { st ->
+        MeRow(st.item.words(st.answer?.value) ?: st.item.question, sub = "${st.item.why} ${st.item.fix}", tone = Tone.WARN)
+    }.ifEmpty { listOf(MeNote(if (checklist.any { it.answer != null }) "Nothing flagged." else "Not answered yet.")) }, info = "A checklist, not a score.")
+    return out
+}
+
+fun exposuresMeView(
+    d: ExposuresData,
+    questionnaires: List<InstrumentSummary> = emptyList(),
+    screens: RiskScreens? = null,
+    prevention: List<MeSection> = emptyList(),
+): MeViewDoc {
     val s = d.summary
     val sections = mutableListOf<MeSection>()
     sections += questionnaireSections(questionnaires)
+    sections += prevention
     screens?.let { sections += screenSections(it) }
     sections += MeSection("AIR · LAST 30 DAYS", if (s == null || s.daysWithData == 0) listOf(MeNote("No air days yet.")) else listOfNotNull(
         MeTile("PM2.5 breathed", s.pm25Mean?.let(::f1) ?: "—", "µg/m³", tone = tone(s.states["pm25"]), hue = "m-pm25",

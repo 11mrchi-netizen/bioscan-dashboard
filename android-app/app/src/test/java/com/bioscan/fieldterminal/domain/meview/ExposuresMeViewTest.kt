@@ -7,6 +7,8 @@ import com.bioscan.fieldterminal.data.ExposuresData
 import com.bioscan.fieldterminal.domain.risk.InstrumentAnswer
 import com.bioscan.fieldterminal.domain.risk.parseInstruments
 import com.bioscan.fieldterminal.domain.risk.summaries
+import com.bioscan.fieldterminal.domain.risk.states
+import com.bioscan.fieldterminal.domain.risk.statuses
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -85,5 +87,20 @@ class ExposuresMeViewTest {
         assertEquals("Not worked out: needs total cholesterol.", (doc.sections[0].items.single() as MeNote).text)
         assertEquals(14, doc.sections[3].items.size)
         assertTrue(doc.sections[3].items.all { it is MeRow })
+    }
+
+    @Test
+    fun preventionSectionsShowWhatIsDueSubstancesAndOnlyFlaggedChecklistItems() {
+        val pdefs = com.bioscan.fieldterminal.domain.risk.parsePreventive(java.io.File("../../supabase/functions/_shared/risk/preventive.json").readText())
+        val cdefs = com.bioscan.fieldterminal.domain.risk.parseChecklist(java.io.File("../../supabase/functions/_shared/risk/home-checklist.json").readText())
+        val today = java.time.LocalDate.of(2026, 11, 19)
+        val ctx = com.bioscan.fieldterminal.domain.risk.PreventiveContext(45, "male", 23.0, "never", 0.03, emptyMap())
+        val statuses = pdefs.statuses(emptyList(), ctx, today)
+        val states = cdefs.states(listOf(com.bioscan.fieldterminal.domain.risk.ChecklistAnswer("gas_cooking", "gas_no_hood", today)), today)
+        val sections = preventionSections(statuses, com.bioscan.fieldterminal.domain.risk.SubstanceSummary(200.0, 120.0, 3, 28), states)
+        assertEquals(listOf("PREVENTIVE CARE", "SUBSTANCES", "HOME AND WATER"), sections.map { it.title })
+        assertTrue(sections[0].items.all { (it as MeRow).tone == Tone.WARN }) // nothing recorded yet: all due
+        assertEquals(Tone.WARN, (sections[1].items[0] as MeRow).tone) // 25 units a week
+        assertEquals(1, sections[2].items.size)
     }
 }

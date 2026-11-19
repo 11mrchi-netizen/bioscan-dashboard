@@ -61,6 +61,21 @@ Assumptions, labelled where they show: logged sessions count as moderate-to-vigo
 is 210 minutes a week of logged sessions; alcohol counts only logged drinks; "high blood pressure" for the dementia factors
 is a systolic of 130 or more (the Commission's midlife threshold) or BP medicine.
 
+## R4: substances, sun and heat, home and water, preventive care
+
+| Part | Where | Tested by |
+|---|---|---|
+| Home and water checklist: 7 items (gas cooking without extraction, incense or candles, heating food in plastic, overheated non-stick pans, damp and mould, radon, private well water), each flagged answer with why, the fix and its source (WHO indoor air quality guidelines, WHO radon handbook, EFSA, WHO drinking-water guidelines); no score; asked again after 12 months | `supabase/functions/_shared/risk/home-checklist.json` (asset) | `PreventionTest` |
+| Preventive care: the layered schedule (owner decision): USPSTF A/B screenings and CDC adult vaccines; ESC/EAS (Lp(a) once); regional (hepatitis B for those from high-prevalence regions); optional (coronary calcium when PREVENT is borderline or intermediate, dental, eye, skin). By age, sex and condition (BMI, smoking, PREVENT); intervals by method (a colonoscopy every 10 years, a stool test every year); last done from records or the person's data (BP readings, lab draw dates); "check if it applies" where the app cannot tell (20 pack-years) | `supabase/functions/_shared/risk/preventive.json` (asset), `domain/risk/Prevention.kt` | `PreventionTest` |
+| `home_checklist_answers`, `preventive_records` (done on a local date, by a method, or not applicable): append-only, own rows | `supabase/migrations/20261119160000_home_checklist_preventive.sql` | applied on Postgres 16 with stubs |
+| Substances (alcohol and caffeine from logged drinks, late caffeine by the wall clock, smoking from the background), sun and heat (sessions on days of 32 °C or more, outdoor sessions at UV 6 or more) | `data/PreventionRepository.kt` | compiled |
+| Phone: Me › EXPOSURES › PREVENTIVE CARE (RECORD opens the record form), SUBSTANCES, SUN AND HEAT, HOME AND WATER (ANSWER / EDIT opens the checklist); published to `me_views` | `ui/screens/me/PreventionCards.kt`, `PreventionSheets.kt` | `ExposuresMeViewTest` |
+
+Not done in R4: **the diet questionnaire for Life's Essential 8.** LE8 names the MEPA screener for individuals, and its
+16 items could not be read from a source here (the paper's open copy refused automated access, and the advisory's
+tables are not in its PubMed Central text). It was not written from memory; diet stays "not assessed". Preventive
+items are not yet in Plan or the Sunday reminder: they show on Me › EXPOSURES.
+
 ## The health assistant's scope
 
 `agent-core/scope.ts` classifies every table (a test fails on one that is not). `bp_readings` is `shared`, like
@@ -69,13 +84,14 @@ is a systolic of 130 or more (the Commission's midlife threshold) or BP medicine
 `place_visits` and `home_env_readings`. The `air_exposure` summary in `analysis_results` is withheld too
 (`resultAllowed`), since it carries the share of the dose breathed at home. `instrument_responses` (R2) is `never`:
 mental health answers, including the self-harm item, stay closed until the owner opens them as an opt-in group of their own. `health_background`
-(R3: smoking, medicines, diagnoses) is `never` too. These take effect in the assistant when
+(R3: smoking, medicines, diagnoses) is `never` too. So are R4's `home_checklist_answers` and `preventive_records`. These take effect in the assistant when
 `health-agent` is redeployed; the live one (v3) would still serve an `air_exposure` row once `analysis-run` writes one.
 
 ## Deploy, in this order
 
 Status (19 Nov 2026): step 1 done on live (both migrations applied and checked: tables, RLS, `run_analysis` accepting
-`exposures`, job `analysis-run-exposures` at 20:45 UTC). R2's `20261119120000_instrument_responses.sql` and R3's `20261119140000_health_background.sql` are applied on live too.
+`exposures`, job `analysis-run-exposures` at 20:45 UTC). R2's `20261119120000_instrument_responses.sql`, R3's `20261119140000_health_background.sql` and R4's
+`20261119160000_home_checklist_preventive.sql` are applied on live too.
 Step 2 is not done: the live `analysis-run` is still v32 (the deploy command is refused by this environment's auto mode). It
 was diffed against `main` first: v32 equals `main` except the symptom-check change to `healthSeries.ts` and vocabulary
 1.1.0, which `main` has and the database already expects, so deploying this branch ships `main` plus the air engine.

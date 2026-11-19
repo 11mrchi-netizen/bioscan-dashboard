@@ -79,7 +79,13 @@ data class RiskScreens(
     val findrisc: FindriscResult,
     val brain: List<BrainFactor>,
     val backgroundAnswered: Boolean,
-)
+    /** Risk profile R4: each lab marker (lower case) to its latest draw date, for the preventive schedule. */
+    val labDates: Map<String, LocalDate> = emptyMap(),
+    /** The latest blood pressure reading, home or clinic. */
+    val bpLast: LocalDate? = null,
+) {
+    val prevent10y: Double? get() = (prevent as? PreventOutcomeOrWhy.Ok)?.result?.tenYear?.get(com.bioscan.fieldterminal.domain.risk.PreventOutcome.TOTAL_CVD)
+}
 
 /** Window for activity, sleep and alcohol. */
 const val SCREEN_WINDOW_DAYS = 28L
@@ -170,6 +176,8 @@ class RiskScreensRepository(private val supabase: SupabaseClient) {
             findrisc = findrisc(inputs),
             brain = brainFactors(inputs),
             backgroundAnswered = background != HealthBackground(),
+            labDates = labs.groupBy { it.marker.lowercase() }.mapValues { (_, v) -> v.map { it.date }.reduce { a, b -> if (b.isAfter(a)) b else a } },
+            bpLast = listOfNotNull(bp?.readings?.lastOrNull()?.at?.toLocalDate(), bp?.clinic?.date).maxOrNull(),
         )
     }
 

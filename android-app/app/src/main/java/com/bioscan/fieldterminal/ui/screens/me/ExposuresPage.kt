@@ -27,6 +27,13 @@ import com.bioscan.fieldterminal.data.ExposuresRepository
 import com.bioscan.fieldterminal.data.InstrumentResponseRow
 import com.bioscan.fieldterminal.data.InstrumentsRepository
 import com.bioscan.fieldterminal.data.RiskScreens
+import com.bioscan.fieldterminal.data.PreventionData
+import com.bioscan.fieldterminal.data.PreventionRepository
+import com.bioscan.fieldterminal.data.preventiveContext
+import com.bioscan.fieldterminal.data.toDomain
+import com.bioscan.fieldterminal.domain.risk.PreventiveStatus
+import com.bioscan.fieldterminal.domain.risk.states
+import com.bioscan.fieldterminal.domain.risk.statuses
 import com.bioscan.fieldterminal.data.RiskScreensRepository
 import com.bioscan.fieldterminal.domain.risk.InstrumentAnswer
 import com.bioscan.fieldterminal.domain.risk.InstrumentSummary
@@ -97,6 +104,12 @@ fun ExposuresPage() {
     var screens by remember { mutableStateOf<RiskScreens?>(null) }
     var screensError by remember { mutableStateOf<String?>(null) }
     var editingBackground by remember { mutableStateOf(false) }
+    // Risk profile R4: substances, sun and heat, home and water, preventive care.
+    var prevention by remember { mutableStateOf<PreventionData?>(null) }
+    var editingChecklist by remember { mutableStateOf(false) }
+    var recording by remember { mutableStateOf<PreventiveStatus?>(null) }
+    val checklistDefs = remember { PreventionRepository.checklistDefs(context) }
+    val preventiveDefs = remember { PreventionRepository.preventiveDefs(context) }
     val cacheVersion = rememberCacheVersion()
     LaunchedEffect(reload, cacheVersion) {
         try {
@@ -110,6 +123,7 @@ fun ExposuresPage() {
         try {
             screens = RiskScreensRepository(SupabaseClientProvider.client).load(context)
             screensError = null
+            prevention = catching { PreventionRepository(SupabaseClientProvider.client).load() }.getOrNull()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -126,7 +140,8 @@ fun ExposuresPage() {
             catching {
                 val rows = InstrumentsRepository(SupabaseClientProvider.client).loadResponses()
                 val risk = catching { RiskScreensRepository(SupabaseClientProvider.client).load(context) }.getOrNull()
-                MeViewPublisher.publish(SupabaseClientProvider.client, exposuresMeView(loaded, defs.summaries(rows.map { InstrumentAnswer(it.instrument, it.date, it.score, it.band, it.flags) }, LocalDate.now()), risk))
+                val prev = com.bioscan.fieldterminal.data.MeViewSources.preventionSections(context, SupabaseClientProvider.client, risk)
+                MeViewPublisher.publish(SupabaseClientProvider.client, exposuresMeView(loaded, defs.summaries(rows.map { InstrumentAnswer(it.instrument, it.date, it.score, it.band, it.flags) }, LocalDate.now()), risk, prev))
             }
         } catch (e: CancellationException) {
             throw e
@@ -143,6 +158,14 @@ fun ExposuresPage() {
         when {
             summaries != null -> QuestionnaireCards(summaries, today, onTake = { taking = it }, onOpen = { questionnaireHistory = it })
             answersError != null -> Text("Couldn't load the questionnaires: $answersError", style = FTType.BodySmall, color = FT.Bad)
+        }
+        val checklistStates = prevention?.let { checklistDefs.states(it.checklist, today) }
+        val preventiveStatuses = prevention?.let { p -> preventiveDefs.statuses(p.records.map { it.toDomain() }, preventiveContext(screens, preventiveDefs), today) }
+        prevention?.let { p ->
+            preventiveStatuses?.let { PreventiveCard(it, onRecord = { s -> recording = s }) }
+            SubstancesCard(p, screens?.inputs?.background?.smoking)
+            HeatCard(p, highUvSessions = data?.summary?.sessionsHighUv)
+            checklistStates?.let { HomeWaterCard(it, onEdit = { editingChecklist = true }) }
         }
         when {
             screens != null -> RiskScreenCards(screens!!, onEditBackground = { editingBackground = true })
@@ -167,6 +190,10 @@ fun ExposuresPage() {
     }
     taking?.let { id -> QuestionnaireSheet(id, onDismiss = { taking = null }, onSaved = { reload++ }) }
     if (editingBackground) HealthBackgroundSheet(onDismiss = { editingBackground = false }, onSaved = { reload++ })
+    if (editingChecklist) prevention?.let { p ->
+        HomeChecklistSheet(checklistDefs.states(p.checklist, LocalDate.now()), onDismiss = { editingChecklist = false }, onSaved = { reload++ })
+    }
+    recording?.let { r -> PreventiveRecordSheet(r, onDismiss = { recording = null }, onSaved = { reload++ }) }
 }
 
 @Composable

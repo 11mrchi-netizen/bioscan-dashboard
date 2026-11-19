@@ -80,6 +80,7 @@ test('results about routine series are withheld, whatever the result kind', () =
   // questionnaire answers (R2) stay closed even with every group shared
   assert.equal(tableAccess('instrument_responses', all).ok, false)
   assert.equal(tableAccess('health_background', all).ok, false)
+  assert.equal(tableAccess('preventive_records', all).ok, false)
 })
 
 test('health-concern results need the health concerns group', () => {

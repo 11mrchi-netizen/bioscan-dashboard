@@ -101,6 +101,8 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     'instrument_responses',
     // the risk screens' health background (R3): smoking, medicines, diagnoses, family history; closed like the answers above
     'health_background',
+    // R4: the home checklist and preventive records (which tests and vaccines, including HIV and hepatitis); closed like the above
+    'home_checklist_answers', 'preventive_records',
   ),
   ...internal(
     'sync_log', 'zepp_raw_extracts', 'zepp_history_pull', 'zepp_sync_state', 'calendar_sync_state', 'notification_log',

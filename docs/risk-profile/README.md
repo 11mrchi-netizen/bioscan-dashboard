@@ -34,7 +34,13 @@ says so; the first suggestion is then to measure indoors.
 
 ## Deploy, in this order
 
-Not deployed: nothing here has reached the live project yet.
+Status (19 Nov 2026): step 1 done on live (both migrations applied and checked: tables, RLS, `run_analysis` accepting
+`exposures`, job `analysis-run-exposures` at 20:45 UTC). Step 2 is not done: the live `analysis-run` is still v32. It
+was diffed against `main` first: v32 equals `main` except the symptom-check change to `healthSeries.ts` and vocabulary
+1.1.0, which `main` has and the database already expects, so deploying this branch ships `main` plus the air engine.
+Until it is deployed, the 20:45 UTC `exposures` job gets a 400 (unknown group) from v32; nothing else is affected.
+The bundle (53 files, 571 KB) is too large for the connector's inline deploy; use the CLI from the repo root:
+`supabase functions deploy analysis-run --project-ref ugfrglbcoivkprjqvjzz --use-api`.
 
 1. Apply `20261119090000_bp_readings.sql` and `20261119100000_air_exposure.sql`. Both only add; the second replaces
    `private.run_analysis` with the same body plus the `exposures` group.

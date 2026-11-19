@@ -250,7 +250,7 @@ fun EntrySheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var deleteError by remember { mutableStateOf<String?>(null) }
-    val editable = entry.source != LogSource.Sleep
+    val editable = entry.source != LogSource.Sleep && entry.source != LogSource.Breathwork
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -306,6 +306,7 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
             LogSource.Masturbation -> repo.fetchSexualActivity(entry.id)
             LogSource.Supplement -> repo.fetchSupplementTaken(entry.id)
             LogSource.Sleep -> null // no edit form; EntrySheet never offers EDIT for this
+            LogSource.Breathwork -> null // same: delete-only
             }
         } catch (e: CancellationException) {
             throw e

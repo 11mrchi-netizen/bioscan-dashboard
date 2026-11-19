@@ -1,6 +1,7 @@
 @file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain
 
+import com.bioscan.fieldterminal.data.model.LogBreathworkRow
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
 import com.bioscan.fieldterminal.data.model.LogExerciseRow
 import com.bioscan.fieldterminal.data.model.LogGripRow
@@ -13,6 +14,7 @@ import com.bioscan.fieldterminal.data.model.LogSleepRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
+import com.bioscan.fieldterminal.domain.breath.BreathworkLog
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
 import com.bioscan.fieldterminal.data.model.SexualActivityInstance
@@ -29,7 +31,7 @@ enum class LogEntryKind(val label: String) {
     Exercise("EXERCISE"), Food("FOOD"), Sleep("SLEEP"), Stool("STOOL"),
     Encounter("ENC"), Note("NOTE"), Drink("DRINK"),
     Wellness("WELL"), Supplement("SUPP"), Ostrc("CHECK-IN"), Masturbation("MASTURBATION"),
-    Intercourse("INTERCOURSE"), Grip("GRIP"),
+    Intercourse("INTERCOURSE"), Grip("GRIP"), Breathwork("BREATH"),
 }
 
 // DAV-219 (24/9 fixes): a few named groups the Log page clusters same-day
@@ -49,7 +51,8 @@ val LogEntryKind.category: LogCategory
     get() = when (this) {
         LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement -> LogCategory.Intake
         LogEntryKind.Exercise, LogEntryKind.Ostrc -> LogCategory.Activity
-        LogEntryKind.Sleep, LogEntryKind.Wellness, LogEntryKind.Stool, LogEntryKind.Masturbation, LogEntryKind.Intercourse, LogEntryKind.Grip -> LogCategory.Body
+        LogEntryKind.Sleep, LogEntryKind.Wellness, LogEntryKind.Stool, LogEntryKind.Masturbation, LogEntryKind.Intercourse, LogEntryKind.Grip,
+        LogEntryKind.Breathwork -> LogCategory.Body
         LogEntryKind.Note, LogEntryKind.Encounter -> LogCategory.Notes
     }
 
@@ -67,6 +70,8 @@ enum class LogSource(val table: String) {
     Stool("stool_log"), Encounter("encounters"), Note("notes"), Hydration("hydration_daily"),
     Wellbeing("wellbeing_daily"), Supplement("supplement_log"), Ostrc("ostrc_checkins"),
     Masturbation("sexual_activity_daily"), Grip("grip_strength_log"),
+    // Lab › BREATHWORK sessions: delete-only (a session is not edited after the fact).
+    Breathwork("breathwork_sessions"),
 }
 
 @Serializable
@@ -131,6 +136,7 @@ fun buildLogEntries(
     ostrc: List<LogOstrcRow> = emptyList(),
     sexualActivity: List<LogSexualActivityRow> = emptyList(),
     grip: List<LogGripRow> = emptyList(),
+    breathwork: List<LogBreathworkRow> = emptyList(),
 ): List<LogEntry> {
     val entries = mutableListOf<LogEntry>()
 
@@ -203,6 +209,17 @@ fun buildLogEntries(
             timestamp = parseTimestamp(g.occurredAt),
             headline = "Grip ${g.hand} · %.1f kg".format(g.kg),
             detail = null,
+        )
+    }
+
+    breathwork.forEach { b ->
+        entries += LogEntry(
+            id = b.id,
+            source = LogSource.Breathwork,
+            kind = LogEntryKind.Breathwork,
+            timestamp = parseTimestamp(b.startedAt),
+            headline = "Breathwork " + BreathworkLog.headline(b),
+            detail = BreathworkLog.detail(b),
         )
     }
 

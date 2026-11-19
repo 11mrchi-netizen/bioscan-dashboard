@@ -113,7 +113,7 @@ private fun TestsTab(onStart: (LabTest) -> Unit, onOpenBreathwork: () -> Unit) {
         TestRow("BODY CHECK-IN", "Grip, tape girths and three skinfolds, once a month before breakfast. About 15 minutes.") { onStart(LabTest.BodyCheckIn) }
         TestRow("SWEAT TEST", "Weigh before and after a session of an hour or more, with what you drank. It sets your sweat rate.") { onStart(LabTest.SweatTest) }
         TestRow("RUNNING FORM ANALYSER", "A 10–20 s side-on clip, read on the phone: foot landing, knee and shin, trunk lean, bounce and, in slow motion, contact time.") { onStart(LabTest.RunningForm) }
-        // Not a test (nothing is saved): a guided breathing pacer with presets and your own patterns.
+        // A guided breathing pacer with presets and your own patterns; each session is saved to the Log.
         TestRow("BREATHWORK", "Box, 4-7-8, coherent, the physiological sigh, or a pattern of your own, paced by a guide circle.", startLabel = "OPEN", onStart = onOpenBreathwork)
     }
 }

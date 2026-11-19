@@ -49,7 +49,19 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.data.BreathworkRepository
 import com.bioscan.fieldterminal.data.BreathworkStore
+import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.model.LogBreathworkRow
+import com.bioscan.fieldterminal.data.model.NewBreathworkRow
+import com.bioscan.fieldterminal.domain.WallClock
+import com.bioscan.fieldterminal.domain.breath.BreathworkLog
+import com.bioscan.fieldterminal.ui.components.Toasts
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import kotlinx.coroutines.CancellationException
 import com.bioscan.fieldterminal.domain.breath.BreathPacer
 import com.bioscan.fieldterminal.domain.breath.BreathPattern
 import com.bioscan.fieldterminal.domain.breath.BreathPresets
@@ -77,7 +89,8 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Lab › TESTS › BREATHWORK: pick a preset or one of your own patterns, set the rounds, START. The session is a guide
 // circle that fills on the breath in, holds still on a hold and empties on the breath out, with the cue and the seconds
-// left in its middle. Nothing is logged: the page only paces the breath. Custom patterns live on the phone
+// left in its middle. A session is saved to the Log (breathwork_sessions) when it finishes, or when it is ended after at
+// least 30 s of breathing, with UNDO on the toast; RECENT lists the last few. Custom patterns live on the phone
 // (data/BreathworkStore.kt).
 @Composable
 fun BreathworkScreen(onBack: () -> Unit) {
@@ -101,9 +114,33 @@ fun BreathworkScreen(onBack: () -> Unit) {
         }
     }
 
+    val repo = remember { BreathworkRepository(SupabaseClientProvider.client) }
+    // The last few sessions; a session just saved shows at once (a negative id) while its toast's UNDO is open.
+    var recent by remember { mutableStateOf<List<LogBreathworkRow>?>(null) }
+    var recentFailed by remember { mutableStateOf(false) }
+    var localId by remember { mutableStateOf(-1L) }
+    LaunchedEffect(Unit) {
+        try {
+            recent = repo.recent()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            recentFailed = true
+        }
+    }
+    fun logSession(row: NewBreathworkRow) {
+        val placeholder = LogBreathworkRow(localId--, row.startedAt, row.patternName, row.steps, row.roundsPlanned, row.roundsDone, row.durationS, row.completed)
+        recent = (listOf(placeholder) + recent.orEmpty()).take(RECENT_COUNT)
+        Toasts.undoable(
+            message = "Breathwork saved to Log",
+            commit = { repo.add(row) },
+            onUndo = { recent = recent?.filterNot { it.id == placeholder.id } },
+        )
+    }
+
     val running = find(runningId)
     if (running != null && running.isRunnable) {
-        BreathSession(pattern = running, onEnd = { runningId = null })
+        BreathSession(pattern = running, onLogged = ::logSession, onEnd = { runningId = null })
         return
     }
 
@@ -132,6 +169,8 @@ fun BreathworkScreen(onBack: () -> Unit) {
                 )
             }
             FTButton("+ NEW PATTERN", modifier = Modifier.fillMaxWidth(), onClick = { editingId = "" })
+            Spacer(Modifier.height(8.dp))
+            RecentCard(recent, recentFailed)
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -236,16 +275,16 @@ private fun Stepper(value: String, onMinus: () -> Unit, onPlus: () -> Unit, what
 // ---- the session ----
 
 private const val LEAD_IN_SECONDS = 3.0
+private const val RECENT_COUNT = 5
 
 @Composable
-private fun BreathSession(pattern: BreathPattern, onEnd: () -> Unit) {
+private fun BreathSession(pattern: BreathPattern, onLogged: (NewBreathworkRow) -> Unit, onEnd: () -> Unit) {
     // The screen stays on while the guide runs.
     val view = LocalView.current
     DisposableEffect(view) {
         view.keepScreenOn = true
         onDispose { view.keepScreenOn = false }
     }
-    BackHandler(onBack = onEnd)
 
     var attempt by remember { mutableIntStateOf(0) }
     var paused by remember { mutableStateOf(false) }
@@ -266,17 +305,31 @@ private fun BreathSession(pattern: BreathPattern, onEnd: () -> Unit) {
     val moment = BreathPacer.momentAt(pattern, elapsed - LEAD_IN_SECONDS)
     val finished = moment.finished
 
+    // Logging: the wall-clock time the breathing began (the lead-in over), and whether this attempt is saved yet.
+    var startedAt by remember(attempt) { mutableStateOf<LocalDateTime?>(null) }
+    LaunchedEffect(attempt, leadIn) { if (!leadIn && startedAt == null) startedAt = LocalDateTime.now() }
+    var saved by remember(attempt) { mutableStateOf(false) }
+    fun save() {
+        if (saved) return
+        val row = BreathworkLog.record(pattern, elapsed - LEAD_IN_SECONDS, startedAt ?: LocalDateTime.now()) ?: return
+        saved = true
+        onLogged(row)
+    }
+    LaunchedEffect(finished) { if (finished) save() }
+    val end = { save(); onEnd() }
+    BackHandler(onBack = end)
+
     Column(
         modifier = Modifier.fillMaxSize().background(FT.Base).ftDomainWash(FT.DomainLabs).padding(horizontal = 22.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            FTIconButton(FTIcons.Close, "End session", onEnd)
+            FTIconButton(FTIcons.Close, "End session", end)
             Column(Modifier.weight(1f).padding(start = 4.dp)) {
                 Text(pattern.name.uppercase(), style = FTType.SectionTitle, color = FT.TextPrimary, maxLines = 1)
                 Text(
                     when {
-                        finished -> "DONE · ${formatDuration(pattern.totalSeconds)} MIN"
+                        finished -> "DONE · ${formatDuration(pattern.totalSeconds)} MIN" + if (saved) " · SAVED TO LOG" else ""
                         leadIn -> "GET READY"
                         else -> "ROUND ${moment.round} OF ${pattern.rounds} · ${formatDuration(remainingSeconds(pattern, elapsed - LEAD_IN_SECONDS))} LEFT"
                     },
@@ -314,7 +367,7 @@ private fun BreathSession(pattern: BreathPattern, onEnd: () -> Unit) {
                 FTButton("AGAIN", modifier = Modifier.weight(1f), onClick = { paused = false; attempt++ })
                 FTButton("CLOSE", modifier = Modifier.weight(1f), emphasis = FTButtonEmphasis.Primary, onClick = onEnd)
             } else {
-                FTButton("END", modifier = Modifier.weight(1f), onClick = onEnd)
+                FTButton("END", modifier = Modifier.weight(1f), onClick = end)
                 FTButton(if (paused) "RESUME" else "PAUSE", modifier = Modifier.weight(1f), emphasis = FTButtonEmphasis.Primary, onClick = { paused = !paused })
             }
         }
@@ -377,6 +430,41 @@ private fun BreathGuide(fill: Double, stepProgress: Double, holding: Boolean, cu
             if (count.isNotEmpty()) Text(count, style = FTType.DisplayMetric, color = FT.TextPrimary)
         }
     }
+}
+
+// The last few sessions saved, newest first: what, how long, how far, when. Not tappable: the Log holds the entry.
+@Composable
+private fun RecentCard(recent: List<LogBreathworkRow>?, failed: Boolean) {
+    FTCard(title = "RECENT", info = "Each session is saved to the Log when it finishes, or when you end it after at least 30 seconds of breathing. Delete one from the Log.") {
+        when {
+            failed && recent.isNullOrEmpty() -> Text("Couldn't load your sessions.", style = FTType.BodySmall, color = FT.TextSecondary)
+            recent == null -> Text("Loading…", style = FTType.BodySmall, color = FT.TextMuted)
+            recent.isEmpty() -> Text("No sessions yet. Finished sessions show here and in the Log.", style = FTType.BodySmall, color = FT.TextSecondary)
+            else -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                val today = LocalDate.now()
+                recent.forEach { row ->
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                        Column(Modifier.weight(1f)) {
+                            Text(BreathworkLog.headline(row), style = FTType.RowTitle, color = FT.TextPrimary)
+                            Text(BreathworkLog.detail(row), style = FTType.Caption, color = FT.TextSecondary)
+                        }
+                        Text(whenLabel(row.startedAt, today), style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(start = 10.dp, top = 2.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+// "TODAY 07:20", "YESTERDAY 21:05", "MON 16 NOV 06:40" -- a logged time, read as its digits.
+private fun whenLabel(startedAt: String, today: LocalDate): String {
+    val t = WallClock.read(startedAt) ?: return ""
+    val day = when (t.toLocalDate()) {
+        today -> "TODAY"
+        today.minusDays(1) -> "YESTERDAY"
+        else -> t.format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)).uppercase()
+    }
+    return day + " " + t.format(DateTimeFormatter.ofPattern("HH:mm"))
 }
 
 // ---- building a pattern ----

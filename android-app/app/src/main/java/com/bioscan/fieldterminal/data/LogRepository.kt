@@ -3,6 +3,7 @@ package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
 import com.bioscan.fieldterminal.data.model.LogExerciseRow
+import com.bioscan.fieldterminal.data.model.LogBreathworkRow
 import com.bioscan.fieldterminal.data.model.LogGripRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
@@ -159,6 +160,14 @@ class LogRepository(private val supabase: SupabaseClient) {
                     limit(FETCH_CAP_PER_SOURCE)
                 }.decodeList<LogGripRow>()
         }
+        val breathwork = async {
+            supabase.postgrest.from(BreathworkRepository.TABLE)
+                .select(columns = Columns.list(BreathworkRepository.COLUMNS)) {
+                    filter { gte("started_at", fromTimestamp) }
+                    order("started_at", Order.DESCENDING)
+                    limit(FETCH_CAP_PER_SOURCE)
+                }.decodeList<LogBreathworkRow>()
+        }
         // A roster that fails to load only costs the supplement gap marks, never the feed (caught inside the child so the
         // failure cannot cancel the sibling queries).
         val schedule = async {
@@ -182,6 +191,7 @@ class LogRepository(private val supabase: SupabaseClient) {
                 mealRows, exerciseSessions.await(), sleepRows,
                 stool.await(), encounters.await(), notes.await(), hydrationRows,
                 wellbeingRows, supplementRows, ostrc.await(), sexualActivity.await(), grip.await(),
+                breathwork.await(),
             ).filter { !it.timestamp.toLocalDate().isBefore(since) },
             coverage = logCoverage(mealRows, hydrationRows, supplementRows, sleepRows, wellbeingRows, FETCH_CAP_PER_SOURCE.toInt(), since),
             supplementSchedule = schedule.await(),

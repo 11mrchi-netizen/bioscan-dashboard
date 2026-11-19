@@ -38,11 +38,12 @@ import com.bioscan.fieldterminal.data.ResolvedMealItem
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.FoodRow
 import com.bioscan.fieldterminal.data.model.FoodServingRow
+import com.bioscan.fieldterminal.domain.fuel.mealSlotOf
 import com.bioscan.fieldterminal.domain.toAppIso
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTFlow
 import com.bioscan.fieldterminal.ui.components.FlowPage
-import com.bioscan.fieldterminal.ui.components.FlowPager
+import com.bioscan.fieldterminal.ui.components.DateTimeField
 import com.bioscan.fieldterminal.ui.components.rememberFlowState
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
@@ -102,12 +103,12 @@ fun NutritionCandidateReviewSheet(
     var saveError by remember { mutableStateOf<String?>(null) }
 
     val allResolved = rows.isNotEmpty() && rows.all { confirmed.containsKey(it.first) }
-    var current by remember { mutableStateOf(0) }
-    val shown = current.coerceIn(0, (rows.size - 1).coerceAtLeast(0))
-    // One item at a time with "2 of 4": every card stays composed (its search and match keep running and are kept),
-    // only the one shown takes room on the page.
+    // Time and meal slot are confirmed here with the foods (Logging Flows Redesign Plan: Food › CONFIRM).
+    var whenAt by remember { mutableStateOf(mealDateTime) }
+    var slot by remember { mutableStateOf(mealSlot) }
+    // One page: every item with its match and serving, one under the other, then time and slot.
     FTFlow(
-        title = "REVIEW & CONFIRM", pages = listOf(FlowPage("ITEMS")), state = rememberFlowState(), onClose = onDismiss,
+        title = "CONFIRM", pages = listOf(FlowPage("ITEMS")), state = rememberFlowState(), onClose = onDismiss,
         canSave = allResolved, saving = saving, wash = FT.Domain.Fuel,
         error = saveError ?: if (!allResolved) "Pick a match for every item before saving." else null,
         onSave = {
@@ -115,7 +116,7 @@ fun NutritionCandidateReviewSheet(
             saveError = null
             scope.launch {
                 try {
-                    saveRepo.saveMeal(mealDateTime.toAppIso(), description.trim(), rows.mapNotNull { confirmed[it.first] }, mealSlot)
+                    saveRepo.saveMeal(whenAt.toAppIso(), description.trim(), rows.mapNotNull { confirmed[it.first] }, slot)
                     saving = false
                     onSaved()
                 } catch (e: Exception) {
@@ -126,11 +127,10 @@ fun NutritionCandidateReviewSheet(
         },
     ) {
         Column { FormLabel("MEAL DESCRIPTION"); FieldTextField(description, { description = it }, "e.g. Lunch") }
-        FlowPager(shown, rows.size, { current = it }, what = "items")
-        Box {
-            rows.forEachIndexed { i, (key, seed) ->
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            rows.forEach { (key, seed) ->
                 androidx.compose.runtime.key(key) {
-                    Box(if (i == shown) Modifier else Modifier.size(0.dp).clipToBounds()) {
+                    Box(Modifier.fillMaxWidth().border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall)).padding(12.dp)) {
                         ReviewItemCard(
                             seed = seed,
                             searchRepo = searchRepo,
@@ -150,8 +150,10 @@ fun NutritionCandidateReviewSheet(
             val key = nextKey.toString()
             nextKey += 1
             rows = rows + (key to ReviewSeedItem(description = "", source = MealItemSource.Manual))
-            current = rows.size - 1
         }
+        FormLabel("WHEN")
+        DateTimeField("TIME", whenAt, { whenAt = it })
+        MealSlotChips(whenAt, mealSlotOf(slot), { slot = it.name.lowercase() })
     }
 }
 

@@ -37,7 +37,9 @@ import com.bioscan.fieldterminal.domain.health.checkInDate
 import com.bioscan.fieldterminal.domain.score.IllnessCheckIn
 import com.bioscan.fieldterminal.domain.score.gravityOf
 import com.bioscan.fieldterminal.ui.components.FTFlow
+import com.bioscan.fieldterminal.ui.components.FlowEssentials
 import com.bioscan.fieldterminal.ui.components.FlowField
+import com.bioscan.fieldterminal.ui.components.FlowMore
 import com.bioscan.fieldterminal.ui.components.FlowPage
 import com.bioscan.fieldterminal.ui.components.FlowPickGrid
 import com.bioscan.fieldterminal.ui.components.FlowQuestion
@@ -119,15 +121,14 @@ fun IllnessSheet(
         }
     }
 
-    // Three pages ask what is needed (what and since when, the symptoms, how bad); two optional ones hold the rest.
+    // Two pages (Logging Flows Redesign Plan): WHAT AND HOW BAD (the kind and how bad first, then when it started, training
+    // and temperature; SAVE is offered from here), then SYMPTOMS, a long pick list, with the test, the clinician, the name and
+    // the notes folded under it.
     val flow = rememberFlowState()
     val tempOk = temperature.isBlank() || (temp != null && temp in 34.0..43.0)
     val pages = listOf(
-        FlowPage("WHAT", ready = type != null),
+        FlowPage("WHAT AND HOW BAD", ready = type != null && severity != null && tempOk),
         FlowPage("SYMPTOMS"),
-        FlowPage("HOW BAD", ready = severity != null && tempOk),
-        FlowPage("TEST · CLINICIAN", optional = true),
-        FlowPage("NAME · NOTES", optional = true),
     )
     FTFlow(
         title = "ILLNESS OR INFECTION", pages = pages, state = flow, onClose = onDismiss,
@@ -136,6 +137,7 @@ fun IllnessSheet(
     ) { page ->
         when (page) {
             0 -> {
+                FlowEssentials {
                 FlowQuestion("What is it?", "In your words, no diagnosis needed. A small thing for a day is quicker as a SYMPTOM CHECK.")
                 TextChipRow(ILLNESS_TYPES.map { it.label.uppercase() }, type?.label?.uppercase(), perRow = 3) { picked ->
                     val t = ILLNESS_TYPES.firstOrNull { it.label.uppercase() == picked }
@@ -145,22 +147,13 @@ fun IllnessSheet(
                         if (prefillSymptoms.isEmpty() && symptoms.isEmpty()) symptoms = t.symptoms.take(3).toSet()
                     }
                 }
+                FTRatingSlider("HOW BAD, AT WORST NOW", severity, 0..10, FT.Metric.Soreness, { severity = it }, lowWord = "barely", highWord = "worst", reversed = true)
+                }
                 FlowField("STARTED") {
                     TextChipRow(STARTS.map { it.second }, STARTS.firstOrNull { it.first == startDaysAgo }?.second, perRow = 3) { picked ->
                         startDaysAgo = STARTS.firstOrNull { it.second == picked }?.first ?: 0L
                     }
                 }
-            }
-            1 -> {
-                FlowQuestion("What do you have?", type?.let { "The usual ones for ${it.label.lowercase()} come first." })
-                val usual = type?.symptoms.orEmpty()
-                val options = (usual + vocab.systemicSymptoms.map { it.code }).distinct().filter { it != "sym.other" } + "sym.other"
-                FlowPickGrid(options.map { it to (vocab.symptom(it)?.label ?: it) }, symptoms, { code ->
-                    symptoms = if (code in symptoms) symptoms - code else symptoms + code
-                })
-            }
-            2 -> {
-                FTRatingSlider("HOW BAD, AT WORST NOW", severity, 0..10, FT.Metric.Soreness, { severity = it }, lowWord = "barely", highWord = "worst", reversed = true)
                 FlowField("TRAINING") {
                     TextChipRow(IMPACT_LABELS, impact?.let { IMPACT_LABELS[it] }, perRow = 2) { picked -> impact = picked?.let { IMPACT_LABELS.indexOf(it) } }
                 }
@@ -177,7 +170,14 @@ fun IllnessSheet(
                     )
                 }
             }
-            3 -> {
+            else -> {
+                FlowQuestion("What do you have?", type?.let { "The usual ones for ${it.label.lowercase()} come first." })
+                val usual = type?.symptoms.orEmpty()
+                val options = (usual + vocab.systemicSymptoms.map { it.code }).distinct().filter { it != "sym.other" } + "sym.other"
+                FlowPickGrid(options.map { it to (vocab.symptom(it)?.label ?: it) }, symptoms, { code ->
+                    symptoms = if (code in symptoms) symptoms - code else symptoms + code
+                })
+                FlowMore("illness_more", summary = "A test, a clinician, the name, medication, a note") {
                 FlowField("A TEST") {
                     TextChipRow(TESTS.map { it.second }, TESTS.firstOrNull { it.first == test }?.second, perRow = 4) { picked ->
                         test = TESTS.firstOrNull { it.second == picked }?.first
@@ -191,11 +191,10 @@ fun IllnessSheet(
                     TextChipRow(listOf("NO", "YES"), if (clinician) "YES" else "NO", perRow = 2) { clinician = it == "YES" }
                     if (clinician) FieldTextField(diagnosis, { diagnosis = it }, "What they said (optional)")
                 }
-            }
-            else -> {
                 FlowField("NAME IT") { FieldTextField(title, { title = it; titleEdited = true }, "e.g. Cold after the race") }
                 FlowField("MEDICATION") { FieldTextField(medication, { medication = it }, "e.g. paracetamol, antibiotics") }
                 FlowField("NOTE") { FieldTextField(note, { note = it }, "", singleLine = false) }
+                }
             }
         }
     }

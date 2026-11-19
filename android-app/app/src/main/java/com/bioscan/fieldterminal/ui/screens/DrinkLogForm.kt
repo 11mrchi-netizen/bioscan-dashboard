@@ -36,7 +36,12 @@ import com.bioscan.fieldterminal.data.DrinksRepository
 import com.bioscan.fieldterminal.data.NutritionBarcodeLookupRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.catching
+import com.bioscan.fieldterminal.data.AddEntryRepository
 import com.bioscan.fieldterminal.domain.DrinkMatch
+import com.bioscan.fieldterminal.ui.components.FlowEssentials
+import com.bioscan.fieldterminal.ui.components.FlowTile
+import com.bioscan.fieldterminal.ui.components.Toasts
+import androidx.compose.foundation.layout.Box
 import com.bioscan.fieldterminal.domain.STANDARD_DRINK_G
 import com.bioscan.fieldterminal.domain.UnknownScanCheck
 import com.bioscan.fieldterminal.domain.UsualDrink
@@ -63,6 +68,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlin.math.roundToInt
@@ -107,7 +113,6 @@ internal fun DrinkLogForm(
     var dateTime by remember { mutableStateOf(LocalDateTime.now()) }
     var defaults by remember { mutableStateOf<List<DrinkMatch>>(emptyList()) }
     var usual by remember { mutableStateOf<List<Pair<UsualDrink, DrinkMatch?>>>(emptyList()) }
-    var usualOpen by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<DrinkMatch>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
@@ -119,7 +124,9 @@ internal fun DrinkLogForm(
     var abv by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    // Two steps (no page scrolls): FIND a drink, then its AMOUNT. Picking one goes on to the amount; CHANGE DRINK comes back.
+    // Two pages, because the amount depends on the drink (its sizes, its strength): FIND a drink, then its AMOUNT. On FIND,
+    // water has its own row (250 / 500 / 750 ml, saved at once with UNDO) and each usual drink saves its usual amount with
+    // one tap (AMOUNT opens the second page for another amount). CHANGE DRINK comes back.
     var amountStep by remember { mutableStateOf(false) }
 
     // A barcode no database has numbers for: its label is scanned, then the saved product is picked.
@@ -210,10 +217,70 @@ internal fun DrinkLogForm(
         if (uris.isNotEmpty()) labelPhotos = labelPhotos + uris
     }
 
+    // Water at once: the sheet closes, the write waits out the undo window and then adds to the day's total (the screens
+    // refresh on the write itself, through ReadCache).
+    fun quickWater(ml: Int) {
+        val day = LocalDate.now().toString()
+        onSaved()
+        Toasts.undoable(
+            "Water +$ml ml",
+            commit = { AddEntryRepository(SupabaseClientProvider.client).addDrink(day, ml) },
+            onUndo = {},
+        )
+    }
+
+    // A usual drink at its usual amount, the same way (an alcohol with no known strength opens AMOUNT instead).
+    fun quickUsual(u: UsualDrink, match: DrinkMatch?) {
+        val k = match?.beverageClass ?: u.beverageClass
+        val d = match ?: defaults.firstOrNull { it.beverageClass == k }
+        if (k == null || k == "water") { quickWater(u.ml.roundToInt()); return }
+        val amounts = drinkAmounts(d, u.ml)
+        if (k == "alcohol" && amounts.alcoholG == null) { pick(d, k, u.ml); return }
+        val at = LocalDateTime.now()
+        onSaved()
+        Toasts.undoable(
+            "${d?.title ?: u.description} ${u.ml.roundToInt()} ml logged",
+            commit = {
+                repo.save(
+                    loggedAt = WallClock.write(at), drink = d, beverageClass = k, amounts = amounts,
+                    description = d?.title ?: u.description, estimated = d == null || d.drinkDefault || d.caffeineEstimated, source = "manual",
+                )
+            },
+            onUndo = {},
+        )
+    }
+
     val k = kind
     val st = steps
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         if (!(amountStep && k != null && st != null)) {
+        FlowEssentials {
+            DrinkLabel("WATER")
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(250, 500, 750).forEach { ml -> FlowTile("$ml ml", false, Modifier.weight(1f)) { quickWater(ml) } }
+            }
+        }
+        // Usual drinks, open: a tap logs the usual amount, AMOUNT picks another.
+        if (usual.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                DrinkLabel("USUALS")
+                usual.take(6).forEach { (u, match) ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Box(Modifier.weight(1f)) {
+                            DrinkRow(
+                                title = match?.title ?: u.description,
+                                detail = "${u.ml.roundToInt()} ml · ${u.times}× in 60 days · tap to log",
+                                selected = false,
+                            ) { quickUsual(u, match) }
+                        }
+                        FTButton("AMOUNT", emphasis = FTButtonEmphasis.Tertiary) {
+                            val kk = match?.beverageClass ?: u.beverageClass
+                            pick(match ?: defaults.firstOrNull { it.beverageClass == kk }, kk, u.ml)
+                        }
+                    }
+                }
+            }
+        }
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             DrinkLabel("FIND A DRINK")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -246,30 +313,6 @@ internal fun DrinkLogForm(
                 val k = DRINK_KINDS.firstOrNull { it.second == label }?.first
                 if (k == null) { kind = null; picked = null; steps = null }
                 else pick(if (k == "water") null else defaults.firstOrNull { it.beverageClass == k }, k)
-            }
-        }
-
-        // Usual drinks, kept closed: one tap opens them.
-        if (usual.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(
-                    Modifier.fillMaxWidth().ftClickable(onClickLabel = if (usualOpen) "Close usual drinks" else "Open usual drinks") { usualOpen = !usualOpen }.padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    DrinkLabel("USUALS (${usual.size})")
-                    Spacer(Modifier.weight(1f))
-                    FTIcon(if (usualOpen) FTIcons.Minus else FTIcons.Plus, null, tint = FT.TextSecondary, size = FTIconSize.Inline)
-                }
-                if (usualOpen) usual.take(5).forEach { (u, match) ->
-                    DrinkRow(
-                        title = match?.title ?: u.description,
-                        detail = "${u.ml.roundToInt()} ml · ${u.times}× in 60 days",
-                        selected = picked != null && picked?.id == match?.id && match != null,
-                    ) {
-                        val k = match?.beverageClass ?: u.beverageClass
-                        pick(match ?: defaults.firstOrNull { it.beverageClass == k }, k, u.ml)
-                    }
-                }
             }
         }
 

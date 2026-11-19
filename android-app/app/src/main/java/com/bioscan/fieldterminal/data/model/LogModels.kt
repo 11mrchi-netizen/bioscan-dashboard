@@ -100,7 +100,22 @@ data class LogEncounterRow(
     val notes: String? = null,
     @SerialName("calendar_event_title") val calendarEventTitle: String? = null,
     @SerialName("person_id") val personId: Long? = null,
+    @SerialName("place_id") val placeId: String? = null,
+    val sexual: Boolean = false,
+    val format: List<String>? = null,
+    val positions: List<String>? = null,
+    val toys: List<String>? = null,
+    val protection: List<String>? = null,
+    @SerialName("ejaculation_location") val ejaculationLocation: List<String>? = null,
+    val rounds: Int? = null,
+    @SerialName("orgasm_count") val orgasmCount: Int? = null,
+    @SerialName("orgasm_intensity") val orgasmIntensity: Int? = null,
+    // The partner's name, embedded through person_id where the select asks for people(name).
+    val people: PersonName? = null,
 )
+
+@Serializable
+data class PersonName(val name: String)
 
 @Serializable
 data class LogNoteRow(

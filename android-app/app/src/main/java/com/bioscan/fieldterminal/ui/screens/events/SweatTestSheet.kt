@@ -87,10 +87,11 @@ fun SweatTestSheet(
     }
     val problems = test?.let(::sweatTestProblems).orEmpty()
     val flow = rememberFlowState()
+    // Two pages, split by when the numbers exist (Logging Flows Redesign Plan): THE SESSION (what, how long, the air), then
+    // WEIGHTS AND FLUIDS after it, with the sweat rate shown live under them.
     val pages = listOf(
-        FlowPage("SESSION", ready = parseHoursMinutes(duration) != null),
-        FlowPage("WEIGHTS"),
-        FlowPage("CONDITIONS", optional = true),
+        FlowPage("THE SESSION", ready = parseHoursMinutes(duration) != null),
+        FlowPage("WEIGHTS AND FLUIDS"),
     )
     FTFlow(
         title = "SWEAT TEST", pages = pages, state = flow, onClose = onDismiss,
@@ -120,8 +121,12 @@ fun SweatTestSheet(
                     }
                 }
                 Column { Label("DURATION"); FieldTextField(duration, { duration = it }, "h:mm") }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.weight(1f)) { Label("AIR °C"); FieldTextField(temp, { temp = it }, "e.g. 18", keyboardType = KeyboardType.Decimal) }
+                    Column(Modifier.weight(1f)) { Label("HUMIDITY %"); FieldTextField(humidity, { humidity = it }, "e.g. 60", keyboardType = KeyboardType.Number) }
+                }
             }
-            1 -> {
+            else -> {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Column(Modifier.weight(1f)) { Label("WEIGHT BEFORE KG"); FieldTextField(before, { before = it }, "e.g. 70.4", keyboardType = KeyboardType.Decimal) }
                     Column(Modifier.weight(1f)) { Label("WEIGHT AFTER KG"); FieldTextField(after, { after = it }, "e.g. 69.6", keyboardType = KeyboardType.Decimal) }
@@ -141,14 +146,8 @@ fun SweatTestSheet(
                     )
                 }
             }
-            else -> {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Column(Modifier.weight(1f)) { Label("AIR °C"); FieldTextField(temp, { temp = it }, "e.g. 18", keyboardType = KeyboardType.Decimal) }
-                    Column(Modifier.weight(1f)) { Label("HUMIDITY %"); FieldTextField(humidity, { humidity = it }, "e.g. 60", keyboardType = KeyboardType.Number) }
-                }
-                Column { Label("NOTES"); FieldTextField(notes, { notes = it }, "Kit, sun, wind", singleLine = false) }
-            }
         }
+        if (page == 1) Column { Label("NOTES"); FieldTextField(notes, { notes = it }, "Kit, sun, wind", singleLine = false) }
     }
 }
 

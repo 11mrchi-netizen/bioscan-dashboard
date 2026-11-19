@@ -164,7 +164,7 @@ internal fun AccessoryEditor(initial: Accessory?, onClose: () -> Unit, onSave: (
         if (page == 0) {
             FlowQuestion("Which exercise?", "Pick a common one or type any name.")
             FieldTextField(name, { name = it }, "Exercise")
-            FlowPickGrid(COMMON_ACCESSORIES.map { it to it }, setOf(name.trim()), { name = it }, columns = 2, perPage = 8, single = true)
+            FlowPickGrid(COMMON_ACCESSORIES.map { it to it }, setOf(name.trim()), { name = it }, columns = 2, single = true)
         } else {
             FlowField("SETS") {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

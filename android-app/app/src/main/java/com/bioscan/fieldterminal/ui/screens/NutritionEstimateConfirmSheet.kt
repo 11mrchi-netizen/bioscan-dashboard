@@ -51,11 +51,14 @@ import com.bioscan.fieldterminal.data.usingDatabaseMatch
 import com.bioscan.fieldterminal.data.withGrams
 import com.bioscan.fieldterminal.data.withItems
 import com.bioscan.fieldterminal.data.withMeasure
+import com.bioscan.fieldterminal.domain.fuel.mealSlotOf
 import com.bioscan.fieldterminal.domain.toAppIso
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTFlow
 import com.bioscan.fieldterminal.ui.components.FlowPage
-import com.bioscan.fieldterminal.ui.components.FlowPager
+import com.bioscan.fieldterminal.ui.components.DateTimeField
+import com.bioscan.fieldterminal.ui.components.FlowEssentials
+import com.bioscan.fieldterminal.ui.components.FlowMore
 import com.bioscan.fieldterminal.ui.components.rememberFlowState
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
@@ -94,6 +97,9 @@ fun NutritionEstimateConfirmSheet(
 ) {
     val scope = rememberCoroutineScope()
     val lookupRepo = remember { NutritionCronometerLookupRepository(SupabaseClientProvider.client) }
+    // Time and meal slot are confirmed here, with the foods (Logging Flows Redesign Plan: Food › CONFIRM).
+    var whenAt by remember { mutableStateOf(mealDateTime) }
+    var slot by remember { mutableStateOf(mealSlot) }
 
     // The user's item edits; reset whenever a new lookup result arrives.
     var current by remember(enrichment) { mutableStateOf(enrichment) }
@@ -222,7 +228,7 @@ fun NutritionEstimateConfirmSheet(
                         } else e
                     }
                     NutritionMealSaveRepository(SupabaseClientProvider.client)
-                        .saveEstimatedMeal(mealDateTime.toAppIso(), finalEstimate, aiEstimateId, scaledEnrichment, source, mealSlot)
+                        .saveEstimatedMeal(whenAt.toAppIso(), finalEstimate, aiEstimateId, scaledEnrichment, source, slot)
                     onSaved()
                 } catch (e: Exception) {
                     error = e.message ?: "Unknown error"
@@ -233,104 +239,102 @@ fun NutritionEstimateConfirmSheet(
         }
     }
 
-    var itemIndex by remember { mutableStateOf(0) }
-    // CHECK (a photo's confidence, its quick questions and a correction), FOODS (one food to a page: portion, replace,
-    // remove, + ADD INGREDIENT), TOTALS (the numbers, editable) and SAVE.
-    val pages = buildList {
-        if (source == MealItemSource.AiImage) add(FlowPage("CHECK"))
-        add(FlowPage("FOODS", ready = busy == null && editing == null))
-        add(FlowPage("TOTALS"))
-    }
+    // One CONFIRM page (Logging Flows Redesign Plan, Nov 2026): what the photo saw and its questions at the top, every food
+    // with its portion, the totals they come to, then time and meal slot, and SAVE in the bottom bar.
     FTFlow(
         title = when (source) {
-            MealItemSource.AiText -> "TEXT LOOKUP"
-            MealItemSource.Barcode -> "BARCODE LOOKUP"
-            else -> "MEAL ESTIMATE"
+            MealItemSource.AiText -> "CONFIRM · DESCRIBED MEAL"
+            MealItemSource.Barcode -> "CONFIRM · BARCODE"
+            else -> "CONFIRM · PHOTO"
         },
-        pages = pages, state = rememberFlowState(), onClose = onDismiss,
+        pages = listOf(FlowPage("CONFIRM", ready = busy == null && editing == null)), state = rememberFlowState(), onClose = onDismiss,
         canSave = valid && busy == null && editing == null, saving = saving, onSave = { if (valid && !saving) save() },
         wash = FT.Domain.Fuel, error = error?.let { "Couldn't save ($it)." } ?: pickError?.let { "Couldn't load that food ($it)." },
-    ) { page ->
+    ) {
         val e = current
-        when (pages.getOrNull(page)?.label) {
-            "CHECK" -> PhotoEstimatePanel(estimate, rerunning, onAnswer, onCorrect)
-            "FOODS" -> {
-                if (e != null) {
-                    Text(
-                        "From ${sourceLabel(e.primarySource) ?: "the food database"} (${e.itemsIncluded} of ${e.items.size} items counted, " +
-                            "confidence ${(e.confidence * 100).roundToInt()}%). Check each food and portion.",
-                        style = FTType.Caption,
-                        color = FT.TextMuted,
-                    )
-                    CrossCheckNote(e)
-                    val index = itemIndex.coerceIn(0, (e.items.size - 1).coerceAtLeast(0))
-                    e.items.getOrNull(index)?.let { item ->
-                        FlowPager(index, e.items.size, { itemIndex = it; editing = null }, what = "foods")
-                        if (editing == index) {
-                            FoodSuggestField(
-                                initialQuery = item.query,
-                                initial = item.alternatives.map {
-                                    FoodSuggestion(FoodSuggestionRef("cronometer", it.foodId), it.name, it.source, it.kcalPer100g)
-                                },
-                                placeholder = "Type the right food",
-                                onPick = { typed, s -> pickSuggestion(index, typed, s) },
-                                onCancel = { editing = null },
-                            )
-                        } else {
-                            MatchedItemRow(
-                                item = item,
-                                loading = busy == index,
-                                onPortion = { replaceItem(index, it) },
-                                onReplace = { editing = index },
-                                onUseDatabase = { replaceItem(index, item.usingDatabaseMatch()) },
-                                onRemove = if (e.items.size > 1) ({ replaceItem(index, null) }) else null,
-                            )
-                            // Photo logging v3: what the photo saw for this food and what it assumed.
-                            if (!item.userEdited) photoFoodFor(estimate, item.query)?.let { PhotoFoodNote(it) }
-                        }
-
-                    }
-                } else if (enriching) {
-                    Text("LOOKING UP FOODS...", style = FTType.LabelCaps, color = FT.TextSecondary)
-                    Text("Matching the foods in the database for more accurate nutrition. The AI estimate is on the next page meanwhile.", style = FTType.Caption, color = FT.TextMuted)
-                } else {
-                    Text(
-                        "Approximate whole-meal estimate (confidence ${(estimate.confidence * 100).toInt()}%): edit the totals on the next page, " +
-                            "or add the foods one by one for database numbers.",
-                        style = FTType.Caption,
-                        color = FT.TextMuted,
-                    )
-                }
-                if (!enriching || e != null) {
-                    when {
-                        editing == ADDING -> FoodSuggestField(
-                            initialQuery = "",
-                            initial = emptyList(),
-                            placeholder = "Add a food, e.g. olive oil",
-                            onPick = { typed, s -> pickSuggestion(ADDING, typed, s) },
-                            onCancel = { editing = null },
-                        )
-                        busy == ADDING -> Text("Adding $busyName...", style = FTType.Caption, color = FT.TextSecondary)
-                        else -> ActionLink("+ ADD INGREDIENT") { editing = ADDING }
-                    }
-                }
+        if (source == MealItemSource.AiImage) PhotoEstimatePanel(estimate, rerunning, onAnswer, onCorrect)
+        FlowEssentials {
+            Column { FormFieldLabel("DESCRIPTION"); FieldTextField(description, { description = it }, "Meal description") }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.weight(1f)) { FormFieldLabel("KCAL"); FieldTextField(calories, { calories = it }, "0", keyboardType = KeyboardType.Number) }
+                Column(Modifier.weight(1f)) { FormFieldLabel("CARBS G"); FieldTextField(carbs, { carbs = it }, "0", keyboardType = KeyboardType.Number) }
+                Column(Modifier.weight(1f)) { FormFieldLabel("PROT. G"); FieldTextField(protein, { protein = it }, "0", keyboardType = KeyboardType.Number) }
+                Column(Modifier.weight(1f)) { FormFieldLabel("FAT G"); FieldTextField(fat, { fat = it }, "0", keyboardType = KeyboardType.Number) }
             }
-            else -> {
-                if (e != null && enrichment == null) Text("Totals come from the foods, not the photo estimate.", style = FTType.Caption, color = FT.TextMuted)
-                Column { FormFieldLabel("DESCRIPTION"); FieldTextField(description, { description = it }, "Meal description") }
-                Column { FormFieldLabel("CALORIES"); FieldTextField(calories, { calories = it }, "0", keyboardType = KeyboardType.Number) }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Column(Modifier.weight(1f)) { FormFieldLabel("PROTEIN G"); FieldTextField(protein, { protein = it }, "0", keyboardType = KeyboardType.Number) }
-                    Column(Modifier.weight(1f)) { FormFieldLabel("CARBS G"); FieldTextField(carbs, { carbs = it }, "0", keyboardType = KeyboardType.Number) }
-                    Column(Modifier.weight(1f)) { FormFieldLabel("FAT G"); FieldTextField(fat, { fat = it }, "0", keyboardType = KeyboardType.Number) }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Column(Modifier.weight(1f)) { FormFieldLabel("FIBER G"); FieldTextField(fiber, { fiber = it }, "0", keyboardType = KeyboardType.Number) }
-                    Column(Modifier.weight(1f)) { FormFieldLabel("SUGAR G"); FieldTextField(sugar, { sugar = it }, "0", keyboardType = KeyboardType.Number) }
-                    Column(Modifier.weight(1f)) { FormFieldLabel("SODIUM MG"); FieldTextField(sodium, { sodium = it }, "0", keyboardType = KeyboardType.Number) }
-                }
+            if (e != null && enrichment == null) Text("Totals come from the foods below, not the photo estimate.", style = FTType.Caption, color = FT.TextMuted)
+        }
+        FlowMore("food_confirm_more", summary = "Fiber, sugar, sodium") {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.weight(1f)) { FormFieldLabel("FIBER G"); FieldTextField(fiber, { fiber = it }, "0", keyboardType = KeyboardType.Number) }
+                Column(Modifier.weight(1f)) { FormFieldLabel("SUGAR G"); FieldTextField(sugar, { sugar = it }, "0", keyboardType = KeyboardType.Number) }
+                Column(Modifier.weight(1f)) { FormFieldLabel("SODIUM MG"); FieldTextField(sodium, { sodium = it }, "0", keyboardType = KeyboardType.Number) }
             }
         }
+        FormFieldLabel("FOODS")
+        if (e != null) {
+            Text(
+                "From ${sourceLabel(e.primarySource) ?: "the food database"} (${e.itemsIncluded} of ${e.items.size} items counted, " +
+                    "confidence ${(e.confidence * 100).roundToInt()}%). Check each food and portion.",
+                style = FTType.Caption,
+                color = FT.TextMuted,
+            )
+            CrossCheckNote(e)
+            e.items.forEachIndexed { index, item ->
+                Column(
+                    Modifier.fillMaxWidth().border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall)).padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    if (editing == index) {
+                        FoodSuggestField(
+                            initialQuery = item.query,
+                            initial = item.alternatives.map {
+                                FoodSuggestion(FoodSuggestionRef("cronometer", it.foodId), it.name, it.source, it.kcalPer100g)
+                            },
+                            placeholder = "Type the right food",
+                            onPick = { typed, s -> pickSuggestion(index, typed, s) },
+                            onCancel = { editing = null },
+                        )
+                    } else {
+                        MatchedItemRow(
+                            item = item,
+                            loading = busy == index,
+                            onPortion = { replaceItem(index, it) },
+                            onReplace = { editing = index },
+                            onUseDatabase = { replaceItem(index, item.usingDatabaseMatch()) },
+                            onRemove = if (e.items.size > 1) ({ replaceItem(index, null) }) else null,
+                        )
+                        // Photo logging v3: what the photo saw for this food and what it assumed.
+                        if (!item.userEdited) photoFoodFor(estimate, item.query)?.let { PhotoFoodNote(it) }
+                    }
+                }
+            }
+        } else if (enriching) {
+            Text("LOOKING UP FOODS...", style = FTType.LabelCaps, color = FT.TextSecondary)
+            Text("Matching the foods in the database for more accurate nutrition. The estimate's totals are above meanwhile.", style = FTType.Caption, color = FT.TextMuted)
+        } else {
+            Text(
+                "Approximate whole-meal estimate (confidence ${(estimate.confidence * 100).toInt()}%): edit the totals above, " +
+                    "or add the foods one by one for database numbers.",
+                style = FTType.Caption,
+                color = FT.TextMuted,
+            )
+        }
+        if (!enriching || e != null) {
+            when {
+                editing == ADDING -> FoodSuggestField(
+                    initialQuery = "",
+                    initial = emptyList(),
+                    placeholder = "Add a food, e.g. olive oil",
+                    onPick = { typed, s -> pickSuggestion(ADDING, typed, s) },
+                    onCancel = { editing = null },
+                )
+                busy == ADDING -> Text("Adding $busyName...", style = FTType.Caption, color = FT.TextSecondary)
+                else -> ActionLink("+ ADD INGREDIENT") { editing = ADDING }
+            }
+        }
+        FormFieldLabel("WHEN")
+        DateTimeField("TIME", whenAt, { whenAt = it })
+        MealSlotChips(whenAt, mealSlotOf(slot), { slot = it.name.lowercase() })
     }
 }
 

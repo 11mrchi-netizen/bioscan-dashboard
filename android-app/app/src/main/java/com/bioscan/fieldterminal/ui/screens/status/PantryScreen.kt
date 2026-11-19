@@ -63,21 +63,11 @@ private fun fmt(d: Double): String = if (d % 1.0 == 0.0) d.toLong().toString() e
 @Composable
 fun PantryScreen(onBack: () -> Unit) {
     val repo = remember { PantryRepository(SupabaseClientProvider.client) }
-    var items by remember { mutableStateOf<List<PantryItem>?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val page = remember { PantryState() }
     var reload by remember { mutableIntStateOf(0) }
     var openId by remember { mutableStateOf<Long?>(null) }
 
-    LaunchedEffect(reload) {
-        try {
-            items = repo.load()
-            error = null
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            error = e.message ?: "Unknown error"
-        }
-    }
+    LaunchedEffect(reload) { page.load() }
 
     PinnedPage(onBack = onBack, title = "PANTRY", subtitle = "STOCK · RUN-OUT DATES · REORDER", accent = FT.DomainLabs) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -86,9 +76,9 @@ fun PantryScreen(onBack: () -> Unit) {
                     "Run-out dates are estimates from your schedule or recent logging.",
                 style = body, color = FT.TextSecondary,
             )
-            val list = items
+            val list = page.items
             when {
-                error != null && list == null -> Text("Failed to load: $error", style = body, color = FT.Bad)
+                page.error != null && list == null -> Text("Failed to load: ${page.error}", style = body, color = FT.Bad)
                 list == null -> SkeletonSections()
                 list.isEmpty() -> Text("No supplements with a linked product yet. Add ingredients to a supplement (or verify it by barcode) to track its stock here.", style = body, color = FT.TextSecondary)
                 else -> {
@@ -107,7 +97,7 @@ fun PantryScreen(onBack: () -> Unit) {
         }
     }
 
-    items?.firstOrNull { it.productId == openId }?.let { item ->
+    page.items?.firstOrNull { it.productId == openId }?.let { item ->
         PantryDetailSheet(item, repo, onDismiss = { openId = null }, onChanged = { reload++ })
     }
 }

@@ -40,6 +40,8 @@ import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTFlow
 import com.bioscan.fieldterminal.ui.components.FTRatingSlider
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.FlowEssentials
+import com.bioscan.fieldterminal.ui.components.FlowMore
 import com.bioscan.fieldterminal.ui.components.FlowPage
 import com.bioscan.fieldterminal.ui.components.FlowPickGrid
 import com.bioscan.fieldterminal.ui.components.FlowQuestion
@@ -60,7 +62,6 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 internal enum class Took(val label: String) { AsPlanned("PLANNED"), Less("LESS"), More("MORE"), None("NONE") }
 
-private const val BLOCKS_PER_PAGE = 3
 
 /** Everything a debrief holds while it is filled in, and its pages. */
 @Stable
@@ -90,19 +91,15 @@ class DebriefState internal constructor(val target: DebriefTarget, private val r
     var suggestion by mutableStateOf<ToleranceSuggestion?>(null)
         internal set
 
-    private val blockPages get() = blocks.chunked(BLOCKS_PER_PAGE)
-
     val canSave: Boolean get() = parseHoursMinutes(duration) != null
 
-    /** WHAT YOU TOOK (as many pages as the schedule needs), TOTALS, GUT, FEELING; then WEIGH-INS · NOTES as the extra. */
+    /**
+     * Two pages (Logging Flows Redesign Plan): WHAT YOU TOOK, planned against actual (the duration, every block marked AS
+     * PLANNED until tapped, extras, and the totals live under them), then HOW IT WENT (gut and feeling, about the same
+     * session; weigh-ins and notes folded).
+     */
     val pages: List<FlowPage>
-        get() = buildList {
-            blockPages.indices.forEach { add(FlowPage(if (blockPages.size > 1) "WHAT YOU TOOK ${it + 1}" else "WHAT YOU TOOK")) }
-            add(FlowPage("TOTALS", ready = canSave))
-            add(FlowPage("GUT"))
-            add(FlowPage("FEELING"))
-            add(FlowPage("WEIGH-INS · NOTES", optional = true))
-        }
+        get() = listOf(FlowPage("WHAT YOU TOOK", ready = canSave), FlowPage("HOW IT WENT"))
 
     internal fun actuals(): List<BlockActual> = blocks.map { b ->
         val scale = (amountText[b.id]?.replace(',', '.')?.toDoubleOrNull()?.div(100.0))?.takeIf { took[b.id] == Took.Less || took[b.id] == Took.More }
@@ -135,13 +132,13 @@ class DebriefState internal constructor(val target: DebriefTarget, private val r
     /** One page of the debrief, [index] into [pages]. */
     @Composable
     fun Page(index: Int) {
-        val label = pages.getOrNull(index)?.label.orEmpty()
-        when {
-            label.startsWith("WHAT YOU TOOK") -> TookPage(index)
-            label == "TOTALS" -> TotalsPage()
-            label == "GUT" -> GutPage()
-            label == "FEELING" -> FeelingPage()
-            else -> ExtrasPage()
+        if (index == 0) {
+            TookPage()
+            TotalsPage()
+        } else {
+            GutPage()
+            FeelingPage()
+            FlowMore("debrief_weigh_ins", label = "WEIGH-INS AND NOTES", summary = "Before and after weights make it a sweat test") { ExtrasPage() }
         }
         if (addingExtra) {
             FuelBlockSheet(
@@ -155,9 +152,13 @@ class DebriefState internal constructor(val target: DebriefTarget, private val r
     }
 
     @Composable
-    private fun TookPage(index: Int) {
-        if (index == 0) Text(target.title, style = FTType.BodySmall, color = FT.TextSecondary)
-        blockPages.getOrNull(index).orEmpty().forEach { b ->
+    private fun TookPage() {
+        FlowEssentials {
+            Text(target.title, style = FTType.BodySmall, color = FT.TextSecondary)
+            Column { DLabel("DURATION"); FieldTextField(duration, { duration = it }, "h:mm") }
+        }
+        if (blocks.isNotEmpty()) Text("Everything is AS PLANNED until you tap what differed.", style = FTType.Caption, color = FT.TextMuted)
+        blocks.forEach { b ->
             val state = took[b.id] ?: Took.AsPlanned
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("${b.label.uppercase()} · ${blockSummary(b)}", style = FTType.BodySmall, color = FT.TextPrimary)
@@ -178,11 +179,9 @@ class DebriefState internal constructor(val target: DebriefTarget, private val r
 
     @Composable
     private fun TotalsPage() {
-        if (blocks.isEmpty()) Text(target.title, style = FTType.BodySmall, color = FT.TextSecondary)
         if (target.sessionId == null) {
             Text("The recorded session isn't linked yet (it links once synced): the debrief is kept, the intake rows are written when it is.", style = FTType.Caption, color = FT.TextSecondary)
         }
-        Column { DLabel("DURATION"); FieldTextField(duration, { duration = it }, "h:mm") }
         if (blocks.isEmpty()) Text("No schedule was made for this one. Add what you took, or enter the totals.", style = FTType.Caption, color = FT.TextSecondary)
         // Extras as one line each, the latest three: the totals below count them all.
         extras.takeLast(3).forEach { x -> Text("EXTRA · ${x.label.uppercase()} · ${blockSummary(x)}", style = FTType.BodySmall, color = FT.TextPrimary) }

@@ -15,75 +15,15 @@ import com.bioscan.fieldterminal.domain.toAppIso
 import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.DateTimeField
 import com.bioscan.fieldterminal.ui.components.FTRatingSlider
-import com.bioscan.fieldterminal.ui.components.FormSteps
+import com.bioscan.fieldterminal.ui.components.FlowEssentials
+import com.bioscan.fieldterminal.ui.components.FlowMore
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.screens.today.laneColor
 import java.time.LocalDate
 import java.time.LocalDateTime
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// + LOG: the body and how it feels: encounters, grip, stool, the weekly OSTRC questions, wellbeing, a note.
-
-// DAV-158: DateTimeField instead of the old date-only DateField -- encounters
-// previously had no time-of-day in storage at all (see the fake
-// ENCOUNTER_NOMINAL_TIME fallback in domain/Log.kt), just a bare DATE column.
-// DAV-159: location/duration/activities/rating restore real columns
-// (`encounters.location_type`/`duration_min`/`activities`/`my_rating`) that
-// already existed in the schema but had no UI anywhere. Of the schema's three
-// separate rating columns (my_rating/physical_rating/connection_rating,
-// confirmed unused in every real row), only my_rating is surfaced here --
-// "exactly one rating system" per this ticket's acceptance criterion.
-@Composable
-internal fun EncounterForm(
-    saving: Boolean,
-    initialDateTime: LocalDateTime = LocalDateTime.now(),
-    initialType: String = "",
-    initialLocationType: String = "",
-    initialDurationMin: Int? = null,
-    initialActivities: String = "",
-    initialMyRating: Int? = null,
-    initialNotes: String = "",
-    onSave: (
-        date: String,
-        occurredAt: String,
-        encounterType: String?,
-        locationType: String?,
-        durationMin: Int?,
-        activities: List<String>?,
-        myRating: Int?,
-        notes: String?,
-    ) -> Unit,
-) {
-    var dateTime by remember { mutableStateOf(initialDateTime) }
-    var encounterType by remember { mutableStateOf(initialType) }
-    var locationType by remember { mutableStateOf(initialLocationType) }
-    var durationMin by remember { mutableStateOf(initialDurationMin?.toString() ?: "") }
-    var activities by remember { mutableStateOf(initialActivities) }
-    var myRating by remember { mutableStateOf(initialMyRating) }
-    var notes by remember { mutableStateOf(initialNotes) }
-
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        DateTimeField("WHEN", dateTime, { dateTime = it })
-        Column { FormLabel("TYPE (OPTIONAL)"); FieldTextField(encounterType, { encounterType = it }, "e.g. date, call, hangout") }
-        Column { FormLabel("LOCATION (OPTIONAL)"); FieldTextField(locationType, { locationType = it }, "e.g. their place, restaurant") }
-        Column { FormLabel("DURATION MIN (OPTIONAL)"); FieldTextField(durationMin, { durationMin = it }, "e.g. 90", keyboardType = KeyboardType.Number) }
-        Column { FormLabel("ACTIVITIES (OPTIONAL)"); FieldTextField(activities, { activities = it }, "comma-separated, e.g. dinner, movie") }
-        Column { FormLabel("RATING 1-5 (OPTIONAL)"); IntChipRow(1..5, myRating) { myRating = it } }
-        Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Notes...", singleLine = false) }
-        SaveButton(saving, true) {
-            onSave(
-                dateTime.toLocalDate().toString(),
-                dateTime.toAppIso(),
-                encounterType.trim().ifBlank { null },
-                locationType.trim().ifBlank { null },
-                durationMin.toIntOrNull(),
-                activities.split(",").map { it.trim() }.filter { it.isNotBlank() }.ifEmpty { null },
-                myRating,
-                notes.trim().ifBlank { null },
-            )
-        }
-    }
-}
+// + LOG: the body and how it feels: grip, stool, the weekly OSTRC questions, wellbeing, a note.
 
 // Handgrip strength: the best of the attempts on a hand dynamometer, one row per hand. Logged for the record; it is shown on the
 // Healthspan card but not scored until a cited norm table exists.
@@ -208,21 +148,21 @@ internal fun WellnessForm(
     var arousalLevel by remember { mutableStateOf(initialArousalLevel?.toString() ?: "") }
 
     val valid = listOf(energy, mood, stress, soreness, morningWood, arousalLevel).any { it.isNotBlank() }
-    // Two steps: energy, mood and stress, then soreness and the two arousal scales.
-    FormSteps(listOf("MIND", "BODY"), canSave = valid, saving = saving, onSave = {
-        onSave(date.toString(), energy.toIntOrNull(), mood.toIntOrNull(), stress.toIntOrNull(), soreness.toIntOrNull(), morningWood.toIntOrNull(), arousalLevel.toIntOrNull())
-    }) { step ->
-        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            if (step == 0) {
-                DateField("DATE", date, { date = it })
-                FTRatingSlider("ENERGY", energy.toIntOrNull(), 0..10, FT.Metric.Energy, { energy = it?.toString() ?: "" }, lowWord = "drained", highWord = "full")
-                FTRatingSlider("MOOD", mood.toIntOrNull(), 0..10, FT.Metric.Mood, { mood = it?.toString() ?: "" }, lowWord = "low", highWord = "great")
-                FTRatingSlider("STRESS", stress.toIntOrNull(), 0..10, FT.Metric.Stress, { stress = it?.toString() ?: "" }, lowWord = "calm", highWord = "very stressed", reversed = true)
-            } else {
-                FTRatingSlider("SORENESS", soreness.toIntOrNull(), 0..10, FT.Metric.Soreness, { soreness = it?.toString() ?: "" }, lowWord = "none", highWord = "very sore", reversed = true)
-                FTRatingSlider("MORNING WOOD", morningWood.toIntOrNull(), 0..10, FT.Metric.Arousal, { morningWood = it?.toString() ?: "" }, lowWord = "none", highWord = "full")
-                FTRatingSlider("AROUSAL LEVEL", arousalLevel.toIntOrNull(), 0..10, FT.Metric.Arousal, { arousalLevel = it?.toString() ?: "" }, lowWord = "none", highWord = "very high")
-            }
+    // One page (Logging Flows Redesign Plan): the four ratings answered together, the two arousal scales folded under them.
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        FlowEssentials {
+            DateField("DATE", date, { date = it })
+            FTRatingSlider("ENERGY", energy.toIntOrNull(), 0..10, FT.Metric.Energy, { energy = it?.toString() ?: "" }, lowWord = "drained", highWord = "full")
+            FTRatingSlider("MOOD", mood.toIntOrNull(), 0..10, FT.Metric.Mood, { mood = it?.toString() ?: "" }, lowWord = "low", highWord = "great")
+            FTRatingSlider("STRESS", stress.toIntOrNull(), 0..10, FT.Metric.Stress, { stress = it?.toString() ?: "" }, lowWord = "calm", highWord = "very stressed", reversed = true)
+            FTRatingSlider("SORENESS", soreness.toIntOrNull(), 0..10, FT.Metric.Soreness, { soreness = it?.toString() ?: "" }, lowWord = "none", highWord = "very sore", reversed = true)
+        }
+        FlowMore("wellbeing_arousal", summary = "Morning wood, arousal level") {
+            FTRatingSlider("MORNING WOOD", morningWood.toIntOrNull(), 0..10, FT.Metric.Arousal, { morningWood = it?.toString() ?: "" }, lowWord = "none", highWord = "full")
+            FTRatingSlider("AROUSAL LEVEL", arousalLevel.toIntOrNull(), 0..10, FT.Metric.Arousal, { arousalLevel = it?.toString() ?: "" }, lowWord = "none", highWord = "very high")
+        }
+        SaveButton(saving, valid) {
+            onSave(date.toString(), energy.toIntOrNull(), mood.toIntOrNull(), stress.toIntOrNull(), soreness.toIntOrNull(), morningWood.toIntOrNull(), arousalLevel.toIntOrNull())
         }
     }
 }

@@ -13,8 +13,6 @@
 .dash-link { background: none; border: 1px solid var(--ft-glass-border); border-radius: 999px; padding: 7px 12px; color: var(--ft-fg); font: 500 10px/1 var(--ft-mono); letter-spacing: .1em; text-decoration: none; cursor: pointer; }
 .dash-link:hover { border-color: var(--ft-muted); }
 .dash-user { font: 500 11px var(--ft-mono); color: var(--ft-dim); }
-.dash-banner { margin: 0; padding: 8px max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px)); font-size: 12px; color: var(--ft-muted); border-bottom: 1px solid var(--ft-line); }
-.dash-banner a { color: var(--ft-fg); }
 .dash-main { flex: 1; width: 100%; max-width: 1040px; margin: 0 auto; padding: 20px max(16px, env(safe-area-inset-right, 0px)) 40px max(16px, env(safe-area-inset-left, 0px)); box-sizing: border-box; }
 
 .today { display: flex; flex-direction: column; gap: 16px; }

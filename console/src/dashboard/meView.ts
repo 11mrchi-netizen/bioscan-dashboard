@@ -18,7 +18,7 @@ export interface MeViewDoc { v: number; tab: string; range?: string; sections: M
 export interface MeViewRow { view: MeViewDoc; builtAt: string }
 
 /** The phone's tabs, in the phone's order (MeScreen.kt). */
-export const ME_TABS = ['HEALTHSPAN', 'PERFORMANCE', 'BODY', 'HEALTH', 'BLOODWORK', 'ROUTINE'] as const
+export const ME_TABS = ['HEALTHSPAN', 'PERFORMANCE', 'BODY', 'HEALTH', 'BLOODWORK', 'ROUTINE', 'EXPOSURES'] as const
 export type MeTab = typeof ME_TABS[number]
 
 export async function loadMeView(tab: MeTab): Promise<MeViewRow | null> {

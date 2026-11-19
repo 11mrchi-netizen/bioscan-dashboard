@@ -65,8 +65,10 @@ const soft = <T>(r: { rows: T[]; error?: string }, name: string, missing: string
 
 export async function runAir(admin: Admin, userId: string, now: Date = new Date(), fetcher: OutdoorFetcher = openMeteoFetcher()): Promise<AirRun> {
   const missing: string[] = []
+  // All of it (one small row a day): the offset for a date is the latest row on or before it, which can be older than
+  // the window when the phone has not written one for a while. A lower bound here made every hour UTC in that case.
   const ctxRes = await fetchAll<{ date: string; utc_offset_min: number | null }>((a, b) =>
-    admin.from('daily_context').select('date, utc_offset_min').eq('user_id', userId).gte('date', shift(now.toISOString().slice(0, 10), -BACKFILL_DAYS - 40)).order('date').range(a, b))
+    admin.from('daily_context').select('date, utc_offset_min').eq('user_id', userId).order('date').range(a, b))
   const context = soft(ctxRes, 'daily_context', missing).filter((c) => c.utc_offset_min !== null) as { date: string; utc_offset_min: number }[]
   const clock = localClock(context)
   const today = localDateAt(now, context)
@@ -163,7 +165,7 @@ export async function runAir(admin: Admin, userId: string, now: Date = new Date(
 
   const inputs = { visits, fixes, home, indoor, sessions, outdoor, clock, wallToUtc }
   const rows = hourRows(hours, inputs, now.getTime())
-  const days = summarizeDays(rows, outdoorAtHome(hours, home, outdoor), inputs, now.getTime()).filter((d) => d.date >= fromDate && d.date <= today)
+  const days = summarizeDays(rows, outdoorAtHome(hours, home, outdoor), inputs).filter((d) => d.date >= fromDate && d.date <= today)
 
   const upserts = days.map((d) => ({ user_id: userId, ...d, engine_version: AIR_ENGINE_VERSION, calculated_at: now.toISOString() }))
   for (let i = 0; i < upserts.length; i += 20) {

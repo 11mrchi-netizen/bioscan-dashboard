@@ -26,6 +26,7 @@ const GROUPS: { title: string; items: { to: string; label: string }[] }[] = [
   { title: 'ANALYSIS', items: [
     { to: 'history', label: 'History' }, { to: 'evidence', label: 'Evidence' }, { to: 'explore', label: 'Explore' },
     { to: 'data', label: 'Data' }, { to: 'models', label: 'Models' }, { to: 'body', label: 'Body' },
+    { to: 'risk', label: 'Risk' },
   ] },
   { title: 'SYSTEM', items: [{ to: 'integrity', label: 'Integrity' }, { to: 'connections', label: 'Connections' }] },
 ]

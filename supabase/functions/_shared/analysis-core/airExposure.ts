@@ -229,7 +229,7 @@ export function outdoorAtHome(hours: number[], home: { lat: number; lon: number 
   return m
 }
 
-export function summarizeDays(rows: HourRow[], homeOutdoor: Map<number, number | null>, inp: Pick<AirInputs, 'sessions' | 'wallToUtc' | 'clock' | 'outdoor' | 'visits' | 'fixes' | 'home'>, nowMs: number): AirDay[] {
+export function summarizeDays(rows: HourRow[], homeOutdoor: Map<number, number | null>, inp: Pick<AirInputs, 'sessions' | 'wallToUtc' | 'clock'>): AirDay[] {
   const byDate = new Map<string, HourRow[]>()
   for (const r of rows) { const l = byDate.get(r.date) ?? []; l.push(r); byDate.set(r.date, l) }
   const spans = outdoorSessionSpans(inp.sessions, inp.wallToUtc)

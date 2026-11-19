@@ -65,7 +65,7 @@ test('a day: indoor at home with a sensor, outdoor at work, the dose split and t
   const indoor = hours.flatMap((h) => [0, 15, 30, 45].map((m) => ({ measured_at: new Date(h + m * 60000).toISOString(), metric: 'pm25_ugm3', value: 8 })))
   const inp = { visits, fixes: [], home: HOME, indoor, sessions: [], outdoor, clock, wallToUtc }
   const rows = hourRows(hours, inp, DAY_START + 30 * 3600000)
-  const [day] = summarizeDays(rows, outdoorAtHome(hours, HOME, outdoor), inp, 0)
+  const [day] = summarizeDays(rows, outdoorAtHome(hours, HOME, outdoor), inp)
   assert.equal(day.date, '2026-11-10')
   assert.equal(day.coverage_h, 23, '17:00-18:00 has no visit or fix')
   assert.equal(day.sources.indoor, 15)
@@ -80,7 +80,7 @@ test('a day: indoor at home with a sensor, outdoor at work, the dose split and t
 test('without an indoor sensor home hours use the outdoor level there, labelled as such', () => {
   const outdoor = outdoorTable(() => 12)
   const inp = { visits, fixes: [], home: HOME, indoor: [], sessions: [], outdoor, clock, wallToUtc }
-  const [day] = summarizeDays(hourRows(hours, inp, 0), new Map(), inp, 0)
+  const [day] = summarizeDays(hourRows(hours, inp, 0), new Map(), inp)
   assert.equal(day.sources.indoor, 0)
   assert.equal(day.sources.outdoor_home, 15)
   assert.equal(day.pm25_ugm3, 12)
@@ -92,7 +92,7 @@ test('an outdoor session takes its hours from the outdoor level, even at home', 
   // a 60-minute run at 06:00 local (logged wall clock)
   const sessions = [{ start_time: '2026-11-10T06:00:00+00:00', duration_min: 60, type: 'run' }]
   const inp = { visits, fixes: [], home: HOME, indoor, sessions, outdoor, clock, wallToUtc }
-  const [day] = summarizeDays(hourRows(hours, inp, 0), new Map(), inp, 0)
+  const [day] = summarizeDays(hourRows(hours, inp, 0), new Map(), inp)
   assert.equal(day.sources.session, 1)
   assert.equal(day.sessions.length, 1)
   assert.equal(day.sessions[0].pm25, 40)
@@ -126,7 +126,8 @@ test('runAir: reads softly, fetches only missing cells, writes days and the summ
   const placeRows = [{ id: 'p-home', lat: HOME.lat, lon: HOME.lon, category: 'home', source: 'home_setting', user_id: 'u' }]
   const visitRows = [{ start_at: '2026-11-01T00:00:00.000Z', end_at: null, lat: HOME.lat, lon: HOME.lon, place_id: 'p-home', user_id: 'u' }]
   const admin = fakeAdmin({
-    daily_context: context.map((c) => ({ ...c, user_id: 'u' })),
+    // older than the window on purpose: the offset still applies (a lower bound on this read once made every hour UTC)
+    daily_context: [{ date: '2026-06-01', utc_offset_min: 480, user_id: 'u' }],
     places: placeRows,
     place_visits: visitRows,
   }, ['home_env_readings'])

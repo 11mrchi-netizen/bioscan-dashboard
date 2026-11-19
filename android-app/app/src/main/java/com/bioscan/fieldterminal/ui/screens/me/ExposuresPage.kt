@@ -27,6 +27,15 @@ import com.bioscan.fieldterminal.data.ExposuresRepository
 import com.bioscan.fieldterminal.data.InstrumentResponseRow
 import com.bioscan.fieldterminal.data.InstrumentsRepository
 import com.bioscan.fieldterminal.data.RiskScreens
+import com.bioscan.fieldterminal.data.AirImprovement
+import com.bioscan.fieldterminal.data.ImprovementsRepository
+import com.bioscan.fieldterminal.domain.risk.IMPROVEMENT_MIN_DAYS
+import com.bioscan.fieldterminal.domain.risk.StartedImprovement
+import com.bioscan.fieldterminal.domain.risk.beforeAfter
+import com.bioscan.fieldterminal.domain.risk.metricsFor
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
+import com.bioscan.fieldterminal.ui.components.launchSafe
+import androidx.compose.runtime.rememberCoroutineScope
 import com.bioscan.fieldterminal.data.PreventionData
 import com.bioscan.fieldterminal.data.PreventionRepository
 import com.bioscan.fieldterminal.data.preventiveContext
@@ -107,6 +116,9 @@ fun ExposuresPage() {
     // Risk profile R4: substances, sun and heat, home and water, preventive care.
     var prevention by remember { mutableStateOf<PreventionData?>(null) }
     var editingChecklist by remember { mutableStateOf(false) }
+    // Risk profile R5: ways to improve started as Lab interventions.
+    var improvements by remember { mutableStateOf<List<StartedImprovement>>(emptyList()) }
+    val scope = rememberCoroutineScope()
     var recording by remember { mutableStateOf<PreventiveStatus?>(null) }
     val checklistDefs = remember { PreventionRepository.checklistDefs(context) }
     val preventiveDefs = remember { PreventionRepository.preventiveDefs(context) }
@@ -124,6 +136,7 @@ fun ExposuresPage() {
             screens = RiskScreensRepository(SupabaseClientProvider.client).load(context)
             screensError = null
             prevention = catching { PreventionRepository(SupabaseClientProvider.client).load() }.getOrNull()
+            improvements = ImprovementsRepository(SupabaseClientProvider.client).load()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -174,7 +187,11 @@ fun ExposuresPage() {
         val d = data
         when {
             d == null && error == null -> Text("Loading…", style = FTType.BodySmall, color = FT.TextSecondary)
-            d != null -> ExposuresContent(d, onOpen = { history = it })
+            d != null -> ExposuresContent(
+                d, onOpen = { history = it }, started = improvements,
+                onStart = { i -> scope.launchSafe(onError = { e -> error = describeLoadFailure(e) }) { ImprovementsRepository(SupabaseClientProvider.client).start(i); reload++ } },
+                onStop = { id -> scope.launchSafe(onError = { e -> error = describeLoadFailure(e) }) { ImprovementsRepository(SupabaseClientProvider.client).stop(id); reload++ } },
+            )
         }
     }
 
@@ -197,7 +214,13 @@ fun ExposuresPage() {
 }
 
 @Composable
-private fun ExposuresContent(d: ExposuresData, onOpen: (AirMetric) -> Unit) {
+private fun ExposuresContent(
+    d: ExposuresData,
+    onOpen: (AirMetric) -> Unit,
+    started: List<StartedImprovement> = emptyList(),
+    onStart: (AirImprovement) -> Unit = {},
+    onStop: (String) -> Unit = {},
+) {
     val s = d.summary
     FTCard(title = "AIR · LAST 30 DAYS", info = AIR_GUIDELINES) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -241,11 +264,27 @@ private fun ExposuresContent(d: ExposuresData, onOpen: (AirMetric) -> Unit) {
         FTCard(title = "WAYS TO IMPROVE", info = "Ranked by how much of your dose each could lower. Each appears only when your own numbers call for it.") {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 list.forEach { i ->
+                    val running = started.firstOrNull { it.improvementId == i.id && it.state != "stopped" }
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(i.title, style = FTType.RowTitle, color = FT.TextPrimary)
                         Text(i.why, style = FTType.BodySmall, color = FT.TextSecondary)
                         Text(i.evidence, style = FTType.Caption, color = FT.TextMuted)
                         Text("EFFORT ${i.effort.uppercase()} · LOWERS ${i.lowers.joinToString(", ") { it.uppercase() }}", style = FTType.MonoCaption, color = FT.TextSecondary)
+                        // Risk profile R5: started as a Lab intervention, then read back against the air days.
+                        if (running?.started != null) {
+                            Text("STARTED ${running.started} · READ ON ${running.evaluateOn ?: "-"} · ON LAB WITH YOUR INTERVENTIONS", style = FTType.MonoCaption, color = FT.TextPrimary)
+                            beforeAfter(airDayValues(d), running.started, metricsFor(i.lowers), LocalDate.now()).forEach { b ->
+                                Text(
+                                    if (b.readable) "${b.metric.label}: ${fmt(b.before!!, 1)} before → ${fmt(b.after!!, 1)} since${b.metric.unit.takeIf { it.isNotEmpty() }?.let { " $it" } ?: ""} (${b.beforeDays} and ${b.afterDays} days)"
+                                    else "${b.metric.label}: ${b.afterDays} of ${IMPROVEMENT_MIN_DAYS} days since the start so far",
+                                    style = FTType.Caption, color = if (b.readable && (b.change ?: 0.0) < 0) FT.Ok else FT.TextSecondary,
+                                )
+                            }
+                            Text("Before and after, not a trial: the season and the weather move the air too.", style = FTType.Caption, color = FT.TextMuted)
+                            FTButton("STOP", emphasis = FTButtonEmphasis.Tertiary) { onStop(running.interventionId) }
+                        } else {
+                            FTButton("START", emphasis = FTButtonEmphasis.Primary) { onStart(i) }
+                        }
                     }
                 }
             }
@@ -290,4 +329,13 @@ private fun MetricLine(m: AirMetric, mean: Double, days: Int, onOpen: (AirMetric
         Text(fmt(mean, m.decimals) + if (m.unit.isNotEmpty()) " ${m.unit}" else "", style = FTType.Telemetry, color = m.color)
         FTChevron(tint = FT.TextSecondary)
     }
+}
+
+/** The air days as the before/after reads them (risk profile R5). */
+internal fun airDayValues(d: ExposuresData): List<com.bioscan.fieldterminal.domain.risk.AirDayValues> = d.days.mapNotNull { r ->
+    val date = runCatching { LocalDate.parse(r.date) }.getOrNull() ?: return@mapNotNull null
+    com.bioscan.fieldterminal.domain.risk.AirDayValues(date, buildMap {
+        r.pm25?.let { put("pm25", it) }; r.pm25Indoor?.let { put("pm25_indoor", it) }; r.no2?.let { put("no2", it) }
+        r.o3?.let { put("o3", it) }; r.co2Night?.let { put("co2", it) }; r.uvMax?.let { put("uv", it) }
+    })
 }

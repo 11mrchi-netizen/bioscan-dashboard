@@ -12,6 +12,8 @@ import { dashboardHref } from '../lib/surfaces'
 import { type BpRow, categorize, series as bpSeries, sittings } from '../lib/bp'
 import { CO2_POOR, CO2_VENTILATE, WHO_NO2_24H, WHO_O3_8H, WHO_PM25_24H, WHO_PM25_ANNUAL } from '../../../supabase/functions/_shared/analysis-core/airExposure.ts'
 import { RiskQuestionnaires, type Response } from './RiskQuestionnaires'
+import { RiskFromPhone } from './RiskFromPhone'
+import { localToday } from '../lib/instruments'
 import './Pages.css'
 
 // Metric hues for canvas charts: the values of design/tokens (--m-pm25, --m-no2, --m-ozone, --m-co2, --m-uv-index,
@@ -73,6 +75,34 @@ export default function Risk() {
   const [responses, setResponses] = useState<Response[]>([])
   const [responsesMissing, setResponsesMissing] = useState(false)
   const [answered, setAnswered] = useState(0)
+  // Risk profile R5: ways to improve already started as interventions (improvement id -> start date), and starting one.
+  const [started, setStarted] = useState<Record<string, string>>({})
+  const [starting, setStarting] = useState<string | null>(null)
+  useEffect(() => {
+    let live = true
+    void supabase.from('interventions').select('subject_key,started_at,lifecycle_state').eq('subject_type', 'risk_improvement').then(({ data }) => {
+      if (!live) return
+      const m: Record<string, string> = {}
+      for (const r of (data ?? []) as { subject_key: string; started_at: string | null; lifecycle_state: string }[]) {
+        if (r.lifecycle_state !== 'stopped' && r.started_at) m[r.subject_key.replace(/^air:/, '')] = r.started_at
+      }
+      setStarted(m)
+    })
+    return () => { live = false }
+  }, [answered])
+  async function startImprovement(i: Improvement) {
+    setStarting(i.id)
+    const today = localToday()
+    const evaluate = new Date(Date.parse(today + 'T00:00:00Z') + 28 * 86400000).toISOString().slice(0, 10)
+    const { error } = await supabase.from('interventions').insert({
+      id: crypto.randomUUID(), domain: 'lifestyle', subject_type: 'risk_improvement', subject_key: `air:${i.id}`,
+      name: i.title.slice(0, 80), mechanism: i.why, intended_outcomes: i.lowers, lifecycle_state: 'active',
+      started_at: today, evaluate_on: evaluate, source: 'risk_profile',
+    })
+    setStarting(null)
+    if (error) { setNotes((n) => [...n, `could not start: ${error.message}`]); return }
+    setAnswered((n) => n + 1)
+  }
   useEffect(() => {
     let live = true
     void supabase.from('instrument_responses').select('id,instrument,local_date,score,band,flags,source').order('answered_at').then(({ data, error }) => {
@@ -177,6 +207,8 @@ export default function Risk() {
 
       <RiskQuestionnaires responses={responses} missing={responsesMissing} onChanged={() => setAnswered((n) => n + 1)} />
 
+      <RiskFromPhone />
+
       <div className="pg-grid">
         <section className="pg-card">
           <h3 className="pg-card-title mono"><span>AIR · LAST 30 DAYS</span><span>{summary?.asOf ?? ''}</span></h3>
@@ -204,6 +236,12 @@ export default function Risk() {
                 <p className="pg-note" style={{ margin: '4px 0' }}>{i.why}</p>
                 <p className="pg-note" style={{ margin: '4px 0', opacity: 0.75 }}>{i.evidence}</p>
                 <span className="mono" style={{ fontSize: 11, color: PALETTE.textMuted }}>EFFORT {i.effort.toUpperCase()} · LOWERS {i.lowers.join(', ').toUpperCase()}</span>
+                {/* Risk profile R5: start it as a Lab intervention (the phone reads it back against the air days). */}
+                <div style={{ marginTop: 6 }}>
+                  {started[i.id]
+                    ? <span className="mono" style={{ fontSize: 11 }}>STARTED {started[i.id]} · ON LAB › INTERVENTIONS · READ ON THE PHONE AFTER 4 WEEKS</span>
+                    : <button className="btn-ghost" disabled={starting === i.id} onClick={() => void startImprovement(i)}>{starting === i.id ? 'STARTING…' : 'START AS AN INTERVENTION'}</button>}
+                </div>
               </li>
             ))}</ul>
           )}

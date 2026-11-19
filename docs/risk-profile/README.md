@@ -76,6 +76,18 @@ Not done in R4: **the diet questionnaire for Life's Essential 8.** LE8 names the
 tables are not in its PubMed Central text). It was not written from memory; diet stays "not assessed". Preventive
 items are not yet in Plan or the Sunday reminder: they show on Me › EXPOSURES.
 
+## R5: ways to improve as Lab experiments; Console Risk in full
+
+| Part | Where | Tested by |
+|---|---|---|
+| A way to improve (the air summary's `improvements`) starts as a Lab intervention: domain `lifestyle`, `subject_type` `risk_improvement`, `subject_key` `air:<id>`, its `lowers` as `intended_outcomes`, `lifecycle_state` `active`, evaluated 28 days after the start (the table requires 13 or more). STOP sets `stopped` and `ended_at`. It then shows on Lab with every other intervention | `data/ImprovementsRepository.kt` | live constraints checked |
+| Before and after: the 4 weeks before the start against the days since, per metric it lowers (PM2.5 outdoor and indoor, CO2), read only once 7 days have passed and both sides have days | `domain/risk/Improvements.kt` | `ImprovementsTest` |
+| Phone: Me › EXPOSURES › WAYS TO IMPROVE has START / STOP and the before/after readout | `ui/screens/me/ExposuresPage.kt` | compiled |
+| Console: ANALYSIS › RISK has START AS AN INTERVENTION on each way to improve (a local start date), and draws the phone's preventive care, substances, home and water, heart, sugar and brain sections from its published Me › EXPOSURES (`me_views`); the air and questionnaires keep the console's own views | `workspaces/Risk.tsx`, `workspaces/RiskFromPhone.tsx` | `e2e/risk.mts` |
+
+Only the air summary's ways to improve start as interventions: the other domains say what to do in words, and have no daily
+series to read a before and after from.
+
 ## The health assistant's scope
 
 `agent-core/scope.ts` classifies every table (a test fails on one that is not). `bp_readings` is `shared`, like
@@ -108,7 +120,8 @@ The bundle (53 files, 571 KB) is too large for the connector's inline deploy; us
 
 The edge function needs outbound access to `air-quality-api.open-meteo.com` (Supabase edge functions have it by default).
 
-## Not done (next phases)
+## Not done
 
-R2 (mental health, social, work questionnaires), R3 (PREVENT, Life's Essential 8, FINDRISC, brain factors), R4
-(substances, heat and sun, home and water checklists, preventive care in Plan), R5 (ways to improve as Lab experiments).
+- Deploying `analysis-run` (step 2 above); until then there are no air summaries, so no ways to improve to start.
+- The LE8 diet questionnaire (MEPA): needs its items from a source.
+- Preventive items in Plan and the Sunday reminder.

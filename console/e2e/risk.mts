@@ -69,6 +69,13 @@ const T: Record<string, Record<string, unknown>[]> = {
   bp_readings: [],
   lab_results: [{ draw_id: 1, marker_name: 'SBP, Sitting', value: 136 }, { draw_id: 1, marker_name: 'DBP, Sitting', value: 84 }],
   lab_draws: [{ id: 1, draw_date: '2026-04-25' }],
+  // R3-R5: the phone's published Me › EXPOSURES (the console draws its screens and prevention, not its air), no interventions yet
+  me_views: [{ tab: 'EXPOSURES', built_at: '2026-11-19T02:00:00Z', view: { v: 1, tab: 'EXPOSURES', sections: [
+    { title: 'PREVENTIVE CARE', items: [{ kind: 'row', label: 'Flu vaccine', value: 'due', tone: 'warn' }, { kind: 'row', label: 'Hepatitis C test', value: 'done', sub: 'last 2020-01-01' }] },
+    { title: 'HEART · PREVENT', items: [{ kind: 'tile', label: 'Heart attack, stroke or heart failure in 10 years', value: '2.1', unit: '%', sub: 'Low', tone: 'ok' }] },
+    { title: 'AIR · LAST 30 DAYS', items: [{ kind: 'note', text: 'drawn by the console itself' }] },
+  ] } }],
+  interventions: [],
   // R2: one WHO-5 from a month ago, so it is due, and nothing else yet
   instrument_responses: [{ id: 1, instrument: 'who5', local_date: '2026-10-15', answered_at: '2026-10-15T02:00:00Z', score: 64, band: 'Good', flags: [], source: 'phone' }],
 }
@@ -117,6 +124,9 @@ try {
       return route.fulfill({ status: 201, contentType: 'application/json', body: '[]' })
     }
     const rows = postgrest(table, u.searchParams)
+    if ((route.request().headers()['accept'] ?? '').includes('vnd.pgrst.object')) {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rows[0] ?? null) })
+    }
     return route.fulfill({ status: 200, headers: { 'content-type': 'application/json', 'content-range': `0-${rows.length}/*` }, body: JSON.stringify(rows) })
   })
   const exp = Math.floor(Date.now() / 1000) + 3600
@@ -142,6 +152,14 @@ try {
   check(/^\d{4}-\d{2}-\d{2}$/.test(String(saved?.local_date)), 'saved with a local date', String(saved?.local_date))
   check(((await page.textContent('.pg')) ?? '').includes('Please talk about it with someone you trust'), 'the self-harm answer shows its plain line')
   await page.screenshot({ path: path.join(OUT, 'risk-phq9.png'), fullPage: true })
+  // R5: the phone's screens and prevention, without its air sections; a way to improve started as an intervention.
+  const after = ((await page.textContent('.pg')) ?? '').replace(/\s+/g, ' ')
+  check(after.includes('PREVENTIVE CARE') && after.includes('Flu vaccine') && after.includes('HEART · PREVENT'), "the phone's screens and prevention show")
+  check(!after.includes('drawn by the console itself'), "the phone's air sections are left to the console's own views")
+  await page.getByRole('button', { name: 'START AS AN INTERVENTION' }).first().click()
+  await page.getByText(/STARTED \d{4}-\d{2}-\d{2}/).first().waitFor({ timeout: 5000 })
+  const iv = posted.find((p) => p.table === 'interventions')?.rows[0]
+  check(iv?.subject_type === 'risk_improvement' && String(iv?.subject_key).startsWith('air:') && iv?.lifecycle_state === 'active' && Array.isArray(iv?.intended_outcomes), 'a way to improve starts as a Lab intervention', JSON.stringify(iv))
   check(errors.length === 0, 'no page errors', errors.join(' | '))
   await page.screenshot({ path: path.join(OUT, 'risk.png'), fullPage: true })
   console.log('engine:', JSON.stringify({ days: out.days, cells: out.cells }), 'screenshot:', path.join(OUT, 'risk.png'))

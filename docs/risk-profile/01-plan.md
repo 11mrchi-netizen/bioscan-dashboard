@@ -1,6 +1,6 @@
 # Risk profile: environmental and behavioural exposures
 
-Status: R0 to R4 built (19 Nov 2026; see [README.md](README.md) for what is deployed and what R4 left open); R5 planned. Owner decisions so far (2026-11-19): build our own version rather than port
+Status: R0 to R5 built (19 Nov 2026; see [README.md](README.md) for what is deployed and what is left open). Owner decisions so far (2026-11-19): build our own version rather than port
 [healthrating](https://github.com/alanrooster/healthrating) (AGPL-3.0, so no code is copied; its methodology page is used
 only as a reading list); take home blood pressure readings; replace life expectancy with the AHA PREVENT equations; the
 tool **assesses exposures and risks and shows ways to improve, rather than giving one precise number**.

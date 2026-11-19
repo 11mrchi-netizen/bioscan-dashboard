@@ -75,8 +75,8 @@ instrument repeats on its own schedule, and every improvement can be started as 
   Severity bands as published.
 - **Passive context**: `wellbeing_daily` mood and stress, daytime stress (BALANCE), night-time phone use
   (`phone_usage_daily`). Shown next to the scores; never folded into them.
-- **Safety**: a positive PHQ-9 item 9 (thoughts of self-harm) shows crisis resources at once, whatever the total, and is
-  never hidden behind a tap. Wording to be agreed with the owner before it ships.
+- **Safety**: a positive PHQ-9 item 9 (thoughts of self-harm) shows a short, plain line at once, whatever the total,
+  suggesting talking to someone or a doctor. Owner decision: no specific crisis line and no notifications to anyone.
 
 ### 5. Social connection
 
@@ -90,8 +90,18 @@ instrument repeats on its own schedule, and every improvement can be started as 
 
 ### 7. Cardiometabolic
 
-- **Blood pressure** (new): home readings on the AHA protocol (validated upper-arm cuff; 2 readings 1 min apart, morning
-  and evening, 7 days; seated, 5 min rest). The 7-day mean, dropping day 1, is the value used. Categories: AHA/ACC 2017.
+- **Blood pressure.** What exists today: clinic readings only, as lab markers (`lab_results`: `SBP, Sitting`,
+  `DBP, Sitting`, `Pulse Rate`; grouped under Cardiovascular in `LabMarkerThemes.kt`, which also lists them under Kidney
+  by mistake, the later entry winning) and a metric hue (`FT.Metric.BloodPressure`, `bloodPressure` in tokens). No home
+  readings, no table for them, no Health Connect import (`BloodPressureRecord` is not among the records the phone reads).
+  - **Home readings**: imported from Health Connect (`BloodPressureRecord`; Omron Connect and most cuff apps write there),
+    with manual entry in the add sheet as the fallback. Both land in `bp_readings`.
+  - **Protocol**: the AHA one (validated upper-arm cuff; 2 readings 1 min apart, morning and evening, 7 days; seated,
+    5 min rest). The 7-day mean, dropping day 1, is the value used. Then a 7-day series every 3 months, or as advised.
+    Categories: AHA/ACC 2017.
+  - **Clinic vs home**: both kept and shown side by side. A clinic reading well above the home mean suggests a white-coat
+    effect; the reverse, masked hypertension. Home means win as the input to PREVENT and Life's Essential 8; the latest
+    clinic reading is the fallback, labelled as such.
 - **PREVENT** (Khan et al., Circulation 2024): 10- and 30-year risk of total CVD, ASCVD and heart failure from age, sex,
   total and HDL cholesterol, systolic BP, BP treatment, diabetes, smoking, eGFR (CKD-EPI 2021 from creatinine) and BMI;
   the HbA1c add-on when available. Valid for ages 30-79; outside that range it is not shown, and the row says why. Tests
@@ -117,12 +127,26 @@ instrument repeats on its own schedule, and every improvement can be started as 
 
 - Screenings, vaccines and check-ups due for age and sex, each with its interval, last date and next date. Due items go
   to Plan as reminders.
+- **Which schedule** (owner decision 2026-11-19: the best evidence, not one country's). No single country's guidance is
+  best on its own, so the schedule is built in layers, and each item names the layer it comes from:
+  1. **Core: USPSTF grade A and B.** The most rigorously graded and most often updated screening reviews. They are
+     deliberately conservative, recommending only what trials show helps people without symptoms.
+  2. **Cardiovascular prevention: ESC / EAS.** Europe is ahead on prevention here: Lipoprotein(a) measured once in
+     adult life (EAS 2022 consensus, ESC 2019), ApoB as a target, and the European Code Against Cancer (5th ed., 2025)
+     for cancer exposures.
+  3. **Regional prevalence.** Where the person lives changes a few items, for example hepatitis B screening (high
+     prevalence in East and Southeast Asia) and gastric cancer (endoscopy programmes in Korea and Japan). Driven by the
+     country of residence in `user_profile`.
+  4. **Optional, discuss with a doctor.** Items that are useful for someone tracking closely but are not a population
+     recommendation: USPSTF grade C and I, a coronary calcium score when PREVENT sits in the borderline band
+     (ACC/AHA 2019), skin checks.
+  Each item shows its layer and source, so it is clear what is a guideline and what is optional.
 
 ## Data
 
 | Table | Holds | Notes |
 |---|---|---|
-| `bp_readings` | `occurred_at` (logged time), systolic, diastolic, pulse, arm, position, session id (the pair of readings), cuff, `on_bp_meds` | Own-row RLS |
+| `bp_readings` | `occurred_at` (logged time), systolic, diastolic, pulse, arm, position, session id (the pair of readings), cuff, `on_bp_meds`, source (`health_connect` with its record id, or `manual`) | Own-row RLS; the Health Connect record id is unique, so a re-import adds nothing |
 | `instrument_responses` | instrument, version, `answered_at`, item answers (jsonb), score, band | Append-only; a correction supersedes a row, as in health concerns |
 | `exposure_answers` | checklist item, value, `answered_at` | Latest per item wins; history kept |
 | `preventive_items` | item, last done, interval, source | Feeds Plan |
@@ -137,7 +161,7 @@ on demand; new registry entries go in `metric-registry.json`.
 - **Phone** (logging stays on the phone): BP entry in the add sheet with the 7-day protocol as a guided series;
   questionnaire reminders; a new Me tab, **EXPOSURES**, published to `me_views` like the other tabs.
 - **Console**: a **Risk** workspace for answering the longer instruments and checklists on a large screen and for digging
-  into each domain (exposure over time, drivers, coverage). Rail group to be decided (proposed: under ANALYSIS).
+  into each domain (exposure over time, drivers, coverage), in the ANALYSIS rail group.
 - **Plan**: preventive care due dates. **Lab**: "start as experiment" from any improvement.
 - Healthspan is unchanged and stays on its own; nothing here feeds it.
 - The app map gets the new screens (EXPOSURES tab, BP entry, questionnaire sheet) with `status: "new"` when they are
@@ -147,7 +171,7 @@ on demand; new registry entries go in `metric-registry.json`.
 
 | Phase | Builds | Why first |
 |---|---|---|
-| R0 | `bp_readings` + phone entry and protocol | Readings need a week before they can be used; start collecting at once |
+| R0 | `bp_readings`, Health Connect import, manual entry and the 7-day protocol | Readings need a week before they can be used; start collecting at once |
 | R1 | Air: outdoor cache, personal exposure, indoor join, EXPOSURES tab skeleton | Uses data already collected; the owner's first ask |
 | R2 | Mental health, social, work instruments; reminders; safety handling | Second ask; small and self-contained |
 | R3 | Cardiometabolic: PREVENT, Life's Essential 8, FINDRISC; brain factors | Needs R0's readings |
@@ -156,10 +180,15 @@ on demand; new registry entries go in `metric-registry.json`.
 
 Each phase: tests, `assembleDebug`, console `tsc`, then the map update.
 
-## Open questions for the owner
+## Decisions (2026-11-19)
 
-1. Preventive-care guidance: which country's schedule (USPSTF by default, or the one where you live)?
-2. PHQ-9 item 9: which crisis line to show, and should it also notify anyone? (Default: show the line only.)
-3. Questionnaires on the phone, in the Console, or both? (Proposed: short ones on the phone, longer ones in both.)
-4. Rail group for the Console Risk workspace.
-5. Outdoor air: the Open-Meteo Air Quality host may need allowing for the edge function's network.
+1. Preventive care: the layered schedule above (USPSTF A/B, ESC / EAS cardiovascular prevention, regional prevalence,
+   optional items), not one country's.
+2. PHQ-9 item 9: a plain line only; no crisis line and no notifications.
+3. Questionnaires: short ones on the phone, longer ones on the phone or in the Console.
+4. The Console Risk workspace goes in the ANALYSIS rail group.
+
+## Still open
+
+- Country of residence for the regional layer (stored in `user_profile`, asked once in the app).
+- Outdoor air: the Open-Meteo Air Quality host may need allowing for the edge function's network.

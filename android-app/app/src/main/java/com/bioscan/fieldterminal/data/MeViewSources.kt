@@ -64,6 +64,9 @@ object MeViewSources {
             d.apps.map { Triple(it.label ?: it.pkg, it.category, it.minutes) },
         )
 
+    suspend fun exposures(supabase: SupabaseClient): MeViewDoc =
+        com.bioscan.fieldterminal.domain.meview.exposuresMeView(ExposuresRepository(supabase).load())
+
     suspend fun routine(supabase: SupabaseClient): MeViewDoc =
         routine(com.bioscan.fieldterminal.data.routine.RoutinePageRepository(supabase).load())
 }

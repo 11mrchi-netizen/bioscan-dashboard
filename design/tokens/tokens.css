@@ -151,6 +151,12 @@
   --m-time-work:         #e8c26a;
   --m-time-out:          #ff8fb1;
   --m-time-training:     #ff6a3d;
+  /* risk profile R1: air exposure */
+  --m-pm25:              #d9a066;
+  --m-no2:               #c9644a;
+  --m-ozone:             #8fd0ff;
+  --m-uv-index:          #c8e04a;
+  --m-co2:               #9fb4c8;
   --m-time-logged:       #b8e04a;
   --m-time-phone:        #a7b0ff;
 

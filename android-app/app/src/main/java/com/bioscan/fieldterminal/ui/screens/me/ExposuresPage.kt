@@ -1,0 +1,207 @@
+package com.bioscan.fieldterminal.ui.screens.me
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.data.AirDayRow
+import com.bioscan.fieldterminal.data.ExposuresData
+import com.bioscan.fieldterminal.data.ExposuresRepository
+import com.bioscan.fieldterminal.data.MeViewPublisher
+import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
+import com.bioscan.fieldterminal.domain.meview.exposuresMeView
+import com.bioscan.fieldterminal.domain.meview.AIR_GUIDELINES
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTChevron
+import com.bioscan.fieldterminal.ui.components.describeLoadFailure
+import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.rememberCacheVersion
+import com.bioscan.fieldterminal.ui.screens.detail.HistorySpec
+import com.bioscan.fieldterminal.ui.screens.detail.MetricHistoryOverlay
+import com.bioscan.fieldterminal.ui.theme.FTType
+import kotlinx.coroutines.CancellationException
+import java.time.LocalDate
+import java.util.Locale
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+
+// Risk profile R1: Me › EXPOSURES. The air breathed over the last 30 days against the WHO 2021 guidelines, where the dose
+// came from, outdoor sessions in poor air, and the ways to improve that fire on these numbers. Every metric opens its
+// daily history. The numbers are worked out nightly on the server (analysis-core/airExposure.ts).
+
+private data class AirMetric(
+    val key: String,
+    val label: String,
+    val unit: String,
+    val color: Color,
+    val pick: (AirDayRow) -> Double?,
+    /** The guideline line in words, for the row's sub-line. */
+    val guide: String,
+    val decimals: Int = 1,
+)
+
+private val METRICS = listOf(
+    AirMetric("pm25", "PM2.5 breathed", "µg/m³", FT.Metric.Pm25, { it.pm25 }, "WHO 15 a day, 5 a year"),
+    AirMetric("pm25_indoor", "PM2.5 indoors at home", "µg/m³", FT.Metric.Pm25, { it.pm25Indoor }, "from the home sensor"),
+    AirMetric("pm25_outdoor_home", "PM2.5 outdoors at home", "µg/m³", FT.Metric.Pm25, { it.pm25OutdoorHome }, "modelled (CAMS)"),
+    AirMetric("no2", "NO₂ where you were", "µg/m³", FT.Metric.No2, { it.no2 }, "WHO 25 a day, 10 a year"),
+    AirMetric("o3", "Ozone, highest 8 h", "µg/m³", FT.Metric.Ozone, { it.o3 }, "WHO 100"),
+    AirMetric("co2", "CO₂ at night, home", "ppm", FT.Metric.Co2, { it.co2Night }, "1,000 ventilate · 1,400 poor", decimals = 0),
+    AirMetric("uv", "UV index, daytime peak", "", FT.Metric.UvIndex, { it.uvMax }, "6+ high"),
+)
+
+private fun fmt(v: Double, decimals: Int) = if (decimals == 0) "%,.0f".format(Locale.ENGLISH, v) else "%.1f".format(Locale.ENGLISH, v)
+
+private fun toneColor(state: String?): Color? = when (state) { "ok" -> FT.Ok; "warn" -> FT.Warn; "bad" -> FT.Bad; else -> null }
+
+@Composable
+fun ExposuresPage() {
+    var data by remember { mutableStateOf<ExposuresData?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var reload by remember { mutableIntStateOf(0) }
+    var history by remember { mutableStateOf<AirMetric?>(null) }
+    val cacheVersion = rememberCacheVersion()
+    LaunchedEffect(reload, cacheVersion) {
+        try {
+            val loaded = ExposuresRepository(SupabaseClientProvider.client).load()
+            data = loaded
+            error = null
+            catching { MeViewPublisher.publish(SupabaseClientProvider.client, exposuresMeView(loaded)) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            error = describeLoadFailure(e)
+        }
+    }
+
+    Column(Modifier.padding(horizontal = 22.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        error?.let {
+            Text("Couldn't load: $it", style = FTType.BodySmall, color = FT.Bad)
+            FTButton("RETRY") { reload++ }
+        }
+        val d = data
+        when {
+            d == null && error == null -> Text("Loading…", style = FTType.BodySmall, color = FT.TextSecondary)
+            d != null -> ExposuresContent(d, onOpen = { history = it })
+        }
+    }
+
+    history?.let { m ->
+        val series = data?.series(m.pick).orEmpty()
+        MetricHistoryOverlay(HistorySpec(m.label, series, m.unit, { fmt(it, m.decimals) }, m.color, betterHigher = false, info = m.guide)) { history = null }
+    }
+}
+
+@Composable
+private fun ExposuresContent(d: ExposuresData, onOpen: (AirMetric) -> Unit) {
+    val s = d.summary
+    FTCard(title = "AIR · LAST 30 DAYS", info = AIR_GUIDELINES) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (s == null || s.daysWithData == 0) {
+                Text(
+                    "No air days yet. They are worked out each night from your places (Setup › Data capture › Locations), the " +
+                        "outdoor air there and, at home, the Home Terminal sensors.",
+                    style = FTType.BodySmall, color = FT.TextSecondary,
+                )
+            } else {
+                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(s.pm25Mean?.let { fmt(it, 1) } ?: "—", style = FTType.MetricMedium, color = FT.Metric.Pm25)
+                    Text("µg/m³ PM2.5, mean breathed", style = FTType.Caption, color = FT.TextSecondary)
+                }
+                toneColor(s.states["pm25"])?.let { c ->
+                    val word = when (s.states["pm25"]) { "ok" -> "Within the WHO annual guideline (5)"; "warn" -> "Above the annual guideline (5), below the daily one (15)"; else -> "Above the WHO daily guideline (15)" }
+                    Text(word, style = FTType.CaptionStrong, color = c)
+                }
+                Text(
+                    "${s.pm25DaysOver} of ${s.fullDays} full days above 15 µg/m³ · NO₂ above 25 on ${s.no2DaysOver} days · ozone above 100 on ${s.o3DaysOver} days",
+                    style = FTType.Caption, color = FT.TextSecondary,
+                )
+                val where = s.doseHomeShare?.let { "${(it * 100).toInt()} % of the dose at home" }
+                val how = if (s.indoorSensor) "measured indoors" else "home estimated from the outdoor level (no indoor PM2.5 sensor)"
+                Text(listOfNotNull(where, how, "${s.daysWithData} days with data").joinToString(" · "), style = FTType.Caption, color = FT.TextSecondary)
+            }
+        }
+    }
+
+    FTCard(title = "BY METRIC", info = "Each line is the mean over the last 30 days with data. Tap one for its daily history.") {
+        Column {
+            METRICS.forEach { m ->
+                val recent = d.days.takeLast(30).mapNotNull(m.pick)
+                if (recent.isNotEmpty()) MetricLine(m, recent.average(), recent.size, onOpen)
+            }
+            if (d.days.isEmpty()) Text("Nothing yet.", style = FTType.Caption, color = FT.TextSecondary)
+        }
+    }
+
+    s?.improvements?.takeIf { it.isNotEmpty() }?.let { list ->
+        FTCard(title = "WAYS TO IMPROVE", info = "Ranked by how much of your dose each could lower. Each appears only when your own numbers call for it.") {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                list.forEach { i ->
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(i.title, style = FTType.RowTitle, color = FT.TextPrimary)
+                        Text(i.why, style = FTType.BodySmall, color = FT.TextSecondary)
+                        Text(i.evidence, style = FTType.Caption, color = FT.TextMuted)
+                        Text("EFFORT ${i.effort.uppercase()} · LOWERS ${i.lowers.joinToString(", ") { it.uppercase() }}", style = FTType.MonoCaption, color = FT.TextSecondary)
+                    }
+                }
+            }
+        }
+    }
+
+    val sessions = d.days.flatMap { it.sessions }.takeLast(8).reversed()
+    if (sessions.isNotEmpty()) {
+        FTCard(title = "OUTDOOR SESSIONS", info = "The outdoor air during each session where it was. Breathing is several times higher while training, so these hours weigh more.") {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                sessions.forEach { x ->
+                    val poor = (x.pm25 ?: 0.0) > 15 || (x.o3 ?: 0.0) > 100
+                    Row(Modifier.fillMaxWidth()) {
+                        Text("${x.start.take(10)} ${x.start.drop(11).take(5)} · ${x.type} ${x.minutes} min", style = FTType.Caption, color = FT.TextPrimary, modifier = Modifier.weight(1f))
+                        Text(
+                            listOfNotNull(x.pm25?.let { "PM2.5 ${fmt(it, 0)}" }, x.o3?.let { "O₃ ${fmt(it, 0)}" }, x.uv?.let { "UV ${fmt(it, 0)}" }).joinToString(" · "),
+                            style = FTType.MonoCaption, color = if (poor) FT.Warn else FT.TextSecondary,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    s?.missing?.takeIf { it.isNotEmpty() }?.let {
+        Text("Not read last night: ${it.joinToString(", ")}.", style = FTType.Caption, color = FT.TextMuted)
+    }
+    d.summaryAsOf?.let { Text("Worked out for ${LocalDate.parse(it)}.", style = FTType.Caption, color = FT.TextMuted) }
+}
+
+@Composable
+private fun MetricLine(m: AirMetric, mean: Double, days: Int, onOpen: (AirMetric) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().ftClickable(onClickLabel = "Open its history") { onOpen(m) }.padding(vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(Modifier.size(8.dp).background(m.color, RoundedCornerShape(2.dp)))
+        Column(Modifier.weight(1f)) {
+            Text(m.label.uppercase(), style = FTType.LabelCaps, color = FT.TextPrimary, maxLines = 1)
+            Text("${m.guide} · $days DAYS", style = FTType.MonoCaption, color = FT.TextSecondary)
+        }
+        Text(fmt(mean, m.decimals) + if (m.unit.isNotEmpty()) " ${m.unit}" else "", style = FTType.Telemetry, color = m.color)
+        FTChevron(tint = FT.TextSecondary)
+    }
+}

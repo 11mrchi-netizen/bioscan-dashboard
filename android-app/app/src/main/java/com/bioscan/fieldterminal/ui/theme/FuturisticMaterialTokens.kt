@@ -201,6 +201,12 @@ object FuturisticMaterialTokens {
         val TimeWork = Color(0xFFE8C26A)
         val TimeOut = Color(0xFFFF8FB1)
         val TimeTraining = Color(0xFFFF6A3D)
+        // risk profile R1: air exposure (Me › EXPOSURES)
+        val Pm25 = Color(0xFFD9A066)
+        val No2 = Color(0xFFC9644A)
+        val Ozone = Color(0xFF8FD0FF)
+        val UvIndex = Color(0xFFC8E04A)
+        val Co2 = Color(0xFF9FB4C8)
         val TimeLogged = Color(0xFFB8E04A)
         val TimePhone = Color(0xFFA7B0FF)
     }

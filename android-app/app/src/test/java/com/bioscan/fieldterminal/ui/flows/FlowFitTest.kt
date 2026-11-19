@@ -82,8 +82,8 @@ class FlowFitTest {
     private object Holder { val page = androidx.compose.runtime.mutableIntStateOf(0) }
 
     @Test fun symptomCheck() = fits("symptom_check", 2) { com.bioscan.fieldterminal.ui.screens.health.SymptomCheckSheet(onDismiss = {}, onSaved = {}, onTrackIllness = { _, _ -> }, onTrackInjury = {}) }
-    @Test fun event() = fits("event", 5) { com.bioscan.fieldterminal.ui.screens.events.EventFormSheet(onDismiss = {}, onSaved = {}) }
-    @Test fun sweatTest() = fits("sweat_test", 3) { com.bioscan.fieldterminal.ui.screens.events.SweatTestSheet(onDismiss = {}, onSaved = {}) }
+    @Test fun event() = fits("event", 2) { com.bioscan.fieldterminal.ui.screens.events.EventFormSheet(onDismiss = {}, onSaved = {}) }
+    @Test fun sweatTest() = fits("sweat_test", 2) { com.bioscan.fieldterminal.ui.screens.events.SweatTestSheet(onDismiss = {}, onSaved = {}) }
     @Test fun bodyCheckIn() = fits("body_check_in", 5) { com.bioscan.fieldterminal.ui.screens.status.BodyCheckInSheet(onDismiss = {}, onSaved = {}) }
 
     // A long run with a schedule of five blocks, all on WHAT YOU TOOK.
@@ -96,7 +96,7 @@ class FlowFitTest {
         existing = null,
     )
     @Test fun fuelDebrief() = fits("fuel_debrief", 2) { com.bioscan.fieldterminal.ui.screens.fuel.FuelDebriefSheet(debrief, onDismiss = {}, onSaved = {}) }
-    @Test fun regimenNew() = fits("regimen", 6) { com.bioscan.fieldterminal.ui.screens.status.SupplementFormSheet(existing = null, onDismiss = {}, onSaved = {}) }
+    @Test fun regimenNew() = fits("regimen", 2) { com.bioscan.fieldterminal.ui.screens.status.SupplementFormSheet(existing = null, onDismiss = {}, onSaved = {}) }
     @Test fun healthCheckIn() = fits("health_check_in", 1) { com.bioscan.fieldterminal.ui.screens.health.HealthCheckInSheet(onDismiss = {}, onSaved = {}) }
     @Test fun healthNewBody() = fits("health_new_body", 3) { com.bioscan.fieldterminal.ui.screens.health.HealthCheckInSheet(onDismiss = {}, onSaved = {}, start = com.bioscan.fieldterminal.ui.screens.health.CheckInStart.NewBody) }
     @Test fun eveningCheckIn() = fits("evening_check_in", 1) { com.bioscan.fieldterminal.ui.screens.status.EveningCheckInSheet(java.time.LocalDate.of(2026, 11, 17), onDismiss = {}, onSaved = {}) }
@@ -118,7 +118,7 @@ class FlowFitTest {
     @Test fun addNote() = add("add_note", com.bioscan.fieldterminal.domain.AddEntryStart.Form(com.bioscan.fieldterminal.domain.AddEntryType.Note))
     @Test fun addSexual() = add("add_sexual", com.bioscan.fieldterminal.domain.AddEntryStart.Form(com.bioscan.fieldterminal.domain.AddEntryType.SexualActivity))
     @Test fun addGrip() = add("add_grip", com.bioscan.fieldterminal.domain.AddEntryStart.Form(com.bioscan.fieldterminal.domain.AddEntryType.Grip))
-    @Test fun shoes() = fits("shoes", 2) { com.bioscan.fieldterminal.ui.screens.shoes.ShoeFormSheet(com.bioscan.fieldterminal.ui.screens.shoes.ShoeFormRequest(null, "a1b2c3d4e5", null), onDismiss = {}, onSaved = {}) }
+    @Test fun shoes() = fits("shoes", 1) { com.bioscan.fieldterminal.ui.screens.shoes.ShoeFormSheet(com.bioscan.fieldterminal.ui.screens.shoes.ShoeFormRequest(null, "a1b2c3d4e5", null), onDismiss = {}, onSaved = {}) }
     // Accessory work: a full session (the most a page holds) and the editor of one exercise.
     private val curls = com.bioscan.fieldterminal.domain.training.generate.Accessory(
         "Incline Dumbbell Hammer Curl", 3, com.bioscan.fieldterminal.domain.training.definition.NumRange(10.0, 12.0),

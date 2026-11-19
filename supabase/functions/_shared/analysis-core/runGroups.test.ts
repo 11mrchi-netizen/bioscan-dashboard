@@ -10,7 +10,7 @@ test('every engine belongs to exactly one group and `all` is their union in orde
 })
 
 test('every engine the run publishes is placed in a group', () => {
-  const published = ['breaks', 'integrity', 'relationships', 'typicality', 'expectedBands', 'evidence', 'experiments', 'interventionResponses', 'interventionIts', 'eventEvidence', 'fitnessFatigue', 'health']
+  const published = ['breaks', 'integrity', 'relationships', 'typicality', 'expectedBands', 'evidence', 'experiments', 'interventionResponses', 'interventionIts', 'eventEvidence', 'fitnessFatigue', 'health', 'air']
   assert.deepEqual([...enginesFor('all')].sort(), [...published].sort())
 })
 
@@ -34,6 +34,7 @@ test('only a group made entirely of own-read engines skips the frame', () => {
   assert.equal(needsFrame('core'), true, 'relationships needs the frame')
   assert.equal(needsFrame('health'), true)
   assert.equal(needsFrame('all'), true)
+  assert.equal(needsFrame('exposures'), false, 'air reads its own rows')
 })
 
 test('timedEngine records the time and turns a throw into that engine\'s error', async () => {

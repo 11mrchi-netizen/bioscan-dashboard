@@ -28,6 +28,8 @@
 // Health concerns (docs/health-concerns): `health_overview`, `health_concern_state`, `health_finding` and
 // `health_trial_read` rows, nightly after the evidence engines, and on demand with the action `health` (user JWT; the app
 // calls it right after a check-in so the new state shows at once).
+// Risk profile R1 (docs/risk-profile): `air` (group `exposures`) writes air_exposure_daily and one `air_exposure` summary;
+// on demand with the action `air` (user JWT), so the app can refresh after a first setup.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -40,6 +42,7 @@ import { runExpectedBands } from "../_shared/analysis-core/runExpectedBands.ts";
 import { runFitnessFatigue } from "../_shared/analysis-core/runFitnessFatigue.ts";
 import { runHealth } from "../_shared/analysis-core/runHealth.ts";
 import { runIntegrity } from "../_shared/analysis-core/runIntegrity.ts";
+import { runAir } from "../_shared/analysis-core/runAir.ts";
 import type { SeriesFile } from "../_shared/analysis-core/seriesContract.ts";
 import seriesFile from "../_shared/metric-registry/metric-series.json" with { type: "json" };
 import { runSeriesBreaks } from "../_shared/analysis-core/runSeriesBreaks.ts";
@@ -120,6 +123,18 @@ Deno.serve(async (req) => {
     return json({ coreVersion: CORE_VERSION, health }, "error" in health && health.error ? 500 : 200);
   }
 
+  if (body.action === "air") {
+    // On demand for the signed-in user only: the air exposure engine (risk profile R1).
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const userClient = createClient(url, anon, { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } } });
+    const { data: { user } } = await userClient.auth.getUser();
+    if (!user) return json({ error: "unauthorized" }, 401);
+    const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const air = await runAir(admin, user.id, new Date()).catch((e) => ({ userId: user.id, error: String(e) }));
+    return json({ air }, air.error ? 500 : 200);
+  }
+
   if (body.action === "run") {
     const url = Deno.env.get("SUPABASE_URL")!;
     const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -163,12 +178,14 @@ Deno.serve(async (req) => {
       // Series breaks and integrity read their own rows, so a frame that fails to load does not hide them.
       if (want.has("breaks")) Object.assign(out, await run("breaks", () => runSeriesBreaks(admin, id, new Date(), engineTrace("series_breaks"))));
       if (want.has("integrity")) out.integrity = await run("integrity", () => runIntegrity(admin, id, seriesFile as SeriesFile));
+      // Risk profile R1: the air breathed each day (outdoor feed + indoor sensors + places), group `exposures`.
+      if (want.has("air")) out.air = await run("air", () => runAir(admin, id, new Date()));
       // The frame is read once and shared; one engine failing must not hide the others: each reports its own error.
       // Typicality and the expected bands run in a later group than the series breaks because they restart at confirmed ones.
       if (needsFrame(group)) {
         const loaded = await run("loadFrame", () => loadFrame(admin, id));
         if ("error" in loaded) {
-          for (const name of want) if (name !== "breaks" && name !== "integrity") out[name] = loaded;
+          for (const name of want) if (name !== "breaks" && name !== "integrity" && name !== "air") out[name] = loaded;
         } else {
           const engines: Record<string, () => Promise<unknown>> = {
             relationships: () => runRelationships(admin, id, new Date(), loaded),

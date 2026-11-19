@@ -39,6 +39,7 @@ import com.bioscan.fieldterminal.domain.WallClock
 import com.bioscan.fieldterminal.domain.withNothingElse
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTFlow
+import com.bioscan.fieldterminal.ui.components.FlowEssentials
 import com.bioscan.fieldterminal.ui.components.FlowPage
 import com.bioscan.fieldterminal.ui.components.rememberFlowState
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
@@ -92,10 +93,10 @@ fun EveningCheckInSheet(date: LocalDate, onDismiss: () -> Unit, onSaved: (Evenin
         }
     }
 
-    // THE DAY (drinks, late caffeine, late eating, stress), then the GUT. NOTHING ELSE on either page marks every
-    // unanswered row as none and saves, so a quiet evening is still one tap.
+    // One page (Logging Flows Redesign Plan): the day's questions and the gut; the gut symptoms open in place only when the
+    // gut was below good. NOTHING ELSE marks every unanswered row as none and saves, so a quiet evening is still one tap.
     val flow = rememberFlowState()
-    val pages = listOf(FlowPage("THE DAY"), FlowPage("GUT"))
+    val pages = listOf(FlowPage("THE DAY"))
     val blocked = saving || guard.error != null
     FTFlow(
         title = "EVENING CHECK-IN", pages = pages, state = flow, onClose = onDismiss,
@@ -104,12 +105,11 @@ fun EveningCheckInSheet(date: LocalDate, onDismiss: () -> Unit, onSaved: (Evenin
         bottomBar = { page ->
             Row(Modifier.fillMaxWidth().background(FT.Surface).padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 FTButton("NOTHING ELSE", enabled = !blocked, modifier = Modifier.weight(1f)) { save(draft.withNothingElse()) }
-                if (page == 0) FTButton("NEXT", emphasis = FTButtonEmphasis.Primary, modifier = Modifier.weight(1f)) { flow.next() }
-                else FTButton(if (saving) "SAVING..." else "SAVE", emphasis = FTButtonEmphasis.Primary, enabled = !blocked, modifier = Modifier.weight(1f)) { save(draft) }
+                FTButton(if (saving) "SAVING..." else "SAVE", emphasis = FTButtonEmphasis.Primary, enabled = !blocked, modifier = Modifier.weight(1f)) { save(draft) }
             }
         },
-    ) { page ->
-        if (page == 0) {
+    ) {
+        FlowEssentials {
             Text(date.format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.ENGLISH)), style = FTType.RowTitle, color = FT.TextPrimary)
             Text("One tap each. NOTHING ELSE marks the rest as none.", style = FTType.BodySmall, color = FT.TextSecondary)
             CheckInLabel("DRINKS WITH ALCOHOL")
@@ -124,22 +124,26 @@ fun EveningCheckInSheet(date: LocalDate, onDismiss: () -> Unit, onSaved: (Evenin
             TextChipRow(YES_NO, draft.lateMeal?.let { if (it) "YES" else "NO" }, perRow = 2) { picked ->
                 draft = draft.copy(lateMeal = picked?.let { it == "YES" })
             }
-            FTRatingSlider("STRESS TODAY", draft.stress, 1..5, FT.Metric.Stress, { draft = draft.copy(stress = it) },
-                lowWord = "calm", highWord = "very stressed", reversed = true)
-        } else {
-            // Scoring system (FUEL › gut): how the gut was, what happened, and the day's logged movements with their times.
-            FTRatingSlider("GUT", draft.gutComfort, 0..4, FT.Metric.GutComfort, { draft = draft.copy(gutComfort = it) },
-                lowWord = "rough", highWord = "comfortable")
+        }
+        FTRatingSlider("STRESS TODAY", draft.stress, 1..5, FT.Metric.Stress, { draft = draft.copy(stress = it) },
+            lowWord = "calm", highWord = "very stressed", reversed = true)
+        // Scoring system (FUEL › gut): how the gut was, what happened, and the day's logged movements with their times.
+        FTRatingSlider("GUT", draft.gutComfort, 0..4, FT.Metric.GutComfort, { draft = draft.copy(gutComfort = it) },
+            lowWord = "rough", highWord = "comfortable")
+        if ((draft.gutComfort ?: GUT_GOOD) < GUT_GOOD || !draft.gutSymptoms.isNullOrEmpty()) {
             CheckInLabel("ANY OF THESE? (TICK ALL THAT HAPPENED)")
             SymptomChips(draft.gutSymptoms.orEmpty()) { symptom ->
                 val now = draft.gutSymptoms.orEmpty()
                 draft = draft.copy(gutSymptoms = if (symptom in now) now - symptom else now + symptom)
             }
-            BowelMovements(date)
         }
+        BowelMovements(date)
         LoadErrorCard(guard)
     }
 }
+
+/** Gut comfort from this up (0 rough … 4 comfortable) needs no symptoms asked. */
+private const val GUT_GOOD = 3
 
 @Composable
 private fun CheckInLabel(text: String) {

@@ -172,8 +172,7 @@ fun BodyCheckInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
     }
 
     val stepLabel = when (val s = step) {
-        CheckInStep.Setup -> "CONDITIONS"
-        CheckInStep.Sections -> "WHAT TO MEASURE"
+        CheckInStep.Setup, CheckInStep.Sections -> "SETUP"
         CheckInStep.Grip -> "GRIP"
         is CheckInStep.Measure -> "${if (s.slot.site.method == MeasureMethod.TAPE) "TAPE" else "SKINFOLDS"} · ${slots.indexOf(s.slot) + 1} OF ${slots.size}"
         CheckInStep.Review -> "REVIEW"
@@ -189,11 +188,8 @@ fun BodyCheckInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
         bottomBar = { _ ->
             Row(Modifier.fillMaxWidth().background(FT.Surface).padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 when (val st = step) {
-                    CheckInStep.Setup -> FTButton("NEXT", emphasis = FTButtonEmphasis.Primary, modifier = Modifier.weight(1f)) { go(CheckInStep.Sections) }
-                    CheckInStep.Sections -> {
-                        FTButton("BACK") { back() }
-                        FTButton("START", emphasis = FTButtonEmphasis.Primary, modifier = Modifier.weight(1f)) { go(CheckInStep.Grip) }
-                    }
+                    // SETUP is one page (Logging Flows Redesign Plan): the conditions and what to measure, then START.
+                    CheckInStep.Setup, CheckInStep.Sections -> FTButton("START", emphasis = FTButtonEmphasis.Primary, modifier = Modifier.weight(1f)) { go(CheckInStep.Grip) }
                     CheckInStep.Grip -> {
                         FTButton("SKIP", modifier = Modifier.weight(1f)) { gripRight = ""; gripLeft = ""; advanceFrom(null) }
                         FTButton("NEXT", emphasis = FTButtonEmphasis.Primary, modifier = Modifier.weight(1f)) { advanceFrom(null) }
@@ -214,7 +210,7 @@ fun BodyCheckInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
         },
     ) { _ ->
             when (val s = step) {
-                CheckInStep.Setup -> {
+                CheckInStep.Setup, CheckInStep.Sections -> {
                     Text(
                         last?.let { "Last check-in ${it.date}. Same conditions as then make the months comparable." }
                             ?: "Your first check-in. The same conditions every month make the months comparable.",
@@ -230,9 +226,6 @@ fun BodyCheckInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                         Label("HEIGHT, CM (ONCE: FOR WAIST-TO-HEIGHT)")
                         FieldTextField(height, { height = it }, "e.g. 178", keyboardType = KeyboardType.Decimal)
                     }
-                }
-
-                CheckInStep.Sections -> {
                     Label("WHAT TO MEASURE TODAY")
                     Toggle("Tape girths (about 8 minutes)", tape) { tape = it }
                     if (tape) Toggle("Also flexed upper arms", flexedArms) { flexedArms = it }

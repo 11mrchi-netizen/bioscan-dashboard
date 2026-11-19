@@ -49,8 +49,13 @@ import com.bioscan.fieldterminal.domain.withSaved
 import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.DateTimeField
 import com.bioscan.fieldterminal.ui.components.FTRatingSlider
-import com.bioscan.fieldterminal.ui.components.FormSteps
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.FlowEssentials
+import com.bioscan.fieldterminal.ui.components.FlowMore
+import com.bioscan.fieldterminal.ui.components.FormBackHandler
+import com.bioscan.fieldterminal.ui.components.LocalFlowStartPage
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import kotlinx.coroutines.launch
@@ -129,13 +134,15 @@ internal fun EncounterForm(
     }
     val visit = remember(visits, dateTime) { suggestVisit(visits.map { it.first }, dateTime)?.let { v -> visits.first { it.first == v } } }
 
-    // One page each (the owner's rule: no page scrolls). WHEN, then with sex the FORMAT, then per partner who and the
-    // rating, the rounds, and one page per list; type, place, duration and notes last. Every field is optional, so SAVE
-    // is offered on every page.
-    val perPartner = if (sexual) PARTNER_PAGES else listOf("PARTNER")
-    val labels = listOf("WHEN") + (if (sexual) listOf("FORMAT") else emptyList()) +
-        partners.indices.flatMap { i -> perPartner.map { p -> if (partners.size > 1) "$p ${i + 1}" else p } } + "DETAILS"
-    FormSteps(labels, canSave = true, saving = saving, onSave = {
+    // Pages only where the subject changes (Logging Flows Redesign Plan): THE ENCOUNTER (when, the place your location
+    // history suggests, sex or not and the format, the shared details folded), then one page per partner (who and the
+    // rating, the rounds and orgasms, the lists folded until opened). Every field is optional, so SAVE is always offered.
+    // The fit test opens each page in turn (LocalFlowStartPage); the app starts on THE ENCOUNTER.
+    val testStart = LocalFlowStartPage.current
+    var page by rememberSaveable { mutableStateOf(testStart) }
+    if (page > partners.size) page = partners.size
+    FormBackHandler(enabled = page > 0) { page -= 1 }
+    val save = {
         // The sex fields are cleared when SEX is No, so a meetup never carries a stale round count or tag.
         fun tags(picked: Set<String>) = picked.toList().takeIf { sexual && it.isNotEmpty() }
         onSave(
@@ -163,91 +170,76 @@ internal fun EncounterForm(
                 )
             }
         )
-    }) { step ->
-        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            val label = labels.getOrNull(step).orEmpty()
-            when {
-                step == 0 -> {
-                    header?.invoke()
-                    DateTimeField("WHEN", dateTime, { dateTime = it })
-                    visit?.let { (span, name) ->
-                        val used = placeId != null && placeId == span.placeId && durationMin == span.minutes.toString()
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                FormLabel("FROM YOUR LOCATION")
-                                Text(
-                                    "${name ?: "A place with no name yet"} \u00b7 ${span.start.format(VISIT_TIME)}\u2013${span.end.format(VISIT_TIME)} \u00b7 ${span.minutes} min there",
-                                    style = FTType.BodySmall, color = FT.TextSecondary,
-                                )
-                            }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        val partnerLabel = { i: Int -> partners[i].partnerName.ifBlank { if (partners.size > 1) "PARTNER ${i + 1}" else "PARTNER" }.uppercase() }
+        Text(
+            "${page + 1} / ${partners.size + 1} · ${if (page == 0) "THE ENCOUNTER" else partnerLabel(page - 1)}",
+            style = FTType.MonoCaption, color = FT.TextSecondary,
+        )
+        if (page == 0) {
+            FlowEssentials {
+                header?.invoke()
+                DateTimeField("WHEN", dateTime, { dateTime = it })
+                visit?.let { (span, name) ->
+                    val used = placeId != null && placeId == span.placeId && durationMin == span.minutes.toString()
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            FormLabel("FROM YOUR LOCATION")
                             Text(
-                                if (used) "USED" else "USE",
-                                style = FTType.MonoCaption,
-                                color = if (used) FT.TextMuted else FT.DomainLog,
-                                modifier = Modifier.ftClickable {
-                                    placeId = span.placeId
-                                    if (name != null && locationType.isBlank()) locationType = name
-                                    durationMin = span.minutes.toString()
-                                },
+                                "${name ?: "A place with no name yet"} \u00b7 ${span.start.format(VISIT_TIME)}\u2013${span.end.format(VISIT_TIME)} \u00b7 ${span.minutes} min there",
+                                style = FTType.BodySmall, color = FT.TextSecondary,
                             )
                         }
-                    }
-                    Column { FormLabel("SEX"); TextChipRow(YES_NO_OPTIONS, if (sexual) "Yes" else "No", perRow = 2) { picked -> if (picked != null) sexual = picked == "Yes" } }
-                }
-                label == "FORMAT" -> MultiChips("FORMAT", IntimacyVocab.formats, format) { format = it }
-                label == "DETAILS" -> {
-                    Column { FormLabel("TYPE (OPTIONAL)"); FieldTextField(encounterType, { encounterType = it }, "e.g. date, call, hangout") }
-                    Column { FormLabel("LOCATION (OPTIONAL)"); FieldTextField(locationType, { locationType = it }, "e.g. their place, restaurant") }
-                    Column { FormLabel("DURATION MIN (OPTIONAL)"); FieldTextField(durationMin, { durationMin = it }, "e.g. 90", keyboardType = KeyboardType.Number) }
-                    Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Notes...", singleLine = false) }
-                }
-                else -> {
-                    val first = if (sexual) 2 else 1
-                    val i = (step - first) / perPartner.size
-                    val page = perPartner[(step - first) % perPartner.size]
-                    val partner = partners[i]
-                    when (page) {
-                        "PARTNER" -> {
-                            PartnerPicker(partner.partnerId, partner.partnerName) { person -> partner.partnerId = person?.id; partner.partnerName = person?.name ?: "" }
-                            Column { FormLabel("RATING 1-5 (OPTIONAL)"); IntChipRow(1..5, partner.myRating) { partner.myRating = it } }
-                            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                // A new encounter can take more partners (a group: one row each); an edit is one partner's row.
-                                if (initial == null) Text("+ ADD PARTNER", style = FTType.MonoCaption, color = FT.DomainLog, modifier = Modifier.ftClickable { partners.add(EditablePartner()) })
-                                if (partners.size > 1) Text("REMOVE PARTNER", style = FTType.MonoCaption, color = FT.Bad, modifier = Modifier.ftClickable { partners.removeAt(i) })
-                            }
-                        }
-                        "ROUNDS" -> {
-                            Column { FormLabel("ROUNDS (OPTIONAL)"); IntChipRow(1..5, partner.rounds) { partner.rounds = it } }
-                            Column { FormLabel("MY ORGASMS (OPTIONAL)"); IntChipRow(0..5, partner.orgasmCount) { partner.orgasmCount = it } }
-                            if ((partner.orgasmCount ?: 0) > 0) {
-                                FTRatingSlider("STRONGEST ORGASM", partner.orgasmIntensity, 0..10, FT.Metric.Arousal, { partner.orgasmIntensity = it }, lowWord = "faint", highWord = "intense")
-                            }
-                        }
-                        "ACTIVITIES" -> MultiChips("ACTIVITIES", IntimacyVocab.activities, partner.activities) { partner.activities = it }
-                        "POSITIONS" -> MultiChips("POSITIONS", IntimacyVocab.positions, partner.positions) { partner.positions = it }
-                        "TOYS" -> MultiChips("TOYS", IntimacyVocab.toys, partner.toys) { partner.toys = it }
-                        "PROTECTION" -> {
-                            MultiChips("PROTECTION", IntimacyVocab.protection, partner.protection) { partner.protection = it }
-                            MultiChips("EJACULATION", IntimacyVocab.ejaculationLocation, partner.ejaculation) { partner.ejaculation = it }
-                        }
+                        Text(
+                            if (used) "USED" else "USE",
+                            style = FTType.MonoCaption,
+                            color = if (used) FT.TextMuted else FT.DomainLog,
+                            modifier = Modifier.ftClickable {
+                                placeId = span.placeId
+                                if (name != null && locationType.isBlank()) locationType = name
+                                durationMin = span.minutes.toString()
+                            },
+                        )
                     }
                 }
+                Column { FormLabel("SEX"); TextChipRow(YES_NO_OPTIONS, if (sexual) "Yes" else "No", perRow = 2) { picked -> if (picked != null) sexual = picked == "Yes" } }
             }
+            if (sexual) MultiChipSection("FORMAT", IntimacyVocab.formats, format) { format = it }
+            FlowMore("encounter_details", label = "DETAILS", summary = "Type, location, duration, notes") {
+                Column { FormLabel("TYPE (OPTIONAL)"); FieldTextField(encounterType, { encounterType = it }, "e.g. date, call, hangout") }
+                Column { FormLabel("LOCATION (OPTIONAL)"); FieldTextField(locationType, { locationType = it }, "e.g. their place, restaurant") }
+                Column { FormLabel("DURATION MIN (OPTIONAL)"); FieldTextField(durationMin, { durationMin = it }, "e.g. 90", keyboardType = KeyboardType.Number) }
+                Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Notes...", singleLine = false) }
+            }
+            FTButton("${partnerLabel(0)} ›", modifier = Modifier.fillMaxWidth(), emphasis = FTButtonEmphasis.Secondary) { page = 1 }
+        } else {
+            val i = page - 1
+            val partner = partners[i]
+            FlowEssentials {
+                PartnerPicker(partner.partnerId, partner.partnerName) { person -> partner.partnerId = person?.id; partner.partnerName = person?.name ?: "" }
+                Column { FormLabel("RATING 1-5 (OPTIONAL)"); IntChipRow(1..5, partner.myRating) { partner.myRating = it } }
+            }
+            if (sexual) {
+                Column { FormLabel("ROUNDS (OPTIONAL)"); IntChipRow(1..5, partner.rounds) { partner.rounds = it } }
+                Column { FormLabel("MY ORGASMS (OPTIONAL)"); IntChipRow(0..5, partner.orgasmCount) { partner.orgasmCount = it } }
+                if ((partner.orgasmCount ?: 0) > 0) {
+                    FTRatingSlider("STRONGEST ORGASM", partner.orgasmIntensity, 0..10, FT.Metric.Arousal, { partner.orgasmIntensity = it }, lowWord = "faint", highWord = "intense")
+                }
+                MultiChipSection("ACTIVITIES", IntimacyVocab.activities, partner.activities) { partner.activities = it }
+                MultiChipSection("POSITIONS", IntimacyVocab.positions, partner.positions) { partner.positions = it }
+                MultiChipSection("TOYS", IntimacyVocab.toys, partner.toys) { partner.toys = it }
+                MultiChipSection("PROTECTION", IntimacyVocab.protection, partner.protection) { partner.protection = it }
+                MultiChipSection("EJACULATION", IntimacyVocab.ejaculationLocation, partner.ejaculation) { partner.ejaculation = it }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                // A new encounter can take more partners (a group: one row each); an edit is one partner's row.
+                if (initial == null) Text("+ ADD PARTNER", style = FTType.MonoCaption, color = FT.DomainLog, modifier = Modifier.ftClickable { partners.add(EditablePartner()); page = partners.size })
+                if (partners.size > 1) Text("REMOVE PARTNER", style = FTType.MonoCaption, color = FT.Bad, modifier = Modifier.ftClickable { partners.removeAt(i); page = i.coerceAtLeast(1).coerceAtMost(partners.size) })
+            }
+            if (i < partners.lastIndex) FTButton("${partnerLabel(i + 1)} ›", modifier = Modifier.fillMaxWidth(), emphasis = FTButtonEmphasis.Secondary) { page += 1 }
         }
-    }
-}
-
-// A partner's pages when SEX is Yes; with No only PARTNER (who, and the rating).
-private val PARTNER_PAGES = listOf("PARTNER", "ROUNDS", "ACTIVITIES", "POSITIONS", "TOYS", "PROTECTION")
-
-// A whole list of multiple-choice chips under its label: on a page of its own in the encounter steps, so it is shown open.
-@Composable
-private fun MultiChips(label: String, vocabulary: List<String>, selected: Set<String>, onChange: (Set<String>) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        FormLabel(if (selected.isEmpty()) label else "$label \u00b7 ${selected.size}")
-        ChipGrid(withSaved(vocabulary, selected), perRow = 3, role = Role.Checkbox, isSelected = { it in selected }) {
-            onChange(if (it in selected) selected - it else selected + it)
-        }
+        SaveButton(saving, true) { save() }
     }
 }
 
@@ -379,32 +371,24 @@ internal fun SexualActivityForm(
     }
     var notes by remember { mutableStateOf(initialNotes) }
 
-    // DATE, one page per instance (+ ADD INSTANCE on the last), then the notes: no page scrolls.
-    val labels = listOf("DATE") + instances.indices.map { if (instances.size > 1) "INSTANCE ${it + 1}" else "INSTANCE" } + "NOTES"
-    FormSteps(labels, canSave = true, saving = saving, onSave = {
-        onSave(date.toString(), instances.map { it.toDto() }, notes.trim().ifBlank { null })
-    }) { step ->
-        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            when {
-                step == 0 -> {
-                    header?.invoke()
-                    DateField("DATE", date, { date = it })
-                }
-                step <= instances.size -> {
-                    val i = step - 1
-                    SexualActivityInstanceEditor(instances[i], canRemove = instances.size > 1) { instances.removeAt(i) }
-                    if (i == instances.lastIndex) {
-                        Text(
-                            "+ ADD INSTANCE",
-                            style = FTType.MonoCaption,
-                            color = FT.DomainLog,
-                            modifier = Modifier.ftClickable { instances.add(EditableSexualActivityInstance()) },
-                        )
-                    }
-                }
-                else -> Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Anything else worth noting", singleLine = false) }
-            }
+    // One page (Logging Flows Redesign Plan): the day, the instances one under the other with + ADD INSTANCE, the notes.
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        FlowEssentials {
+            header?.invoke()
+            DateField("DATE", date, { date = it })
         }
+        instances.forEachIndexed { i, instance ->
+            if (instances.size > 1) FormLabel("INSTANCE ${i + 1}")
+            SexualActivityInstanceEditor(instance, canRemove = instances.size > 1) { instances.removeAt(i) }
+        }
+        Text(
+            "+ ADD INSTANCE",
+            style = FTType.MonoCaption,
+            color = FT.DomainLog,
+            modifier = Modifier.ftClickable { instances.add(EditableSexualActivityInstance()) },
+        )
+        Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Anything else worth noting", singleLine = false) }
+        SaveButton(saving, true) { onSave(date.toString(), instances.map { it.toDto() }, notes.trim().ifBlank { null }) }
     }
 }
 

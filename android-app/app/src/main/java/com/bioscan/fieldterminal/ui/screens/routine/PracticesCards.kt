@@ -53,6 +53,7 @@ import com.bioscan.fieldterminal.domain.routine.scheduleWords
 import com.bioscan.fieldterminal.domain.routine.weekTime
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTFlow
+import com.bioscan.fieldterminal.ui.components.FlowEssentials
 import com.bioscan.fieldterminal.ui.components.FlowPage
 import com.bioscan.fieldterminal.ui.components.FlowPickGrid
 import com.bioscan.fieldterminal.ui.components.rememberFlowState
@@ -353,10 +354,11 @@ private fun ActivitySheet(initial: RoutineActivity, isNew: Boolean, onDismiss: (
         kind == ActivityKind.PRACTICE && remind && parsedTime == null -> "A reminder needs a time."
         else -> null
     }
-    // WHAT (name, practice or pastime, kind), then WHEN (a practice's length, days, time and reminder; a pastime's length).
+    // One page (Logging Flows Redesign Plan): name and what it is first, its kind, then a practice's length, days, time and
+    // reminder (a pastime's length).
     FTFlow(
         title = if (isNew) "ADD A PRACTICE OR PASTIME" else "CHANGE ${initial.name.uppercase()}",
-        pages = listOf(FlowPage("WHAT", ready = name.isNotBlank()), FlowPage(if (kind == ActivityKind.PRACTICE) "WHEN" else "LENGTH")),
+        pages = listOf(FlowPage("PRACTICE OR PASTIME", ready = name.isNotBlank())),
         state = rememberFlowState(), onClose = onDismiss, canSave = problem == null,
         error = problem?.takeIf { name.isNotBlank() },
         onSave = {
@@ -369,8 +371,8 @@ private fun ActivitySheet(initial: RoutineActivity, isNew: Boolean, onDismiss: (
                 ),
             )
         },
-    ) { page ->
-        if (page == 0) {
+    ) {
+        FlowEssentials {
             Column { Label("NAME"); FieldTextField(name, { name = it }, if (kind == ActivityKind.PRACTICE) "e.g. Meditation" else "e.g. TV, Reading") }
             Column {
                 Label("WHAT IT IS")
@@ -380,11 +382,12 @@ private fun ActivitySheet(initial: RoutineActivity, isNew: Boolean, onDismiss: (
                     style = FTType.Caption, color = FT.TextSecondary, modifier = Modifier.padding(top = 4.dp),
                 )
             }
-            Column {
-                Label("KIND")
-                FlowPickGrid(ActivityCategory.entries.map { it.name to it.label }, setOf(category.name), { k -> category = ActivityCategory.valueOf(k) }, columns = 3, single = true)
-            }
-        } else if (kind == ActivityKind.PRACTICE) {
+        }
+        Column {
+            Label("KIND")
+            FlowPickGrid(ActivityCategory.entries.map { it.name to it.label }, setOf(category.name), { k -> category = ActivityCategory.valueOf(k) }, columns = 3, single = true)
+        }
+        if (kind == ActivityKind.PRACTICE) {
             Column { Label("PLANNED LENGTH, MIN (OPTIONAL)"); FieldTextField(target, { target = it }, "e.g. 10", keyboardType = KeyboardType.Number) }
             Column {
                 Label("DAYS")
@@ -432,10 +435,10 @@ private fun LogSheet(activities: List<RoutineActivity>, existing: RoutineLog?, o
         length <= 0 || length > 1440 -> "Between 1 minute and 24 hours."
         else -> null
     }
-    // WHAT (the activities, a grid paged when long), then WHEN: the day, from-to or minutes, a note.
+    // One page (Logging Flows Redesign Plan): what, then the day, from-to or minutes, and a note.
     FTFlow(
         title = if (existing == null) "ADD TIME" else "CHANGE TIME",
-        pages = listOf(FlowPage("WHAT"), FlowPage("WHEN")), state = rememberFlowState(), onClose = onDismiss,
+        pages = listOf(FlowPage("TIME")), state = rememberFlowState(), onClose = onDismiss,
         canSave = problem == null, error = problem?.takeIf { start.isNotBlank() || end.isNotBlank() || minutes.isNotBlank() },
         onSave = {
             val useBlock = startAt != null && endAt != null
@@ -447,10 +450,10 @@ private fun LogSheet(activities: List<RoutineActivity>, existing: RoutineLog?, o
                 ),
             )
         },
-    ) { page ->
-        if (page == 0) {
-            FlowPickGrid(activities.map { it.id.toString() to it.name }, setOf(activityId.toString()), { id -> activities.firstOrNull { it.id.toString() == id }?.let { activityId = it.id } }, single = true)
-        } else {
+    ) {
+        Label("WHAT")
+        FlowPickGrid(activities.map { it.id.toString() to it.name }, setOf(activityId.toString()), { id -> activities.firstOrNull { it.id.toString() == id }?.let { activityId = it.id } }, single = true)
+        run {
             Column {
                 Label("DAY")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

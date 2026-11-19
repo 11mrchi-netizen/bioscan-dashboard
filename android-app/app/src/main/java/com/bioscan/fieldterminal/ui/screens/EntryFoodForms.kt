@@ -34,7 +34,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.bioscan.fieldterminal.data.AddEntryRepository
+import com.bioscan.fieldterminal.data.MEAL_PORTIONS
 import com.bioscan.fieldterminal.data.MealItemSource
+import com.bioscan.fieldterminal.data.model.MealRow
+import com.bioscan.fieldterminal.data.portionLabel
+import com.bioscan.fieldterminal.data.scaled
 import com.bioscan.fieldterminal.data.NutritionMealSaveRepository
 import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -47,7 +51,12 @@ import com.bioscan.fieldterminal.ui.components.DateTimeField
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
-import com.bioscan.fieldterminal.ui.components.FormSteps
+import com.bioscan.fieldterminal.ui.components.FlowEssentials
+import com.bioscan.fieldterminal.ui.components.FlowMore
+import com.bioscan.fieldterminal.ui.components.FlowQuestion
+import com.bioscan.fieldterminal.ui.components.FlowTile
+import com.bioscan.fieldterminal.ui.components.FormBackHandler
+import com.bioscan.fieldterminal.ui.components.LocalFlowStartPage
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.util.PendingCameraCapture
@@ -56,6 +65,7 @@ import com.bioscan.fieldterminal.util.scanBarcode
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
+import kotlin.math.roundToInt
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // + LOG: food, fuel taken during a session, and drinks.
@@ -155,32 +165,162 @@ internal fun FoodForm(
     )
     val photos = state.rememberPhotoSources(externalActivityActive)
 
-    // WHEN AND WHAT (time, meal, description), then HOW: photos, the description estimate, a barcode or a recent meal,
-    // each of which opens its own confirm flow; or BY HAND, the numbers typed, and SAVE.
-    FormSteps(
-        listOf("WHEN AND WHAT", "PHOTO · BARCODE · RECENT", "BY HAND"),
-        canSave = state.description.isNotBlank(), saving = saving, onSave = { state.saveManual(onSave) },
-    ) { step ->
-        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            when (step) {
-                0 -> {
-                    DateTimeField("WHEN", state.dateTime, { state.dateTime = it })
-                    MealSlotChips(state.dateTime, mealSlotOf(state.mealSlot), { state.mealSlot = it.name.lowercase() }, editingMealId)
+    // HOW first (Logging Flows Redesign Plan, Nov 2026): the way the meal is logged decides the pages after it. A recent
+    // meal goes to its CONFIRM; a photo, a barcode or a described meal go through the estimate or the lookup to their
+    // confirm sheet; BY HAND is one page that saves itself. Time and meal slot sit where the meal is confirmed, filled in
+    // for now. An entry being edited, or one handed over with its numbers, opens BY HAND directly.
+    val direct = editingMealId != null || initialCalories != null
+    // The fit test opens each path in turn (LocalFlowStartPage); the app starts at HOW.
+    val testStart = LocalFlowStartPage.current
+    var mode by rememberSaveable {
+        mutableStateOf(
+            when {
+                testStart in 1..4 -> listOf(FoodMode.ByHand, FoodMode.Describe, FoodMode.Photo, FoodMode.Barcode)[testStart - 1]
+                direct -> FoodMode.ByHand
+                initialDescription.isNotBlank() -> FoodMode.Describe
+                else -> FoodMode.How
+            },
+        )
+    }
+    var recentPick by remember { mutableStateOf<MealRow?>(null) }
+    if (mode == FoodMode.Recent && recentPick == null) mode = FoodMode.How
+    FormBackHandler(enabled = !direct && mode != FoodMode.How) { mode = FoodMode.How; recentPick = null }
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        when (mode) {
+            FoodMode.How -> state.HowPage(onMode = { mode = it }, onRecent = { recentPick = it; mode = FoodMode.Recent })
+            FoodMode.Recent -> recentPick?.let { state.RecentConfirm(it, editingMealId, onCanonicalSaved) }
+            FoodMode.Photo -> {
+                FlowQuestion("Photograph the meal", "One or more photos of the same plate. What it is or its weight makes the estimate better.")
+                state.PhotoEstimateSection(photos)
+            }
+            FoodMode.Barcode -> {
+                FlowQuestion("Scan the barcode", "Or type its number. A product no database knows opens the label to copy.")
+                state.BarcodeSection()
+            }
+            FoodMode.Describe -> state.DescribePage()
+            FoodMode.ByHand -> {
+                FlowEssentials {
+                    state.WhenFields(editingMealId)
                     Column { FormLabel("DESCRIPTION"); FieldTextField(state.description, { state.description = it }, "e.g. Chicken rice bowl") }
+                    state.ManualFields()
                 }
-                // Photo, description and barcode go through the server-side estimate and lookup functions; a candidate from
-                // any of them opens a confirm or review flow, and nothing on this step writes to `meals` directly.
-                1 -> Column {
-                    state.PhotoEstimateSection(photos)
-                    state.BarcodeSection()
-                    state.RecentMealsSection(onCanonicalSaved)
-                }
-                else -> state.ManualFields()
+                FlowMore("food_by_hand", summary = "Fiber, sugar, sodium") { state.ExtraFields() }
+                SaveButton(saving, state.description.isNotBlank()) { state.saveManual(onSave) }
             }
         }
     }
 
     state.Sheets(photos, onCanonicalSaved)
+}
+
+private enum class FoodMode { How, Recent, Photo, Barcode, Describe, ByHand }
+
+/** Time and meal slot, filled in for now and the slot of this hour. */
+@Composable
+private fun FoodLogState.WhenFields(editingMealId: Long?) {
+    DateTimeField("WHEN", dateTime, { dateTime = it })
+    MealSlotChips(dateTime, mealSlotOf(mealSlot), { mealSlot = it.name.lowercase() }, editingMealId)
+}
+
+// HOW: the recent meals first (each a tap to its CONFIRM), then the four ways in.
+@Composable
+private fun FoodLogState.HowPage(onMode: (FoodMode) -> Unit, onRecent: (MealRow) -> Unit) {
+    FlowQuestion("How are you logging it?")
+    LaunchedEffect(Unit) {
+        if (recentMeals == null) {
+            recentMeals = try { NutritionRepository(SupabaseClientProvider.client).loadRecentMeals(limit = 20) } catch (e: Exception) { emptyList() }
+        }
+    }
+    FlowEssentials {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FlowTile("PHOTO", false, Modifier.weight(1f)) { onMode(FoodMode.Photo) }
+            FlowTile("BARCODE", false, Modifier.weight(1f)) { onMode(FoodMode.Barcode) }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FlowTile("DESCRIBE IT", false, Modifier.weight(1f)) { onMode(FoodMode.Describe) }
+            FlowTile("BY HAND", false, Modifier.weight(1f)) { onMode(FoodMode.ByHand) }
+        }
+    }
+    val meals = recentMeals
+    FormLabel("AGAIN")
+    when {
+        meals == null -> CircularProgressIndicator(color = FT.DomainLog, modifier = Modifier.size(14.dp))
+        meals.isEmpty() -> Text("No meals logged yet.", style = FTType.BodySmall, color = FT.TextSecondary)
+        else -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            meals.filter { !it.description.isNullOrBlank() }.distinctBy { it.description!!.trim().lowercase() }.take(8).forEach { meal ->
+                val shape = RoundedCornerShape(FT.RadiusSmall)
+                Row(
+                    Modifier.fillMaxWidth().border(FT.BorderWidth, FT.GlassBorder, shape)
+                        .ftClickable(shape = shape, onClickLabel = "Log ${meal.description} again") { onRecent(meal) }
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(meal.description ?: "Meal", style = FTType.BodySmall, color = FT.TextPrimary, modifier = Modifier.weight(1f), maxLines = 2)
+                    meal.calories?.let { Text("${it.roundToInt()} kcal", style = FTType.MonoCaption, color = FT.TextSecondary) }
+                }
+            }
+        }
+    }
+}
+
+// CONFIRM for a meal logged again: its portion, the numbers it comes to, time and slot, and SAVE.
+@Composable
+private fun FoodLogState.RecentConfirm(meal: MealRow, editingMealId: Long?, onCanonicalSaved: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var portion by rememberSaveable(meal.id) { mutableStateOf(1.0) }
+    val m = meal.scaled(portion)
+    FlowEssentials {
+        FlowQuestion(meal.description ?: "Meal", "Logged again: pick the portion against last time.")
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            MEAL_PORTIONS.forEach { p -> FlowTile(portionLabel(p), p == portion, Modifier.weight(1f)) { portion = p } }
+        }
+        Text(
+            listOfNotNull(
+                m.calories?.let { "${it.roundToInt()} kcal" }, m.carbsG?.let { "carbs ${it.roundToInt()} g" },
+                m.proteinG?.let { "protein ${it.roundToInt()} g" }, m.fatG?.let { "fat ${it.roundToInt()} g" },
+            ).joinToString(" · ").ifEmpty { "No numbers on this meal." },
+            style = FTType.BodySmall, color = FT.TextSecondary,
+        )
+        WhenFields(editingMealId)
+    }
+    barcodeError?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
+    SaveButton(cloning, meal.id != null) {
+        val id = meal.id ?: return@SaveButton
+        cloning = true
+        barcodeError = null
+        scope.launch {
+            try {
+                NutritionMealSaveRepository(SupabaseClientProvider.client).cloneMeal(id, dateTime.toAppIso(), mealSlot, portion)
+                onCanonicalSaved()
+            } catch (e: Exception) {
+                barcodeError = e.message ?: "Could not log this meal again"
+            } finally {
+                cloning = false
+            }
+        }
+    }
+}
+
+// DESCRIBE IT: one line, and the estimate opens its confirm sheet.
+@Composable
+private fun FoodLogState.DescribePage() {
+    FlowEssentials {
+        FlowQuestion("Describe the meal", "What and roughly how much, e.g. \"beef noodle soup, large bowl\".")
+        FieldTextField(description, { description = it }, "What you ate", singleLine = false)
+        PhotoActionButton(
+            label = if (estimating) "ESTIMATING..." else "ESTIMATE",
+            modifier = Modifier.fillMaxWidth(),
+            enabled = description.isNotBlank() && !estimating,
+        ) { runTextEstimate() }
+    }
+    if (estimating) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CircularProgressIndicator(color = FT.DomainLog, modifier = Modifier.size(14.dp))
+            Text("Estimating...", style = FTType.BodySmall, color = FT.TextSecondary)
+        }
+    }
+    estimationError?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
 }
 
 /** The camera and the photo picker, already wired to put what they return where the form expects it. */
@@ -297,11 +437,6 @@ private fun FoodLogState.PhotoEstimateSection(photos: PhotoSources) {
             enabled = !estimating,
         ) { runImageEstimate(pendingPhotos) }
     }
-    PhotoActionButton(
-        label = "FROM DESCRIPTION",
-        modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-        enabled = description.isNotBlank(),
-    ) { runTextEstimate() }
     if (estimating) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
             CircularProgressIndicator(color = FT.DomainLog, modifier = Modifier.size(14.dp))
@@ -344,63 +479,7 @@ private fun FoodLogState.BarcodeSection() {
     }
 }
 
-// REPEAT A RECENT MEAL: the last meals, each a tap that logs it again at this form's time and meal.
-@Composable
-private fun FoodLogState.RecentMealsSection(onCanonicalSaved: () -> Unit) {
-    val scope = rememberCoroutineScope()
-    Text(
-        if (showRecentMeals) "HIDE RECENT MEALS" else "REPEAT A RECENT MEAL",
-        style = sheetActionLabelStyle,
-        color = FT.TextSecondary,
-        modifier = Modifier
-            .padding(top = 14.dp)
-            .ftClickable {
-                showRecentMeals = !showRecentMeals
-            },
-    )
-    if (showRecentMeals) {
-        LaunchedEffect(Unit) {
-            if (recentMeals == null) {
-                recentMeals = try { NutritionRepository(SupabaseClientProvider.client).loadRecentMeals() } catch (e: Exception) { emptyList() }
-            }
-        }
-        val meals = recentMeals
-        if (meals == null) {
-            CircularProgressIndicator(color = FT.DomainLog, modifier = Modifier.padding(top = 8.dp).size(14.dp))
-        } else if (meals.isEmpty()) {
-            Text("No recent meals yet.", style = FTType.BodySmall, color = FT.TextSecondary, modifier = Modifier.padding(top = 8.dp))
-        } else {
-            Column(modifier = Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                meals.take(5).forEach { meal ->
-                    Text(
-                        meal.description ?: "Meal",
-                        style = FTType.BodySmall,
-                        color = if (cloning) FT.TextMuted else FT.TextPrimary,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .ftClickable(enabled = !cloning) {
-                                val id = meal.id ?: return@ftClickable
-                                cloning = true
-                                scope.launch {
-                                    try {
-                                        NutritionMealSaveRepository(SupabaseClientProvider.client).cloneMeal(id, dateTime.toAppIso(), mealSlot)
-                                        onCanonicalSaved()
-                                    } catch (e: Exception) {
-                                        barcodeError = e.message ?: "Could not repeat this meal"
-                                    } finally {
-                                        cloning = false
-                                    }
-                                }
-                            }
-                            .padding(vertical = 6.dp),
-                    )
-                }
-            }
-        }
-    }
-}
-
-// The fields typed by hand, and SAVE for a meal logged from them alone.
+// The numbers typed by hand: kcal and the three macros.
 @Composable
 private fun FoodLogState.ManualFields() {
     Column { FormLabel("CALORIES (OPTIONAL)"); FieldTextField(calories, { calories = it }, "e.g. 650", keyboardType = KeyboardType.Number) }
@@ -409,9 +488,12 @@ private fun FoodLogState.ManualFields() {
         Column(Modifier.weight(1f)) { FormLabel("CARBS G"); FieldTextField(carbs, { carbs = it }, "0", keyboardType = KeyboardType.Number) }
         Column(Modifier.weight(1f)) { FormLabel("FAT G"); FieldTextField(fat, { fat = it }, "0", keyboardType = KeyboardType.Number) }
     }
-    // DAV-77: kept to fiber/sugar/sodium -- the smallest real
-    // "beyond macros" set, not the dozens of vitamins/minerals a
-    // photo/description estimate can't plausibly guess anyway.
+}
+
+// DAV-77: kept to fiber/sugar/sodium -- the smallest real "beyond macros" set, not the dozens of vitamins/minerals a
+// photo/description estimate can't plausibly guess anyway. Folded under MORE DETAIL.
+@Composable
+private fun FoodLogState.ExtraFields() {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Column(Modifier.weight(1f)) { FormLabel("FIBER G"); FieldTextField(fiber, { fiber = it }, "0", keyboardType = KeyboardType.Number) }
         Column(Modifier.weight(1f)) { FormLabel("SUGAR G"); FieldTextField(sugar, { sugar = it }, "0", keyboardType = KeyboardType.Number) }

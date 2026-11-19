@@ -374,7 +374,7 @@ class NutritionMealSaveRepository(
     // Duplicates a previous meal's items under a new meal at newLoggedAt --
     // same food_id/quantity/servings, fresh row ids. No new foods rows, no
     // re-resolution: this is a straight copy of already-correct data.
-    suspend fun cloneMeal(sourceMealId: Long, newLoggedAt: String, mealSlot: String? = null): Long {
+    suspend fun cloneMeal(sourceMealId: Long, newLoggedAt: String, mealSlot: String? = null, portion: Double = 1.0): Long {
         // MealRow.loggedAt is non-nullable -- must be selected even though
         // newLoggedAt (the clone's own date) is what actually gets used.
         // Same class of bug as resolveMealItem's foods query: decodeSingle
@@ -385,10 +385,12 @@ class NutritionMealSaveRepository(
                 columns = Columns.list("logged_at,description,calories,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg"),
             ) { filter { eq("id", sourceMealId) } }
             .decodeSingle<MealRow>()
+            .scaled(portion)
 
         val sourceItems = supabase.postgrest.from("meal_items")
             .select { filter { eq("meal_id", sourceMealId) } }
             .decodeList<MealItemRow>()
+            .map { it.scaled(portion) }
 
         val newMealId = supabase.postgrest.from("meals")
             .insert(

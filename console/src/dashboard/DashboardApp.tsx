@@ -2,7 +2,7 @@ import { Navigate, NavLink, Route, Routes, useSearchParams } from 'react-router-
 import { useAuth } from '../context/AuthContext'
 import { Login } from '../workspaces/Login'
 import { localToday } from '../lib/dates'
-import { consoleHref, legacyHref } from '../lib/surfaces'
+import { consoleHref } from '../lib/surfaces'
 import { Today } from './Today'
 import { Me } from './Me'
 
@@ -49,9 +49,6 @@ function DashShell({ tab }: { tab: 'today' | 'me' }) {
           <button className="dash-link" onClick={signOut}>SIGN OUT</button>
         </div>
       </header>
-      <p className="dash-banner">
-        The new Dashboard is being built in phases; until it is complete, the previous one stays at <a href={legacyHref()}>/legacy/</a>.
-      </p>
       <main className="dash-main">{tab === 'today' ? <Today day={day} onDay={setDay} /> : <Me />}</main>
     </div>
   )

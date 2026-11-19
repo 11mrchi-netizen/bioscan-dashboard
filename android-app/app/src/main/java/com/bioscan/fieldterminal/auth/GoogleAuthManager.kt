@@ -28,7 +28,7 @@ private const val TAG = "GoogleAuthManager"
  * resulting ID token for a real Supabase session -- same Supabase project
  * (ugfrglbcoivkprjqvjzz) and Google Cloud OAuth app the web dashboard already
  * uses, just a native-appropriate flow (Credential Manager, not the web
- * redirect flow `login.html` uses).
+ * redirect flow the web Dashboard and Console sign-in uses).
  *
  * Confirmed via Supabase's and Google's current docs (Sept 2026) rather than
  * assumed, per this project's "check don't assume" discipline -- this DOES

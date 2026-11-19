@@ -71,7 +71,8 @@ object MeViewSources {
         // The questionnaires are read softly: before their migration, the air part still publishes.
         val rows = catching { InstrumentsRepository(supabase).loadResponses() }.getOrElse { emptyList() }
         val summaries = defs.summaries(rows.map { InstrumentAnswer(it.instrument, it.date, it.score, it.band, it.flags) }, LocalDate.now())
-        return com.bioscan.fieldterminal.domain.meview.exposuresMeView(ExposuresRepository(supabase).load(), summaries)
+        val screens = catching { RiskScreensRepository(supabase).load(context) }.getOrNull()
+        return com.bioscan.fieldterminal.domain.meview.exposuresMeView(ExposuresRepository(supabase).load(), summaries, screens)
     }
 
     suspend fun routine(supabase: SupabaseClient): MeViewDoc =

@@ -1,6 +1,11 @@
 package com.bioscan.fieldterminal.domain.meview
 
 import com.bioscan.fieldterminal.data.ExposuresData
+import com.bioscan.fieldterminal.data.RiskScreens
+import com.bioscan.fieldterminal.domain.risk.FactorState
+import com.bioscan.fieldterminal.domain.risk.PreventOutcome
+import com.bioscan.fieldterminal.domain.risk.PreventOutcomeOrWhy
+import com.bioscan.fieldterminal.domain.risk.preventCategory
 import com.bioscan.fieldterminal.domain.risk.INSTRUMENT_DOMAINS
 import com.bioscan.fieldterminal.domain.risk.InstrumentSummary
 import java.time.LocalDate
@@ -41,10 +46,44 @@ private fun questionnaireSections(summaries: List<InstrumentSummary>): List<MeSe
     }, info = "Validated questionnaires, answered on the phone or in the console. Screens, not diagnoses.")
 }
 
-fun exposuresMeView(d: ExposuresData, questionnaires: List<InstrumentSummary> = emptyList()): MeViewDoc {
+private fun pctW(x: Double) = String.format(Locale.ENGLISH, if (x < 0.1) "%.1f" else "%.0f", x * 100)
+
+/** Risk profile R3: the heart, sugar and brain screens, as ui/screens/me/RiskScreenCards.kt shows them. */
+fun screenSections(s: RiskScreens): List<MeSection> {
+    val out = mutableListOf<MeSection>()
+    val prevent = when (val p = s.prevent) {
+        is PreventOutcomeOrWhy.Ok -> {
+            val total = p.result.tenYear.getValue(PreventOutcome.TOTAL_CVD)
+            val cat = preventCategory(total)
+            listOf(MeTile("Heart attack, stroke or heart failure in 10 years", pctW(total), "%", sub = cat.label, tone = qTone(cat.state))) +
+                PreventOutcome.entries.drop(1).map { o -> MeRow(o.label, value = "${pctW(p.result.tenYear.getValue(o))} %") } +
+                listOfNotNull(p.result.thirtyYear?.let { MeRow("Any of these in 30 years", value = "${pctW(it.getValue(PreventOutcome.TOTAL_CVD))} %") })
+        }
+        is PreventOutcomeOrWhy.NotApplicable -> listOf(MeNote("Not worked out: ${p.reasons.joinToString("; ")}."))
+        null -> listOf(MeNote("Not worked out."))
+    }
+    out += MeSection("HEART · PREVENT", prevent, info = "AHA PREVENT equations (Khan et al. 2024), base model; valid from 30 to 79. Low under 5 %, borderline to 7.5 %, intermediate to 20 %, high from 20 %.")
+    val le8 = s.le8
+    out += MeSection("HEART · LIFE'S ESSENTIAL 8", listOfNotNull(
+        le8.score?.let { MeTile("Life's Essential 8", "$it", "/ 100", sub = "${le8.band} · ${le8.assessed.size} of 8 measures", tone = qTone(le8.state)) },
+    ) + le8.metrics.map { m -> MeRow(m.metric.label, value = m.points?.toString(), sub = m.reading ?: m.missing?.let { "needs $it" }, tone = m.points?.let { qTone(if (it >= 80) "ok" else if (it >= 50) "warn" else "bad") }) },
+        info = "AHA Life's Essential 8 (Lloyd-Jones et al. 2022). Diet needs a questionnaire that comes later.")
+    val fr = s.findrisc
+    out += MeSection("SUGAR · FINDRISC", listOf(
+        MeTile("FINDRISC", "${fr.score}", "/ 26", sub = if (fr.complete) "${fr.band} · ${fr.tenYearRisk} in 10 years" else "so far; up to ${fr.maxPossible}", tone = if (fr.complete) qTone(fr.state) else null),
+    ) + fr.items.map { MeRow(it.label, value = it.points?.toString(), sub = it.reading ?: "not answered") }, info = "Finnish Diabetes Risk Score (Lindström & Tuomilehto 2003).")
+    out += MeSection("BRAIN · DEMENTIA FACTORS", s.brain.map { f ->
+        MeRow(f.label, value = f.state.word, sub = if (f.state == FactorState.UNKNOWN) "needs ${f.needs}" else f.reading,
+            tone = when (f.state) { FactorState.PRESENT -> Tone.WARN; FactorState.ABSENT -> Tone.OK; else -> null })
+    }, info = "The 14 modifiable factors of the 2024 Lancet Commission; no combined number.")
+    return out
+}
+
+fun exposuresMeView(d: ExposuresData, questionnaires: List<InstrumentSummary> = emptyList(), screens: RiskScreens? = null): MeViewDoc {
     val s = d.summary
     val sections = mutableListOf<MeSection>()
     sections += questionnaireSections(questionnaires)
+    screens?.let { sections += screenSections(it) }
     sections += MeSection("AIR · LAST 30 DAYS", if (s == null || s.daysWithData == 0) listOf(MeNote("No air days yet.")) else listOfNotNull(
         MeTile("PM2.5 breathed", s.pm25Mean?.let(::f1) ?: "—", "µg/m³", tone = tone(s.states["pm25"]), hue = "m-pm25",
             sub = "${s.pm25DaysOver} of ${s.fullDays} full days above 15", series = d.series { it.pm25 }.toList()),

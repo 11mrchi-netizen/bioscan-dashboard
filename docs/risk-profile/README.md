@@ -47,6 +47,20 @@ PHQ-9 item 9 (thoughts of being better off dead or of self-harm) shows a plain l
 notification to anyone (owner decision). Passive context (encounters, phone use at night) is not folded in: encounters
 became the partnered record in `main`'s sex-tracking work, so they no longer measure social contact.
 
+## R3: heart, sugar and brain
+
+| Part | Where | Tested by |
+|---|---|---|
+| AHA PREVENT, base model: 10-year (30-79) and 30-year (30-59) risk of total CVD, ASCVD, heart failure, CHD and stroke; validity ranges; the AHA categories; CKD-EPI 2021 eGFR from creatinine when no eGFR is reported | `android-app/.../domain/risk/Prevent.kt`; coefficients in `supabase/functions/_shared/risk/prevent-base.json` (an asset), extracted programmatically from the preventr R package's data (MIT), each row with preventr's label | `PreventTest`: preventr's published reference results, 20 values (both sexes, 10 and 30 years, five outcomes), and its eGFR references |
+| Life's Essential 8 (the advisory's point tables; diet left as "not assessed" until R4 brings a diet questionnaire, the score shown over the measures assessed), FINDRISC (all eight items, with the most it could still be when some are unanswered), the 14 Lancet 2024 dementia factors (present / absent / unknown with the source and what is needed; no combined number) | `domain/risk/Screens.kt` | `ScreensTest` (each point table, partial answers, the factors) |
+| `health_background`: one row per person (smoking, quit year, second-hand smoke, diabetes, BP and cholesterol medicine, high glucose history, family diabetes, vegetables daily, hearing, vision, head injury, education), own-row RLS, edited in place | `supabase/migrations/20261119140000_health_background.sql` | applied on Postgres 16 with stubs: partial answers merge, others see nothing, bad values refused |
+| Gathering: labs (total, HDL, LDL cholesterol, fasting glucose, HbA1c, eGFR or creatinine, waist), BMI (latest weight, profile height), BP (home mean, else the clinic reading), activity (logged sessions, last 4 weeks), sleep, alcohol (logged drinks), PHQ-9 and UCLA-3, PM2.5; all read softly | `data/RiskScreensRepository.kt` | `ScreensTest` (PREVENT on gathered inputs, or what is missing) |
+| Phone: Me › EXPOSURES › HEALTH BACKGROUND (ANSWER / EDIT opens the one-page form), HEART · PREVENT, HEART · LIFE'S ESSENTIAL 8, SUGAR · FINDRISC, BRAIN · DEMENTIA FACTORS; published to `me_views` | `ui/screens/me/HealthBackgroundSheet.kt`, `RiskScreenCards.kt`, `domain/meview/ExposuresMeView.kt` | `ExposuresMeViewTest` |
+
+Assumptions, labelled where they show: logged sessions count as moderate-to-vigorous activity; FINDRISC's "30 minutes a day"
+is 210 minutes a week of logged sessions; alcohol counts only logged drinks; "high blood pressure" for the dementia factors
+is a systolic of 130 or more (the Commission's midlife threshold) or BP medicine.
+
 ## The health assistant's scope
 
 `agent-core/scope.ts` classifies every table (a test fails on one that is not). `bp_readings` is `shared`, like
@@ -54,13 +68,15 @@ became the partnered record in `main`'s sex-tracking work, so they no longer mea
 `outdoor_air_hourly` are `never`: they are built from where the person was, hour by hour, the same rule as
 `place_visits` and `home_env_readings`. The `air_exposure` summary in `analysis_results` is withheld too
 (`resultAllowed`), since it carries the share of the dose breathed at home. `instrument_responses` (R2) is `never`:
-mental health answers, including the self-harm item, stay closed until the owner opens them as an opt-in group of their own. These take effect in the assistant when
+mental health answers, including the self-harm item, stay closed until the owner opens them as an opt-in group of their own. `health_background`
+(R3: smoking, medicines, diagnoses) is `never` too. These take effect in the assistant when
 `health-agent` is redeployed; the live one (v3) would still serve an `air_exposure` row once `analysis-run` writes one.
 
 ## Deploy, in this order
 
 Status (19 Nov 2026): step 1 done on live (both migrations applied and checked: tables, RLS, `run_analysis` accepting
-`exposures`, job `analysis-run-exposures` at 20:45 UTC). Step 2 is not done: the live `analysis-run` is still v32. It
+`exposures`, job `analysis-run-exposures` at 20:45 UTC). R2's `20261119120000_instrument_responses.sql` and R3's `20261119140000_health_background.sql` are applied on live too.
+Step 2 is not done: the live `analysis-run` is still v32 (the deploy command is refused by this environment's auto mode). It
 was diffed against `main` first: v32 equals `main` except the symptom-check change to `healthSeries.ts` and vocabulary
 1.1.0, which `main` has and the database already expects, so deploying this branch ships `main` plus the air engine.
 Until it is deployed, the 20:45 UTC `exposures` job gets a 400 (unknown group) from v32; nothing else is affected.

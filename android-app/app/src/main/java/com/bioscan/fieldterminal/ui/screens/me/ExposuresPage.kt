@@ -26,6 +26,8 @@ import com.bioscan.fieldterminal.data.ExposuresData
 import com.bioscan.fieldterminal.data.ExposuresRepository
 import com.bioscan.fieldterminal.data.InstrumentResponseRow
 import com.bioscan.fieldterminal.data.InstrumentsRepository
+import com.bioscan.fieldterminal.data.RiskScreens
+import com.bioscan.fieldterminal.data.RiskScreensRepository
 import com.bioscan.fieldterminal.domain.risk.InstrumentAnswer
 import com.bioscan.fieldterminal.domain.risk.InstrumentSummary
 import com.bioscan.fieldterminal.domain.risk.summaries
@@ -91,6 +93,10 @@ fun ExposuresPage() {
     var answersError by remember { mutableStateOf<String?>(null) }
     var taking by remember { mutableStateOf<String?>(null) }
     var questionnaireHistory by remember { mutableStateOf<InstrumentSummary?>(null) }
+    // Risk profile R3: the heart, sugar and brain screens, also loaded on their own.
+    var screens by remember { mutableStateOf<RiskScreens?>(null) }
+    var screensError by remember { mutableStateOf<String?>(null) }
+    var editingBackground by remember { mutableStateOf(false) }
     val cacheVersion = rememberCacheVersion()
     LaunchedEffect(reload, cacheVersion) {
         try {
@@ -100,6 +106,14 @@ fun ExposuresPage() {
             throw e
         } catch (e: Exception) {
             answersError = describeLoadFailure(e)
+        }
+        try {
+            screens = RiskScreensRepository(SupabaseClientProvider.client).load(context)
+            screensError = null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            screensError = describeLoadFailure(e)
         }
     }
     val today = LocalDate.now()
@@ -111,7 +125,8 @@ fun ExposuresPage() {
             error = null
             catching {
                 val rows = InstrumentsRepository(SupabaseClientProvider.client).loadResponses()
-                MeViewPublisher.publish(SupabaseClientProvider.client, exposuresMeView(loaded, defs.summaries(rows.map { InstrumentAnswer(it.instrument, it.date, it.score, it.band, it.flags) }, LocalDate.now())))
+                val risk = catching { RiskScreensRepository(SupabaseClientProvider.client).load(context) }.getOrNull()
+                MeViewPublisher.publish(SupabaseClientProvider.client, exposuresMeView(loaded, defs.summaries(rows.map { InstrumentAnswer(it.instrument, it.date, it.score, it.band, it.flags) }, LocalDate.now()), risk))
             }
         } catch (e: CancellationException) {
             throw e
@@ -128,6 +143,10 @@ fun ExposuresPage() {
         when {
             summaries != null -> QuestionnaireCards(summaries, today, onTake = { taking = it }, onOpen = { questionnaireHistory = it })
             answersError != null -> Text("Couldn't load the questionnaires: $answersError", style = FTType.BodySmall, color = FT.Bad)
+        }
+        when {
+            screens != null -> RiskScreenCards(screens!!, onEditBackground = { editingBackground = true })
+            screensError != null -> Text("Couldn't work out the risk screens: $screensError", style = FTType.BodySmall, color = FT.Bad)
         }
         val d = data
         when {
@@ -147,6 +166,7 @@ fun ExposuresPage() {
         ) { questionnaireHistory = null }
     }
     taking?.let { id -> QuestionnaireSheet(id, onDismiss = { taking = null }, onSaved = { reload++ }) }
+    if (editingBackground) HealthBackgroundSheet(onDismiss = { editingBackground = false }, onSaved = { reload++ })
 }
 
 @Composable

@@ -92,6 +92,8 @@ android {
             assets.srcDir("../../supabase/functions/_shared/health-vocab")
             // Risk profile R2: the questionnaires (instruments.json), shared with the console and its tests.
             assets.srcDir("../../supabase/functions/_shared/instruments")
+            // Risk profile R3: the AHA PREVENT base-model coefficients (prevent-base.json).
+            assets.srcDir("../../supabase/functions/_shared/risk")
             // Running form analyser: MediaPipe's pose model, downloaded at build time (downloadPoseModel below).
             // A plain folder: AGP 9 refuses a Provider here. The download still runs first (preBuild dependsOn downloadPoseModel below).
             assets.srcDir(layout.buildDirectory.dir("generated/pose-model").get().asFile)

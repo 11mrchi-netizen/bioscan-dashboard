@@ -67,4 +67,23 @@ class ExposuresMeViewTest {
         assertEquals("—", ucla.value)
         assertTrue(ucla.sub!!.contains("due now"))
     }
+
+    @Test
+    fun theScreensFollowTheQuestionnairesWithNoCombinedBrainNumber() {
+        val inputs = com.bioscan.fieldterminal.domain.risk.ScreenInputs(
+            age = 42, sex = "male", background = com.bioscan.fieldterminal.domain.risk.HealthBackground(), bmi = null, waistCm = null, sbp = null, dbp = null,
+            totalCholMgDl = null, hdlMgDl = null, ldlMgDl = null, fastingGlucoseMgDl = null, hba1cPct = null, egfr = null, activityMinPerWeek = null,
+            sleepHours = null, alcoholGramsPerWeek = null, phq9 = null, ucla3 = null, pm25 = null, currentYear = 2026,
+        )
+        val screens = com.bioscan.fieldterminal.data.RiskScreens(
+            inputs, com.bioscan.fieldterminal.domain.risk.PreventOutcomeOrWhy.NotApplicable(listOf("needs total cholesterol")),
+            com.bioscan.fieldterminal.domain.risk.le8(inputs), com.bioscan.fieldterminal.domain.risk.findrisc(inputs),
+            com.bioscan.fieldterminal.domain.risk.brainFactors(inputs), backgroundAnswered = false,
+        )
+        val doc = exposuresMeView(ExposuresData(emptyList(), null, null, null), emptyList(), screens)
+        assertEquals(listOf("HEART · PREVENT", "HEART · LIFE'S ESSENTIAL 8", "SUGAR · FINDRISC", "BRAIN · DEMENTIA FACTORS", "AIR · LAST 30 DAYS"), doc.sections.map { it.title })
+        assertEquals("Not worked out: needs total cholesterol.", (doc.sections[0].items.single() as MeNote).text)
+        assertEquals(14, doc.sections[3].items.size)
+        assertTrue(doc.sections[3].items.all { it is MeRow })
+    }
 }

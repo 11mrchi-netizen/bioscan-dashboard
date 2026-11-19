@@ -28,7 +28,7 @@ enum class LogEntryKind(val label: String) {
     Exercise("EXERCISE"), Food("FOOD"), Sleep("SLEEP"), Stool("STOOL"),
     Encounter("ENC"), Note("NOTE"), Drink("DRINK"),
     Wellness("WELL"), Supplement("SUPP"), Ostrc("CHECK-IN"), Masturbation("MASTURBATION"),
-    Intercourse("INTERCOURSE"), Grip("GRIP"),
+    Intercourse("INTERCOURSE"), Grip("GRIP"), Bp("BP"),
 }
 
 // DAV-219 (24/9 fixes): a few named groups the Log page clusters same-day
@@ -48,7 +48,7 @@ val LogEntryKind.category: LogCategory
     get() = when (this) {
         LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement -> LogCategory.Intake
         LogEntryKind.Exercise, LogEntryKind.Ostrc -> LogCategory.Activity
-        LogEntryKind.Sleep, LogEntryKind.Wellness, LogEntryKind.Stool, LogEntryKind.Masturbation, LogEntryKind.Intercourse, LogEntryKind.Grip -> LogCategory.Body
+        LogEntryKind.Sleep, LogEntryKind.Wellness, LogEntryKind.Stool, LogEntryKind.Masturbation, LogEntryKind.Intercourse, LogEntryKind.Grip, LogEntryKind.Bp -> LogCategory.Body
         LogEntryKind.Note, LogEntryKind.Encounter -> LogCategory.Notes
     }
 
@@ -65,7 +65,7 @@ enum class LogSource(val table: String) {
     Meal("meals"), Exercise("exercise_sessions"), Sleep("sleep_daily"),
     Stool("stool_log"), Encounter("encounters"), Note("notes"), Hydration("hydration_daily"),
     Wellbeing("wellbeing_daily"), Supplement("supplement_log"), Ostrc("ostrc_checkins"),
-    Masturbation("sexual_activity_daily"), Grip("grip_strength_log"),
+    Masturbation("sexual_activity_daily"), Grip("grip_strength_log"), Bp("bp_readings"),
 }
 
 @Serializable
@@ -130,6 +130,7 @@ fun buildLogEntries(
     ostrc: List<LogOstrcRow> = emptyList(),
     sexualActivity: List<LogSexualActivityRow> = emptyList(),
     grip: List<LogGripRow> = emptyList(),
+    bp: List<com.bioscan.fieldterminal.data.BpReadingRow> = emptyList(),
 ): List<LogEntry> {
     val entries = mutableListOf<LogEntry>()
 
@@ -202,6 +203,19 @@ fun buildLogEntries(
             timestamp = parseTimestamp(g.occurredAt),
             headline = "Grip ${g.hand} · %.1f kg".format(g.kg),
             detail = null,
+        )
+    }
+
+    // Risk profile R0: one entry per home blood pressure reading (typed or from the cuff's app via Health Connect).
+    bp.forEach { b ->
+        entries += LogEntry(
+            id = b.id,
+            source = LogSource.Bp,
+            kind = LogEntryKind.Bp,
+            timestamp = parseTimestamp(b.occurredAt),
+            headline = "BP ${b.systolic}/${b.diastolic} mmHg",
+            detail = listOfNotNull(b.pulse?.let { "pulse $it" }, b.arm?.let { "$it arm" }, if (b.source == "health_connect") "from Health Connect" else null)
+                .joinToString(" · ").ifEmpty { null },
         )
     }
 

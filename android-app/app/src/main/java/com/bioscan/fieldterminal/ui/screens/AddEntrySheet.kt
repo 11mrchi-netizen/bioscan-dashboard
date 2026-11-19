@@ -225,6 +225,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
                     AddEntryType.Ostrc -> OstrcForm(saving, onSave = { date, ba, q1, q2, q3, q4, n -> onSubmit { it.addOstrc(date, ba, q1, q2, q3, q4, n) } })
                     AddEntryType.SexualActivity -> SexualActivityForm(saving, onSave = { date, type, instances, n -> onSubmit { it.addSexualActivity(date, type, instances, n) } })
                     AddEntryType.Grip -> GripForm(saving, onSave = { occurredAt, hand, kg -> onSubmit { it.addGrip(occurredAt, hand, kg) } })
+                    AddEntryType.BloodPressure -> BpForm(saving, onSave = { rows -> onSubmit { it.addBp(rows) } })
                 }
             }
             }
@@ -299,6 +300,7 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
             LogSource.Encounter -> repo.fetchEncounter(entry.id)
             LogSource.Stool -> repo.fetchStool(entry.id)
             LogSource.Grip -> repo.fetchGrip(entry.id)
+            LogSource.Bp -> repo.fetchBp(entry.id)
             LogSource.Note -> repo.fetchNote(entry.id)
             LogSource.Wellbeing -> repo.fetchWellbeing(entry.id)
             LogSource.Exercise -> repo.fetchExerciseSession(entry.id)
@@ -385,6 +387,15 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                     initialDiscomfort = row.discomfort,
                     initialEmpty = row.completeEvacuation,
                     onSave = { occurredAt, bt, d, empty -> onSubmit { it.updateStool(row.id, occurredAt, bt, d, empty) } },
+                )
+                is com.bioscan.fieldterminal.data.BpReadingRow -> BpForm(
+                    saving,
+                    initialDateTime = parseIsoToLocalDateTime(row.occurredAt),
+                    initial = com.bioscan.fieldterminal.data.NewBpReadingRow(
+                        occurredAt = row.occurredAt, systolic = row.systolic, diastolic = row.diastolic, pulse = row.pulse,
+                        arm = row.arm, position = row.position, onBpMeds = row.onBpMeds, note = row.note,
+                    ),
+                    onSave = { rows -> onSubmit { it.updateBp(row.id, rows.first()) } },
                 )
                 is LogGripRow -> GripForm(
                     saving,

@@ -156,6 +156,15 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         )
     }
 
+    // Risk profile R0: a sitting's readings (1 or 2), in one insert.
+    suspend fun addBp(rows: List<NewBpReadingRow>) {
+        supabase.postgrest.from("bp_readings").insert(rows)
+    }
+
+    suspend fun updateBp(id: Long, row: NewBpReadingRow) = BloodPressureRepository(supabase).update(id, row)
+
+    suspend fun fetchBp(id: Long) = BloodPressureRepository(supabase).fetch(id)
+
     suspend fun addGrip(occurredAt: String, hand: String, kg: Double) {
         supabase.postgrest.from("grip_strength_log").insert(NewGripRow(occurredAt = occurredAt, hand = hand, kg = kg))
     }

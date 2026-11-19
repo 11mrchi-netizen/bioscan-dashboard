@@ -478,7 +478,7 @@ private fun TypeChip(kind: LogEntryKind) {
         LogEntryKind.Encounter, LogEntryKind.Masturbation, LogEntryKind.Intercourse -> FT.Category.Arousal.c500
         LogEntryKind.Note -> FT.TextSecondary
         LogEntryKind.Stool, LogEntryKind.Ostrc -> FT.Category.Digestion.c500
-        LogEntryKind.Wellness -> FT.Category.Wellbeing.c500
+        LogEntryKind.Wellness, LogEntryKind.Bp -> FT.Category.Wellbeing.c500
     }
     val filled = kind in setOf(LogEntryKind.Exercise, LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement, LogEntryKind.Stool)
     val shape = RoundedCornerShape(FT.RadiusSmall)

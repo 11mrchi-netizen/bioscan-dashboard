@@ -88,6 +88,20 @@ class HealthConnectSyncCoordinator(private val context: Context, private val sup
                 step("vitals") { daily.syncVitals(since, until) }
                 step("sleep") { daily.syncSleep(since, until) }
                 step("exercise_sessions") { exercise.syncSessions(since, until) }
+                // Risk profile R0: cuff readings, only when the optional blood pressure permission is granted (0 otherwise).
+                // Reads its own fixed window, not the watermark, so readings from before the permission was granted arrive.
+                // Its failure (the table not migrated yet, a bad record) is logged and never holds back the watermark of the rest:
+                // it reads a fixed window, so the next run picks up whatever this one missed.
+                step("blood_pressure") {
+                    try {
+                        BloodPressureRepository(supabase).importFromHealthConnect(context, until)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.e(TAG, "blood_pressure import failed", e)
+                        0
+                    }
+                }
             }
             val results = outcomes.mapValues { it.value.await() }
             val failedSteps = results.filterValues { it.isFailure }

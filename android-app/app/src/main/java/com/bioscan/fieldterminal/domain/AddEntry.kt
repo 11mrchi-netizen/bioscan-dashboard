@@ -18,6 +18,8 @@ enum class AddEntryType(val label: String) {
     Ostrc("INJURY CHECK-IN"),
     SexualActivity("SEXUAL ACTIVITY"),
     Grip("GRIP"),
+    // Risk profile R0: a home blood pressure sitting (domain/bp/BloodPressure.kt).
+    BloodPressure("BLOOD PRESSURE"),
 }
 
 // FUEL's own three-way sub-picker, shown after FUEL is selected.
@@ -49,6 +51,7 @@ enum class AddEntryChoice(val label: String, val group: AddEntryGroup) {
     Wellbeing("Wellbeing", AddEntryGroup.Body),
     Stool("Stool", AddEntryGroup.Body),
     Grip("Grip strength", AddEntryGroup.Body),
+    BloodPressure("Blood pressure", AddEntryGroup.Body),
     // The monthly sitting: grip, tape girths and skinfolds (BodyCheckin.kt).
     BodyCheckIn("Body check-in", AddEntryGroup.Body),
     // Weight and impedance read straight from the body scale over BLE (ScaleBroadcast.kt), no OKOK app.
@@ -92,6 +95,7 @@ val AddEntryChoice.target: AddEntryTarget
         AddEntryChoice.Wellbeing -> AddEntryTarget.Form(AddEntryType.Wellness)
         AddEntryChoice.Stool -> AddEntryTarget.Form(AddEntryType.Stool)
         AddEntryChoice.Grip -> AddEntryTarget.Form(AddEntryType.Grip)
+        AddEntryChoice.BloodPressure -> AddEntryTarget.Form(AddEntryType.BloodPressure)
         AddEntryChoice.BodyCheckIn -> AddEntryTarget.BodyCheckIn
         AddEntryChoice.HealthCheckIn -> AddEntryTarget.HealthCheckIn
         AddEntryChoice.IllnessLog -> AddEntryTarget.IllnessForm

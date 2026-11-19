@@ -158,6 +158,22 @@ class LogRepository(private val supabase: SupabaseClient) {
                     limit(FETCH_CAP_PER_SOURCE)
                 }.decodeList<LogGripRow>()
         }
+        // Blood pressure (risk profile R0) is caught inside the child like the roster below: before its migration is applied
+        // the table does not exist, and that must not cost the whole feed.
+        val bp = async {
+            try {
+                supabase.postgrest.from("bp_readings")
+                    .select(columns = Columns.list("id,occurred_at,systolic,diastolic,pulse,arm,position,on_bp_meds,source,note")) {
+                        filter { gte("occurred_at", fromTimestamp) }
+                        order("occurred_at", Order.DESCENDING)
+                        limit(FETCH_CAP_PER_SOURCE)
+                    }.decodeList<com.bioscan.fieldterminal.data.BpReadingRow>()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
         // A roster that fails to load only costs the supplement gap marks, never the feed (caught inside the child so the
         // failure cannot cancel the sibling queries).
         val schedule = async {
@@ -180,7 +196,7 @@ class LogRepository(private val supabase: SupabaseClient) {
             entries = buildLogEntries(
                 mealRows, exerciseSessions.await(), sleepRows,
                 stool.await(), encounters.await(), notes.await(), hydrationRows,
-                wellbeingRows, supplementRows, ostrc.await(), sexualActivity.await(), grip.await(),
+                wellbeingRows, supplementRows, ostrc.await(), sexualActivity.await(), grip.await(), bp.await(),
             ).filter { !it.timestamp.toLocalDate().isBefore(since) },
             coverage = logCoverage(mealRows, hydrationRows, supplementRows, sleepRows, wellbeingRows, FETCH_CAP_PER_SOURCE.toInt(), since),
             supplementSchedule = schedule.await(),

@@ -223,12 +223,21 @@ private fun HealthConnectCard(context: Context) {
     val hcAvailable = remember { HealthConnectManager.isAvailable(context) }
     var hcChecked by remember { mutableStateOf(false) }
     var hcGranted by remember { mutableStateOf(false) }
+    // Risk profile R0: blood pressure is optional, asked for with the rest and on its own once the rest is granted.
+    var bpGranted by remember { mutableStateOf(false) }
     val hcPermissionLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract(),
-    ) { granted -> hcGranted = granted.containsAll(HealthConnectManager.PERMISSIONS) }
+    ) { granted ->
+        // The result lists only what this request asked for, so the blood-pressure-only request must not clear the rest.
+        hcGranted = hcGranted || granted.containsAll(HealthConnectManager.PERMISSIONS)
+        bpGranted = bpGranted || granted.containsAll(HealthConnectManager.OPTIONAL_PERMISSIONS)
+    }
 
     LaunchedEffect(Unit) {
-        if (hcAvailable) hcGranted = HealthConnectManager.hasAllPermissions(context)
+        if (hcAvailable) {
+            hcGranted = HealthConnectManager.hasAllPermissions(context)
+            bpGranted = HealthConnectManager.hasBloodPressurePermission(context)
+        }
         hcChecked = true
     }
 
@@ -251,7 +260,17 @@ private fun HealthConnectCard(context: Context) {
         )
         if (hcAvailable && hcChecked && !hcGranted) {
             FTButton(label = "CONNECT HEALTH CONNECT") {
-                hcPermissionLauncher.launch(HealthConnectManager.PERMISSIONS)
+                hcPermissionLauncher.launch(HealthConnectManager.REQUESTED_PERMISSIONS)
+            }
+        }
+        if (hcAvailable && hcChecked && hcGranted && !bpGranted) {
+            Text(
+                "Blood pressure is not shared yet. Allow it to import readings from your cuff's app (Omron Connect and most others write to Health Connect).",
+                style = FTType.BodySmall,
+                color = FT.TextSecondary,
+            )
+            FTButton(label = "ALLOW BLOOD PRESSURE") {
+                hcPermissionLauncher.launch(HealthConnectManager.OPTIONAL_PERMISSIONS)
             }
         }
         if (hcGranted) {

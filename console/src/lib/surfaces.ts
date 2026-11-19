@@ -15,8 +15,3 @@ export function consoleHref(hash = ''): string {
   return `${inConsole() ? './' : './console/'}${hash}`
 }
 
-/** The previous dashboard, kept at /legacy/ until it is retired (plan phase 5). */
-export function legacyHref(): string {
-  if (!deployed()) return '../legacy/'
-  return inConsole() ? '../legacy/' : './legacy/'
-}

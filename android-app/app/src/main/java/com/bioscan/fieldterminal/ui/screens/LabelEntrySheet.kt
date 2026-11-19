@@ -112,9 +112,10 @@ fun LabelEntrySheet(
     val size = servingSize.toAmount()
     val calories = values.getValue("calories").value.toAmount()
     val valid = name.isNotBlank() && calories != null && (!perServing || (size != null && size > 0))
-    // PRODUCT (the label photo, name and brand), SERVING, then the label's NUMBERS and SAVE PRODUCT.
+    // Two pages (Logging Flows Redesign Plan): THE PRODUCT (the label photo, which fills in what it can read, the name, the
+    // brand and the serving), then THE LABEL: its numbers, copied as printed, and SAVE PRODUCT.
     FTFlow(
-        title = "NEW PRODUCT", pages = listOf(FlowPage("PRODUCT", ready = name.isNotBlank()), FlowPage("SERVING"), FlowPage("NUMBERS")),
+        title = "NEW PRODUCT", pages = listOf(FlowPage("THE PRODUCT", ready = name.isNotBlank()), FlowPage("THE LABEL")),
         state = rememberFlowState(), onClose = onDismiss,
         canSave = valid && !reading, saving = saving, saveLabel = "SAVE PRODUCT", wash = FT.Domain.Fuel,
         error = saveError?.let { "Couldn't save ($it)." },
@@ -173,8 +174,6 @@ fun LabelEntrySheet(
                 }
                 Column { LabelFormLabel("PRODUCT NAME"); FieldTextField(name, { name = it }, "e.g. 超能蛋白 咖啡口味") }
                 Column { LabelFormLabel("BRAND (OPTIONAL)"); FieldTextField(brand, { brand = it }, "e.g. 福樂") }
-            }
-            1 -> {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Column(Modifier.weight(1f)) {
                         LabelFormLabel("SERVING SIZE (每一份量)")

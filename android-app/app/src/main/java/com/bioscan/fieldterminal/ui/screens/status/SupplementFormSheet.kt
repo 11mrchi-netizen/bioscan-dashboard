@@ -53,7 +53,8 @@ import com.bioscan.fieldterminal.domain.spec
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTFlow
 import com.bioscan.fieldterminal.ui.components.FlowPage
-import com.bioscan.fieldterminal.ui.components.FlowPager
+import com.bioscan.fieldterminal.ui.components.FlowEssentials
+import com.bioscan.fieldterminal.ui.components.FlowMore
 import com.bioscan.fieldterminal.ui.components.rememberFlowState
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
@@ -189,31 +190,37 @@ fun SupplementFormSheet(
         }
     }
 
-    var ingredientIndex by remember { mutableStateOf(0) }
-    // Asked, a page each: WHAT (name, kind, the barcode), FORM, WHEN, ONE DOSE. The rest is optional: the ingredients one
-    // to a page, a cycle and dose changes, and for a medication, hormone or peptide its reference card. An item already
-    // taken adds what is read rather than typed: labs to watch, what changed since, the vial, the history, STOP / RESTART.
-    val pages = buildList {
-        add(FlowPage("WHAT", ready = name.isNotBlank()))
-        add(FlowPage("FORM"))
-        add(FlowPage("WHEN"))
-        add(FlowPage("ONE DOSE"))
-        add(FlowPage("INGREDIENTS", optional = true))
-        add(FlowPage("CYCLE · DOSE CHANGES", optional = true))
-        if (regimen.kind != RegimenKind.SUPPLEMENT || existing?.productId != null) add(FlowPage("REFERENCE", optional = true))
-        if (existing != null) add(FlowPage("LABS · EFFECTS", optional = true))
-        if (existing != null && regimen.injectable) add(FlowPage("VIAL · SITES", optional = true))
-        if (existing != null) add(FlowPage("HISTORY", optional = true))
+    // Adding takes two pages (Logging Flows Redesign Plan): WHAT IT IS (name, kind, the barcode, the form) and HOW YOU TAKE
+    // IT (when, and one dose). An item already on the list opens as its own page instead: each section one under the other,
+    // folded until opened (what it is, how it is taken, ingredients, cycle and dose changes, the reference card, labs and
+    // effects, the vial, the history), with STOP / RESTART and one SAVE for any change.
+    val sections = buildList {
+        add("WHAT")
+        add("HOW")
+        add("INGREDIENTS")
+        add("CYCLE · DOSE CHANGES")
+        if (regimen.kind != RegimenKind.SUPPLEMENT || existing?.productId != null) add("REFERENCE")
+        if (existing != null) add("LABS · EFFECTS")
+        if (existing != null && regimen.injectable) add("VIAL · SITES")
+        if (existing != null) add("HISTORY")
     }
+    val pages = if (existing == null) {
+        listOf(FlowPage("WHAT IT IS", ready = name.isNotBlank()), FlowPage("HOW YOU TAKE IT"))
+    } else listOf(FlowPage(existing.name.uppercase()))
+    val sectionTitle = mapOf(
+        "WHAT" to "WHAT IT IS", "HOW" to "HOW YOU TAKE IT", "INGREDIENTS" to "INGREDIENTS", "CYCLE · DOSE CHANGES" to "CYCLE AND DOSE CHANGES",
+        "REFERENCE" to "REFERENCE", "LABS · EFFECTS" to "LABS AND EFFECTS", "VIAL · SITES" to "VIAL AND SITES", "HISTORY" to "HISTORY",
+    )
     val flow = rememberFlowState()
     FTFlow(
         title = if (existing == null) "ADD TO YOUR REGIMEN" else "EDIT ${regimen.kind.label.uppercase()}",
         pages = pages, state = flow, onClose = onDismiss,
         canSave = draft != null, saving = saving, onSave = { if (draft != null && !saving) save() },
         wash = FT.Domain.Fuel,
-        error = error?.let { "Couldn't save ($it)." } ?: missing?.takeIf { name.isNotBlank() && flow.page >= 3 },
+        error = error?.let { "Couldn't save ($it)." } ?: missing?.takeIf { name.isNotBlank() && (existing != null || flow.page >= 1) },
     ) { page ->
-        when (pages.getOrNull(page)?.label) {
+        @Composable
+        fun Section(label: String) { when (label) {
             "WHAT" -> {
                 Column { FormFieldLabel("NAME"); FieldTextField(name, { name = it }, "e.g. Vitamin D3 (NOW Foods)") }
                 RegimenKindField(regimen)
@@ -330,13 +337,13 @@ fun SupplementFormSheet(
                 }
             }
             "FORM" -> RegimenFormField(regimen)
-            "WHEN" -> RegimenWhenField(regimen)
-            "ONE DOSE" -> {
+            "HOW" -> {
+                RegimenWhenField(regimen)
                 // One dose: how much of the form, then what that dose contains.
                 DoseCountField(regimen)
                 val named = ingredients.count { it.name.isNotBlank() }
                 Text(
-                    if (named == 0) "No ingredients yet: add them on the next page, or scan the barcode on the first."
+                    if (named == 0) "No ingredients yet: scan the barcode on the first page, or add them on the item's page once saved."
                     else "$named ingredient${if (named == 1) "" else "s"} in one dose: ${ingredients.filter { it.name.isNotBlank() }.take(3).joinToString { it.name }}${if (named > 3) "…" else ""}",
                     style = FTType.Caption, color = FT.TextSecondary,
                 )
@@ -359,12 +366,8 @@ fun SupplementFormSheet(
             }
             "INGREDIENTS" -> {
                 Text("Amounts for one dose. Scanned labels list one serving: check they match your dose.", style = FTType.Caption, color = FT.TextMuted)
-                val i = ingredientIndex.coerceIn(0, (ingredients.size - 1).coerceAtLeast(0))
-                if (ingredients.isNotEmpty()) {
-                    FlowPager(i, ingredients.size, { ingredientIndex = it }, what = "ingredients")
-                    IngredientEditor(ingredients[i]) { ingredients.removeAt(i); ingredientIndex = (i - 1).coerceAtLeast(0) }
-                }
-                FTButton("+ ADD INGREDIENT", modifier = Modifier.fillMaxWidth()) { ingredients.add(EditableIngredient()); ingredientIndex = ingredients.size - 1 }
+                ingredients.forEachIndexed { i, ing -> IngredientEditor(ing) { ingredients.removeAt(i) } }
+                FTButton("+ ADD INGREDIENT", modifier = Modifier.fillMaxWidth()) { ingredients.add(EditableIngredient()) }
             }
             "CYCLE · DOSE CHANGES" -> {
                 RegimenCycleField(regimen)
@@ -394,6 +397,19 @@ fun SupplementFormSheet(
                 InjectableSection(existing.id, existing.spec(), regimen.syringeUnits.replace(',', '.').toDoubleOrNull() ?: existing.syringeUnits)
             }
             "HISTORY" -> if (existing != null) RegimenHistory(existing.id)
+        } }
+        when {
+            existing == null && page == 0 -> {
+                FlowEssentials { Section("WHAT") }
+                Section("FORM")
+            }
+            existing == null -> FlowEssentials { Section("HOW") }
+            else -> sections.forEach { label ->
+                FlowMore("regimen_item_${label.lowercase()}", label = sectionTitle[label] ?: label) {
+                    Section(label)
+                    if (label == "WHAT") Section("FORM")
+                }
+            }
         }
         if (showEnrichConfirm) {
                 AlertDialog(

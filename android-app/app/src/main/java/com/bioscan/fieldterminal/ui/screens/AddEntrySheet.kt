@@ -19,6 +19,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,6 +64,10 @@ import com.bioscan.fieldterminal.ui.components.AddEntryTargetSaver
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTFlow
 import com.bioscan.fieldterminal.ui.components.FlowPage
+import com.bioscan.fieldterminal.ui.components.FormSaveAction
+import com.bioscan.fieldterminal.ui.components.FormSaveBar
+import com.bioscan.fieldterminal.ui.components.LocalFormBack
+import com.bioscan.fieldterminal.ui.components.LocalFormSave
 import com.bioscan.fieldterminal.ui.components.rememberFlowState
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.LoadErrorLine
@@ -158,6 +163,9 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
             val type = selectedType
             // Full screen (owner's request, Nov 2026): the menu is one page of tiles, each form a page of its own. Back from a
             // form returns to the menu, as before; the forms keep their own SAVE.
+            val formBack = remember { mutableStateOf<(() -> Boolean)?>(null) }
+            val formSave = remember { mutableStateOf<FormSaveAction?>(null) }
+            CompositionLocalProvider(LocalFormBack provides formBack, LocalFormSave provides formSave) {
             FTFlow(
                 title = when {
                     sayIt -> "SAY IT"
@@ -169,12 +177,13 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
                 canSave = false, onSave = {}, wash = FT.DomainLog,
                 onBack = {
                     when {
+                        formBack.value?.invoke() == true -> true
                         sayIt -> { sayIt = false; true }
                         type != null -> { selectedType = null; foodPrefill = null; fuelStart = null; true }
                         else -> false
                     }
                 },
-                bottomBar = { },
+                bottomBar = { FormSaveBar(formSave) },
             ) {
             if (sayIt) {
                 LogAgentForm(
@@ -226,6 +235,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
                     AddEntryType.SexualActivity -> SexualActivityForm(saving, onSave = { date, type, instances, n -> onSubmit { it.addSexualActivity(date, type, instances, n) } })
                     AddEntryType.Grip -> GripForm(saving, onSave = { occurredAt, hand, kg -> onSubmit { it.addGrip(occurredAt, hand, kg) } })
                 }
+            }
             }
             }
         }
@@ -314,9 +324,11 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
         }
     }
 
+    val formSave = remember { mutableStateOf<FormSaveAction?>(null) }
+    CompositionLocalProvider(LocalFormSave provides formSave) {
     FTFlow(
         title = "EDIT ${entry.kind.label}", pages = listOf(FlowPage("")), state = rememberFlowState(), onClose = onDismiss,
-        canSave = false, onSave = {}, wash = FT.DomainLog, bottomBar = { },
+        canSave = false, onSave = {}, wash = FT.DomainLog, bottomBar = { FormSaveBar(formSave) },
     ) {
         Column {
 
@@ -448,6 +460,7 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
             }
             Spacer(Modifier.height(12.dp))
         }
+    }
     }
 }
 

@@ -1,4 +1,4 @@
-// The 3D body from the old dashboard (legacy/index.html), moved into Me › Body (web transition plan, phase 3). Same mesh and
+// The 3D body from the old dashboard (retired in phase 5), moved into Me › Body (web transition plan, phase 3). Same mesh and
 // hologram look; drag to turn, scroll to zoom. Each region now opens what is on file for that part of the body: the
 // phone's measurements there (from the BODY document, judged against their error) and the health concerns placed there.
 // Regions come from where the tap lands on the mesh (height and distance from the midline), as on the old page.

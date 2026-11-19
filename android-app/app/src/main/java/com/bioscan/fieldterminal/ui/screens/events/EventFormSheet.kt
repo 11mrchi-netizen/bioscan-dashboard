@@ -2,6 +2,8 @@ package com.bioscan.fieldterminal.ui.screens.events
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -49,6 +51,7 @@ import com.bioscan.fieldterminal.ui.components.CourseSaver
 import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTFlow
+import com.bioscan.fieldterminal.ui.components.FlowEssentials
 import com.bioscan.fieldterminal.ui.components.FlowPage
 import com.bioscan.fieldterminal.ui.components.FlowPager
 import com.bioscan.fieldterminal.ui.components.FlowQuestion
@@ -209,20 +212,17 @@ fun EventFormSheet(
 
     val draft = build()
     val problems = validateEvent(draft)
-    var stationIndex by rememberSaveable { mutableStateOf(0) }
     val flow = rememberFlowState()
-    // WHAT, WHEN and the COURSE are asked; aid stations (one to a page) and notes are the optional extras.
+    // Two pages (Logging Flows Redesign Plan): THE EVENT (what, when, how far: everything training and fuel planning need;
+    // SAVE from here), then COURSE AND AID STATIONS, a list you build (the GPX and place, every station, notes, delete).
     val pages = listOf(
-        FlowPage("WHAT", ready = name.isNotBlank()),
-        FlowPage("WHEN"),
-        FlowPage("COURSE"),
-        FlowPage("AID STATIONS", optional = true),
-        FlowPage(if (initial?.id == null) "NOTES" else "NOTES · DELETE", optional = true),
+        FlowPage("THE EVENT", ready = name.isNotBlank()),
+        FlowPage("COURSE AND AID STATIONS"),
     )
     FTFlow(
         title = if (initial?.id == null) "ADD EVENT" else "EDIT EVENT", pages = pages, state = flow, onClose = onDismiss,
         canSave = problems.isEmpty(), saving = saving, wash = FT.DomainTraining,
-        error = error ?: problems.firstOrNull()?.takeIf { name.isNotBlank() && flow.page >= 2 },
+        error = error ?: problems.firstOrNull()?.takeIf { name.isNotBlank() },
         onSave = {
             saving = true
             error = null
@@ -232,8 +232,8 @@ fun EventFormSheet(
             }
         },
     ) { page ->
-        when (page) {
-            0 -> {
+        if (page == 0) {
+            FlowEssentials {
                 FlowQuestion("What is it?", "A race, a long day or a hard day outside your plan. Fuel and hydration plans are built around it.")
                 Column { Label("NAME"); FieldTextField(name, { name = it }, "e.g. City half marathon") }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -245,9 +245,8 @@ fun EventFormSheet(
                     SegmentedToggle(EventPriority.entries, priority, { it.key }, { priority = it }, accentColor = FT.DomainTraining)
                     Text("A: the goal race. B: important. C: fits around the plan.", style = FTType.Caption, color = FT.TextSecondary, modifier = Modifier.padding(top = 4.dp))
                 }
-            }
-            1 -> {
                 DateField("DATE", date) { date = it }
+            }
                 Column {
                     Label("START")
                     SegmentedToggle(listOf(false, true), hasStart, { if (it) "SET A TIME" else "NO TIME YET" }, { hasStart = it }, accentColor = FT.DomainTraining)
@@ -258,8 +257,11 @@ fun EventFormSheet(
                     Column(Modifier.weight(1f)) { Label("OR EXPECTED"); FieldTextField(expected, { expected = it }, "h:mm") }
                 }
                 Text("The target time when you have one; otherwise roughly how long it will take.", style = FTType.Caption, color = FT.TextSecondary)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.weight(1f)) { Label("DISTANCE KM"); FieldTextField(distance, { distance = it }, "e.g. 21.1", keyboardType = KeyboardType.Decimal) }
+                Column(Modifier.weight(1f)) { Label("ASCENT M"); FieldTextField(ascent, { ascent = it }, "e.g. 250", keyboardType = KeyboardType.Number) }
             }
-            2 -> {
+        } else {
                 if (course.size >= 2) {
                     val km = course.last().distanceM / 1000
                     Text("%.1f km course, %d points.".format(km, course.size), style = FTType.BodySmall, color = FT.TextPrimary)
@@ -273,10 +275,6 @@ fun EventFormSheet(
                     FTButton("ATTACH GPX FILE", modifier = Modifier.fillMaxWidth()) { picking = true; gpxPicker.launch(arrayOf("*/*")) }
                 }
                 info?.let { Text(it, style = FTType.Caption, color = FT.TextSecondary) }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Column(Modifier.weight(1f)) { Label("DISTANCE KM"); FieldTextField(distance, { distance = it }, "e.g. 21.1", keyboardType = KeyboardType.Decimal) }
-                    Column(Modifier.weight(1f)) { Label("ASCENT M"); FieldTextField(ascent, { ascent = it }, "e.g. 250", keyboardType = KeyboardType.Number) }
-                }
                 Column {
                     Label("PLACE")
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -297,13 +295,12 @@ fun EventFormSheet(
                         style = FTType.Caption, color = FT.TextSecondary, modifier = Modifier.padding(top = 4.dp),
                     )
                 }
-            }
-            3 -> {
-                // One station to a page: a long course's dozen stations never make a long list.
-                val i = stationIndex.coerceIn(0, (stations.size - 1).coerceAtLeast(0))
-                if (stations.isNotEmpty()) {
-                    FlowPager(i, stations.size, { stationIndex = it }, what = "stations")
-                    val s = stations[i]
+                Label("AID STATIONS")
+                stations.forEachIndexed { i, s ->
+                    Column(
+                        Modifier.fillMaxWidth().border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall)).padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                     Column { Label("NAME"); FieldTextField(s.name, { s.name = it }, "Name") }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Column(Modifier.weight(1f)) { Label("AT KM"); FieldTextField(s.km, { s.km = it }, "km", keyboardType = KeyboardType.Decimal) }
@@ -314,19 +311,11 @@ fun EventFormSheet(
                         ToggleChip("FOOD", s.food, Modifier.weight(1f)) { s.food = it }
                         ToggleChip("DROP BAG", s.dropBag, Modifier.weight(1f)) { s.dropBag = it }
                     }
-                } else {
-                    FlowQuestion("No aid stations yet.", "Add one for each stop on the course: fuel plans use what each one has.")
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    FTButton("ADD AID STATION", modifier = Modifier.weight(1f)) {
-                        stations.add(AidStationDraft(name = "Aid ${stations.size + 1}")); stationIndex = stations.size - 1
-                    }
-                    if (stations.isNotEmpty()) FTButton("REMOVE", emphasis = FTButtonEmphasis.Tertiary) {
-                        stations.removeAt(i); stationIndex = (i - 1).coerceAtLeast(0)
+                    FTButton("REMOVE", emphasis = FTButtonEmphasis.Tertiary) { stations.removeAt(i) }
                     }
                 }
-            }
-            else -> {
+                if (stations.isEmpty()) Text("Add one for each stop on the course: fuel plans use what each one has.", style = FTType.Caption, color = FT.TextSecondary)
+                FTButton("ADD AID STATION", modifier = Modifier.fillMaxWidth()) { stations.add(AidStationDraft(name = "Aid ${stations.size + 1}")) }
                 Column { Label("NOTES"); FieldTextField(notes, { notes = it }, "Bib pick-up, kit, anything worth noting", singleLine = false) }
                 if (initial?.id != null) {
                     if (confirmingDelete) {
@@ -349,7 +338,6 @@ fun EventFormSheet(
                 }
             }
         }
-    }
 }
 
 @Composable

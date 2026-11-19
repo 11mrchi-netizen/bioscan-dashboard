@@ -14,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,7 +42,11 @@ import com.bioscan.fieldterminal.domain.toAppIso
 import com.bioscan.fieldterminal.domain.unitsWords
 import com.bioscan.fieldterminal.ui.components.DateTimeField
 import com.bioscan.fieldterminal.ui.components.FieldTextField
-import com.bioscan.fieldterminal.ui.components.FormSteps
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FlowEssentials
+import com.bioscan.fieldterminal.ui.components.FlowMore
+import com.bioscan.fieldterminal.ui.components.FlowQuestion
+import com.bioscan.fieldterminal.ui.components.FormBackHandler
 import com.bioscan.fieldterminal.ui.theme.FTType
 import kotlinx.coroutines.CancellationException
 import java.time.Instant
@@ -137,155 +142,130 @@ internal fun SupplementsForm(
     // "scan" only when everything being saved was picked by barcode.
     val source = if (scannedChecked.isNotEmpty() && checkedBundles.isEmpty() && checkedAsNeeded.isEmpty()) "scan" else "manual"
 
-    // WHEN · SCAN, then one step per time of day that has anything due (its bundle and each item's quantity), AS NEEDED,
-    // NOT DUE TODAY, and the INJECTION SITE when an injection is ticked. SAVE from the first step once anything is ticked.
-        val injected = selectedItems.filter { (quantities[it.first] ?: 1.0) > 0.0 }.mapNotNull { (id, name, _) ->
-            specs[id]?.takeIf { it.injectable }?.let { Triple(id, name, it) }
+    val injected = selectedItems.filter { (quantities[it.first] ?: 1.0) > 0.0 }.mapNotNull { (id, name, _) ->
+        specs[id]?.takeIf { it.injectable }?.let { Triple(id, name, it) }
         }
         val chosenSites = injected.associate { (id, _, spec) ->
             id to (sites[id] ?: nextSite(sitesFor(spec), siteHistory[id].orEmpty())?.key?.takeIf { !siteHistoryFailed })
         }.filterValues { it != null }.mapValues { it.value!! }
-    val loaded = supplements != null && list.isNotEmpty()
-    val labels = buildList {
-        add("WHEN · SCAN")
-        if (loaded) {
-            listOf("morning", "afternoon", "night").forEach { if (!groups[it].isNullOrEmpty()) add(it.uppercase()) }
-            if (asNeeded.isNotEmpty()) add("AS NEEDED")
-            if (notDueList.isNotEmpty()) add("NOT DUE TODAY")
-        }
-        if (injected.isNotEmpty()) add("INJECTION SITE")
-    }
-    FormSteps(
-        labels, canSave = selectedItems.any { (quantities[it.first] ?: 1.0) > 0.0 }, saving = saving,
-        onSave = { onSave(dateTime.toAppIso(), selectedItems.filter { (quantities[it.first] ?: 1.0) > 0.0 }, source, quantities, chosenSites) },
-    ) { step ->
-        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            when (val label = labels.getOrNull(step)) {
-                "WHEN · SCAN" -> {
-                    DateTimeField("WHEN", dateTime, { dateTime = it })
-                    when {
-                        supplements == null -> Box(Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = FT.DomainLog)
-                        }
-                        list.isEmpty() -> Text(
-                            "No active supplements to log.",
-                            style = FTType.BodySmall,
-                            color = FT.TextSecondary,
+    // One page (Logging Flows Redesign Plan, Nov 2026): the time, then each time of day that has anything due with its
+    // bundle tick and each item's quantity, what was scanned, and AS NEEDED and NOT DUE TODAY folded at the foot. The
+    // INJECTION SITE page follows only when an injection is ticked (a different action); SAVE is offered on the first page
+    // as soon as every injected dose has its site (the suggested one, rested longest).
+    var sitePage by rememberSaveable { mutableStateOf(false) }
+    if (injected.isEmpty() && sitePage) sitePage = false
+    FormBackHandler(enabled = sitePage) { sitePage = false }
+    val doses = selectedItems.filter { (quantities[it.first] ?: 1.0) > 0.0 }
+    val canSave = doses.isNotEmpty() && injected.all { chosenSites[it.first] != null }
+    val save = { onSave(dateTime.toAppIso(), doses, source, quantities, chosenSites) }
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        if (!sitePage) {
+            FlowEssentials {
+                DateTimeField("WHEN", dateTime, { dateTime = it })
+                when {
+                    supplements == null -> Box(Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = FT.DomainLog)
+                    }
+                    list.isEmpty() -> Text("No active supplements to log.", style = FTType.BodySmall, color = FT.TextSecondary)
+                    groups.isEmpty() -> Text("Nothing due now. Pick from AS NEEDED below, or scan.", style = FTType.BodySmall, color = FT.TextSecondary)
+                }
+                REGIMEN_SLOTS.forEach { timeOfDay ->
+                    val itemsInGroup = groups[timeOfDay]
+                    if (!itemsInGroup.isNullOrEmpty()) {
+                        BundleToggleRow(
+                            label = timeOfDay.uppercase(),
+                            itemNames = itemsInGroup.joinToString(", ") { it.name },
+                            checked = timeOfDay in checkedBundles,
+                            onToggle = {
+                                checkedBundles = if (timeOfDay in checkedBundles) checkedBundles - timeOfDay else checkedBundles + timeOfDay
+                            },
                         )
-                        else -> {
-                        BarcodeLogPanel(list) { hits ->
-                            scanned = (scanned + hits).distinctBy { it.id }
-                            scannedChecked = scannedChecked + hits.map { it.id }
-                        }
-                        if (scanned.isNotEmpty()) {
-                            FormLabel("SCANNED")
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                scanned.forEach { supp ->
-                                    val checked = supp.id in scannedChecked
-                                    CheckToggleRow(
-                                        label = supp.name,
-                                        checked = checked,
-                                        onToggle = { scannedChecked = if (checked) scannedChecked - supp.id else scannedChecked + supp.id },
-                                    )
-                                    if (checked) {
+                        if (timeOfDay in checkedBundles) {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(start = 16.dp)) {
+                                itemsInGroup.forEach { supp ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(supp.name, style = FTType.BodySmall, color = FT.TextSecondary, modifier = Modifier.weight(1f))
                                         QtyRow(quantities[supp.id] ?: 1.0, stepOf(supp), { q -> wordsOf(supp, q) }) { quantities = quantities + (supp.id to it) }
                                     }
                                 }
                             }
                         }
-                        }
                     }
-                }
-                "MORNING", "AFTERNOON", "NIGHT" -> {
-                    val timeOfDay = label.lowercase()
-                        val itemsInGroup = groups[timeOfDay]
-                        if (!itemsInGroup.isNullOrEmpty()) {
-                            BundleToggleRow(
-                                label = timeOfDay.uppercase(),
-                                itemNames = itemsInGroup.joinToString(", ") { it.name },
-                                checked = timeOfDay in checkedBundles,
-                                onToggle = {
-                                    checkedBundles = if (timeOfDay in checkedBundles) checkedBundles - timeOfDay else checkedBundles + timeOfDay
-                                },
-                            )
-                            if (timeOfDay in checkedBundles) {
-                                Column(
-                                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                                    modifier = Modifier.padding(start = 16.dp),
-                                ) {
-                                    itemsInGroup.forEach { supp ->
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
-                                            Text(supp.name, style = FTType.BodySmall, color = FT.TextSecondary, modifier = Modifier.weight(1f))
-                                            QtyRow(quantities[supp.id] ?: 1.0, stepOf(supp), { q -> wordsOf(supp, q) }) { quantities = quantities + (supp.id to it) }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                }
-                "AS NEEDED" -> {
-                    if (asNeeded.isNotEmpty()) {
-                        FormLabel("AS NEEDED")
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            asNeeded.forEach { supp ->
-                                val checked = supp.id in checkedAsNeeded
-                                CheckToggleRow(
-                                    label = supp.name,
-                                    checked = checked,
-                                    onToggle = {
-                                        checkedAsNeeded = if (checked) checkedAsNeeded - supp.id else checkedAsNeeded + supp.id
-                                    },
-                                )
-                                if (checked) {
-                                    QtyRow(quantities[supp.id] ?: 1.0, stepOf(supp), { q -> wordsOf(supp, q) }) { quantities = quantities + (supp.id to it) }
-                                }
-                            }
-                        }
-                    }
-                }
-                "NOT DUE TODAY" -> {
-                    if (notDueList.isNotEmpty()) {
-                        FormLabel("NOT DUE TODAY")
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            notDueList.forEach { supp ->
-                                val nextDate = specs.getValue(supp.id).nextDueAfter(today, recentLastTaken[supp.id])
-                                Row(modifier = Modifier.fillMaxWidth()) {
-                                    Text(
-                                        supp.name,
-                                        style = FTType.BodySmall,
-                                        color = FT.TextMuted,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    Text(
-                                        specs.getValue(supp.id).stateWords(today) ?: (if (nextDate != null) "Next: ${if (nextDate == today.plusDays(1)) "tomorrow" else nextDate.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM", java.util.Locale.ENGLISH))}" else specs.getValue(supp.id).scheduleWords()),
-                                        style = FTType.MonoCaption,
-                                        color = FT.TextMuted,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                else -> {
-                if (injected.isNotEmpty()) {
-                    FormLabel("INJECTION SITE")
-                    injected.forEach { (id, name, spec) ->
-                        val options = sitesFor(spec)
-                        val suggested = nextSite(options, siteHistory[id].orEmpty())
-                        val units = list.firstOrNull { it.id == id }?.syringeUnits?.let { " · ${com.bioscan.fieldterminal.domain.formatAmount(it)} units as prescribed" } ?: ""
-                        if (siteHistoryFailed) Text("$name$units · your site history couldn't be read: pick the site yourself.", style = FTType.Caption, color = FT.Warn)
-                        else Text("$name$units · suggested: ${suggested?.label ?: "—"} (rested longest)", style = FTType.Caption, color = FT.TextSecondary)
-                        TextChipRow(options.map { it.label }, options.firstOrNull { it.key == chosenSites[id] }?.label, perRow = 2) { picked ->
-                            options.firstOrNull { it.label == picked }?.let { sites = sites + (id to it.key) }
-                        }
-                    }
-                }
                 }
             }
+            if (list.isNotEmpty()) {
+                BarcodeLogPanel(list) { hits ->
+                    scanned = (scanned + hits).distinctBy { it.id }
+                    scannedChecked = scannedChecked + hits.map { it.id }
+                }
+            }
+            if (scanned.isNotEmpty()) {
+                FormLabel("SCANNED")
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    scanned.forEach { supp ->
+                        val checked = supp.id in scannedChecked
+                        CheckToggleRow(
+                            label = supp.name,
+                            checked = checked,
+                            onToggle = { scannedChecked = if (checked) scannedChecked - supp.id else scannedChecked + supp.id },
+                        )
+                        if (checked) {
+                            QtyRow(quantities[supp.id] ?: 1.0, stepOf(supp), { q -> wordsOf(supp, q) }) { quantities = quantities + (supp.id to it) }
+                        }
+                    }
+                }
+            }
+            if (asNeeded.isNotEmpty()) {
+                FlowMore("supps_as_needed", label = "AS NEEDED", summary = asNeeded.joinToString(", ") { it.name }) {
+                    asNeeded.forEach { supp ->
+                        val checked = supp.id in checkedAsNeeded
+                        CheckToggleRow(
+                            label = supp.name,
+                            checked = checked,
+                            onToggle = { checkedAsNeeded = if (checked) checkedAsNeeded - supp.id else checkedAsNeeded + supp.id },
+                        )
+                        if (checked) {
+                            QtyRow(quantities[supp.id] ?: 1.0, stepOf(supp), { q -> wordsOf(supp, q) }) { quantities = quantities + (supp.id to it) }
+                        }
+                    }
+                }
+            }
+            if (notDueList.isNotEmpty()) {
+                FlowMore("supps_not_due", label = "NOT DUE TODAY", summary = notDueList.joinToString(", ") { it.name }) {
+                    notDueList.forEach { supp ->
+                        val nextDate = specs.getValue(supp.id).nextDueAfter(today, recentLastTaken[supp.id])
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            Text(supp.name, style = FTType.BodySmall, color = FT.TextMuted, modifier = Modifier.weight(1f))
+                            Text(
+                                specs.getValue(supp.id).stateWords(today) ?: (if (nextDate != null) "Next: ${if (nextDate == today.plusDays(1)) "tomorrow" else nextDate.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM", java.util.Locale.ENGLISH))}" else specs.getValue(supp.id).scheduleWords()),
+                                style = FTType.MonoCaption,
+                                color = FT.TextMuted,
+                            )
+                        }
+                    }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (injected.isNotEmpty()) FTButton("INJECTION SITE ›", modifier = Modifier.weight(1f), enabled = !saving) { sitePage = true }
+                Box(Modifier.weight(1f)) { SaveButton(saving, canSave) { save() } }
+            }
+        } else {
+            FlowQuestion("Where did each injection go?", "The suggested site is the one rested longest.")
+            injected.forEach { (id, name, spec) ->
+                val options = sitesFor(spec)
+                val suggested = nextSite(options, siteHistory[id].orEmpty())
+                val units = list.firstOrNull { it.id == id }?.syringeUnits?.let { " · ${com.bioscan.fieldterminal.domain.formatAmount(it)} units as prescribed" } ?: ""
+                if (siteHistoryFailed) Text("$name$units · your site history couldn't be read: pick the site yourself.", style = FTType.Caption, color = FT.Warn)
+                else Text("$name$units · suggested: ${suggested?.label ?: "—"} (rested longest)", style = FTType.Caption, color = FT.TextSecondary)
+                TextChipRow(options.map { it.label }, options.firstOrNull { it.key == chosenSites[id] }?.label, perRow = 2) { picked ->
+                    options.firstOrNull { it.label == picked }?.let { sites = sites + (id to it.key) }
+                }
+            }
+            SaveButton(saving, canSave) { save() }
         }
     }
 }

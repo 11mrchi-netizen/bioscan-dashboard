@@ -51,7 +51,8 @@ enum class AddEntryChoice(val label: String, val group: AddEntryGroup) {
     Wellbeing("Wellbeing", AddEntryGroup.Body),
     Stool("Stool", AddEntryGroup.Body),
     Grip("Grip strength", AddEntryGroup.Body),
-    BloodPressure("Blood pressure", AddEntryGroup.Body),
+    // In OTHER, not BODY: a tenth BODY tile starts a fourth row and the one-page menu no longer fits (FlowFitTest).
+    BloodPressure("Blood pressure", AddEntryGroup.Other),
     // The monthly sitting: grip, tape girths and skinfolds (BodyCheckin.kt).
     BodyCheckIn("Body check-in", AddEntryGroup.Body),
     // Weight and impedance read straight from the body scale over BLE (ScaleBroadcast.kt), no OKOK app.

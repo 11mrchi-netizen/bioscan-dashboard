@@ -1,6 +1,6 @@
 # Risk profile: environmental and behavioural exposures
 
-Status: plan, not built. Owner decisions so far (2026-11-19): build our own version rather than port
+Status: R0 and R1 built (19 Nov 2026, not yet deployed; see [README.md](README.md)); R2-R5 planned. Owner decisions so far (2026-11-19): build our own version rather than port
 [healthrating](https://github.com/alanrooster/healthrating) (AGPL-3.0, so no code is copied; its methodology page is used
 only as a reading list); take home blood pressure readings; replace life expectancy with the AHA PREVENT equations; the
 tool **assesses exposures and risks and shows ways to improve, rather than giving one precise number**.
@@ -146,7 +146,7 @@ instrument repeats on its own schedule, and every improvement can be started as 
 
 | Table | Holds | Notes |
 |---|---|---|
-| `bp_readings` | `occurred_at` (logged time), systolic, diastolic, pulse, arm, position, session id (the pair of readings), cuff, `on_bp_meds`, source (`health_connect` with its record id, or `manual`) | Own-row RLS; the Health Connect record id is unique, so a re-import adds nothing |
+| `bp_readings` | `occurred_at` (logged time), systolic, diastolic, pulse, arm, position, `on_bp_meds`, note (sittings are derived: readings within 15 minutes), source (`health_connect` with its record id, or `manual`) | Own-row RLS; the Health Connect record id is unique, so a re-import adds nothing |
 | `instrument_responses` | instrument, version, `answered_at`, item answers (jsonb), score, band | Append-only; a correction supersedes a row, as in health concerns |
 | `exposure_answers` | checklist item, value, `answered_at` | Latest per item wins; history kept |
 | `preventive_items` | item, last done, interval, source | Feeds Plan |

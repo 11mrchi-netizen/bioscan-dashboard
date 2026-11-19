@@ -66,7 +66,8 @@ class FlowFitTest {
             compose.waitForIdle()
             val body = compose.onNodeWithTag(FLOW_BODY_TAG).fetchSemanticsNode().boundsInRoot
             compose.onAllNodesWithTag(FLOW_ESSENTIALS_TAG, useUnmergedTree = true).fetchSemanticsNodes().forEach { node ->
-                val below = node.boundsInRoot.bottom - body.bottom
+                // Not boundsInRoot: inside the scrolling body that is clipped to what shows, which would hide the overflow.
+                val below = node.positionInRoot.y + node.size.height - body.bottom
                 if (below > 1f) overflow += "page ${p + 1}: the essentials end ${below.toInt()} px below the visible body"
             }
             OUT?.let { dir ->
@@ -80,12 +81,12 @@ class FlowFitTest {
 
     private object Holder { val page = androidx.compose.runtime.mutableIntStateOf(0) }
 
-    @Test fun symptomCheck() = fits("symptom_check", 3) { com.bioscan.fieldterminal.ui.screens.health.SymptomCheckSheet(onDismiss = {}, onSaved = {}, onTrackIllness = { _, _ -> }, onTrackInjury = {}) }
+    @Test fun symptomCheck() = fits("symptom_check", 2) { com.bioscan.fieldterminal.ui.screens.health.SymptomCheckSheet(onDismiss = {}, onSaved = {}, onTrackIllness = { _, _ -> }, onTrackInjury = {}) }
     @Test fun event() = fits("event", 5) { com.bioscan.fieldterminal.ui.screens.events.EventFormSheet(onDismiss = {}, onSaved = {}) }
     @Test fun sweatTest() = fits("sweat_test", 3) { com.bioscan.fieldterminal.ui.screens.events.SweatTestSheet(onDismiss = {}, onSaved = {}) }
     @Test fun bodyCheckIn() = fits("body_check_in", 5) { com.bioscan.fieldterminal.ui.screens.status.BodyCheckInSheet(onDismiss = {}, onSaved = {}) }
 
-    // A long run with a schedule of five blocks: what you took runs over two pages.
+    // A long run with a schedule of five blocks, all on WHAT YOU TOOK.
     private val debrief = com.bioscan.fieldterminal.data.DebriefTarget(
         sessionId = 1, eventId = null, title = "LONG RUN · 2 h 30", date = java.time.LocalDate.of(2026, 11, 15), type = "run", durationMin = 150.0,
         schedule = com.bioscan.fieldterminal.data.FuelScheduleRow(
@@ -94,10 +95,10 @@ class FlowFitTest {
         ),
         existing = null,
     )
-    @Test fun fuelDebrief() = fits("fuel_debrief", 6) { com.bioscan.fieldterminal.ui.screens.fuel.FuelDebriefSheet(debrief, onDismiss = {}, onSaved = {}) }
+    @Test fun fuelDebrief() = fits("fuel_debrief", 2) { com.bioscan.fieldterminal.ui.screens.fuel.FuelDebriefSheet(debrief, onDismiss = {}, onSaved = {}) }
     @Test fun regimenNew() = fits("regimen", 6) { com.bioscan.fieldterminal.ui.screens.status.SupplementFormSheet(existing = null, onDismiss = {}, onSaved = {}) }
     @Test fun healthCheckIn() = fits("health_check_in", 1) { com.bioscan.fieldterminal.ui.screens.health.HealthCheckInSheet(onDismiss = {}, onSaved = {}) }
-    @Test fun healthNewBody() = fits("health_new_body", 5) { com.bioscan.fieldterminal.ui.screens.health.HealthCheckInSheet(onDismiss = {}, onSaved = {}, start = com.bioscan.fieldterminal.ui.screens.health.CheckInStart.NewBody) }
+    @Test fun healthNewBody() = fits("health_new_body", 3) { com.bioscan.fieldterminal.ui.screens.health.HealthCheckInSheet(onDismiss = {}, onSaved = {}, start = com.bioscan.fieldterminal.ui.screens.health.CheckInStart.NewBody) }
     @Test fun eveningCheckIn() = fits("evening_check_in", 1) { com.bioscan.fieldterminal.ui.screens.status.EveningCheckInSheet(java.time.LocalDate.of(2026, 11, 17), onDismiss = {}, onSaved = {}) }
     // Add entry: the menu, then each form it opens.
     private fun add(name: String, start: com.bioscan.fieldterminal.domain.AddEntryStart?, steps: Int = 1) =
@@ -132,5 +133,5 @@ class FlowFitTest {
     @Test fun accessoryEditor() = fits("accessory_editor", 2) {
         com.bioscan.fieldterminal.ui.screens.training.AccessoryEditor(curls, onClose = {}, onSave = {})
     }
-    @Test fun illness() = fits("illness", 5) { IllnessSheet(onDismiss = {}, onSaved = {}) }
+    @Test fun illness() = fits("illness", 2) { IllnessSheet(onDismiss = {}, onSaved = {}) }
 }

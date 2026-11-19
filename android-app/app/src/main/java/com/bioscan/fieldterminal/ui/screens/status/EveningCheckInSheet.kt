@@ -124,12 +124,12 @@ fun EveningCheckInSheet(date: LocalDate, onDismiss: () -> Unit, onSaved: (Evenin
             TextChipRow(YES_NO, draft.lateMeal?.let { if (it) "YES" else "NO" }, perRow = 2) { picked ->
                 draft = draft.copy(lateMeal = picked?.let { it == "YES" })
             }
-            FTRatingSlider("STRESS TODAY", draft.stress, 1..5, FT.Metric.Stress, { draft = draft.copy(stress = it) },
-                lowWord = "calm", highWord = "very stressed", reversed = true)
-            // Scoring system (FUEL › gut): how the gut was, what happened, and the day's logged movements with their times.
-            FTRatingSlider("GUT", draft.gutComfort, 0..4, FT.Metric.GutComfort, { draft = draft.copy(gutComfort = it) },
-                lowWord = "rough", highWord = "comfortable")
         }
+        FTRatingSlider("STRESS TODAY", draft.stress, 1..5, FT.Metric.Stress, { draft = draft.copy(stress = it) },
+            lowWord = "calm", highWord = "very stressed", reversed = true)
+        // Scoring system (FUEL › gut): how the gut was, what happened, and the day's logged movements with their times.
+        FTRatingSlider("GUT", draft.gutComfort, 0..4, FT.Metric.GutComfort, { draft = draft.copy(gutComfort = it) },
+            lowWord = "rough", highWord = "comfortable")
         if ((draft.gutComfort ?: GUT_GOOD) < GUT_GOOD || !draft.gutSymptoms.isNullOrEmpty()) {
             CheckInLabel("ANY OF THESE? (TICK ALL THAT HAPPENED)")
             SymptomChips(draft.gutSymptoms.orEmpty()) { symptom ->

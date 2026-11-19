@@ -54,8 +54,8 @@ private fun label(s: FuelingSessionRow): String {
 }
 
 /**
- * Add entry › Run fuel as a full-screen flow: ACTIVITY (the recent runs, rides and hikes, six to a page), then the debrief's
- * pages for the one picked. LOG ONE INTAKE INSTEAD swaps the flow for the single-intake form.
+ * Add entry › Run fuel as a full-screen flow: ACTIVITY (the recent runs, rides and hikes; a tap moves on), then the
+ * debrief's two pages for the one picked. LOG ONE INTAKE INSTEAD swaps the flow for the single-intake form.
  */
 @Composable
 internal fun RunFuelFlow(onDismiss: () -> Unit, onSaved: () -> Unit) {
@@ -69,10 +69,13 @@ internal fun RunFuelFlow(onDismiss: () -> Unit, onSaved: () -> Unit) {
     val targetGuard = rememberLoadGuard(refreshOnUpdates = false)
     val target by produceGuarded<DebriefTarget?>(targetGuard, null, picked?.id) { picked?.let { repo.targetForSession(it) } }
     val flow = rememberFlowState()
+    // ACTIVITY is a choice: a tap moves on, once that activity's debrief has loaded.
+    var advance by remember { mutableStateOf(false) }
     val t = target
     key(t?.sessionId, single) {
         val d = t?.let { rememberDebriefState(it) }
         val suggestion = d?.suggestion
+        LaunchedEffect(advance, d) { if (advance && d != null && flow.page == 0) { advance = false; flow.next() } }
         val pages = when {
             single -> listOf(FlowPage("ONE INTAKE"))
             suggestion != null -> listOf(FlowPage("SUGGESTION"))
@@ -102,6 +105,7 @@ internal fun RunFuelFlow(onDismiss: () -> Unit, onSaved: () -> Unit) {
                         FlowQuestion("Which activity?", "The debrief is checked against the fuel schedule made for it.")
                         FlowPickGrid(sessions.map { it.id.toString() to label(it) }, setOfNotNull(picked?.id?.toString()), { id ->
                             picked = sessions.firstOrNull { it.id.toString() == id }
+                            advance = true
                         }, columns = 1, single = true)
                         LoadErrorLine(targetGuard, "the debrief for this activity")
                         FTButton("LOG ONE INTAKE INSTEAD", emphasis = FTButtonEmphasis.Tertiary, modifier = Modifier.fillMaxWidth()) { single = true }

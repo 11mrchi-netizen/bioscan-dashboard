@@ -31,7 +31,7 @@ enum class LogEntryKind(val label: String) {
     Exercise("EXERCISE"), Food("FOOD"), Sleep("SLEEP"), Stool("STOOL"),
     Encounter("ENC"), Note("NOTE"), Drink("DRINK"),
     Wellness("WELL"), Supplement("SUPP"), Ostrc("CHECK-IN"), Masturbation("MASTURBATION"),
-    Intercourse("INTERCOURSE"), Grip("GRIP"), Breathwork("BREATH"),
+    Intercourse("INTERCOURSE"), Grip("GRIP"), Breathwork("BREATH"), Bp("BP"),
 }
 
 // DAV-219 (24/9 fixes): a few named groups the Log page clusters same-day
@@ -52,7 +52,7 @@ val LogEntryKind.category: LogCategory
         LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement -> LogCategory.Intake
         LogEntryKind.Exercise, LogEntryKind.Ostrc -> LogCategory.Activity
         LogEntryKind.Sleep, LogEntryKind.Wellness, LogEntryKind.Stool, LogEntryKind.Masturbation, LogEntryKind.Intercourse, LogEntryKind.Grip,
-        LogEntryKind.Breathwork -> LogCategory.Body
+        LogEntryKind.Breathwork, LogEntryKind.Bp -> LogCategory.Body
         LogEntryKind.Note, LogEntryKind.Encounter -> LogCategory.Notes
     }
 
@@ -72,6 +72,7 @@ enum class LogSource(val table: String) {
     Masturbation("sexual_activity_daily"), Grip("grip_strength_log"),
     // Lab › BREATHWORK sessions: delete-only (a session is not edited after the fact).
     Breathwork("breathwork_sessions"),
+    Bp("bp_readings"),
 }
 
 @Serializable
@@ -137,6 +138,7 @@ fun buildLogEntries(
     sexualActivity: List<LogSexualActivityRow> = emptyList(),
     grip: List<LogGripRow> = emptyList(),
     breathwork: List<LogBreathworkRow> = emptyList(),
+    bp: List<com.bioscan.fieldterminal.data.BpReadingRow> = emptyList(),
 ): List<LogEntry> {
     val entries = mutableListOf<LogEntry>()
 
@@ -220,6 +222,19 @@ fun buildLogEntries(
             timestamp = parseTimestamp(b.startedAt),
             headline = "Breathwork " + BreathworkLog.headline(b),
             detail = BreathworkLog.detail(b),
+        )
+    }
+
+    // Risk profile R0: one entry per home blood pressure reading (typed or from the cuff's app via Health Connect).
+    bp.forEach { b ->
+        entries += LogEntry(
+            id = b.id,
+            source = LogSource.Bp,
+            kind = LogEntryKind.Bp,
+            timestamp = parseTimestamp(b.occurredAt),
+            headline = "BP ${b.systolic}/${b.diastolic} mmHg",
+            detail = listOfNotNull(b.pulse?.let { "pulse $it" }, b.arm?.let { "$it arm" }, if (b.source == "health_connect") "from Health Connect" else null)
+                .joinToString(" · ").ifEmpty { null },
         )
     }
 

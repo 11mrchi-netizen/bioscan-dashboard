@@ -73,6 +73,14 @@ test('results about routine series are withheld, whatever the result kind', () =
   assert.equal(resultAllowed({ kind: 'relationship', key: 'screen_bed_min->sleep_hours@0' }, all), false)
   assert.equal(resultAllowed({ kind: 'experiment', key: 'exp:7', payload: { exposure: 'daylight_day' } }, all), false)
   assert.equal(resultAllowed({ kind: 'relationship', key: 'alcohol_any->hrv@1' }, on), true)
+  // the air summary is built from location (risk profile R1), so it is withheld with every group shared
+  assert.equal(resultAllowed({ kind: 'air_exposure', key: 'summary' }, { enabled: true, optIn: ['notes', 'sexual_health', 'health_concerns', 'digestive'] }), false)
+  assert.equal(tableAccess('air_exposure_daily', on).ok, false)
+  assert.equal(tableAccess('bp_readings', on).ok, true)
+  // questionnaire answers (R2) stay closed even with every group shared
+  assert.equal(tableAccess('instrument_responses', all).ok, false)
+  assert.equal(tableAccess('health_background', all).ok, false)
+  assert.equal(tableAccess('preventive_records', all).ok, false)
 })
 
 test('health-concern results need the health concerns group', () => {

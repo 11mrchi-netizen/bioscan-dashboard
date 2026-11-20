@@ -5,6 +5,7 @@ import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.BasalMetabolicRateRecord
+import androidx.health.connect.client.records.BloodPressureRecord
 import androidx.health.connect.client.records.BodyFatRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ElevationGainedRecord
@@ -75,6 +76,18 @@ object HealthConnectManager {
         HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND,
     )
 
+    /**
+     * Asked for together with [PERMISSIONS] but not required: the sync runs without them, and a person who already
+     * granted [PERMISSIONS] before they were added is not sent back to the grant screen. Blood pressure (risk profile R0,
+     * docs/risk-profile/01-plan.md) is read only when it is granted.
+     */
+    val OPTIONAL_PERMISSIONS: Set<String> = setOf(
+        HealthPermission.getReadPermission(BloodPressureRecord::class),
+    )
+
+    /** What the grant screen asks for. Only [PERMISSIONS] decide whether the app counts as connected. */
+    val REQUESTED_PERMISSIONS: Set<String> = PERMISSIONS + OPTIONAL_PERMISSIONS
+
     fun isAvailable(context: Context): Boolean =
         HealthConnectClient.getSdkStatus(context, PROVIDER_PACKAGE) == HealthConnectClient.SDK_AVAILABLE
 
@@ -82,4 +95,7 @@ object HealthConnectManager {
 
     suspend fun hasAllPermissions(context: Context): Boolean =
         client(context).permissionController.getGrantedPermissions().containsAll(PERMISSIONS)
+
+    suspend fun hasBloodPressurePermission(context: Context): Boolean =
+        HealthPermission.getReadPermission(BloodPressureRecord::class) in client(context).permissionController.getGrantedPermissions()
 }

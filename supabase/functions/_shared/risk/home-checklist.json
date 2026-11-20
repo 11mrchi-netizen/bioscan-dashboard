@@ -1,0 +1,77 @@
+{
+  "version": "1.0.0",
+  "about": "Risk profile R4 (docs/risk-profile/01-plan.md): the home and water checklist. No validated instrument scores these, so each is an exposure present or not, with its source and its fix; there is no score. An item is flagged when its answer is in 'flag'. Answered once, asked again after 12 months.",
+  "recheck_months": 12,
+  "items": [
+    {
+      "id": "gas_cooking",
+      "question": "How do you cook at home?",
+      "options": [["gas_hood", "Gas, with the hood on or a window open"], ["gas_no_hood", "Gas, usually without extraction"], ["electric", "Electric or induction"], ["rarely", "Rarely cook"]],
+      "flag": ["gas_no_hood"],
+      "lowers": ["no2", "pm25"],
+      "why": "Gas burners give off nitrogen dioxide and fine particles; without extraction they build up indoors.",
+      "fix": "Run the hood on its highest setting or open a window while cooking and for 10 minutes after; induction removes the source.",
+      "source": "WHO guidelines for indoor air quality: selected pollutants (2010), nitrogen dioxide; WHO guidelines for indoor air quality: household fuel combustion (2014)."
+    },
+    {
+      "id": "incense_candles",
+      "question": "Do you burn incense or candles indoors?",
+      "options": [["never", "Never or rarely"], ["weekly", "Most weeks"], ["daily", "Most days"]],
+      "flag": ["weekly", "daily"],
+      "lowers": ["pm25"],
+      "why": "Burning incense and candles is an indoor source of fine particles and other combustion products.",
+      "fix": "Burn less often, ventilate while burning, or use a HEPA purifier in that room.",
+      "source": "WHO guidelines for indoor air quality: household fuel combustion (2014), indoor combustion sources."
+    },
+    {
+      "id": "plastic_heating",
+      "question": "Do you heat food or drinks in plastic containers (microwave, hot drinks in plastic cups)?",
+      "options": [["never", "Never or rarely"], ["sometimes", "Sometimes"], ["often", "Often"]],
+      "flag": ["sometimes", "often"],
+      "lowers": ["plastics"],
+      "why": "Heat increases the migration of plastic additives (such as bisphenols and phthalates) into food.",
+      "fix": "Heat food in glass or ceramic; let hot food cool before it goes into plastic.",
+      "source": "EFSA re-evaluation of bisphenol A (2023); US FDA guidance on microwaving food in plastic."
+    },
+    {
+      "id": "nonstick_overheat",
+      "question": "Do you heat non-stick pans empty or on the highest heat?",
+      "options": [["no", "No, or no non-stick pans"], ["sometimes", "Sometimes"]],
+      "flag": ["sometimes"],
+      "lowers": ["fumes"],
+      "why": "PTFE (non-stick) coatings start to break down at high temperatures (above about 260 °C), giving off fumes; an empty pan on high heat can get there in minutes.",
+      "fix": "Do not preheat non-stick pans empty or on high; use stainless steel or cast iron for searing.",
+      "source": "Reports of polymer fume fever from overheated PTFE; manufacturers' and food-safety agency guidance on maximum temperatures."
+    },
+    {
+      "id": "damp_mould",
+      "question": "Is there visible mould or a damp, musty smell anywhere in your home?",
+      "options": [["no", "No"], ["some", "Some (bathroom, a corner)"], ["lots", "In living or sleeping rooms"]],
+      "flag": ["some", "lots"],
+      "lowers": ["mould"],
+      "why": "Dampness and mould go with more respiratory symptoms, asthma and respiratory infections.",
+      "fix": "Fix the source of moisture, ventilate the bathroom and kitchen, keep indoor humidity under about 60 % (the home sensors show it), clean small patches.",
+      "source": "WHO guidelines for indoor air quality: dampness and mould (2009)."
+    },
+    {
+      "id": "radon",
+      "question": "Has your home been tested for radon?",
+      "options": [["below", "Yes, below 100 Bq/m³"], ["above", "Yes, 100 Bq/m³ or more"], ["no", "No"], ["high_floor", "No, but I live above the second floor"]],
+      "flag": ["above"],
+      "lowers": ["radon"],
+      "why": "Radon is the second cause of lung cancer after smoking; homes on or below ground are where it collects.",
+      "fix": "Above 100 Bq/m³: improve under-floor ventilation or sealing (a radon specialist can advise). Untested and on the ground floor: a long-term test kit is inexpensive.",
+      "source": "WHO handbook on indoor radon (2009): reference level 100 Bq/m³."
+    },
+    {
+      "id": "water",
+      "question": "What do you drink at home?",
+      "options": [["tap_filtered", "Tap water, filtered or boiled"], ["tap", "Tap water as it is"], ["bottled", "Mostly bottled"], ["well_untested", "Private well, not tested in the last year"], ["well_tested", "Private well, tested in the last year"]],
+      "flag": ["well_untested"],
+      "lowers": ["water"],
+      "why": "Mains water is tested by the supplier; a private well is not, and can carry nitrate, arsenic or microbes.",
+      "fix": "Test a private well at least once a year (microbes, nitrate) and after floods; treat as the result requires.",
+      "source": "WHO Guidelines for drinking-water quality (4th ed., 2022 addenda)."
+    }
+  ]
+}

@@ -59,6 +59,8 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     'interventions', 'intervention_adherence', 'intervention_state_history', 'protocols', 'protocol_interventions',
     'protocol_state_history', 'protocol_templates', 'intervention_events', 'intervention_expectations', 'intervention_draws', 'protocol_adjustment_proposals', 'decisions', 'series_break_decisions',
     'health_vocab', 'grip_strength_norms',
+    // home blood pressure (docs/risk-profile R0); its free-text note is dropped unless notes are shared
+    'bp_readings',
     // the agent's own memory (written only from confirmed proposals)
     'agent_memory',
   ),
@@ -91,6 +93,16 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     // the home's environment (docs/home-environment): light and changes in the readings show when someone is home, so
     // it stays closed until a phase decides what of it the assistant may see (bedroom temperature beside sleep, say)
     'home_sensors', 'home_env_readings',
+    // the air breathed (docs/risk-profile R1): built from where the person was, hour by hour (which grid cells, home or
+    // away), so it is location data; the outdoor cache's cells alone say where they went
+    'air_exposure_daily', 'outdoor_air_hourly',
+    // questionnaire answers (docs/risk-profile R2): mental health, loneliness and burnout, including PHQ-9's self-harm item.
+    // Closed until the owner decides to open them, as an opt-in group of their own, not by default
+    'instrument_responses',
+    // the risk screens' health background (R3): smoking, medicines, diagnoses, family history; closed like the answers above
+    'health_background',
+    // R4: the home checklist and preventive records (which tests and vaccines, including HIV and hepatitis); closed like the above
+    'home_checklist_answers', 'preventive_records',
   ),
   ...internal(
     'sync_log', 'zepp_raw_extracts', 'zepp_history_pull', 'zepp_sync_state', 'calendar_sync_state', 'notification_log',
@@ -148,12 +160,17 @@ export function serveRows(table: string, rows: Record<string, unknown>[], settin
 /** Every series the routine pipeline produces, read from the engine itself so a new one is covered without an edit here. */
 export const ROUTINE_SERIES: string[] = Object.keys(routineSeries([], {}, () => ({ date: '', hour: 0 })))
 
+// Result kinds built from location (risk profile R1: the air summary carries the share of the dose breathed at home),
+// withheld like the routine series.
+const LOCATION_KINDS = new Set(['air_exposure'])
+
 // Result kinds about health concerns (docs/health-concerns), served only with that group.
 const CONCERN_KINDS = new Set(['health_overview', 'health_concern_state', 'health_finding', 'health_trial_read'])
 
 /** Result keys are like 'hrv', 'alcohol_any->hrv@1' or 'exp:12'; a key naming a routine series is routine data. */
 export function resultAllowed(row: { kind: string; key: string; payload?: unknown }, settings: ScopeSettings): boolean {
   if (!tableAccess('analysis_results', settings).ok) return false
+  if (LOCATION_KINDS.has(row.kind)) return false
   if (CONCERN_KINDS.has(row.kind) && !settings.optIn.includes('health_concerns')) return false
   const tokens = new Set(row.key.split(/[^a-z0-9_]+/))
   if (ROUTINE_SERIES.some((s) => tokens.has(s))) return false

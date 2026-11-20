@@ -19,6 +19,7 @@ import com.bioscan.fieldterminal.data.model.NotificationOutcome
 import com.bioscan.fieldterminal.data.routine.PracticesRepository
 import com.bioscan.fieldterminal.data.routine.RoutineActionReceiver
 import com.bioscan.fieldterminal.domain.bodyCheckinNeeded
+import com.bioscan.fieldterminal.domain.risk.dueToday
 import com.bioscan.fieldterminal.domain.checkinDateFor
 import com.bioscan.fieldterminal.domain.eveningCheckinNeeded
 import com.bioscan.fieldterminal.domain.health.healthCheckinNeeded
@@ -157,6 +158,14 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                     val last = catching { BodyCheckinRepository(supabase).lastCheckinDate() }.getOrElse { continue }
                     if (rule.conditions.skipIfLogged && !bodyCheckinNeeded(last, today)) continue
                     "Monthly body check-in" to "Grip, tape and skinfolds: before breakfast, about 15 minutes"
+                }
+
+                // Risk profile R2: only when a questionnaire is due; a failed lookup skips this window rather than nagging.
+                NotificationKind.QUESTIONNAIRE_DUE -> {
+                    val last = catching { InstrumentsRepository(supabase).lastAnswered() }.getOrElse { continue }
+                    val due = InstrumentsRepository.definitions(applicationContext).dueToday(last, today)
+                    if (due.isEmpty()) continue
+                    "Questionnaires due" to due.joinToString(", ") { it.name.lowercase() }.replaceFirstChar { it.uppercase() } + ": a few minutes, on Me › EXPOSURES"
                 }
 
                 // Health concerns: a failed lookup skips this window rather than nagging.

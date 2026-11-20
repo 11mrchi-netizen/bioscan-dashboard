@@ -27,9 +27,11 @@ object NotificationKind {
     const val EVENT_FOLLOWUP = "event_followup"
     // Routine R7 (domain/routine/Practices.kt): each scheduled practice with its reminder on, at its own time.
     const val PRACTICE_DUE = "practice_due"
+    // Risk profile R2: a questionnaire (PHQ-9, GAD-7, WHO-5, UCLA-3, burnout, hours) is due; Sunday 10:00, only when one is.
+    const val QUESTIONNAIRE_DUE = "questionnaire_due"
     val ALL = listOf(
         SUPPLEMENT_DUE, CHECKIN_MORNING, CHECKIN_EVENING, WELLBEING_CHECKIN, EVENING_LOG, EVENING_CHECKIN, BODY_CHECKIN, FUEL_SESSION, FUEL_EVENT, HEALTH_CHECKIN,
-        EVENT_RATING, EVENT_DRAW, EVENT_FOLLOWUP, PRACTICE_DUE,
+        EVENT_RATING, EVENT_DRAW, EVENT_FOLLOWUP, PRACTICE_DUE, QUESTIONNAIRE_DUE,
     )
 }
 

@@ -102,7 +102,7 @@ private fun choiceColor(choice: AddEntryChoice): Color = when (choice) {
     AddEntryChoice.Wellbeing -> FT.Category.Wellbeing.c500
     AddEntryChoice.Stool -> FT.Category.Digestion.c500
     AddEntryChoice.HealthCheckIn, AddEntryChoice.IllnessLog, AddEntryChoice.SymptomCheck -> FT.DomainHeart
-    AddEntryChoice.Grip, AddEntryChoice.BodyCheckIn, AddEntryChoice.SweatTest, AddEntryChoice.ScaleWeighIn -> FT.Category.Activity.c500
+    AddEntryChoice.Grip, AddEntryChoice.BloodPressure, AddEntryChoice.BodyCheckIn, AddEntryChoice.SweatTest, AddEntryChoice.ScaleWeighIn -> FT.Category.Activity.c500
     AddEntryChoice.Event -> FT.DomainTraining
     AddEntryChoice.Intimacy -> FT.Category.Arousal.c500
     AddEntryChoice.Note -> FT.TextSecondary

@@ -51,6 +51,8 @@ enum class MeTab(val label: String) {
     Intimacy("INTIMACY"),
     // Routine R8: the long view of the routine (ui/screens/me/RoutinePage.kt).
     Routine("ROUTINE"),
+    // Risk profile R1: the air breathed and the ways to improve (ui/screens/me/ExposuresPage.kt).
+    Exposures("EXPOSURES"),
 }
 
 // LAB's old pushed route (it was a Status tile before it became a dock tab); kept so a saved back stack still resolves.

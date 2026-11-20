@@ -27,6 +27,7 @@ const PlanOverview  = lazy(() => import('./workspaces/PlanOverview'))
 const Sessions      = lazy(() => import('./workspaces/Sessions'))
 const Races         = lazy(() => import('./workspaces/Races'))
 const Connections   = lazy(() => import('./workspaces/Connections'))
+const Risk          = lazy(() => import('./workspaces/Risk'))
 
 // Routes of the removed dashboards and the renamed workspaces, so bookmarks still land somewhere sensible.
 const LEGACY_ROUTES: Record<string, string> = {
@@ -72,6 +73,7 @@ export default function App() {
         <Route path="plan" element={<PlanOverview />} />
         <Route path="sessions" element={<Sessions />} />
         <Route path="races" element={<Races />} />
+        <Route path="risk" element={<Risk />} />
         <Route path="connections" element={<Connections />} />
         {Object.entries(LEGACY_ROUTES).map(([from, to]) => (
           <Route key={from} path={from} element={<Navigate to={`/${to}`} replace />} />

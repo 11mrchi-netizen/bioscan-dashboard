@@ -2,6 +2,10 @@ package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.domain.BloodworkMarkerEvaluation
 import com.bioscan.fieldterminal.domain.evaluateBloodworkMarker
+import com.bioscan.fieldterminal.domain.risk.InstrumentAnswer
+import com.bioscan.fieldterminal.domain.risk.summaries
+import com.bioscan.fieldterminal.domain.risk.states
+import com.bioscan.fieldterminal.domain.risk.statuses
 import com.bioscan.fieldterminal.domain.meview.MeViewDoc
 import com.bioscan.fieldterminal.domain.meview.bloodworkMeView
 import com.bioscan.fieldterminal.domain.meview.bodyMeView
@@ -63,6 +67,27 @@ object MeViewSources {
             d.today, d.ribbons, d.time, d.places, d.phone, d.regularity, d.activities, d.logs,
             d.apps.map { Triple(it.label ?: it.pkg, it.category, it.minutes) },
         )
+
+    suspend fun exposures(context: android.content.Context, supabase: SupabaseClient): MeViewDoc {
+        val defs = InstrumentsRepository.definitions(context)
+        // The questionnaires are read softly: before their migration, the air part still publishes.
+        val rows = catching { InstrumentsRepository(supabase).loadResponses() }.getOrElse { emptyList() }
+        val summaries = defs.summaries(rows.map { InstrumentAnswer(it.instrument, it.date, it.score, it.band, it.flags) }, LocalDate.now())
+        val screens = catching { RiskScreensRepository(supabase).load(context) }.getOrNull()
+        return com.bioscan.fieldterminal.domain.meview.exposuresMeView(ExposuresRepository(supabase).load(), summaries, screens, preventionSections(context, supabase, screens))
+    }
+
+    /** Risk profile R4's sections of the Me › EXPOSURES document; read softly (empty before its migration). */
+    suspend fun preventionSections(context: android.content.Context, supabase: SupabaseClient, screens: RiskScreens?): List<com.bioscan.fieldterminal.domain.meview.MeSection> {
+        val p = catching { PreventionRepository(supabase).load() }.getOrNull() ?: return emptyList()
+        val pdefs = PreventionRepository.preventiveDefs(context)
+        val today = LocalDate.now()
+        return com.bioscan.fieldterminal.domain.meview.preventionSections(
+            pdefs.statuses(p.records.map { it.toDomain() }, preventiveContext(screens, pdefs), today),
+            p.substances,
+            PreventionRepository.checklistDefs(context).states(p.checklist, today),
+        )
+    }
 
     suspend fun routine(supabase: SupabaseClient): MeViewDoc =
         routine(com.bioscan.fieldterminal.data.routine.RoutinePageRepository(supabase).load())

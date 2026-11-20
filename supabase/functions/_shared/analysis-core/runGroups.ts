@@ -12,6 +12,8 @@ export const ENGINE_GROUPS = {
   interventions: ['experiments', 'interventionResponses', 'interventionIts', 'eventEvidence'],
   fitness: ['fitnessFatigue'],
   health: ['health'],
+  // Risk profile R1: air exposure reads its own rows and the outdoor feed (runAir.ts); last, at 20:45 UTC.
+  exposures: ['air'],
 } as const
 
 export type Group = keyof typeof ENGINE_GROUPS
@@ -19,7 +21,7 @@ export type GroupOrAll = Group | 'all'
 
 export const GROUP_ORDER = Object.keys(ENGINE_GROUPS) as Group[]
 /** Engines that read the shared daily frame (everything except the two that read their own rows). */
-export const OWN_READ_ENGINES: readonly string[] = ['breaks', 'integrity']
+export const OWN_READ_ENGINES: readonly string[] = ['breaks', 'integrity', 'air']
 
 /** A request's group, or null when it names something that does not exist. A missing group means `all`. */
 export function parseGroup(value: unknown): GroupOrAll | null {

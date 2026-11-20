@@ -56,6 +56,8 @@ fun LabTileScreen(
         }
     }
     var test by rememberSaveable { mutableStateOf<LabTest?>(null) }
+    // Bumped when a test is saved, so the blood pressure card reloads.
+    var testsReload by rememberSaveable { mutableStateOf(0) }
     LaunchedEffect(openBodyCheckIn) {
         if (openBodyCheckIn) {
             tab = LabTab.Tests
@@ -84,13 +86,14 @@ fun LabTileScreen(
         when (tab) {
             LabTab.N1 -> N1Tab()
             LabTab.Supplements -> SupplementsScreen(onOpenPantry = onOpenPantry)
-            LabTab.Tests -> TestsTab(onStart = { test = it }, onOpenBreathwork = onOpenBreathwork)
+            LabTab.Tests -> TestsTab(reloadKey = testsReload, onStart = { test = it }, onOpenBreathwork = onOpenBreathwork)
             LabTab.Routine -> RoutineTab(onOpenDay = onOpenDayMap)
             LabTab.Explore -> ExploreTab()
         }
     }
 
     when (test) {
+        LabTest.BloodPressure -> AddEntrySheet(onDismiss = { test = null }, onSaved = { test = null; testsReload++ }, start = AddEntryStart.Form(AddEntryType.BloodPressure))
         LabTest.Grip -> AddEntrySheet(onDismiss = { test = null }, onSaved = { test = null }, start = AddEntryStart.Form(AddEntryType.Grip))
         LabTest.BodyCheckIn -> BodyCheckInSheet(onDismiss = { test = null }, onSaved = { test = null })
         LabTest.SweatTest -> SweatTestSheet(onDismiss = { test = null }, onSaved = { test = null })
@@ -99,16 +102,17 @@ fun LabTileScreen(
     }
 }
 
-enum class LabTest { Grip, BodyCheckIn, SweatTest, RunningForm }
+enum class LabTest { BloodPressure, Grip, BodyCheckIn, SweatTest, RunningForm }
 
 // Lab › TESTS: where a test starts. Its result is saved like any other entry, so it shows in Log and on the cards that
 // read it (grip and the check-in on Health › Body, the sweat test in race fuel plans).
 @Composable
-private fun TestsTab(onStart: (LabTest) -> Unit, onOpenBreathwork: () -> Unit) {
+private fun TestsTab(reloadKey: Int, onStart: (LabTest) -> Unit, onOpenBreathwork: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        BloodPressureCard(reloadKey) { onStart(LabTest.BloodPressure) }
         TestRow("GRIP STRENGTH", "Dynamometer, best of three per hand. Two minutes.") { onStart(LabTest.Grip) }
         TestRow("BODY CHECK-IN", "Grip, tape girths and three skinfolds, once a month before breakfast. About 15 minutes.") { onStart(LabTest.BodyCheckIn) }
         TestRow("SWEAT TEST", "Weigh before and after a session of an hour or more, with what you drank. It sets your sweat rate.") { onStart(LabTest.SweatTest) }

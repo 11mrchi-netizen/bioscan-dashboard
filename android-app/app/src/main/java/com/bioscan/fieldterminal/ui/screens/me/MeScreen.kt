@@ -73,6 +73,7 @@ fun MeScreen(
                 MeTab.Bloodwork -> "LAB DRAWS · MARKERS"
                 MeTab.Intimacy -> "STATS · TRENDS · STI TESTS · PARTNERS"
                 MeTab.Routine -> "THE DAYS · TIME · PLACES · PHONE · PRACTICES"
+                MeTab.Exposures -> "AIR · WHERE THE DOSE COMES FROM · WAYS TO IMPROVE"
             },
             accent = FT.DomainUser,
             action = {
@@ -114,6 +115,7 @@ fun MeScreen(
                         MeTab.Health -> ConcernsTab(onOpenConcern = onOpenConcern)
                         MeTab.Bloodwork -> LabsScreen()
                         MeTab.Routine -> RoutinePage(onOpenDay = onOpenDayMap)
+                        MeTab.Exposures -> ExposuresPage()
                         MeTab.Healthspan, MeTab.Intimacy -> Unit
                     }
                 }

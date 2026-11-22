@@ -466,30 +466,33 @@ internal fun NewPartnerSheet(
             }
             Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "", singleLine = false) }
             error?.let { Text("Couldn't create ($it).", style = FTType.Caption, color = FT.Bad) }
-            SaveButton(saving, name.isNotBlank()) {
-                if (!saving && name.isNotBlank()) {
-                    saving = true
-                    scope.launch {
-                        try {
-                            val row = NewPersonRow(
-                                name = name.trim(),
-                                relationship = relationship.trim().ifBlank { null },
-                                whereMet = whereMet.trim().ifBlank { null },
-                                gender = gender.trim().ifBlank { null },
-                                ageRange = ageRange.trim().ifBlank { null },
-                                country = country.trim().ifBlank { null },
-                                score = score,
-                                notes = notes.trim().ifBlank { null },
-                            )
-                            if (existing == null) {
-                                onCreated(repo.createPerson(row))
-                            } else {
-                                IntimacyRepository(SupabaseClientProvider.client).updatePerson(existing.id, row)
-                                onCreated(PersonRow(existing.id, row.name))
+            // This sheet sits on top of the entry form, whose footer would otherwise swallow this button (LocalFormSave).
+            androidx.compose.runtime.CompositionLocalProvider(com.bioscan.fieldterminal.ui.components.LocalFormSave provides null) {
+                SaveButton(saving, name.isNotBlank()) {
+                    if (!saving && name.isNotBlank()) {
+                        saving = true
+                        scope.launch {
+                            try {
+                                val row = NewPersonRow(
+                                    name = name.trim(),
+                                    relationship = relationship.trim().ifBlank { null },
+                                    whereMet = whereMet.trim().ifBlank { null },
+                                    gender = gender.trim().ifBlank { null },
+                                    ageRange = ageRange.trim().ifBlank { null },
+                                    country = country.trim().ifBlank { null },
+                                    score = score,
+                                    notes = notes.trim().ifBlank { null },
+                                )
+                                if (existing == null) {
+                                    onCreated(repo.createPerson(row))
+                                } else {
+                                    IntimacyRepository(SupabaseClientProvider.client).updatePerson(existing.id, row)
+                                    onCreated(PersonRow(existing.id, row.name))
+                                }
+                            } catch (e: Exception) {
+                                error = e.message
+                                saving = false
                             }
-                        } catch (e: Exception) {
-                            error = e.message
-                            saving = false
                         }
                     }
                 }

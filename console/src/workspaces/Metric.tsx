@@ -9,7 +9,7 @@ import { useLoadEffect } from '../lib/useLoadEffect'
 import { useChart } from '../lib/useChart'
 import { localDaysAgo, localToday } from '../lib/dates'
 import { directionWords } from '../lib/scoreText'
-import { METRIC_RANGES, metricHref, parseMetricRef, refString, seriesBehind, windowStats } from '../lib/metrics'
+import { METRIC_RANGES, metricHref, parseMetricRef, rangeFor, refString, seriesBehind, windowStats } from '../lib/metrics'
 import { loadMetric, type MetricData } from '../lib/metricData'
 import { PALETTE } from '../lib/palette'
 import { seriesById } from '../lib/schema'
@@ -31,8 +31,8 @@ export default function Metric() {
   const navigate = useNavigate()
   const ref = useMemo(() => parseMetricRef(raw), [raw])
   const focus = params.get('day')
-  const rangeId = params.get('range') ?? '90'
-  const range = METRIC_RANGES.find((r) => r.id === rangeId) ?? METRIC_RANGES[1]
+  // A day opened from Today may be months back: with no range chosen, the smallest range that holds it.
+  const range = METRIC_RANGES.find((r) => r.id === params.get('range')) ?? rangeFor(focus, localToday())
   const from = localDaysAgo(range.days - 1)
   const [data, setData] = useState<MetricData | null>(null)
 
@@ -75,7 +75,7 @@ export default function Metric() {
   return (
     <div className="metric">
       <header className="metric-head">
-        <button className="btn-ghost mono" onClick={() => navigate(-1)} aria-label="Back">‹ BACK</button>
+        <button className="btn-ghost mono" onClick={() => (window.history.state?.idx > 0 ? navigate(-1) : navigate('/today'))} aria-label="Back">‹ BACK</button>
         <div className="metric-title">
           <h2 className="metric-name mono">{data?.label ?? (ref.kind === 'me' ? ref.label : refString(ref))}</h2>
           {data && <p className="metric-sub">{data.source}</p>}
@@ -111,7 +111,7 @@ export default function Metric() {
       )}
 
       {behind && (
-        <p className="metric-sub">This input is a daily series as it is: <Link to={metricHref(`series:${behind}`, { range: 'all' })}>its whole history →</Link> (the kept mornings start on 6 Oct 2026).</p>
+        <p className="metric-sub">This input is read straight from a daily series: <Link to={metricHref(`series:${behind}`, { range: 'all' })}>its whole history →</Link> (the kept mornings start on 6 Oct 2026).</p>
       )}
       {data?.info && <section className="metric-card"><h3 className="metric-h mono">WHAT IS IT?</h3><p className="metric-sub">{data.info}</p></section>}
 

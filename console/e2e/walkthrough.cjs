@@ -333,7 +333,18 @@ async function waitForServer() {
     check((await page.locator('a.me-tile').count()) === 1 && (await page.locator('div.me-tile').count()) === 1, 'a Me tile with points is a link; one without is not')
     await page.locator('a.me-tile').click(); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
     check((await text('.metric-name')).includes('Weight') && (await text('.metric-latest')).includes('kg'), 'the Me tile opens its history with its unit', await text('.metric-latest'))
+    check(decodeURIComponent(await page.url()).includes('me:BODY:WEIGHT::Weight'), 'the Me tile ref carries its section title', page.url().split('#')[1])
     await shot('metric')
+    await page.goto(`${BASE}#/m/series:hrv?day=2026-05-01`); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
+    check((await page.locator('.pb-chip.on').textContent()).includes('1 YEAR'), 'a day months back opens a range that holds it', await page.locator('.pb-chip.on').textContent())
+    await page.goto(`${BASE}#/m/series:hrv`); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
+    await page.locator('.metric-head .btn-ghost').click(); await page.waitForTimeout(300)
+    check(page.url().endsWith('#/today'), 'BACK on a page opened by address goes to Today', page.url().split('#')[1])
+    await page.goto(`${BASE}#/m/series:hrv?range=365`); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
+    await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(300)
+    check(await page.evaluate(() => document.documentElement.scrollWidth <= 392 && document.querySelector('.shell-canvas').scrollWidth <= 392), 'no sideways scroll on the metric page at phone width')
+    await shot('metric-phone')
+    await page.setViewportSize({ width: 1440, height: 1000 })
 
     // 9. old routes redirect
     await page.goto(`${BASE}#/overview`); await page.waitForTimeout(300)

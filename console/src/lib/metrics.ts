@@ -5,6 +5,7 @@
 //   recovery.hrv, sleep.hours, ...                 an input     score_snapshots (value and your usual), since 6 Oct 2026
 //   series:hrv, series:sleep_hours, ...            a series     the contract file's tables, the whole history
 //   me:BODY:Weight                                 a Me item    the points the phone sent with the tile or chart
+//   me:BODY:SECTION::Weight                        the same, in the section of that title (labels can repeat within a tab)
 //
 // Refs of the retired History page (#/history?metric=charge|recovery.hrv) stay valid: they are the first two kinds.
 import { seriesById } from './schema.ts'
@@ -41,6 +42,22 @@ export const SERIES_HUE: Record<string, string> = {
   session_rpe: 'm-rpe',
 }
 
+/**
+ * The metric hue (design/tokens `--m-*`) of each score input: a copy of android ui/theme/MetricInk.kt, so a metric has the
+ * same colour on the phone and here. Direction is never told by colour. inputs.test.ts checks every key of ScoreDomains.kt is here.
+ */
+export const INPUT_HUE: Record<string, string> = {
+  'sleep.hours': 'm-sleep-duration', 'sleep.debt_7d': 'm-sleep-duration', 'sleep.regularity_min': 'm-regularity', 'sleep.midpoint_min': 'm-circadian',
+  'sleep.deep_rem_min': 'm-stage-deep', 'sleep.respiratory': 'm-respiratory', 'recovery.hrv': 'm-hrv', 'ans.hrv_cv_7d': 'm-hrv', 'recovery.rhr': 'm-resting-hr',
+  'recovery.night_stress': 'm-phys-stress', 'ans.stressed_pct': 'm-phys-stress', 'ans.relaxed_pct': 'z-stress-calm', 'recovery.soreness': 'm-soreness',
+  'recovery.energy': 'm-energy', 'recovery.morning_erection': 'm-arousal', 'recovery.arousal': 'm-arousal', 'load.tsb': 'm-tsb',
+  'load.days_without_rest': 'm-atl', 'load.monotony': 'm-atl', 'load.plan_done_7d': 'm-ctl', 'fuel.logged_share': 'm-calories', 'fuel.energy_ratio': 'm-calories',
+  'fuel.protein_ratio': 'm-protein', 'fuel.carb_ratio': 'm-carbs', 'fuel.water_ratio': 'm-hydration', 'fuel.drinks': 'm-sugar', 'fuel.late_caffeine': 'm-caffeine',
+  'gut.symptoms': 'm-gut-comfort', 'gut.timing_min': 'm-stool-healthy', 'gut.timing_spread_min': 'm-stool-healthy', 'gut.frequency': 'm-stool-healthy',
+  'gut.session': 'm-stool-healthy', 'gut.form_3d': 'm-stool-loose', 'ans.wind_down': 'm-night-screen', 'ans.hr_dip_pct': 'm-hr-dip', 'mind.stress': 'm-stress',
+  'mind.mood': 'm-mood', 'rhythm.late_screen': 'm-phone-sleep', 'rhythm.meal_timing_spread_min': 'm-meal-timing',
+}
+
 /** The ref a `#/m/<ref>` address or an old `?metric=` value names; null when nothing is known by that name. */
 export function parseMetricRef(raw: string | null | undefined): MetricRef | null {
   if (!raw) return null
@@ -55,6 +72,15 @@ export function parseMetricRef(raw: string | null | undefined): MetricRef | null
   if (domainOfInput(raw)) return { kind: 'input', key: raw }
   return seriesById(raw) ? { kind: 'series', key: raw } : null // a bare series id is accepted too
 }
+
+/** A Me ref's label split into the section title and the item's label; no title when the ref names the label alone. */
+export function splitMeLabel(label: string): { section: string | null; item: string } {
+  const i = label.indexOf('::')
+  return i < 0 ? { section: null, item: label } : { section: label.slice(0, i), item: label.slice(i + 2) }
+}
+
+/** The ref of a Me tile or chart: its section title keeps two items of one label apart. */
+export const meRef = (tab: string, section: string, label: string): string => `me:${tab}:${section}::${label}`
 
 export function refString(ref: MetricRef): string {
   switch (ref.kind) {
@@ -92,4 +118,14 @@ export function windowStats(points: { day: string; value: number | null }[]): Wi
   let lo = have[0], hi = have[0], sum = 0
   for (const p of have) { sum += p.value; if (p.value < lo.value) lo = p; if (p.value > hi.value) hi = p }
   return { average: sum / have.length, readings: have.length, lowest: { day: lo.day, value: lo.value }, highest: { day: hi.day, value: hi.value } }
+}
+
+/** The smallest range that holds a focused morning (a day opened from Today, maybe months back), so its marker is on the chart. */
+export function rangeFor(focus: string | null, today: string): (typeof METRIC_RANGES)[number] {
+  const dflt = METRIC_RANGES[1]
+  if (!focus || !/^\d{4}-\d{2}-\d{2}$/.test(focus)) return dflt
+  const ago = Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${focus}T12:00:00Z`)) / 864e5)
+  if (!Number.isFinite(ago) || ago < 0) return dflt
+  const fit = METRIC_RANGES.find((r) => r.days > ago)
+  return !fit || fit.days < dflt.days ? dflt : fit
 }

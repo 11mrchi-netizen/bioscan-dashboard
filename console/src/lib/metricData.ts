@@ -4,7 +4,7 @@ import { supabase } from './supabase'
 import { loadDays } from './seriesQuery'
 import { seriesById } from './schema'
 import { DOMAINS, type Direction, type DomainKey, formatInputValue, type GroupScore, referenceLine } from './scoreText'
-import { domainOfInput, INPUT_SERIES, SERIES_HUE, type MetricRef } from './metrics'
+import { domainOfInput, INPUT_HUE, SERIES_HUE, splitMeLabel, type MetricRef } from './metrics'
 import { loadMeView } from '../dashboard/meView'
 import type { MeChart, MeItem, MeTab, MeTile } from '../dashboard/meView'
 
@@ -67,10 +67,9 @@ async function loadInput(key: string, from: string, to: string): Promise<MetricD
     if (i) label = i.spec.label
     return { day: x.day, value: i?.value ?? null, reference: i?.reference ?? null, refLine: i ? referenceLine(i) : null, direction: i?.direction }
   })
-  const series = INPUT_SERIES[key]
   return {
     label, unit: '', usual: true, fmt: (v) => formatInputValue(key, v), points,
-    hue: series && SERIES_HUE[series] ? `var(--${SERIES_HUE[series]})` : 'var(--ft-platinum)',
+    hue: `var(--${INPUT_HUE[key] ?? 'm-weight-ema'})`, // MetricInk.kt's own fallback
     source: 'Value per morning against your usual, as the phone scored it (kept from 6 Oct 2026).',
   }
 }
@@ -90,9 +89,11 @@ async function loadSeries(id: string, from: string, to: string, signal?: AbortSi
 async function loadMe(tab: MeTab, label: string, from: string): Promise<MetricData> {
   const row = await loadMeView(tab)
   if (!row) throw new Error(`The phone has not sent ${tab} yet.`)
-  const items: MeItem[] = row.view.sections.flatMap((s) => s.items)
-  const tile = items.find((i): i is MeTile => i.kind === 'tile' && i.label === label && (i.series?.length ?? 0) > 1)
-  const chart = items.find((i): i is MeChart => i.kind === 'chart' && i.label === label)
+  // Labels repeat within a tab: the ref carries the section title; an older ref with the label alone takes the first match.
+  const { section, item } = splitMeLabel(label)
+  const items: MeItem[] = row.view.sections.filter((s) => section == null || s.title === section).flatMap((s) => s.items)
+  const tile = items.find((i): i is MeTile => i.kind === 'tile' && i.label === item && (i.series?.length ?? 0) > 1)
+  const chart = items.find((i): i is MeChart => i.kind === 'chart' && i.label === item)
   if (tile) {
     return {
       label: tile.label, unit: tile.unit ?? '', hue: tile.hue ? `var(--${tile.hue})` : 'var(--ft-platinum)', usual: false, info: tile.info,
@@ -109,7 +110,7 @@ async function loadMe(tab: MeTab, label: string, from: string): Promise<MetricDa
       alsoInChart: chart.series.slice(1).map((s) => s.name),
     }
   }
-  throw new Error(`"${label}" is no longer on ${tab}.`)
+  throw new Error(`"${item}" is no longer on ${tab}.`)
 }
 
 

@@ -58,7 +58,7 @@ export function Me() {
 
       {status.loading && !row ? <p className="me-note muted">Loading {tab.toLowerCase()}…</p>
         : status.error ? <p className="me-note">Could not load: {status.error} <button className="dash-link" onClick={status.retry}>RETRY</button></p>
-        : row ? <MeSections sections={row.view.sections} sinceDay={since} />
+        : row ? <MeSections sections={row.view.sections} sinceDay={since} tab={tab} />
         : (
           <section className="ft-card me-soon">
             <p>The phone has not sent {tab} yet. It does when the tab is opened on the phone, and every few hours in the background once the updated app is installed.</p>

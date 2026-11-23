@@ -57,6 +57,12 @@ for (let t = Date.UTC(2025, 9, 1); t <= Date.UTC(2026, 9, 26); t += 864e5) {
   T.evening_checkins.push({ id: id++, user_id: 'u1', date: d, drinks, caffeine_after_14: r() < 0.3, late_meal: r() < 0.25, stress: 1 + Math.floor(r() * 5) })
 }
 for (const w of T.wearable_daily) if (w.hrv !== null && drinkDays.has(w.date)) w.hrv = +(w.hrv * 0.9).toFixed(1)
+// the phone's Me › BODY: a tile with points, a tile without, a row (phase 2: only the first opens a history)
+T.me_views = [{ tab: 'BODY', built_at: new Date().toISOString(), view: { v: 1, tab: 'BODY', sections: [{ title: 'WEIGHT', items: [
+  { kind: 'tile', label: 'Weight', value: '72.4', unit: 'kg', hue: 'm-weight', series: Array.from({ length: 40 }, (_, i) => [day(Date.UTC(2026, 8, 17 + i)), +(73 - i * 0.03).toFixed(2)]) },
+  { kind: 'tile', label: 'Lean mass', value: '58.1', unit: 'kg' },
+  { kind: 'row', label: 'Waist', value: '81 cm' },
+] }] } }]
 T.collector_heartbeats = [{ stream: 'location', ts: new Date(Date.now() - 3600e3).toISOString() }]
 T.daily_field_provenance = [{ writer: 'zepp-extract', origin: 'zepp', written_at: new Date(Date.now() - 7200e3).toISOString() }]
 T.analysis_results = [{ kind: 'series_break', key: 'rhr', as_of: '2026-10-26', payload: { deviceSensitive: false, breaks: [{ date: '2026-09-01', kind: 'level', score: 4.2, status: 'candidate', reason: null, before: { n: 60, median: 52, robustSd: 2, integerShare: 0.1 }, after: { n: 50, median: 55, robustSd: 2, integerShare: 0.1 } }] } }]
@@ -309,6 +315,25 @@ async function waitForServer() {
     await page.setViewportSize({ width: 1440, height: 1000 })
     await page.goto(`${BASE}#/today?day=2026-10-20`); await page.waitForSelector('.today', { timeout: 15000 })
     check((await page.inputValue('.dash-date')) === '2026-10-20', 'a past day is read from the address')
+
+    // 8c. the metric page (phase 2): a series with its whole history, the old History address, a Me tile, a tile without points
+    await page.goto(`${BASE}#/m/series:hrv?range=365`); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
+    check((await text('.metric-name')).includes('HRV'), 'the metric page opens a series by its id', await text('.metric-name'))
+    check((await page.locator('.metric-tile').count()) === 4, 'it shows the four numbers of the window')
+    check((await text('.metric-latest')).includes('ms'), 'the latest value carries its unit', await text('.metric-latest'))
+    check((await page.locator('.metric-links a', { hasText: 'RECORDS' }).count()) > 0, 'each day links to the records behind it')
+    await page.locator('.pb-chip', { hasText: '30 DAYS' }).click(); await page.waitForTimeout(300)
+    check(page.url().includes('range=30'), 'the range chips write the range into the address')
+    await page.goto(`${BASE}#/history?metric=recovery.hrv&day=2026-10-20`); await page.waitForSelector('.metric', { timeout: 15000 })
+    check(page.url().includes('#/m/recovery.hrv') && page.url().includes('day=2026-10-20'), 'the old History address lands on the metric page', page.url().split('#')[1])
+    check((await page.locator('.metric-links a', { hasText: 'RECORDS' }).count()) === 0 && (await text('.metric')).includes('whole history'), 'an input with a series behind it offers the whole history')
+    await page.goto(`${BASE}#/m/nonsense`); await page.waitForTimeout(300)
+    check((await text('.metric')).includes('NO SUCH METRIC'), 'an unknown metric says so')
+    await page.goto(`${BASE}#/me?tab=BODY`); await page.waitForSelector('.me-tile', { timeout: 15000 })
+    check((await page.locator('a.me-tile').count()) === 1 && (await page.locator('div.me-tile').count()) === 1, 'a Me tile with points is a link; one without is not')
+    await page.locator('a.me-tile').click(); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
+    check((await text('.metric-name')).includes('Weight') && (await text('.metric-latest')).includes('kg'), 'the Me tile opens its history with its unit', await text('.metric-latest'))
+    await shot('metric')
 
     // 9. old routes redirect
     await page.goto(`${BASE}#/overview`); await page.waitForTimeout(300)

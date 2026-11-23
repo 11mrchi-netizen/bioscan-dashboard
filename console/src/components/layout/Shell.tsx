@@ -24,7 +24,7 @@ const GROUPS: { title: string; items: { to: string; label: string }[] }[] = [
     { to: 'sessions', label: 'Sessions' }, { to: 'races', label: 'Races' },
   ] },
   { title: 'ANALYSIS', items: [
-    { to: 'history', label: 'History' }, { to: 'evidence', label: 'Evidence' }, { to: 'explore', label: 'Explore' },
+    { to: 'evidence', label: 'Evidence' }, { to: 'explore', label: 'Explore' },
     { to: 'data', label: 'Data' }, { to: 'models', label: 'Models' }, { to: 'body', label: 'Body' },
     { to: 'risk', label: 'Risk' },
   ] },
@@ -75,7 +75,7 @@ export function Shell() {
           {railCollapsed ? '›' : '‹'}
         </button>
         <span className="shell-wordmark mono">FIELD TERMINAL</span>
-        {!/^\/(today|me)$/.test(location.pathname) && <DateRangeControl />}
+        {!/^\/(today|me|m\/.*)$/.test(location.pathname) && <DateRangeControl />}
         <div className="header-actions">
           <SavedViews />
           <span className="mono user-label">{user?.email}</span>

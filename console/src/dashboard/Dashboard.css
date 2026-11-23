@@ -190,3 +190,7 @@
 /* Inside the one shell (web redesign, phase 1): the page sits in the shell's canvas, not on a full window of its own. */
 .dash-embed { margin: calc(-1 * var(--sp-4)); min-height: calc(100% + 2 * var(--sp-4)); }
 .dash-bar { display: flex; justify-content: flex-end; padding: 12px max(16px, env(safe-area-inset-right, 0px)) 0; }
+
+/* A Me tile with points is a link to its history. */
+a.me-tile.tappable { text-decoration: none; color: inherit; cursor: pointer; }
+a.me-tile.tappable:hover { border-color: var(--ft-muted); }

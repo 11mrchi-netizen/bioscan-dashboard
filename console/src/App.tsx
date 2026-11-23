@@ -17,7 +17,8 @@ const PlanBlock    = lazy(() => import('./workspaces/PlanBlock'))
 const MealPrep     = lazy(() => import('./workspaces/MealPrep'))
 // Web transition plan, phase 2: where the Dashboard's DAY LOG and OPEN IN CONSOLE land.
 const Log          = lazy(() => import('./workspaces/Log'))
-const History      = lazy(() => import('./workspaces/History'))
+const Metric       = lazy(() => import('./workspaces/Metric'))
+const HistoryRedirect = lazy(() => import('./workspaces/Metric').then((m) => ({ default: m.HistoryRedirect })))
 // Phase 4: the Console catch-up (LAB, PLAN and SYSTEM pages).
 const Experiments   = lazy(() => import('./workspaces/LabExperiments'))
 const Interventions = lazy(() => import('./workspaces/LabInterventions'))
@@ -67,7 +68,8 @@ export default function App() {
         <Route path="plan-block" element={<PlanBlock />} />
         <Route path="meal-prep" element={<MealPrep />} />
         <Route path="log" element={<Log />} />
-        <Route path="history" element={<History />} />
+        <Route path="m/:ref" element={<Metric />} />
+        <Route path="history" element={<HistoryRedirect />} />
         <Route path="experiments" element={<Experiments />} />
         <Route path="interventions" element={<Interventions />} />
         <Route path="regimen" element={<Regimen />} />

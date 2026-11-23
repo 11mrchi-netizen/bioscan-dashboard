@@ -1,10 +1,11 @@
 // Dashboard › Today: the phone's TODAY for any day, read from what the phone saved (todayData.ts): CHARGE and the five
 // rings, the overlays behind them (what moved CHARGE, each ring's inputs against your usual), the day's plan as a
-// timeline and eaten so far. Deeper history opens in the Console (metric history, the day's log).
+// timeline and eaten so far. Every score and input opens its history (workspaces/Metric.tsx); the day's log is one tap away.
 import { useEffect, useState } from 'react'
 import { useLoadEffect } from '../lib/useLoadEffect'
 import { localDateString, localToday } from '../lib/dates'
 import { consoleHref } from '../lib/surfaces'
+import { metricHref } from '../lib/metrics'
 import {
   bandWord, chargeRankLine, directionGlyph, directionWords, DOMAINS, domainSentence, driverSummary, formatJudgedValue, referenceLine,
   type DayScores, type DomainKey,
@@ -20,7 +21,7 @@ function shift(day: string, n: number): string {
 
 const longDate = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 const round = (x: number | null) => (x == null ? null : Math.round(x))
-const historyHref = (metric: string, day: string) => consoleHref(`#/history?metric=${encodeURIComponent(metric)}&day=${day}`)
+const historyHref = (metric: string, day: string) => metricHref(metric, { day })
 
 type Overlay = 'CHARGE' | DomainKey | null
 
@@ -224,7 +225,7 @@ function ChargeOverlay({ scores, day, onPick }: { scores: DayScores; day: string
           )
         })}
       </div>
-      <a className="dash-link" href={historyHref('charge', day)}>OPEN IN CONSOLE →</a>
+      <a className="dash-link" href={historyHref('charge', day)}>HISTORY →</a>
     </>
   )
 }
@@ -254,7 +255,7 @@ function RingOverlay({ scores, k, day, onPick }: { scores: DayScores; k: DomainK
       ))}
       <div className="today-links">
         <button className="dash-link" onClick={() => onPick('CHARGE')}>← CHARGE</button>
-        <a className="dash-link" href={historyHref(k.toLowerCase(), day)}>OPEN IN CONSOLE →</a>
+        <a className="dash-link" href={historyHref(k.toLowerCase(), day)}>HISTORY →</a>
       </div>
     </>
   )

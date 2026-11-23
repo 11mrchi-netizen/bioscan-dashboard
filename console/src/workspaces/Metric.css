@@ -1,0 +1,27 @@
+/* METRIC: the page every tappable number opens (workspaces/Metric.tsx). Uses the planner's controls (PlanBlock.css). */
+.metric { display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-4); max-width: 1200px; }
+.metric-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-3) var(--sp-4); }
+.metric-head > div:first-child { flex: 1; min-width: 220px; }
+.metric-title { font-size: 15px; letter-spacing: .1em; margin: 0; color: var(--color-text-primary); }
+.metric-sub { margin: 4px 0 0; font-size: 12px; color: var(--color-text-muted); }
+.metric-pick { display: flex; flex-direction: column; gap: 4px; font-size: 10px; letter-spacing: .08em; color: var(--color-text-muted); }
+.metric-pick select { max-width: 280px; }
+.metric-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-2); }
+.metric-latest { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; font-size: 11px; color: var(--color-text-muted); }
+.metric-latest-v { font-size: 26px; font-weight: 700; color: var(--color-text-primary); font-variant-numeric: tabular-nums; }
+.metric-ref { font-size: 12px; }
+.metric-chart { height: 320px; width: 100%; }
+.metric-days { overflow-x: auto; }
+.metric-links { display: flex; gap: 12px; white-space: nowrap; }
+.metric-links a { font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em; color: var(--color-text-secondary); }
+
+.metric-head { align-items: center; }
+.metric-title { flex: 1; min-width: 220px; }
+.metric-name { font-size: 15px; letter-spacing: .1em; margin: 0; color: var(--color-text-primary); }
+.metric-card .metric-sub { margin: 0; }
+.metric-h { font-size: 10px; letter-spacing: .12em; color: var(--color-text-muted); margin: 0; font-weight: 500; }
+.metric-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--sp-3); }
+.metric-tile { display: flex; flex-direction: column; gap: 3px; padding: var(--sp-3); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; min-width: 0; }
+.metric-tile-label { font-size: 10px; letter-spacing: .1em; color: var(--color-text-muted); }
+.metric-tile-value { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--color-text-primary); }
+.metric-tile-sub { font-size: 11px; color: var(--color-text-muted); }

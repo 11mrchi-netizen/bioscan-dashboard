@@ -300,6 +300,13 @@ async function waitForServer() {
     await page.locator('.shell-rail .rail-item', { hasText: /^Me$/ }).click(); await page.waitForSelector('.me', { timeout: 15000 })
     check(page.url().includes('#/me'), 'the rail opens Me', page.url().split('#')[1])
     await shot('me')
+    await page.goto(`${BASE}#/today`); await page.waitForSelector('.today-hero', { timeout: 15000 })
+    await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(300)
+    await shot('today-phone')
+    const ringTop = await page.locator('.today-hero').boundingBox()
+    check(ringTop !== null && ringTop.y < 420, 'on a phone the day starts in the first screen, not below the navigation', ringTop?.y)
+    check(await page.evaluate(() => document.documentElement.scrollWidth <= 392), 'no sideways scroll on a phone')
+    await page.setViewportSize({ width: 1440, height: 1000 })
     await page.goto(`${BASE}#/today?day=2026-10-20`); await page.waitForSelector('.today', { timeout: 15000 })
     check((await page.inputValue('.dash-date')) === '2026-10-20', 'a past day is read from the address')
 

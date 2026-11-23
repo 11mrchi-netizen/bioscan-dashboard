@@ -51,14 +51,20 @@ export default function Metric() {
   const from = localDaysAgo(range.days - 1)
   const to = localToday()
   const [items, setItems] = useState<Item[]>([])
+  const [failed, setFailed] = useState<{ key: string; message: string }[]>([])
   const [picking, setPicking] = useState(false)
 
   const status = useLoadEffect(async (isCurrent) => {
     if (!ref) return
     const ctl = new AbortController()
     const all = [ref, ...extraRefs]
-    const loaded = await Promise.all(all.map(async (r) => ({ ref: r, key: refString(r), data: await loadMetric(r, from, to, ctl.signal) })))
-    if (isCurrent()) setItems(loaded)
+    // One extra that cannot load (a saved view or shared link can name one that is gone) must not blank the page: only the
+    // page's own metric is fatal; an extra shows as a chip that says so.
+    const settled = await Promise.allSettled(all.map(async (r) => ({ ref: r, key: refString(r), data: await loadMetric(r, from, to, ctl.signal) })))
+    if (settled[0].status === 'rejected') throw settled[0].reason
+    if (!isCurrent()) return
+    setItems(settled.flatMap((x) => (x.status === 'fulfilled' ? [x.value] : [])))
+    setFailed(settled.slice(1).flatMap((x, i) => (x.status === 'rejected' ? [{ key: refString(extraRefs[i]), message: x.reason instanceof Error ? x.reason.message : String(x.reason) }] : [])))
   }, [raw, extraKey, from])
 
   const primary = items[0]?.key === (ref ? refString(ref) : '') ? items[0] : undefined
@@ -116,6 +122,9 @@ export default function Metric() {
             <button key={e.key} className="ft-chip metric-with" onClick={() => toggle(e.key)} aria-label={`Remove ${e.data.label}`}>
               <b className="metric-swatch" style={{ background: cssColor(e.data.hue) }} />{e.data.label} ✕
             </button>
+          ))}
+          {failed.map((f) => (
+            <button key={f.key} className="ft-chip metric-with metric-failed" title={f.message} onClick={() => toggle(f.key)} aria-label={`Remove ${f.key}`}>{f.key} · could not load ✕</button>
           ))}
           {extraRefs.length < MAX_COMPARE && <button className="ft-chip" aria-expanded={picking} onClick={() => setPicking((v) => !v)}>+ COMPARE</button>}
           {compared && <button className="ft-chip" onClick={() => setWith([])}>CLEAR</button>}
@@ -298,6 +307,9 @@ function Candidates({ own, chosen, full, onPick }: { own: MetricRef; chosen: str
     if (isCurrent()) setInputs(out)
   }, [])
   const ownKey = refString(own)
+  // An input and a series can carry one name (Resting heart rate): they are different pages (the input has your usual and starts on
+  // 6 Oct 2026, the series has the whole history), so a clash is told apart in the label.
+  const clash = new Set(inputs.map((i) => i.label).filter((l) => SERIES.some((s) => s.label === l)))
   const chip = (ref: string, label: string, hue: string) => (
     <button key={ref} className="ft-chip" aria-current={chosen.includes(ref)} disabled={ref === ownKey || (full && !chosen.includes(ref))} onClick={() => onPick(ref)}>
       <b className="metric-swatch" style={{ background: `var(--${hue})` }} />{label}
@@ -314,8 +326,8 @@ function Candidates({ own, chosen, full, onPick }: { own: MetricRef; chosen: str
         return (
           <div key={d.key} className="metric-pick-group">
             <span className="metric-latest-k">{d.label}</span>
-            {ins.map((i) => chip(i.key, i.label, INPUT_HUE[i.key] ?? 'm-weight-ema'))}
-            {ser.map((s) => chip(`series:${s.id}`, s.label, SERIES_HUE[s.id] ?? 'ft-platinum'))}
+            {ins.map((i) => chip(i.key, clash.has(i.label) ? `${i.label} · SCORE INPUT` : i.label, INPUT_HUE[i.key] ?? 'm-weight-ema'))}
+            {ser.map((s) => chip(`series:${s.id}`, clash.has(s.label) ? `${s.label} · SERIES` : s.label, SERIES_HUE[s.id] ?? 'ft-platinum'))}
           </div>
         )
       })}

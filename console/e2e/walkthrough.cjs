@@ -64,6 +64,21 @@ for (let i = 0; i < 118; i++) {
   const energy = 3 + (i % 5)
   T.wellbeing_daily.push({ id: id++, user_id: 'u1', date: day(t), energy, mood: i === 0 ? 5 : +(10 - 1.5 * (3 + ((i - 1) % 5)) + ((i - 1) % 3 === 0 ? 0.3 : -0.2)).toFixed(2), stress: 3, soreness: 2 })
 }
+// the phone's kept scores (phase 3 follow-up): a ring history, and a snapshot per morning with the inputs of RECOVERY and SLEEP,
+// keyed as the phone keys them (an input is on the morning it is published on: the same day as its wearable / sleep row)
+T.score_history = []
+T.score_snapshots = []
+for (let t = Date.UTC(2026, 8, 1); t <= Date.UTC(2026, 9, 26); t += 864e5) {
+  const d = day(t), k = (t - Date.UTC(2026, 8, 1)) / 864e5
+  const w = T.wearable_daily.find((x) => x.date === d), sl = T.sleep_daily.find((x) => x.date === d)
+  T.score_history.push({ day: d, charge: 90 + (k % 7), recovery: 85 + (k % 5), sleep: 88, load: 100, fuel: 95, balance: 92 })
+  const inp = (key, label, value, reference) => ({ spec: { key, label, weight: 1 }, value, score: 80, reference, spread: 5, direction: 'NORMAL' })
+  const dom = (key, score, inputs) => ({ key, score, raw: { groups: [{ group: { key: `${key}g`, label: key, weight: 1 }, score, coverage: 1, inputs }] } })
+  T.score_snapshots.push({ day: d, scores: { day: d, charge: { score: 90 + (k % 7), percentile: 0.7, drivers: [{ key: 'RECOVERY', points: 6 }, { key: 'SLEEP', points: -3 }] }, domains: {
+    RECOVERY: dom('RECOVERY', 85 + (k % 5), [inp('recovery.hrv', 'Overnight HRV', w?.hrv ?? 55, 55), inp('recovery.rhr', 'Resting heart rate', w?.rhr ?? 54, 54)]),
+    SLEEP: dom('SLEEP', 88, [inp('sleep.hours', 'Sleep duration', sl?.hours ?? 7, 7)]),
+  } } })
+}
 // the phone's Me › BODY: a tile with points, a tile without, a row (phase 2: only the first opens a history)
 T.me_views = [{ tab: 'BODY', built_at: new Date().toISOString(), view: { v: 1, tab: 'BODY', sections: [{ title: 'WEIGHT', items: [
   { kind: 'tile', label: 'Weight', value: '72.4', unit: 'kg', hue: 'm-weight', series: Array.from({ length: 40 }, (_, i) => [day(Date.UTC(2026, 8, 17 + i)), +(73 - i * 0.03).toFixed(2)]) },
@@ -189,7 +204,12 @@ async function waitForServer() {
       }
       requests.push(`${req.method()} ${table}?${decodeURIComponent(u.searchParams.toString())}`)
       try {
-        const { rows, total } = postgrest(table, u.searchParams)
+        let { rows, total } = postgrest(table, u.searchParams)
+        // PostgREST JSON-path aliases the console selects from score_snapshots (groups:scores->domains->X->raw->groups, charge:scores->charge->score)
+        const sel = u.searchParams.get('select') ?? ''
+        const gm = /groups:scores->domains->(\w+)->raw->groups/.exec(sel)
+        if (table === 'score_snapshots' && gm) rows = rows.map((r) => ({ day: r.day, groups: r.scores.domains[gm[1]]?.raw.groups ?? null }))
+        else if (table === 'score_snapshots' && /charge:scores->charge->score/.test(sel)) rows = rows.map((r) => ({ day: r.day, charge: r.scores.charge.score }))
         const prefer = req.headers()['prefer'] ?? ''
         const headers = { 'content-type': 'application/json', 'content-range': `0-${Math.max(rows.length - 1, 0)}/${prefer.includes('count=exact') ? total : '*'}`, 'access-control-expose-headers': 'content-range' }
         if (req.method() === 'HEAD') return route.fulfill({ status: 200, headers, body: '' })
@@ -383,6 +403,32 @@ async function waitForServer() {
     await page.setViewportSize({ width: 1440, height: 1000 }); await page.waitForTimeout(300)
     await page.goto(`${BASE}#/m/series:energy?with=series:mood&with=series:hrv`); await page.waitForSelector('.metric-pair', { timeout: 15000 }); await page.waitForTimeout(500)
     await shot('compare')
+
+    // 8e. the path from a score to compare (the user's point 2): Today > ring > input > metric page > + COMPARE > a series, in a browser
+    await page.goto(`${BASE}#/today?day=2026-10-20`); await page.waitForSelector('.ring-btn', { timeout: 15000 })
+    await page.locator('.today-rings .ring-btn', { hasText: 'RECOVERY' }).click()
+    await page.waitForSelector('.ov-input', { timeout: 5000 })
+    check((await page.locator('.ov-input').count()) === 2, 'a ring opens its inputs', await page.locator('.ov-input').count())
+    await page.locator('.ov-input', { hasText: 'Overnight HRV' }).click(); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
+    check(page.url().includes('#/m/recovery.hrv') && page.url().includes('day=2026-10-20'), 'an input opens its metric page on that morning', page.url().split('#')[1])
+    check((await text('.metric-name')).includes('Overnight HRV') && (await text('.metric-latest')).includes('ms'), 'the input is drawn with its unit', await text('.metric-latest'))
+    check((await text('.metric')).includes('WHOLE HISTORY'), 'and offers the series behind it')
+    await page.locator('.metric-compare-bar .ft-chip', { hasText: '+ COMPARE' }).click(); await page.waitForSelector('.metric-picker', { timeout: 5000 })
+    await page.waitForSelector('.metric-picker .ft-chip:has-text("SCORE INPUT")', { timeout: 5000 }).catch(() => {})
+    const pickerText = await text('.metric-picker')
+    check(pickerText.includes('Resting heart rate · SCORE INPUT') && pickerText.includes('Resting heart rate · SERIES') && pickerText.includes('Sleep duration') && pickerText.includes('CHARGE'), 'the picker lists the rings and the inputs of the newest kept morning', pickerText.slice(0, 120))
+    await page.locator('.metric-picker .ft-chip', { hasText: 'Resting heart rate · SCORE INPUT' }).click(); await page.waitForSelector('.metric-pair', { timeout: 15000 })
+    check(decodeURIComponent(page.url()).includes('with=recovery.rhr'), 'an input is added as the second metric', page.url().split('#')[1])
+    check((await text('[data-testid=pair-words]')).includes('days.'), 'and the pair is read', await text('[data-testid=pair-words]'))
+    check(!(await text('.metric-pair')).includes('is dated by'), 'two inputs share their dating: no dating note')
+    await page.goto(`${BASE}#/m/recovery.hrv?with=series:hrv&with=charge&range=90`); await page.waitForSelector('.metric-pair', { timeout: 15000 })
+    check((await text('.metric-pair')).includes('is dated by the morning it is published on'), 'an input against a series says how each is dated', (await text('.metric-pair')).slice(0, 80))
+    check((await page.locator('.metric-with').count()) === 2, 'a ring and a series can be extras beside an input')
+    await page.locator('.metric-pair .ft-chip', { hasText: 'HRV (RMSSD)' }).click(); await page.waitForTimeout(300)
+    await page.locator('.metric-pair .ft-chip', { hasText: 'SAME DAY' }).click(); await page.waitForTimeout(300)
+    check(/r 1\.00|r 0\.99/.test(await text('[data-testid=pair-words]')), 'an input and its series match on the same day, not a day off', await text('[data-testid=pair-words]'))
+    await page.goto(`${BASE}#/m/series:energy?with=series:mood&with=series:nope&with=sleep`); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
+    check((await page.locator('.metric-chart').count()) >= 1 && (await text('.metric-name')).includes('Energy'), 'an unknown extra in the address is ignored and the page stays')
 
     // 9. old routes redirect
     await page.goto(`${BASE}#/overview`); await page.waitForTimeout(300)

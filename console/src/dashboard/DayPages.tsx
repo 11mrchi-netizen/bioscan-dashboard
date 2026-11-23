@@ -14,7 +14,7 @@ function useDay(): [string, (d: string) => void] {
 }
 
 /** The domain wash behind a page (visual contract: background = domain). */
-function Wash({ hue, children }: { hue: string; children: React.ReactNode }) {
+export function Wash({ hue, children }: { hue: string; children: React.ReactNode }) {
   return <div className="dash dash-embed ft-page ft-wash" style={{ ['--ft-wash' as string]: hue }}>{children}</div>
 }
 

@@ -129,3 +129,18 @@ export function rangeFor(focus: string | null, today: string): (typeof METRIC_RA
   const fit = METRIC_RANGES.find((r) => r.days > ago)
   return !fit || fit.days < dflt.days ? dflt : fit
 }
+
+const DOMAIN_WASH: Record<string, string> = { SLEEP: 'ft-domain-sleep', RECOVERY: 'ft-domain-cardio', LOAD: 'ft-domain-load', FUEL: 'ft-domain-fuel', BALANCE: 'ft-domain-balance' }
+const SERIES_DOMAIN: Record<string, string> = {
+  hrv: 'RECOVERY', rhr: 'RECOVERY', spo2: 'RECOVERY', vo2max: 'RECOVERY', energy: 'RECOVERY', soreness: 'RECOVERY',
+  steps: 'LOAD', calories_active: 'LOAD', calories_total: 'LOAD', zone_minutes: 'LOAD', run_duration: 'LOAD', run_distance: 'LOAD', run_avg_hr: 'LOAD', strength_duration: 'LOAD', session_rpe: 'LOAD',
+  water_intake: 'FUEL', meal_energy: 'FUEL', meal_protein: 'FUEL', meal_carbs: 'FUEL', meal_fat: 'FUEL', meal_fiber: 'FUEL',
+}
+
+/** The page wash of a metric (visual contract: background = domain): its ring's domain; CHARGE its own wash; Me items and the rest, BALANCE. */
+export function washFor(ref: MetricRef): string {
+  if (ref.kind === 'ring') return ref.key === 'charge' ? 'ft-charge-b' : DOMAIN_WASH[ref.key.toUpperCase()] ?? 'ft-domain-balance'
+  if (ref.kind === 'input') return DOMAIN_WASH[domainOfInput(ref.key) ?? ''] ?? 'ft-domain-balance'
+  if (ref.kind === 'series') return DOMAIN_WASH[SERIES_DOMAIN[ref.key] ?? (ref.key.startsWith('sleep_') ? 'SLEEP' : '')] ?? 'ft-domain-balance'
+  return 'ft-domain-balance'
+}

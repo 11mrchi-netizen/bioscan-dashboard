@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { rangeFor, INPUT_HUE, INPUT_SERIES, meRef, splitMeLabel, metricHref, parseMetricRef, refString, SERIES_HUE, seriesBehind, windowStats } from './metrics.ts'
+import { washFor, rangeFor, INPUT_HUE, INPUT_SERIES, meRef, splitMeLabel, metricHref, parseMetricRef, refString, SERIES_HUE, seriesBehind, windowStats } from './metrics.ts'
 import { SERIES } from './schema.ts'
 
 test('old History refs still parse: a ring and an input', () => {
@@ -69,4 +69,11 @@ test('a focused morning picks the smallest range that holds it, never less than 
   assert.equal(rangeFor('2026-08-01', '2026-11-23').id, '365') // 114 days back
   assert.equal(rangeFor('2025-09-01', '2026-11-23').id, 'all')
   assert.equal(rangeFor('junk', '2026-11-23').id, '90')
+})
+
+test('every metric has a domain wash that is a token', () => {
+  const css = readFileSync(new URL('../../../design/tokens/tokens.css', import.meta.url), 'utf8')
+  const refs = ['charge', 'sleep', 'recovery.hrv', 'gut.form_3d', 'series:sleep_hours', 'series:meal_energy', 'series:body_weight', 'me:BODY:Weight'].map((r) => parseMetricRef(r)!)
+  for (const r of refs) assert.ok(css.includes(`--${washFor(r)}:`), `${refString(r)} -> ${washFor(r)}`)
+  assert.equal(washFor(parseMetricRef('series:sleep_deep_min')!), 'ft-domain-sleep')
 })

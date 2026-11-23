@@ -1,27 +1,27 @@
-/* METRIC: the page every tappable number opens (workspaces/Metric.tsx). Uses the planner's controls (PlanBlock.css). */
-.metric { display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-4); max-width: 1200px; }
-.metric-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-3) var(--sp-4); }
-.metric-head > div:first-child { flex: 1; min-width: 220px; }
-.metric-title { font-size: 15px; letter-spacing: .1em; margin: 0; color: var(--color-text-primary); }
-.metric-sub { margin: 4px 0 0; font-size: 12px; color: var(--color-text-muted); }
-.metric-pick { display: flex; flex-direction: column; gap: 4px; font-size: 10px; letter-spacing: .08em; color: var(--color-text-muted); }
-.metric-pick select { max-width: 280px; }
-.metric-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-2); }
-.metric-latest { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; font-size: 11px; color: var(--color-text-muted); }
-.metric-latest-v { font-size: 26px; font-weight: 700; color: var(--color-text-primary); font-variant-numeric: tabular-nums; }
-.metric-ref { font-size: 12px; }
-.metric-chart { height: 320px; width: 100%; }
+/* METRIC: the page every tappable number opens (workspaces/Metric.tsx). Built from the Dashboard's pieces (Dashboard.css, design/tokens):
+   domain wash behind, neutral glass cards, the metric's own hue as the line and the latest number, Nunito numbers, Plex Mono labels. */
+.metric { display: flex; flex-direction: column; gap: 16px; }
+.metric-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.metric-title { flex: 1; min-width: 200px; }
+.metric-name { margin: 0; font: 800 22px var(--ft-num); color: var(--ft-fg); }
+.metric-sub { margin: 2px 0 0; font-size: 12px; color: var(--ft-muted); line-height: 1.4; }
+.metric-ranges { display: flex; flex-wrap: wrap; gap: 6px; }
+.metric-card { display: flex; flex-direction: column; gap: 10px; }
+.metric-latest { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+.metric-latest-v { font: 800 34px var(--ft-num); font-variant-numeric: tabular-nums; }
+.metric-latest-k { font: 500 10px var(--ft-mono); letter-spacing: .12em; color: var(--ft-muted); }
+.metric-ref { font-size: 12.5px; color: var(--ft-fg); }
+.metric-chart { height: 300px; width: 100%; }
+.metric-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.metric-note { margin: 0; font-size: 12.5px; color: var(--ft-muted); display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .metric-days { overflow-x: auto; }
+.metric-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.metric-table th { text-align: left; font: 500 10px var(--ft-mono); letter-spacing: .12em; color: var(--ft-dim); padding: 6px 10px 6px 0; }
+.metric-table td { padding: 8px 10px 8px 0; border-top: 1px solid var(--ft-line); color: var(--ft-fg); }
+.metric-table td.k { font: 500 12px var(--ft-mono); color: var(--ft-muted); white-space: nowrap; }
+.metric-table td.v { font: 800 14px var(--ft-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.metric-table td.muted { color: var(--ft-muted); font-size: 12px; }
+.metric-table tr.sel td { background: rgba(255,255,255,.05); }
 .metric-links { display: flex; gap: 12px; white-space: nowrap; }
-.metric-links a { font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em; color: var(--color-text-secondary); }
-
-.metric-head { align-items: center; }
-.metric-title { flex: 1; min-width: 220px; }
-.metric-name { font-size: 15px; letter-spacing: .1em; margin: 0; color: var(--color-text-primary); }
-.metric-card .metric-sub { margin: 0; }
-.metric-h { font-size: 10px; letter-spacing: .12em; color: var(--color-text-muted); margin: 0; font-weight: 500; }
-.metric-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--sp-3); }
-.metric-tile { display: flex; flex-direction: column; gap: 3px; padding: var(--sp-3); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; min-width: 0; }
-.metric-tile-label { font-size: 10px; letter-spacing: .1em; color: var(--color-text-muted); }
-.metric-tile-value { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--color-text-primary); }
-.metric-tile-sub { font-size: 11px; color: var(--color-text-muted); }
+.metric-links a { font: 500 10px var(--ft-mono); letter-spacing: .1em; color: var(--ft-muted); text-decoration: none; }
+.metric-links a:hover { color: var(--ft-fg); }

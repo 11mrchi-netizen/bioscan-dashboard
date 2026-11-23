@@ -8,19 +8,18 @@ import type { EChartsCoreOption } from 'echarts/core'
 import { useLoadEffect } from '../lib/useLoadEffect'
 import { useChart } from '../lib/useChart'
 import { localDaysAgo, localToday } from '../lib/dates'
-import { directionWords } from '../lib/scoreText'
-import { METRIC_RANGES, metricHref, parseMetricRef, rangeFor, refString, seriesBehind, windowStats } from '../lib/metrics'
+import { directionGlyph, directionWords } from '../lib/scoreText'
+import { Wash } from '../dashboard/DayPages'
+import { METRIC_RANGES, metricHref, parseMetricRef, rangeFor, refString, seriesBehind, splitMeLabel, washFor, windowStats } from '../lib/metrics'
 import { loadMetric, type MetricData } from '../lib/metricData'
-import { PALETTE } from '../lib/palette'
 import { seriesById } from '../lib/schema'
-import './PlanBlock.css'
 import './Metric.css'
 
 /** ECharts draws on a canvas and cannot read `var(--token)`: resolve it to the colour the page is using. */
 function cssColor(v: string): string {
   const m = /^var\((--[a-z0-9-]+)\)$/i.exec(v)
   if (!m) return v
-  return getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim() || PALETTE.textMuted
+  return getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim() || '#8a949a'
 }
 
 const shortDay = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
@@ -46,26 +45,29 @@ export default function Metric() {
   const withValue = useMemo(() => (data?.points ?? []).filter((p) => p.value != null), [data])
   const latest = withValue[withValue.length - 1]
   const stats = useMemo(() => windowStats(data?.points ?? []), [data])
-  const color = data ? cssColor(data.hue) : PALETTE.emerald
+  const color = data ? cssColor(data.hue) : cssColor('var(--ft-platinum)')
 
   const option = useMemo<EChartsCoreOption>(() => {
     if (!data) return {}
     const isRing = ref?.kind === 'ring'
+    const muted = cssColor('var(--ft-muted)'), line = cssColor('var(--ft-line)'), fg = cssColor('var(--ft-fg)')
+    const mono = 'IBM Plex Mono, monospace'
     return {
-      grid: { left: 56, right: 20, top: 24, bottom: 32 },
-      tooltip: { trigger: 'axis', valueFormatter: (v: unknown) => (typeof v === 'number' ? `${data.fmt(v)} ${data.unit}`.trim() : '–') },
-      xAxis: { type: 'time', axisLabel: { color: PALETTE.textMuted }, axisLine: { lineStyle: { color: PALETTE.border } } },
-      yAxis: { type: 'value', scale: !isRing, min: isRing ? 0 : undefined, axisLabel: { color: PALETTE.textMuted, formatter: (v: number) => data.fmt(v) }, splitLine: { lineStyle: { color: PALETTE.border } } },
+      textStyle: { fontFamily: mono },
+      grid: { left: 52, right: 16, top: 20, bottom: 30 },
+      tooltip: { trigger: 'axis', backgroundColor: cssColor('var(--ft-bg)'), borderColor: line, textStyle: { color: fg, fontFamily: mono, fontSize: 12 }, valueFormatter: (v: unknown) => (typeof v === 'number' ? `${data.fmt(v)} ${data.unit}`.trim() : '–') },
+      xAxis: { type: 'time', axisLabel: { color: muted, fontFamily: mono, fontSize: 10 }, axisLine: { lineStyle: { color: line } } },
+      yAxis: { type: 'value', scale: !isRing, min: isRing ? 0 : undefined, axisLabel: { color: muted, fontFamily: mono, fontSize: 10, formatter: (v: number) => data.fmt(v) }, splitLine: { lineStyle: { color: line } } },
       series: [
         { name: data.label, type: 'line', data: data.points.map((p) => [p.day, p.value]), connectNulls: false, showSymbol: data.points.length < 120, symbolSize: 5, itemStyle: { color }, lineStyle: { color, width: 2 },
-          markLine: focus ? { symbol: 'none', silent: true, lineStyle: { color: PALETTE.text, type: 'dashed' }, label: { color: PALETTE.text, formatter: focus }, data: [{ xAxis: focus }] } : undefined },
-        ...(data.usual ? [{ name: 'Your usual', type: 'line', data: data.points.map((p) => [p.day, p.reference ?? null]), showSymbol: false, lineStyle: { color: PALETTE.textMuted, width: 1, type: 'dashed' }, itemStyle: { color: PALETTE.textMuted } }] : []),
+          markLine: focus ? { symbol: 'none', silent: true, lineStyle: { color: fg, type: 'dashed' }, label: { color: fg, formatter: focus }, data: [{ xAxis: focus }] } : undefined },
+        ...(data.usual ? [{ name: 'Your usual', type: 'line', data: data.points.map((p) => [p.day, p.reference ?? null]), showSymbol: false, lineStyle: { color: muted, width: 1, type: 'dashed' }, itemStyle: { color: muted } }] : []),
       ],
     }
   }, [data, color, focus, ref])
 
   if (!raw || !ref) {
-    return <div className="metric"><p className="state-empty">NO SUCH METRIC. <Link to="/today">BACK TO TODAY</Link></p></div>
+    return <Wash hue="var(--ft-domain-balance)"><main className="dash-main"><section className="ft-card"><p className="me-note">No such metric. <Link className="dash-link" to="/today">TODAY</Link></p></section></main></Wash>
   }
   const setRange = (id: string) => { const n = new URLSearchParams(params); n.set('range', id); setParams(n, { replace: true }) }
   const behind = seriesBehind(ref)
@@ -73,77 +75,80 @@ export default function Metric() {
   const withUnit = (v: number) => `${data!.fmt(v)}${unit}`
 
   return (
-    <div className="metric">
-      <header className="metric-head">
-        <button className="btn-ghost mono" onClick={() => (window.history.state?.idx > 0 ? navigate(-1) : navigate('/today'))} aria-label="Back">‹ BACK</button>
-        <div className="metric-title">
-          <h2 className="metric-name mono">{data?.label ?? (ref.kind === 'me' ? ref.label : refString(ref))}</h2>
-          {data && <p className="metric-sub">{data.source}</p>}
-        </div>
-        <div className="pb-chips">
-          {METRIC_RANGES.map((r) => <button key={r.id} className={`pb-chip ${range.id === r.id ? 'on' : ''}`} onClick={() => setRange(r.id)}>{r.label}</button>)}
-        </div>
-      </header>
-
-      {status.error && <p className="pb-warn">Could not load: {status.error} <button className="btn-ghost mono" onClick={status.retry}>RETRY</button></p>}
-      {data && !status.loading && withValue.length === 0 && !status.error && <p className="state-empty">NO VALUES IN THIS RANGE.</p>}
-
-      <section className="metric-card">
-        {latest && data && (
-          <div className="metric-latest">
-            <span className="metric-latest-v" style={{ color }}>{withUnit(latest.value!)}</span>
-            <span className="mono">LATEST · {latest.day}</span>
-            {latest.direction && <span className="metric-ref">{directionWords(latest.direction)}</span>}
-            {latest.refLine && <span className="metric-ref">{latest.refLine}</span>}
+    <Wash hue={`var(--${washFor(ref)})`}>
+      <main className="dash-main metric">
+        <header className="metric-head">
+          <button className="dash-link" onClick={() => (window.history.state?.idx > 0 ? navigate(-1) : navigate('/today'))} aria-label="Back">‹ BACK</button>
+          <div className="metric-title">
+            <h2 className="metric-name">{data?.label ?? (ref.kind === 'me' ? splitMeLabel(ref.label).item : refString(ref))}</h2>
+            {data && <p className="metric-sub">{data.source}</p>}
           </div>
+          <div className="metric-ranges">
+            {METRIC_RANGES.map((r) => <button key={r.id} className="ft-chip" aria-current={range.id === r.id} onClick={() => setRange(r.id)}>{r.label}</button>)}
+          </div>
+        </header>
+
+        {status.error && <section className="ft-card"><p className="me-note">Could not load: {status.error} <button className="dash-link" onClick={status.retry}>RETRY</button></p></section>}
+        {data && !status.loading && withValue.length === 0 && !status.error && <section className="ft-card"><p className="me-note muted">No values in this range.</p></section>}
+
+        <section className="ft-card metric-card">
+          {latest && data && (
+            <div className="metric-latest">
+              <span className="metric-latest-v" style={{ color }}>{withUnit(latest.value!)}</span>
+              <span className="metric-latest-k">LATEST · {latest.day}</span>
+              {latest.direction && <span className="metric-ref">{directionGlyph(latest.direction)} {directionWords(latest.direction)}</span>}
+              {latest.refLine && <span className="metric-ref">{latest.refLine}</span>}
+            </div>
+          )}
+          <Chart option={option} hidden={withValue.length === 0} />
+          {data?.alsoInChart && data.alsoInChart.length > 0 && <p className="metric-sub">The phone's chart also draws {data.alsoInChart.join(', ')}; this page shows the first line.</p>}
+        </section>
+
+        {data && stats && (
+          <section className="metric-tiles" aria-label="The numbers of this range">
+            <Tile label="AVERAGE" value={withUnit(stats.average)} />
+            <Tile label="READINGS" value={String(stats.readings)} sub={range.id === 'all' ? undefined : `of ${range.days} days`} />
+            <Tile label="LOWEST" value={withUnit(stats.lowest.value)} sub={shortDay(stats.lowest.day)} />
+            <Tile label="HIGHEST" value={withUnit(stats.highest.value)} sub={shortDay(stats.highest.day)} />
+          </section>
         )}
-        <Chart option={option} hidden={withValue.length === 0} />
-        {data?.alsoInChart && data.alsoInChart.length > 0 && <p className="metric-sub">The phone's chart also draws {data.alsoInChart.join(', ')}; this page shows the first line.</p>}
-      </section>
 
-      {data && stats && (
-        <section className="metric-tiles" aria-label={`In these ${range.id === 'all' ? 'days' : `${range.days} days`}`}>
-          <Tile label="AVERAGE" value={withUnit(stats.average)} />
-          <Tile label="READINGS" value={String(stats.readings)} sub={range.id === 'all' ? undefined : `of ${range.days} days`} />
-          <Tile label="LOWEST" value={withUnit(stats.lowest.value)} sub={shortDay(stats.lowest.day)} />
-          <Tile label="HIGHEST" value={withUnit(stats.highest.value)} sub={shortDay(stats.highest.day)} />
-        </section>
-      )}
+        {behind && (
+          <p className="metric-note">This input is read straight from a daily series: <Link className="dash-link" to={metricHref(`series:${behind}`, { range: 'all' })}>ITS WHOLE HISTORY →</Link> The kept mornings start on 6 Oct 2026.</p>
+        )}
+        {data?.info && <section className="ft-card"><h3 className="me-section-title">WHAT IS IT?</h3><p className="me-note">{data.info}</p></section>}
 
-      {behind && (
-        <p className="metric-sub">This input is read straight from a daily series: <Link to={metricHref(`series:${behind}`, { range: 'all' })}>its whole history →</Link> (the kept mornings start on 6 Oct 2026).</p>
-      )}
-      {data?.info && <section className="metric-card"><h3 className="metric-h mono">WHAT IS IT?</h3><p className="metric-sub">{data.info}</p></section>}
-
-      {data && withValue.length > 0 && (
-        <section className="metric-days">
-          <table className="pb-table">
-            <thead><tr><th>DAY</th><th>VALUE</th>{data.usual && <th>AGAINST USUAL</th>}<th /></tr></thead>
-            <tbody>
-              {[...withValue].reverse().slice(0, 120).map((p) => (
-                <tr key={p.day} className={p.day === focus ? 'pb-sel' : ''}>
-                  <td className="mono">{p.day}</td>
-                  <td className="mono">{withUnit(p.value!)}</td>
-                  {data.usual && <td className="pb-muted">{p.direction ? directionWords(p.direction) : ''}{p.refLine ? ` · ${p.refLine}` : ''}</td>}
-                  <td className="metric-links">
-                    <Link to={`/log?day=${p.day}`}>DAY LOG</Link>
-                    <Link to={`/today?day=${p.day}`}>TODAY</Link>
-                    {ref.kind === 'series' && <Link to={`/data?table=${encodeURIComponent(tableOf(ref.key))}&date=${p.day}`}>RECORDS</Link>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      )}
-    </div>
+        {data && withValue.length > 0 && (
+          <section className="ft-card metric-days">
+            <h3 className="me-section-title">THE DAYS</h3>
+            <table className="metric-table">
+              <thead><tr><th>DAY</th><th>VALUE</th>{data.usual && <th>AGAINST USUAL</th>}<th /></tr></thead>
+              <tbody>
+                {[...withValue].reverse().slice(0, 120).map((p) => (
+                  <tr key={p.day} className={p.day === focus ? 'sel' : ''}>
+                    <td className="k">{p.day}</td>
+                    <td className="v">{withUnit(p.value!)}</td>
+                    {data.usual && <td className="muted">{p.direction ? directionWords(p.direction) : ''}{p.refLine ? ` · ${p.refLine}` : ''}</td>}
+                    <td className="metric-links">
+                      <Link to={`/log?day=${p.day}`}>DAY LOG</Link>
+                      <Link to={`/today?day=${p.day}`}>TODAY</Link>
+                      {ref.kind === 'series' && <Link to={`/data?table=${encodeURIComponent(tableOf(ref.key))}&date=${p.day}`}>RECORDS</Link>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        )}
+      </main>
+    </Wash>
   )
 }
 
 const tableOf = (id: string) => seriesById(id)?.table ?? ''
 
 function Tile({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return <div className="metric-tile"><span className="metric-tile-label mono">{label}</span><span className="metric-tile-value">{value}</span>{sub && <span className="metric-tile-sub">{sub}</span>}</div>
+  return <div className="me-tile"><span className="me-tile-label">{label}</span><span className="me-tile-value">{value}</span>{sub && <span className="me-tile-sub">{sub}</span>}</div>
 }
 
 function Chart({ option, hidden }: { option: EChartsCoreOption; hidden: boolean }) {

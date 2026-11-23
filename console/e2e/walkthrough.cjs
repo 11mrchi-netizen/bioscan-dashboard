@@ -291,6 +291,18 @@ async function waitForServer() {
     await page.locator('.sv-open', { hasText: 'HRV weekly' }).click(); await page.waitForTimeout(500)
     check(page.url().includes('#/explore?series=hrv,rhr&grain=week'), 'opening the view restores it', page.url().split('#')[1])
 
+    // 8b. one app (web redesign phase 1): the root lands on Today, Today and Me are rail items beside the rest
+    await page.goto(BASE); await page.waitForSelector('.today', { timeout: 15000 })
+    check(page.url().endsWith('#/today'), 'the app opens on Today', page.url().split('#')[1])
+    check((await page.locator('.shell-rail .rail-item', { hasText: /^Today$/ }).count()) === 1 && (await page.locator('.shell-rail .rail-item', { hasText: /^Me$/ }).count()) === 1, 'Today and Me are in the rail')
+    check((await page.locator('a', { hasText: /CONSOLE →|← DASHBOARD/ }).count()) === 0, 'there is no Dashboard / Console switch')
+    await shot('today')
+    await page.locator('.shell-rail .rail-item', { hasText: /^Me$/ }).click(); await page.waitForSelector('.me', { timeout: 15000 })
+    check(page.url().includes('#/me'), 'the rail opens Me', page.url().split('#')[1])
+    await shot('me')
+    await page.goto(`${BASE}#/today?day=2026-10-20`); await page.waitForSelector('.today', { timeout: 15000 })
+    check((await page.inputValue('.dash-date')) === '2026-10-20', 'a past day is read from the address')
+
     // 9. old routes redirect
     await page.goto(`${BASE}#/overview`); await page.waitForTimeout(300)
     check(page.url().endsWith('#/explore'), 'v1 routes redirect')

@@ -65,7 +65,7 @@ export default function Tests() {
       <header className="pg-head">
         <div>
           <h2 className="pg-title mono">TESTS</h2>
-          <p className="pg-sub">The tests taken on the phone (Lab › TESTS) and every blood draw with its results. Tap a marker for its history across draws. How a change compares with your own variation is on the <a href={dashboardHref('#/me?tab=BLOODWORK')}>Dashboard's Bloodwork</a>.</p>
+          <p className="pg-sub">The tests taken on the phone (Lab › TESTS) and every blood draw with its results. Tap a marker for its history across draws. How a change compares with your own variation is on the <a href={dashboardHref('#/me?tab=BLOODWORK')}>Me › Bloodwork</a>.</p>
         </div>
         <input className="pb-input" placeholder="Find a marker" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a marker" />
       </header>

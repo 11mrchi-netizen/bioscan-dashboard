@@ -1,17 +1,11 @@
-// The two web surfaces (docs: Dashboard and Console Transition Plan, Nov 2026). Deployed, the Dashboard is the site root and
-// the Console lives in /console/; under the dev server they are dashboard.html and app.html side by side.
-const deployed = (): boolean => !/\/(app|dashboard)\.html$/.test(window.location.pathname)
-const inConsole = (): boolean => /\/console\/?/.test(window.location.pathname)
-
-/** The Dashboard, optionally at a hash route such as `#/today?day=2026-11-17`. */
+// Web redesign, phase 1: the Dashboard and the Console are one app with one router, so both hrefs are plain hash links.
+// Kept only so the call sites need no change in this phase; they are replaced by <Link> and deleted in the cleanup phase.
+/** A page of the app, optionally at a hash route such as `#/today?day=2026-11-17`. */
 export function dashboardHref(hash = ''): string {
-  if (!deployed()) return `./dashboard.html${hash}`
-  return `${inConsole() ? '../' : './'}${hash}`
+  return hash || '#/'
 }
 
-/** The Console, optionally at a hash route such as `#/data?table=meals`. */
+/** A page of the app, optionally at a hash route such as `#/data?table=meals`. */
 export function consoleHref(hash = ''): string {
-  if (!deployed()) return `./app.html${hash}`
-  return `${inConsole() ? './' : './console/'}${hash}`
+  return hash || '#/'
 }
-

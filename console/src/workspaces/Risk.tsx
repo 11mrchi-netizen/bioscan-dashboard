@@ -198,7 +198,7 @@ export default function Risk() {
       <header className="pg-head">
         <div>
           <h2 className="pg-title mono">RISK</h2>
-          <p className="pg-sub">Exposures and risks with ways to improve, not one number. Air is worked out each night from your places, the modelled outdoor air there (Open-Meteo, CAMS) and the home sensors; blood pressure from the home series on the phone (Lab › TESTS) and the clinic readings in your lab draws. The summary is also on the <a href={dashboardHref('#/me?tab=EXPOSURES')}>Dashboard's Me › Exposures</a>.</p>
+          <p className="pg-sub">Exposures and risks with ways to improve, not one number. Air is worked out each night from your places, the modelled outdoor air there (Open-Meteo, CAMS) and the home sensors; blood pressure from the home series on the phone (Lab › TESTS) and the clinic readings in your lab draws. The summary is also on the <a href={dashboardHref('#/me?tab=EXPOSURES')}>Me › Exposures</a>.</p>
         </div>
       </header>
       {st.error && <p className="pb-warn">Could not load: {st.error}</p>}

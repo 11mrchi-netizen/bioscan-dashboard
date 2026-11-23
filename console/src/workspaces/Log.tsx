@@ -185,7 +185,7 @@ export default function Log() {
           <input className="pb-input" type="date" value={to} min={day} max={today} onChange={(e) => e.target.value && set({ to: e.target.value === day ? null : e.target.value })} aria-label="To" />
           {!isRange && <button className="btn-ghost mono" disabled={day >= today} onClick={() => go(shift(day, 1))}>NEXT →</button>}
           {isRange && <button className="btn-ghost mono" onClick={() => set({ to: null })}>ONE DAY</button>}
-          {!isRange && <a className="btn-ghost mono log-dash" href={dashboardHref(`#/today?day=${day}`)}>TODAY ON THE DASHBOARD →</a>}
+          {!isRange && <a className="btn-ghost mono log-dash" href={dashboardHref(`#/today?day=${day}`)}>TODAY →</a>}
         </div>
       </header>
       <div className="pb-chips log-filters" role="group" aria-label="Show">

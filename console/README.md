@@ -33,6 +33,10 @@ See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rule
 
 ## Source entry vs served output
 
+One app (web redesign, phase 1): Today, Me and the former Console pages are routes of one router behind one shell; `dashboard.html`
+is gone. The deploy workflow writes the build to the site root and leaves `console/index.html` as a stub that forwards old
+`/console/#/...` links to the root.
+
 The Vite **source** entry is `app.html` (`npm run dev` opens it). `index.html` in this folder is the **served build output**: the
 deploy workflow (`.github/workflows/deploy-console.yml`) copies `dist/app.html` over it and commits it, together with `assets/`,
 so GitHub Pages can serve `/console/` from `main`. Never edit `index.html` or `assets/` by hand.

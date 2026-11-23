@@ -6,6 +6,10 @@ import { ErrorBoundary } from './components/shared/ErrorBoundary'
 import App from './App'
 import './components/shared/ErrorBoundary.css'
 import './index.css'
+import '../../design/tokens/tokens.css'
+import '../../design/tokens/backgrounds.css'
+import '../../design/tokens/components.css'
+import './dashboard/Dashboard.css'
 
 window.addEventListener('unhandledrejection', (e) => {
   console.error('[BioScan] Unhandled rejection:', e.reason)

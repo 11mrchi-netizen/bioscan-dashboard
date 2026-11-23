@@ -53,7 +53,7 @@ export default function Routine() {
       <header className="pg-head">
         <div>
           <h2 className="pg-title mono">ROUTINE</h2>
-          <p className="pg-sub">Your practices and pastimes, and what was logged against them in the last 8 weeks. Where the days' time went is on the <a href={dashboardHref('#/me?tab=ROUTINE')}>Dashboard's Routine</a>; a wrong entry is fixed on the phone.</p>
+          <p className="pg-sub">Your practices and pastimes, and what was logged against them in the last 8 weeks. Where the days' time went is on the <a href={dashboardHref('#/me?tab=ROUTINE')}>Me › Routine</a>; a wrong entry is fixed on the phone.</p>
         </div>
         <div className="pb-chips"><button className={`pb-chip ${showArchived ? 'on' : ''}`} onClick={() => setShowArchived((v) => !v)}>{showArchived ? 'HIDE REMOVED' : 'SHOW REMOVED'}</button></div>
       </header>

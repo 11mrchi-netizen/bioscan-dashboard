@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import { Shell } from './components/layout/Shell'
 import { Login } from './workspaces/Login'
+import { MePage, TodayPage } from './dashboard/DayPages'
 
 // The analysis hub's five workspaces (docs/analysis-console/IA.md §4).
 const Integrity    = lazy(() => import('./workspaces/Integrity'))
@@ -54,7 +55,9 @@ export default function App() {
           </RequireAuth>
         }
       >
-        <Route index element={<Navigate to="log" replace />} />
+        <Route index element={<Navigate to="today" replace />} />
+        <Route path="today" element={<TodayPage />} />
+        <Route path="me" element={<MePage />} />
         <Route path="integrity" element={<Integrity />} />
         <Route path="evidence"  element={<Evidence />} />
         <Route path="explore"   element={<Explore />} />

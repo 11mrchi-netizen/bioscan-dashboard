@@ -8,12 +8,12 @@ import { ErrorBoundary } from '../shared/ErrorBoundary'
 import { Inspector } from '../shared/Inspector'
 import { DateRangeControl } from './DateRangeControl'
 import { SavedViews } from './SavedViews'
-import { dashboardHref } from '../../lib/surfaces'
 import './Shell.css'
 
-// Web transition plan, phase 4: five groups in the phone's language. The Console is where the data is dug into, fixed and
-// planned; logging stays on the phone and glancing on the Dashboard.
+// One web app (redesign phase 1): Today and Me lead, then the groups in the phone's language. Phases 3-5 regroup the rest
+// into LAB, PLAN and SETUP (docs/web-redesign).
 const GROUPS: { title: string; items: { to: string; label: string }[] }[] = [
+  { title: 'GLANCE', items: [{ to: 'today', label: 'Today' }, { to: 'me', label: 'Me' }] },
   { title: 'LOG', items: [{ to: 'log', label: 'Day log' }] },
   { title: 'LAB', items: [
     { to: 'regimen', label: 'Regimen' }, { to: 'experiments', label: 'Experiments' }, { to: 'interventions', label: 'Interventions' },
@@ -74,9 +74,8 @@ export function Shell() {
         <button className="rail-toggle mono" onClick={() => setRailCollapsed(v => !v)} aria-label="Toggle navigation">
           {railCollapsed ? '›' : '‹'}
         </button>
-        <a className="btn-ghost mono shell-dash-link" href={dashboardHref()} title="The Dashboard: Today and Me">← DASHBOARD</a>
-        <span className="shell-wordmark mono">FIELD TERMINAL · CONSOLE</span>
-        <DateRangeControl />
+        <span className="shell-wordmark mono">FIELD TERMINAL</span>
+        {!/^\/(today|me)$/.test(location.pathname) && <DateRangeControl />}
         <div className="header-actions">
           <SavedViews />
           <span className="mono user-label">{user?.email}</span>

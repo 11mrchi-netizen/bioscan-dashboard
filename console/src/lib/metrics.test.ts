@@ -1,8 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { washFor, rangeFor, INPUT_HUE, INPUT_SERIES, meRef, splitMeLabel, metricHref, parseMetricRef, refString, SERIES_HUE, seriesBehind, windowStats } from './metrics.ts'
+import { compareRefs, seriesGroup, washFor, rangeFor, INPUT_HUE, INPUT_SERIES, meRef, splitMeLabel, metricHref, parseMetricRef, refString, SERIES_HUE, seriesBehind, windowStats } from './metrics.ts'
 import { SERIES } from './schema.ts'
+import { viewPath } from './savedViews.ts'
 
 test('old History refs still parse: a ring and an input', () => {
   assert.deepEqual(parseMetricRef('charge'), { kind: 'ring', key: 'charge' })
@@ -76,4 +77,22 @@ test('every metric has a domain wash that is a token', () => {
   const refs = ['charge', 'sleep', 'recovery.hrv', 'gut.form_3d', 'series:sleep_hours', 'series:meal_energy', 'series:body_weight', 'me:BODY:Weight'].map((r) => parseMetricRef(r)!)
   for (const r of refs) assert.ok(css.includes(`--${washFor(r)}:`), `${refString(r)} -> ${washFor(r)}`)
   assert.equal(washFor(parseMetricRef('series:sleep_deep_min')!), 'ft-domain-sleep')
+})
+
+test('the extra metrics of an address: known, distinct, not the page itself, at most three, no Me items', () => {
+  const own = parseMetricRef('series:hrv')!
+  const got = compareRefs(['series:rhr', 'series:hrv', 'nonsense', 'series:rhr', 'me:BODY:Weight', 'recovery.hrv', 'sleep', 'series:steps', 'charge'], own)
+  assert.deepEqual(got.map(refString), ['series:rhr', 'recovery.hrv', 'sleep'])
+  assert.deepEqual(compareRefs([], null), [])
+})
+
+test('a metric page is saved as a view with its metric and comparison', () => {
+  assert.equal(viewPath('/m/series%3Ahrv', '?with=series%3Arhr&with=sleep'), '/m/series%3Ahrv?with=series%3Arhr&with=sleep')
+  assert.equal(viewPath('/m', ''), null)
+  assert.equal(viewPath('/explore', '?series=hrv'), '/explore?series=hrv')
+  assert.equal(viewPath('/today', ''), null)
+})
+
+test('every series has a picker group', () => {
+  for (const s of SERIES) assert.ok(['SLEEP', 'RECOVERY', 'LOAD', 'FUEL', 'BALANCE'].includes(seriesGroup(s.id)), s.id)
 })

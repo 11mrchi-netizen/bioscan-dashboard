@@ -57,6 +57,13 @@ for (let t = Date.UTC(2025, 9, 1); t <= Date.UTC(2026, 9, 26); t += 864e5) {
   T.evening_checkins.push({ id: id++, user_id: 'u1', date: d, drinks, caffeine_after_14: r() < 0.3, late_meal: r() < 0.25, stress: 1 + Math.floor(r() * 5) })
 }
 for (const w of T.wearable_daily) if (w.hrv !== null && drinkDays.has(w.date)) w.hrv = +(w.hrv * 0.9).toFixed(1)
+// a planted link for the metric page's pair mode (phase 3): mood the day after is 10 - 1.5 x energy, plus a little noise
+T.wellbeing_daily = []
+for (let i = 0; i < 118; i++) {
+  const t = Date.UTC(2026, 6, 1) + i * 864e5
+  const energy = 3 + (i % 5)
+  T.wellbeing_daily.push({ id: id++, user_id: 'u1', date: day(t), energy, mood: i === 0 ? 5 : +(10 - 1.5 * (3 + ((i - 1) % 5)) + ((i - 1) % 3 === 0 ? 0.3 : -0.2)).toFixed(2), stress: 3, soreness: 2 })
+}
 // the phone's Me › BODY: a tile with points, a tile without, a row (phase 2: only the first opens a history)
 T.me_views = [{ tab: 'BODY', built_at: new Date().toISOString(), view: { v: 1, tab: 'BODY', sections: [{ title: 'WEIGHT', items: [
   { kind: 'tile', label: 'Weight', value: '72.4', unit: 'kg', hue: 'm-weight', series: Array.from({ length: 40 }, (_, i) => [day(Date.UTC(2026, 8, 17 + i)), +(73 - i * 0.03).toFixed(2)]) },
@@ -345,6 +352,37 @@ async function waitForServer() {
     check(await page.evaluate(() => document.documentElement.scrollWidth <= 392 && document.querySelector('.shell-canvas').scrollWidth <= 392), 'no sideways scroll on the metric page at phone width')
     await shot('metric-phone')
     await page.setViewportSize({ width: 1440, height: 1000 })
+
+    // 8d. compare (phase 3): a second metric on the page, the pair read at a lag, a second unit in its own panel
+    await page.goto(`${BASE}#/m/series:energy?range=90&with=series:mood&lag=1`); await page.waitForSelector('[data-testid=pair-words]', { timeout: 15000 })
+    check((await page.locator('.metric-card').count()) === 1, 'two metrics of one unit share one panel', await page.locator('.metric-card').count())
+    const w1 = await text('[data-testid=pair-words]')
+    check(/^A strong negative link: r −0\.9/.test(w1), 'the planted +1 day link is found at +1', w1)
+    await page.locator('.metric-pair .ft-chip', { hasText: 'SAME DAY' }).click(); await page.waitForTimeout(300)
+    const w0 = await text('[data-testid=pair-words]')
+    check(page.url().includes('lag=0') && /^(No clear link|A weak)/.test(w0), 'and not at the same day', w0)
+    await page.locator('.metric-pair .ft-chip', { hasText: '+1' }).click(); await page.waitForTimeout(300)
+    check(/^A strong negative link/.test(await text('[data-testid=pair-words]')), 'the lag chip writes the lag into the address and back')
+    check((await text('.metric-pair')).includes('Not proof of cause') || (await text('.metric-pair')).includes('not proof of cause'), 'the pair carries the association note')
+    await page.goto(`${BASE}#/m/series:energy?range=90&with=series:mood&with=series:hrv`); await page.waitForSelector('.metric-card', { timeout: 15000 }); await page.waitForTimeout(500)
+    check((await page.locator('.metric-card').count()) === 2, 'a metric of another unit gets its own panel', await page.locator('.metric-card').count())
+    check((await page.locator('.metric-table thead th').allTextContents()).join(' ').includes('MOOD') && (await page.locator('.metric-table thead th').allTextContents()).join(' ').includes('HRV'), 'the days table has a column per metric')
+    await page.locator('.metric-with', { hasText: 'HRV' }).click(); await page.waitForTimeout(300)
+    check(!decodeURIComponent(page.url()).includes('series:hrv') && decodeURIComponent(page.url()).includes('series:mood'), 'removing a metric takes it out of the address', page.url().split('#')[1])
+    await page.locator('.metric-compare-bar .ft-chip', { hasText: 'CLEAR' }).click(); await page.waitForTimeout(300)
+    check(!page.url().includes('with=') && (await page.locator('.metric-pair').count()) === 0, 'CLEAR returns to the single metric')
+    await page.locator('.metric-compare-bar .ft-chip', { hasText: '+ COMPARE' }).click()
+    await page.locator('.metric-picker .ft-chip', { hasText: 'Stress' }).first().click(); await page.waitForTimeout(400)
+    check(page.url().includes('with=series%3Astress') || page.url().includes('with=series:stress'), 'the picker adds a metric', page.url().split('#')[1])
+    await page.goto(`${BASE}#/m/series:energy?with=series:mood&with=series:stress&with=series:soreness&with=series:hrv&with=series:rhr`); await page.waitForSelector('.metric-card', { timeout: 15000 })
+    check((await page.locator('.metric-with').count()) === 3, 'at most three are drawn beside the page\'s metric', await page.locator('.metric-with').count())
+    await page.goto(`${BASE}#/m/series:energy?with=series:mood&with=series:hrv`); await page.waitForSelector('.metric-pair', { timeout: 15000 })
+    await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(400)
+    check(await page.evaluate(() => document.querySelector('.shell-canvas').scrollWidth <= 392), 'the comparison fits at phone width')
+    await shot('compare-phone')
+    await page.setViewportSize({ width: 1440, height: 1000 }); await page.waitForTimeout(300)
+    await page.goto(`${BASE}#/m/series:energy?with=series:mood&with=series:hrv`); await page.waitForSelector('.metric-pair', { timeout: 15000 }); await page.waitForTimeout(500)
+    await shot('compare')
 
     // 9. old routes redirect
     await page.goto(`${BASE}#/overview`); await page.waitForTimeout(300)

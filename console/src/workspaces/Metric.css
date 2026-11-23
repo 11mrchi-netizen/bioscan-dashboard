@@ -25,3 +25,20 @@
 .metric-links { display: flex; gap: 12px; white-space: nowrap; }
 .metric-links a { font: 500 10px var(--ft-mono); letter-spacing: .1em; color: var(--ft-muted); text-decoration: none; }
 .metric-links a:hover { color: var(--ft-fg); }
+
+/* compare (phase 3) */
+.metric-compare-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.metric-swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: baseline; }
+.metric-with { display: inline-flex; align-items: center; }
+.metric-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font: 500 11px var(--ft-mono); color: var(--ft-fg); }
+.metric-legend i { font-style: normal; color: var(--ft-muted); }
+.metric-unit { margin-left: auto; color: var(--ft-dim); }
+.metric-picker { display: flex; flex-direction: column; gap: 10px; }
+.metric-pick-group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.metric-pick-group > .metric-latest-k { min-width: 84px; }
+.metric-picker .ft-chip:disabled { opacity: .4; cursor: default; }
+.metric-pair { display: flex; flex-direction: column; gap: 10px; }
+.metric-pair-pick { display: flex; flex-direction: column; gap: 8px; }
+.metric-pair-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.metric-pair-row > .metric-latest-k { min-width: 84px; }
+.metric-scatter { height: 240px; width: 100%; }

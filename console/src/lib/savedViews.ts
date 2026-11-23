@@ -10,13 +10,16 @@ export interface SavedView {
   range: SavedRange
 }
 
-const ROUTES = new Set(['integrity', 'evidence', 'explore', 'data', 'models'])
+const ROUTES = new Set(['integrity', 'evidence', 'explore', 'data', 'models', 'm'])
 
 /** The route to save: the hash path with its query, only for the console's own workspaces. */
 export function viewPath(pathname: string, search: string): string | null {
-  const route = pathname.replace(/^\/+/, '').split('/')[0]
+  const parts = pathname.replace(/^\/+/, '').split('/')
+  const route = parts[0]
   if (!ROUTES.has(route)) return null
-  return `/${route}${search && search !== '?' ? search : ''}`
+  // A metric page is #/m/<ref>: the ref is part of the view (a comparison is saved with its metrics, which are repeated ?with=).
+  if (route === 'm' && !parts[1]) return null
+  return `/${route === 'm' ? parts.slice(0, 2).join('/') : route}${search && search !== '?' ? search : ''}`
 }
 
 /** Opening a view: the route to navigate to and the range to set, or null for a row that is not a console route. */

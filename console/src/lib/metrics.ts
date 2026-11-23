@@ -131,7 +131,7 @@ export function rangeFor(focus: string | null, today: string): (typeof METRIC_RA
 }
 
 const DOMAIN_WASH: Record<string, string> = { SLEEP: 'ft-domain-sleep', RECOVERY: 'ft-domain-cardio', LOAD: 'ft-domain-load', FUEL: 'ft-domain-fuel', BALANCE: 'ft-domain-balance' }
-const SERIES_DOMAIN: Record<string, string> = {
+export const SERIES_DOMAIN: Record<string, string> = {
   hrv: 'RECOVERY', rhr: 'RECOVERY', spo2: 'RECOVERY', vo2max: 'RECOVERY', energy: 'RECOVERY', soreness: 'RECOVERY',
   steps: 'LOAD', calories_active: 'LOAD', calories_total: 'LOAD', zone_minutes: 'LOAD', run_duration: 'LOAD', run_distance: 'LOAD', run_avg_hr: 'LOAD', strength_duration: 'LOAD', session_rpe: 'LOAD',
   water_intake: 'FUEL', meal_energy: 'FUEL', meal_protein: 'FUEL', meal_carbs: 'FUEL', meal_fat: 'FUEL', meal_fiber: 'FUEL',
@@ -143,4 +143,27 @@ export function washFor(ref: MetricRef): string {
   if (ref.kind === 'input') return DOMAIN_WASH[domainOfInput(ref.key) ?? ''] ?? 'ft-domain-balance'
   if (ref.kind === 'series') return DOMAIN_WASH[SERIES_DOMAIN[ref.key] ?? (ref.key.startsWith('sleep_') ? 'SLEEP' : '')] ?? 'ft-domain-balance'
   return 'ft-domain-balance'
+}
+
+/** The ring a series is grouped under in the picker: its entry of SERIES_DOMAIN, sleep_* under SLEEP, the rest under BODY AND MIND. */
+export function seriesGroup(id: string): string {
+  return SERIES_DOMAIN[id] ?? (id.startsWith('sleep_') ? 'SLEEP' : 'BALANCE')
+}
+
+/** The most metrics drawn beside the one the page is about. */
+export const MAX_COMPARE = 3
+
+/** The extra metrics of an address (`?with=a&with=b`, one parameter each: refs hold commas and colons), known, distinct, not the page's own. */
+export function compareRefs(withParams: string[], own: MetricRef | null): MetricRef[] {
+  const seen = new Set<string>(own ? [refString(own)] : [])
+  const out: MetricRef[] = []
+  for (const raw of withParams) {
+    const ref = parseMetricRef(raw)
+    if (!ref || ref.kind === 'me') continue // a Me item can be the page's metric, not yet an extra
+    const key = refString(ref)
+    if (seen.has(key)) continue
+    seen.add(key); out.push(ref)
+    if (out.length === MAX_COMPARE) break
+  }
+  return out
 }

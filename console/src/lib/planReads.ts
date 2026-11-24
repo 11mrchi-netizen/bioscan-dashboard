@@ -44,9 +44,4 @@ export const hm = (min: number | null | undefined): string => {
 }
 export const longDate = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
 export const daysUntil = (d: string, today: string) => Math.round((Date.parse(`${d}T12:00:00`) - Date.parse(`${today}T12:00:00`)) / 86400000)
-/** Monday of the week [d] is in. */
-export function mondayOf(d: string): string {
-  const x = new Date(`${d}T12:00:00`)
-  x.setDate(x.getDate() - ((x.getDay() + 6) % 7))
-  return x.toLocaleDateString('sv-SE')
-}
+export { mondayOf } from './dates'

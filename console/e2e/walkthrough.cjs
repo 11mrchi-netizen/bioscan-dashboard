@@ -87,6 +87,11 @@ for (let i = 0; i < 70; i++) {
   if (i % 2 === 0) T.body_metrics.push({ id: id++, user_id: 'u1', date: day(t), body_fat_pct: +(18.5 - i * 0.02 + ((i * 3) % 4) * 0.2).toFixed(1), height_cm: 178, source: 'health_connect' })
 }
 T.user_profile = [{ id: 1, user_id: 'u1', date_of_birth: '1990-05-01', sex: 'male', height_cm: 178 }]
+// one planned session every day around today, for Plan › Sessions' week cards (the last week of a window must be whole)
+const ymd = (d) => d.toLocaleDateString('sv-SE')
+const dayPlus = (n) => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + n); return d }
+T.planned_sessions = []
+for (let n = -70; n <= 70; n++) T.planned_sessions.push({ id: 5000 + n, block_id: null, week_index: null, sequence_no: null, domain: 'run', work_kind: 'easy', title: `Run ${n}`, scheduled_date: ymd(dayPlus(n)), original_date: null, start_time: '07:00:00', duration_min: 45, status: 'planned', exercise_session_id: null, match_status: null, gcal_pushed_at: null, zepp_pushed_at: null })
 // the phone's Me › BODY: a tile with points, a tile without, a row (phase 2: only the first opens a history)
 T.me_views = [{ tab: 'BODY', built_at: new Date().toISOString(), view: { v: 1, tab: 'BODY', sections: [{ title: 'WEIGHT', items: [
   { kind: 'tile', label: 'Weight', value: '72.4', unit: 'kg', hue: 'm-weight', series: Array.from({ length: 40 }, (_, i) => [day(Date.UTC(2026, 8, 17 + i)), +(73 - i * 0.03).toFixed(2)]) },
@@ -549,6 +554,25 @@ async function waitForServer() {
       await page.evaluate((v) => sessionStorage.setItem('ft.console.returnTo', v), stored)
       await page.goto(BASE); await page.waitForTimeout(1200)
       check(page.url().split('#')[1] === expect, `the sign-in return lands on ${expect} (stored ${stored})`, page.url().split('#')[1])
+    }
+
+    // 8h. Plan › Sessions draws whole weeks: the last week of NEXT 6 WEEKS holds all seven days (it once held the Monday only)
+    {
+      const dow = (d) => (d.getDay() + 6) % 7 // 0 = Monday
+      const mon = dayPlus(-dow(dayPlus(0)))
+      const cards = async () => page.locator('section.pg-card').evaluateAll((els) => els.map((e) => ({ title: e.querySelector('.pg-card-title span').textContent, n: Number(e.querySelector('.pg-card-title span:last-child').textContent) })))
+      await page.goto(`${BASE}#/plan/sessions`); await page.waitForSelector('section.pg-card', { timeout: 15000 }); await page.waitForTimeout(300)
+      let c = await cards()
+      check(c.length === 6, 'NEXT 6 WEEKS draws six week cards', c.length)
+      check(c[c.length - 1].n === 7, 'and the last one holds all seven days', JSON.stringify(c[c.length - 1]))
+      check(c.slice(1).every((x) => x.n === 7) && c[0].n === 7 - dow(dayPlus(0)), 'every later week is whole; this week holds today onward', c.map((x) => x.n).join(','))
+      await page.goto(`${BASE}#/plan/sessions?w=recent`); await page.waitForSelector('section.pg-card', { timeout: 15000 }); await page.waitForTimeout(300)
+      c = await cards()
+      check(c.length === 6 && c[0].n === dow(dayPlus(0)) + 1, 'LAST 6 WEEKS: this week up to today, newest first', c.map((x) => x.n).join(','))
+      check(c[c.length - 1].n === 7, 'and its oldest week is whole (it began mid-week)', JSON.stringify(c[c.length - 1]))
+      await page.goto(`${BASE}#/plan/sessions?w=both`); await page.waitForSelector('section.pg-card', { timeout: 15000 }); await page.waitForTimeout(300)
+      c = await cards()
+      check(c.length === 11 && c[0].n === 7 && c[c.length - 1].n === 7, 'BOTH is eleven weeks, whole at both ends', c.map((x) => x.n).join(','))
     }
 
     // 9. old routes redirect

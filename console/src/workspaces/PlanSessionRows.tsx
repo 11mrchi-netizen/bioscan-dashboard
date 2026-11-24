@@ -12,11 +12,10 @@ export function PlanSessionRows({ sessions, blockName, today }: { sessions: Plan
           {s.scheduled_date === today && <span className="pg-tag mono">TODAY</span>}
         </span>
         <span className={`pg-row-value mono ${STATUS_CLASS[s.status] ?? ''}`}>{s.status.toUpperCase()}</span>
-        <span className="pg-row-sub">{[
+        <span className="pg-row-sub">{s.exercise_session_id != null && <><a href={`#/plan/sessions/${s.exercise_session_id}`}>RECORDED SESSION{s.match_status ? ` (${s.match_status})` : ''} →</a>{' · '}</>}{[
           s.domain?.replaceAll('_', ' '), s.duration_min ? hm(s.duration_min) : null,
           s.block_id != null ? `${blockName.get(s.block_id) ?? 'block'}${s.week_index ? ` · week ${s.week_index}` : ''}` : null,
           s.original_date && s.original_date !== s.scheduled_date ? `moved from ${longDate(s.original_date)}` : null,
-          s.exercise_session_id ? `matched to a recorded session${s.match_status ? ` (${s.match_status})` : ''}` : null,
           s.gcal_pushed_at ? 'on the calendar' : null, s.zepp_pushed_at ? 'on the watch' : null,
         ].filter(Boolean).join(' · ')}</span>
       </li>

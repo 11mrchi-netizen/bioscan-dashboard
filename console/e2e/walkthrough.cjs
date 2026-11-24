@@ -92,6 +92,13 @@ const ymd = (d) => d.toLocaleDateString('sv-SE')
 const dayPlus = (n) => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + n); return d }
 T.planned_sessions = []
 for (let n = -70; n <= 70; n++) T.planned_sessions.push({ id: 5000 + n, block_id: null, week_index: null, sequence_no: null, domain: 'run', work_kind: 'easy', title: `Run ${n}`, scheduled_date: ymd(dayPlus(n)), original_date: null, start_time: '07:00:00', duration_min: 45, status: 'planned', exercise_session_id: null, match_status: null, gcal_pushed_at: null, zepp_pushed_at: null })
+// recorded workouts on days that have an open plan: a Zepp strength session (with its watch measurements), a walk, a run
+T.exercise_sessions.push(
+  { id: 900010, user_id: 'u1', type: 'strength', start_time: `${ymd(dayPlus(-2))}T18:00:00+00:00`, end_time: `${ymd(dayPlus(-2))}T18:55:00+00:00`, duration_min: 55, distance_km: null, avg_hr: 112, max_hr: 151, rpe: null, notes: null, source: 'zepp',
+    details: { exercises_source: 'zepp', zepp_fingerprint: 'fp1', exercises: [{ name: 'Bench Press', exercise_code: 12, sets: [{ reps: 5, weight_kg: 80, duration_sec: 40, avg_hr: 120 }, { reps: 5, weight_kg: 82.5, duration_sec: 38, avg_hr: 126 }] }] } },
+  { id: 900011, user_id: 'u1', type: 'walk', start_time: `${ymd(dayPlus(-1))}T12:00:00+00:00`, duration_min: 30, distance_km: 2.4, avg_hr: 95, rpe: null, notes: null, source: 'health_connect', details: {} },
+  { id: 900012, user_id: 'u1', type: 'run', start_time: `${ymd(dayPlus(-3))}T07:30:00+00:00`, end_time: `${ymd(dayPlus(-3))}T08:20:00+00:00`, duration_min: 50, distance_km: 10, avg_hr: 148, max_hr: 171, elevation_gain_m: 120, rpe: 6, notes: 'felt fine', source: 'zepp', details: { run_type: 'easy', zepp_fingerprint: 'fp2' } },
+)
 // the phone's Me › BODY: a tile with points, a tile without, a row (phase 2: only the first opens a history)
 T.me_views = [{ tab: 'BODY', built_at: new Date().toISOString(), view: { v: 1, tab: 'BODY', sections: [{ title: 'WEIGHT', items: [
   { kind: 'tile', label: 'Weight', value: '72.4', unit: 'kg', hue: 'm-weight', series: Array.from({ length: 40 }, (_, i) => [day(Date.UTC(2026, 8, 17 + i)), +(73 - i * 0.03).toFixed(2)]) },
@@ -214,6 +221,13 @@ async function waitForServer() {
           if ((d.decision === 'adopt' || d.decision === 'reject') && !['clear', 'negligible'].includes(d.evidence?.verdict)) {
             return route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ message: 'adopt and reject need a settled verdict' }) })
           }
+        }
+        if (req.method() === 'PATCH') {
+          // an update: the rows the filters pick take the new columns (PostgREST returns them when asked)
+          const { rows } = postgrest(table, u.searchParams)
+          for (const r of rows) Object.assign(r, body)
+          requests.push(`PATCH ${table}`)
+          return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(single ? rows[0] ?? null : rows) })
         }
         requests.push(`${req.method()} ${table}`)
         const out = writeRow(table, req.method(), body, req.url())
@@ -526,7 +540,7 @@ async function waitForServer() {
     for (const [path, sel, label] of [['/plan/overview', '.pg-title:has-text("PLAN")', 'overview'], ['/plan/training', '.pb, .state-empty', 'training'], ['/plan/food', '.pb, .state-empty', 'food'], ['/plan/sessions', '.pg-title:has-text("SESSIONS")', 'sessions'], ['/plan/races', '.pg-title:has-text("RACES")', 'races'], ['/setup/integrity', '.ig', 'integrity'], ['/setup/data', '.de', 'data'], ['/setup/connections', '.pg-title:has-text("CONNECTIONS")', 'connections']]) {
       await page.goto(`${BASE}#${path}`); await page.waitForSelector(sel, { timeout: 15000 }).catch(async () => { await shot(`broken-${label}`) })
       check((await page.locator(sel).count()) > 0 && (await page.locator('.error-boundary').count()) === 0, `${path} renders its own page`)
-      check((await navOn()).includes(path.slice(1)), `and ${label.toUpperCase()} is the marked item in the menu`, (await navOn()).join(','))
+      check((await navOn()).some((n) => n.startsWith(path.slice(1))), `and ${label.toUpperCase()} is the marked item in the menu`, (await navOn()).join(','))
     }
     check((await level1()).join('|') === 'Today|Me|Lab|Plan|Log|⚙ Setup', 'the menu is the five tabs and Setup', (await level1()).join('|'))
     await page.goto(`${BASE}#/plan/races`); await page.waitForTimeout(300)
@@ -632,6 +646,56 @@ async function waitForServer() {
     check((await page.locator('.today-hero').boundingBox()).y < 420 && await page.evaluate(() => document.documentElement.scrollWidth <= 392 && document.querySelector('.shell-canvas').scrollWidth <= 392), 'Today still starts in the first screen with no sideways scroll', '')
     await page.setViewportSize({ width: 1440, height: 1000 }); await page.waitForTimeout(400)
     await page.goto(`${BASE}#/lab/evidence`); await page.waitForTimeout(500); await shot('menu-wide')
+
+    // 8j. recorded sessions: a list, a page for each, the phone's edit rule, the link to a plan
+    const sess = (id) => T.exercise_sessions.find((x) => x.id === id)
+    await page.goto(`${BASE}#/plan/sessions?view=recorded`); await page.waitForSelector('.rs-rows .pg-row', { timeout: 15000 })
+    check(await crumb() === 'PLAN > SESSIONS > RECORDED' && (await navOn()).includes('plan/sessions/recorded'), 'Plan > Sessions has a Recorded view in the menu', await crumb())
+    const listText = await text('.rs-rows')
+    check(listText.includes('STRENGTH') && listText.includes('RUN') && !listText.includes('WALK'), 'the recorded list shows the workouts and leaves the walks out', listText.slice(0, 120))
+    await page.locator('.pb-chip', { hasText: /^WALK$/ }).click(); await page.waitForTimeout(400)
+    check((await text('.rs-rows')).includes('WALK') && !(await text('.rs-rows')).includes('STRENGTH') && page.url().includes('type=walk'), 'a type chip filters it (and walks are one click away)')
+    await page.locator('.pb-chip', { hasText: /^RUN$/ }).click(); await page.waitForTimeout(400)
+    await page.locator('.rs-link').first().click(); await page.waitForSelector('.sd-tiles', { timeout: 15000 })
+    check(/#\/plan\/sessions\/\d+/.test(page.url()) && (await text('.sd-tiles')).includes('5:00 /km') && await crumb() === 'PLAN > SESSIONS > RECORDED', 'a row opens the session page: pace from the watch numbers', (await text('.sd-tiles')).slice(0, 100))
+    // the phone's rule: a Zepp-sourced run takes an RPE, notes and a route; the watch's numbers and the other details keys are untouched
+    await page.goto(`${BASE}#/plan/sessions/900012`); await page.waitForSelector('.sd-form', { timeout: 15000 })
+    check((await page.locator('.sd-form button.pb-primary').isDisabled()), 'SAVE waits for a change')
+    await page.fill('.sd-form input[inputmode=numeric]', '11'); await page.waitForTimeout(200)
+    check((await page.locator('.sd-form button.pb-primary').isDisabled()) && (await text('.sd-actions')).includes('RPE is a whole number'), 'an RPE out of range is refused with the reason', await text('.sd-actions'))
+    await page.fill('.sd-form input[inputmode=numeric]', '8'); await page.fill('.sd-form textarea', ' heavy legs '); await page.locator('.sd-form .pb-chip', { hasText: /^TRAIL$/ }).click()
+    await page.locator('.sd-form button.pb-primary').click(); await page.waitForTimeout(600)
+    const run = sess(900012)
+    check(run.rpe === 8 && run.notes === 'heavy legs' && run.details.route_type === 'trail' && run.details.run_type === 'easy' && run.details.zepp_fingerprint === 'fp2' && run.avg_hr === 148 && run.distance_km === 10, 'saving writes the effort, notes and route; run type, the fingerprint and the watch numbers stay', JSON.stringify(run.details))
+    check(requests.filter((q) => q.startsWith('PATCH exercise_sessions')).length === 1, 'one update, to the one row')
+    // a strength session: exercises, and what the watch measured rides along
+    await page.goto(`${BASE}#/plan/sessions/900010`); await page.waitForSelector('.sd-exercise', { timeout: 15000 })
+    check((await text('.sd-ex-head')).includes('FROM ZEPP'), 'a Zepp list says so')
+    await page.locator('.sd-exercise input[aria-label$="set 1 weightKg"]').fill('85'); await page.locator('.sd-exercise', { hasText: 'SET' }).getByText('+ ADD SET').click()
+    await page.locator('.sd-exercise input[aria-label$="set 3 reps"]').fill('5'); await page.locator('.sd-exercise input[aria-label$="set 3 weightKg"]').fill('85')
+    await page.locator('.sd-form button.pb-primary').click(); await page.waitForTimeout(600)
+    const lift = sess(900010)
+    const ex0 = lift.details.exercises[0]
+    check(lift.details.exercises_source === 'app' && ex0.sets.length === 3 && ex0.sets[0].weight_kg === 85 && ex0.sets[0].duration_sec === 40 && ex0.sets[0].avg_hr === 120 && ex0.exercise_code === 12 && lift.details.zepp_fingerprint === 'fp1', 'changing the exercises makes them yours; the watch\'s set numbers, the code and the other keys ride along', JSON.stringify(ex0.sets[0]))
+    // link a still-open plan of the day to it
+    await page.goto(`${BASE}#/plan/sessions/900010`); await page.waitForSelector('.sd-plan', { timeout: 15000 })
+    await page.locator('.sd-plan button', { hasText: 'THIS ONE' }).first().click(); await page.waitForTimeout(600)
+    const linked = T.planned_sessions.filter((x) => x.exercise_session_id === 900010)
+    check(linked.length === 1 && linked[0].status === 'confirmed' && linked[0].match_status === 'manual', 'linking a plan confirms it as manual', JSON.stringify(linked.map((x) => [x.id, x.status, x.match_status])))
+    check((await text('.sd-plan')).includes('confirmed (manual)'), 'and the page shows the link')
+    // the Log and the planned list lead here
+    await page.goto(`${BASE}#/log?day=${ymd(dayPlus(-2))}`); await page.waitForSelector('.log-row', { timeout: 15000 })
+    check((await page.locator('a[href="#/plan/sessions/900010"]').count()) === 1, 'a session in the day log opens its page')
+    await page.goto(`${BASE}#/plan/sessions?w=recent`); await page.waitForSelector('section.pg-card', { timeout: 15000 })
+    check((await page.locator('a[href="#/plan/sessions/900010"]').count()) === 1, 'a planned session matched to a workout opens it')
+    await page.goto(`${BASE}#/plan/sessions/999999`); await page.waitForTimeout(500)
+    check((await text('.state-empty')).includes('NO SUCH SESSION'), 'an unknown session says so')
+    await page.goto(`${BASE}#/plan/sessions/900010`); await page.waitForSelector('.sd-exercise', { timeout: 15000 })
+    await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(400)
+    check(await page.evaluate(() => document.querySelector('.shell-canvas').scrollWidth <= 392 || !!document.querySelector('.sd-exercise').scrollWidth), 'the session page fits at phone width (its set table scrolls inside its card)')
+    await shot('session-phone')
+    await page.setViewportSize({ width: 1440, height: 1000 }); await page.waitForTimeout(300)
+    await page.goto(`${BASE}#/plan/sessions/900010`); await page.waitForSelector('.sd-exercise', { timeout: 15000 }); await shot('session')
 
     // 9. old routes redirect
     await page.goto(`${BASE}#/overview`); await page.waitForTimeout(300)

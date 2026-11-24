@@ -22,3 +22,6 @@
 .pg-table-wrap { overflow-x: auto; }
 .pg-link { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; font: inherit; color: var(--color-text-primary); }
 .pg-link:hover, .pg-link:focus-visible { text-decoration: underline; }
+
+/* a sentence that points at another page: a link in the page's accent, not the browser's blue */
+.pg a:not([class]) { color: var(--color-emerald); }

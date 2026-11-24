@@ -7,12 +7,19 @@ import { useLoadEffect } from '../lib/useLoadEffect'
 import { localToday, weekWindow, type WeekWindow } from '../lib/dates'
 import { loadPlannedSessions, longDate, mondayOf, type PlannedSession } from '../lib/planReads'
 import { PlanSessionRows } from './PlanSessionRows'
+import RecordedSessions from './RecordedSessions'
 import './PlanBlock.css'
 import './Pages.css'
 
 const WINDOWS = [{ id: 'ahead', label: 'NEXT 6 WEEKS' }, { id: 'recent', label: 'LAST 6 WEEKS' }, { id: 'both', label: 'BOTH' }]
 
 export default function Sessions() {
+  const [params] = useSearchParams()
+  // Two views (the side menu lists them): the planned sessions week by week, and every recorded workout.
+  return params.get('view') === 'recorded' ? <RecordedSessions /> : <PlannedSessions />
+}
+
+function PlannedSessions() {
   const [params, setParams] = useSearchParams()
   const win = params.get('w') ?? 'ahead'
   const status = params.get('status')

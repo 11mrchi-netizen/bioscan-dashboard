@@ -9,7 +9,7 @@
 // link that changes only the tab or the view keeps them (`navTo`).
 
 export interface NavView { id: string; label: string; /** the ?view= value; null when it is the default (no parameter) */ value: string | null }
-export interface NavTab { id: string; label: string; views?: readonly NavView[] }
+export interface NavTab { id: string; label: string; views?: readonly NavView[]; /** the view a page under the tab (#/plan/sessions/<id>) belongs to */ detailView?: string }
 export interface NavSection { id: string; label: string; /** Me: the tab is the ?tab= parameter, not part of the path */ tabParam?: 'tab'; tabs?: readonly NavTab[] }
 
 /** The phone's Me tabs, in the phone's order (MeScreen.kt); BODY is the page's default when no tab is given. */
@@ -35,7 +35,8 @@ export const NAV: readonly NavSection[] = [
   ] },
   { id: 'plan', label: 'Plan', tabs: [
     { id: 'overview', label: 'Overview' }, { id: 'training', label: 'Training' }, { id: 'food', label: 'Food' },
-    { id: 'sessions', label: 'Sessions' }, { id: 'races', label: 'Races' },
+    { id: 'sessions', label: 'Sessions', detailView: 'recorded', views: [{ id: 'planned', label: 'Planned', value: null }, { id: 'recorded', label: 'Recorded', value: 'recorded' }] },
+    { id: 'races', label: 'Races' },
   ] },
   { id: 'log', label: 'Log' },
   { id: 'setup', label: 'Setup', tabs: [{ id: 'integrity', label: 'Integrity' }, { id: 'data', label: 'Data' }, { id: 'connections', label: 'Connections' }] },
@@ -55,7 +56,7 @@ export function locate(pathname: string, search: string): NavLocation {
     tab = section.tabs.find((t) => t.id === want) ?? (section.tabParam ? section.tabs.find((t) => t.id === ME_DEFAULT_TAB) ?? null : null)
   }
   let view: NavView | null = null
-  if (tab?.views) view = tab.views.find((v) => v.value === q.get('view')) ?? tab.views[0]
+  if (tab?.views) view = (parts[2] && tab.detailView ? tab.views.find((v) => v.id === tab.detailView) : null) ?? tab.views.find((v) => v.value === q.get('view')) ?? tab.views[0]
   return { section, tab, view }
 }
 

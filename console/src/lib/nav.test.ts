@@ -63,3 +63,11 @@ test('every tab and view the tree names is a real page route', () => {
   const routes = new Set(['lab/compare', 'lab/evidence', 'lab/experiments', 'lab/regimen', 'lab/tests', 'lab/routine', 'plan/overview', 'plan/training', 'plan/food', 'plan/sessions', 'plan/races', 'setup/integrity', 'setup/data', 'setup/connections'])
   for (const s of NAV) for (const t of s.tabs ?? []) if (!s.tabParam) assert.ok(routes.has(`${s.id}/${t.id}`), `${s.id}/${t.id}`)
 })
+
+test('Plan > Sessions has Planned and Recorded, and one recorded session\'s page belongs to Recorded', () => {
+  assert.equal(locate('/plan/sessions', '').view?.id, 'planned')
+  assert.equal(locate('/plan/sessions', '?view=recorded&type=run').view?.id, 'recorded')
+  assert.equal(locate('/plan/sessions/812', '').view?.id, 'recorded')
+  assert.deepEqual(crumbs(locate('/plan/sessions/812', '')), ['Plan', 'Sessions', 'Recorded'])
+  assert.equal(locate('/plan/overview/812', '').view, null)
+})

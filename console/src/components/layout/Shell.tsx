@@ -29,13 +29,12 @@ const GROUPS: { title: string; items: { to: string; label: string }[] }[] = [
 export const RETURN_KEY = 'ft.console.returnTo'
 
 /**
- * Where the header's range applies: Evidence, Integrity, Data, Explore's long-range view and the like read it. Today, Me, the metric
- * page and Compare's days view have their own (a day, a tab, range chips), so the control would only mislead there.
+ * Where the header's range applies: only the pages that read it (analysisStore's range): Integrity and Compare's PERIODS view
+ * (Explore). Every other page has its own (a day, a tab, range chips, filters) or none, so the control would only mislead.
  */
 function usesGlobalRange(pathname: string, search: string): boolean {
-  if (/^\/(today|me|m\/.*)$/.test(pathname)) return false
-  if (pathname === '/lab/compare') return new URLSearchParams(search).get('view') === 'periods'
-  return true
+  if (pathname === '/integrity') return true
+  return pathname === '/lab/compare' && new URLSearchParams(search).get('view') === 'periods'
 }
 
 export function Shell() {

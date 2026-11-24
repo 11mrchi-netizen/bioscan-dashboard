@@ -333,6 +333,7 @@ async function waitForServer() {
     check(page.url().endsWith('#/today'), 'the app opens on Today', page.url().split('#')[1])
     check((await page.locator('.shell-rail .rail-item', { hasText: /^Today$/ }).count()) === 1 && (await page.locator('.shell-rail .rail-item', { hasText: /^Me$/ }).count()) === 1, 'Today and Me are in the rail')
     check((await page.locator('a', { hasText: /CONSOLE →|← DASHBOARD/ }).count()) === 0, 'there is no Dashboard / Console switch')
+    check((await page.locator('.date-range-control').count()) === 0, 'Today has no header range')
     await shot('today')
     await page.locator('.shell-rail .rail-item', { hasText: /^Me$/ }).click(); await page.waitForSelector('.me', { timeout: 15000 })
     check(page.url().includes('#/me'), 'the rail opens Me', page.url().split('#')[1])
@@ -445,10 +446,13 @@ async function waitForServer() {
     check(await to('/regimen') === '/lab/regimen' && await to('/routine') === '/lab/routine' && await to('/tests') === '/lab/tests', 'old regimen, routine and tests')
     check(await to('/overview') === '/lab/compare?view=periods', 'a v1 alias goes straight to the final place')
     check(await to('/lab') === '/lab/compare' && await to('/lab/nonsense') === '/lab/compare', 'the Lab root and an unknown tab open Compare')
-    for (const [tab, sel] of [['compare', '.metric'], ['evidence', '.dec-queue, .dec-cols, .dec-bench, .dec-col, .rlab'], ['experiments', '.rlab'], ['regimen', '.pg, .pg-sub, h2'], ['tests', '.pg, .pg-sub, h2'], ['routine', '.pg, .pg-sub, h2']]) {
-      await page.goto(`${BASE}#/lab/${tab}`); await page.waitForSelector(sel, { timeout: 15000 })
-      await page.waitForSelector('.lab-tab', { timeout: 5000 }).catch(async () => { await shot(`lab-${tab}-broken`); console.log('LAB TAB MISSING', tab, errors.slice(-2).join(' | '), (await text('.shell-canvas')).slice(0, 200)) })
-      check((await page.locator('.lab-tab[aria-current="true"]').textContent({ timeout: 3000 }).catch(() => '')).toLowerCase() === tab, `Lab › ${tab.toUpperCase()} renders and is the marked tab`)
+    // one selector unique to each page (not the Lab's own heading), no error screen, and the Lab entry itself marked in the rail
+    for (const [tab, sel] of [['compare', '.metric-chart'], ['evidence', '.dec-bench, .dec-cols, .dec-col, .dec-queue'], ['experiments', '.conf-grid, .state-empty'], ['regimen', '.pg-title:has-text("REGIMEN")'], ['tests', '.pg-title:has-text("TESTS")'], ['routine', '.pg-title:has-text("ROUTINE")']]) {
+      await page.goto(`${BASE}#/lab/${tab}`); await page.waitForSelector(sel, { timeout: 15000 }).catch(async () => { await shot(`lab-${tab}-broken`) })
+      check((await page.locator(sel).count()) > 0 && (await page.locator('.error-boundary').count()) === 0, `Lab › ${tab.toUpperCase()} renders its own page, not an error screen`)
+      check((await page.locator('.lab-tab[aria-current="true"]').textContent({ timeout: 3000 }).catch(() => '')).toLowerCase() === tab, `and ${tab.toUpperCase()} is the marked tab`)
+      check((await page.locator('.shell-rail .rail-item.active').allTextContents()).join('|') === 'Lab', 'and Lab is the marked entry in the rail', (await page.locator('.shell-rail .rail-item.active').allTextContents()).join('|'))
+      if (['regimen', 'tests', 'routine'].includes(tab)) await shot(`lab-${tab}`)
     }
     // Compare (phase 4, second commit): the metric page's compare is the default view, Explore the long-range one
     await page.goto(`${BASE}#/lab/compare`); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
@@ -476,6 +480,9 @@ async function waitForServer() {
     for (const v of ['queue', 'board', 'ledger', 'events', 'discovery', 'trust']) { await page.goto(`${BASE}#/lab/evidence${v === 'queue' ? '' : `?view=${v}`}`); await page.waitForTimeout(700) }
     for (const v of ['randomised', 'interventions', 'repeatable', 'fueling']) { await page.goto(`${BASE}#/lab/experiments${v === 'randomised' ? '' : `?view=${v}`}`); await page.waitForTimeout(700) }
     check(errors.length === errsBefore, 'every Evidence and Experiments view renders without a page error', errors.slice(errsBefore).join(' | '))
+    check((await Promise.all(['/lab/evidence', '/lab/regimen', '/lab/tests', '/data', '/plan'].map(async (r) => { await page.goto(`${BASE}#${r}`); await page.waitForTimeout(250); return page.locator('.date-range-control').count() }))).every((n) => n === 0), 'pages that do not read the global range do not show it')
+    await page.goto(`${BASE}#/integrity`); await page.waitForTimeout(300)
+    check((await page.locator('.date-range-control').count()) === 1, 'Integrity, which reads it, does')
     await page.goto(`${BASE}#/lab/evidence?view=board`); await page.waitForSelector('.lab-views', { timeout: 15000 })
     check((await page.locator('.lab-views .ft-chip[aria-current="true"]').textContent()) === 'EVIDENCE BOARD', 'a sub-view link opens that view')
     await page.goto(`${BASE}#/lab/evidence?view=trust`); await page.waitForTimeout(600)

@@ -25,6 +25,19 @@ const median = (v: number[]) => {
 export interface Confidence { have: number; need: number }
 const met = (c: Confidence) => c.have >= c.need
 
+/** One logged meal row, as meals has it. */
+export interface MealRow { logged_at: string; calories: number | null; protein_g: number | null; fat_g: number | null; carbs_g: number | null }
+
+/** Meals summed by the calendar date of their (wall-clock) logged time, ascending (Nutrition.kt aggregateMealsByDay). */
+export function aggregateMealsByDay(meals: MealRow[]): DailyNutrition[] {
+  const byDate = new Map<string, MealRow[]>()
+  for (const m of meals) { const d = m.logged_at.slice(0, 10); const l = byDate.get(d); if (l) l.push(m); else byDate.set(d, [m]) }
+  const sum = (rows: MealRow[], f: (m: MealRow) => number | null) => rows.reduce((a, m) => a + (f(m) ?? 0), 0)
+  return [...byDate.entries()]
+    .map(([date, rows]) => ({ date, calories: sum(rows, (m) => m.calories), proteinG: sum(rows, (m) => m.protein_g), fatG: sum(rows, (m) => m.fat_g), carbsG: sum(rows, (m) => m.carbs_g), mealCount: rows.length }))
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+}
+
 // ---- nutrition (NutritionEvaluation.kt) ----
 
 export interface DailyNutrition { date: string; calories: number; proteinG: number; fatG: number; carbsG: number; mealCount: number }

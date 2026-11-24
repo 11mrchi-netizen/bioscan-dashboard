@@ -36,6 +36,11 @@ export function localDate(ms: number, zone: string): string {
   const p = parts(ms, zone)
   return `${p.y}-${pad(p.mo)}-${pad(p.d)}`
 }
+/** The local time of day of an instant in a zone, "HH:mm:ss". */
+export function localTime(ms: number, zone: string): string {
+  const p = parts(ms, zone)
+  return `${pad(p.h)}:${pad(p.mi)}:${pad(p.s)}`
+}
 /** Kotlin ZonedDateTime.toString(). */
 export function zdtString(ms: number, zone: string): string {
   const p = parts(ms, zone)
@@ -413,6 +418,31 @@ export function assignMatches(plans: PlannedItem[], recs: RecordedSessionInput[]
     out.set(r.id, { plan: plans[j], confidence, stored: false, manual: false })
   })
   return out
+}
+
+/**
+ * kcal and TRIMP per minute by session type from recorded training sessions (walks and fragments left out), and the runs of the 120 days
+ * before the latest recording, for timing calendar runs at the person's pace (PlannedDayRepository.demandHistory).
+ */
+export function demandHistory(recorded: RecordedSessionInput[], restingHr: number | null, maxHr: number | null, weightKg: number | null, zone: string): DemandHistory {
+  const training = recorded.filter((r) => isTrainingSession(r.type, r.durationMin))
+  const kcal: Record<string, number[]> = {}
+  for (const r of training) if ((r.caloriesActive ?? 0) > 0 && r.durationMin > 0) (kcal[r.type] ??= []).push((r.caloriesActive as number) / r.durationMin)
+  const trimp: Record<string, number[]> = {}
+  if (restingHr != null && maxHr != null && maxHr > restingHr) {
+    for (const r of training) {
+      if (r.avgHr == null) continue
+      ;(trimp[r.type] ??= []).push(trimpPerMinute(Math.min(Math.max((r.avgHr - restingHr) / (maxHr - restingHr), 0), 1)))
+    }
+  }
+  let latest: number | null = null
+  for (const r of recorded) { const t = instant(r.start); if (latest === null || t > latest) latest = t }
+  // ZonedDateTime.minusDays(120): the same local time, 120 calendar days earlier.
+  const since = latest === null ? null : atTime(plusDays(localDate(latest, zone), -120), localTime(latest, zone), zone)
+  const runs = training
+    .filter((r) => r.type === 'run' && (r.distanceKm ?? 0) > 0 && (since === null || instant(r.start) > since))
+    .map((r) => ({ distanceKm: r.distanceKm as number, ascentM: r.ascentM ?? 0, durationMin: r.durationMin }))
+  return { kcalPerMinByType: kcal, trimpPerMinByType: trimp, restingHr, maxHr, weightKg, recentRuns: runs }
 }
 
 // ---- the planned days (PlannedDay.kt) ----

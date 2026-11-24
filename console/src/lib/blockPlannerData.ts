@@ -7,6 +7,7 @@ import {
   type DatedSet, type Definition, DefinitionIndex, deriveBlockDomains, type GeneratedBlock, localToday, movementKey, parseDefinition, plusDays,
   prescriptionJson, type RecordedMax, resolveMaxes, type Accessory, accessoriesFrom, accessoriesJson, accessoriesFor, accessoryItemsFor, liftJson, type GenEquipment, type MaxEntry,
 } from '../../../supabase/functions/_shared/training-core/index.ts'
+import { type AccessorySession, accessoryRevisions } from './accessoryRevisions'
 import {
   choicesJson, componentsJson, DEFAULT_SETTINGS, definitionsUsed, type PlannerCatalog, type PlannerDraft, type PlannerEvent, templateOf, type TrainingSettings,
 } from './blockPlanner'
@@ -217,21 +218,17 @@ export async function updateBlockAccessories(b: BlockForEnding, accessories: Rec
   if (t.error) throw new Error(`training_blocks: ${t.error.message}`)
 
   const s = await supabase.from('planned_sessions').select('id,title,work_kind,prescription')
-    .eq('block_id', b.row.id).eq('status', 'planned').gte('scheduled_date', from).eq('module_ref', `strength:${m.key}`)
+    .eq('block_id', b.row.id).eq('status', 'planned').is('exercise_session_id', null).gte('scheduled_date', from).eq('module_ref', `strength:${m.key}`)
   if (s.error) throw new Error(`planned_sessions: ${s.error.message}`)
   const byTitle = new Map(m.sessions.map((x) => [`${m.title}: ${x.label}`, x.id]))
-  let changed = 0
-  for (const row of (s.data ?? []) as { id: number; title: string; work_kind: string; prescription: unknown }[]) {
-    const items = accessoryItemsFor(accessoriesFor({ accessories }, byTitle.get(row.title) ?? null), row.work_kind === 'deload' ? 'deload' : 'normal', eq, maxes)
-    const before = Array.isArray(row.prescription) ? (row.prescription as Record<string, unknown>[]) : []
-    const kept = before.filter((e) => !(e?.type === 'lift' && e?.role === 'accessory'))
-    let at = 0
-    kept.forEach((e, i) => { if (e?.type === 'lift') at = i + 1 })
-    const after = [...kept.slice(0, at), ...items.map(liftJson), ...kept.slice(at)]
-    if (JSON.stringify(after) === JSON.stringify(before)) continue
-    const u = await supabase.from('planned_sessions').update({ prescription: after, updated_at: new Date().toISOString() }).eq('id', row.id)
-    if (u.error) throw new Error(`planned_sessions: ${u.error.message}`)
-    changed++
+  const revisions = accessoryRevisions((s.data ?? []) as AccessorySession[], (t) => byTitle.get(t), accessories, eq, maxes)
+  // A prescription cannot be updated in place (the trigger planned_sessions_immutable refuses it): each change is a new revision, the old row set aside.
+  for (const rev of revisions) {
+    const u = await supabase.rpc('revise_planned_session', { p_id: rev.id, p_today: from, p_prescription: rev.after })
+    if (u.error) {
+      if (u.error.code === 'PGRST202') throw new Error('Changing a session needs the one-time plan-edit database update (revise_planned_session)')
+      throw new Error(`planned_sessions: ${u.error.message}`)
+    }
   }
-  return changed
+  return revisions.length
 }

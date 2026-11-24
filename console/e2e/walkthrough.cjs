@@ -86,7 +86,8 @@ for (let i = 0; i < 70; i++) {
   T.scale_readings.push({ id: id++, user_id: 'u1', occurred_at: `${day(t)}T07:${String(10 + (i % 40)).padStart(2, '0')}:00+00:00`, weight_kg: +(73 - i * 0.03 + ((i * 7) % 5) * 0.1).toFixed(2), impedance_ohm: Math.round(520 + ((i * 13) % 31) - i * 0.4) })
   if (i % 2 === 0) T.body_metrics.push({ id: id++, user_id: 'u1', date: day(t), body_fat_pct: +(18.5 - i * 0.02 + ((i * 3) % 4) * 0.2).toFixed(1), height_cm: 178, source: 'health_connect' })
 }
-T.user_profile = [{ id: 1, user_id: 'u1', date_of_birth: '1990-05-01', sex: 'male', height_cm: 178 }]
+T.user_profile = [{ id: 1, user_id: 'u1', date_of_birth: '1990-05-01', sex: 'male', height_cm: 178, nutrition_goals: { caloriesKcal: 2800, proteinG: 150 } }]
+T.body_metrics.push({ id: id++, user_id: 'u1', date: new Date().toLocaleDateString('sv-SE'), weight_kg: 73.5, source: 'scale' }) // the weight the fuel plan is per kilogram of
 // one planned session every day around today, for Plan › Sessions' week cards (the last week of a window must be whole)
 const ymd = (d) => d.toLocaleDateString('sv-SE')
 const dayPlus = (n) => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + n); return d }
@@ -608,11 +609,11 @@ async function waitForServer() {
 
     // 8g. the regroup (phase 5): Plan and Setup tabs, Body and Risk inside Me, the rail, old routes, the Google sign-in return
     check(await to('/plan') === '/plan/overview' && await to('/plan?x=1') === '/plan/overview', 'the Plan root opens its Overview')
-    check(await to('/plan-block?week=2') === '/plan/training?week=2' && await to('/meal-prep') === '/plan/food' && await to('/sessions') === '/plan/sessions' && await to('/races') === '/plan/races', 'old plan routes land on the Plan tabs, query kept')
+    check(await to('/plan-block?week=2') === '/plan/training?week=2' && await to('/meal-prep') === '/plan/food?view=prep' && await to('/sessions') === '/plan/sessions' && await to('/races') === '/plan/races', 'old plan routes land on the Plan tabs, query kept')
     check(await to('/data?table=meals&id=42') === '/setup/data?table=meals&id=42' && await to('/integrity?series=hrv') === '/setup/integrity?series=hrv' && await to('/connections') === '/setup/connections', 'old data, integrity and connections routes land in Setup, query kept')
     check(await to('/body') === '/me?tab=BODY' && await to('/risk') === '/me?tab=EXPOSURES', 'old Body and Risk routes open Me on their tab')
     check(await to('/data-explorer') === '/setup/data' && await to('/data-quality') === '/setup/integrity' && await to('/setup') === '/setup/integrity', 'the v1 aliases and the Setup root go to the final place')
-    for (const [path, sel, label] of [['/plan/overview', '.pg-title:has-text("PLAN")', 'overview'], ['/plan/training', '.pb, .state-empty', 'training'], ['/plan/food', '.pb, .state-empty', 'food'], ['/plan/sessions', '.pg-title:has-text("SESSIONS")', 'sessions'], ['/plan/races', '.pg-title:has-text("RACES")', 'races'], ['/setup/integrity', '.ig', 'integrity'], ['/setup/data', '.de', 'data'], ['/setup/connections', '.pg-title:has-text("CONNECTIONS")', 'connections']]) {
+    for (const [path, sel, label] of [['/plan/overview', '.pg-title:has-text("PLAN")', 'overview'], ['/plan/training', '.pb, .state-empty', 'training'], ['/plan/food', '.fp, .state-empty', 'food'], ['/plan/food?view=prep', '.pb, .state-empty', 'meal prep'], ['/plan/sessions', '.pg-title:has-text("SESSIONS")', 'sessions'], ['/plan/races', '.pg-title:has-text("RACES")', 'races'], ['/setup/integrity', '.ig', 'integrity'], ['/setup/data', '.de', 'data'], ['/setup/connections', '.pg-title:has-text("CONNECTIONS")', 'connections']]) {
       await page.goto(`${BASE}#${path}`); await page.waitForSelector(sel, { timeout: 15000 }).catch(async () => { await shot(`broken-${label}`) })
       check((await page.locator(sel).count()) > 0 && (await page.locator('.error-boundary').count()) === 0, `${path} renders its own page`)
       check((await navOn()).some((n) => n.startsWith(path.slice(1))), `and ${label.toUpperCase()} is the marked item in the menu`, (await navOn()).join(','))
@@ -850,6 +851,22 @@ async function waitForServer() {
     await shot('planned-edit-phone')
     await page.setViewportSize({ width: 1440, height: 1000 }); await page.waitForTimeout(300)
     await page.goto(`${BASE}#/plan/sessions/planned/7102`); await page.waitForSelector('.pe-lifts', { timeout: 15000 }); await shot('planned-edit')
+
+    // 8l. the fuel plan: Plan > Food, the day's targets and meals worked out with the phone's rules, read only
+    await page.goto(`${BASE}#/plan/food`); await page.waitForSelector('[data-testid="fuel-day"]', { timeout: 20000 })
+    check(await crumb() === 'PLAN > FOOD > FUEL PLAN', 'Food opens on the fuel plan, in the menu as a view of Food', await crumb())
+    const strip = await page.locator('.fp-day').count()
+    check(strip === 17 && (await text('.fp-day.on .fp-day-name')) === 'TODAY', 'a strip of the days from today to the horizon (17), today selected', String(strip))
+    const nums = await page.locator('.fp-num-value').allTextContents()
+    check(nums.length === 4 && nums[1].startsWith('150'), 'carbohydrate, protein (the goal\'s 150), fat and energy are shown', nums.join('|'))
+    check((await page.locator('.fp-why li').count()) >= 1 && (await page.locator('.pg-card:has(h3:has-text("MEALS")) .pg-row').count()) >= 4, 'the reasons and at least the four meals are listed')
+    check((await text('.fp-foot')).includes('2800 kcal'), 'the energy basis names the goal', await text('.fp-foot'))
+    await page.locator('.fp-day').nth(2).click(); await page.waitForFunction(() => location.hash.includes('day='))
+    const picked = await page.locator('.fp-day.on').getAttribute('data-day')
+    check(picked === ymd(dayPlus(2)) && (await text('[data-testid="fuel-day"] .pg-card-title')).toLowerCase().includes(new Date(`${picked}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'long' }).toLowerCase()), 'a day is opened from the strip, and stays in the address', picked)
+    check(!requests.some((q) => /^(POST|PATCH|DELETE) (fuel_plans|fuel_week_plans)/.test(q)), 'the page writes nothing')
+    await page.goto(`${BASE}#/plan/food?view=prep`); await page.waitForSelector('.pb', { timeout: 15000 })
+    check(await crumb() === 'PLAN > FOOD > MEAL PREP', 'the meal prep is the other view of Food', await crumb())
 
     // 9. old routes redirect
     await page.goto(`${BASE}#/overview`); await page.waitForTimeout(300)

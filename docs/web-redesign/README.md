@@ -99,6 +99,24 @@ Every old route redirects with its query kept as written (`components/layout/Red
 `#/data|integrity|connections` → Setup, `#/body` and `#/risk` → Me, `#/history` → the metric page, `/console/#/...` → the root.
 The link builders (`lib/links.ts`) write the new paths directly.
 
+## Fuel plan (Plan › Food)
+
+Food has two views: **Fuel plan** (the default) and **Meal prep**. The fuel plan shows the next 17 days: for each, the carbohydrate,
+protein, fat and energy, why (the training of the next 72 hours, loading before a race, the goal), the day's sessions with what to
+take during them, and the meals that carry the day, each with a carbohydrate code and range. It is worked out in the browser with the
+phone's own rules, ported to `supabase/functions/_shared/fuel-core` and checked against the Kotlin code by fixtures
+(`*ParityTest` in `android-app`, `*.parity.test.ts` here): `day.ts` (targets), `plannedDay.ts` (the training of a day from events,
+planned sessions, the calendar and recordings), `weekEnergy.ts` (goal, observed or estimated maintenance), `mealCodes.ts` (the
+meals). `console/src/lib/fuelInputs.ts` builds the engine's inputs from table rows; `fuelDay.ts` reads them. Read only: `fuel_plans`
+stays the phone's record.
+
+Differences from the phone to know about: the phone's fuel settings (meal times, train low, the carbohydrate the gut tolerates) live
+only on the phone, so the web uses the defaults; the phone's answers to "what is this?" for calendar entries are read
+(`calendar_event_overrides`) but cannot be given here. To regenerate the fixtures after a deliberate rule change:
+`FT_PARITY_WRITE=1 ./gradlew :app:testDebugUnitTest --tests '*ParityTest*'` in `android-app`.
+
+Not built yet: race and long-session fuel (`RaceFuelPlan.kt`), the intake against the plan, writing `fuel_plans`.
+
 ## Look
 
 `ftSkin.css`: one class, `ft-skin`, bridges the console's variables (`--color-*`) to the Dashboard's tokens

@@ -83,7 +83,7 @@ export function splitProtein(dayProteinG: number, kinds: MealSlotKind[], weightK
   const others = kinds.map((_, i) => i).filter((i) => !MAIN[kinds[i]])
   const left = Math.max(dayProteinG - floor * mains.length, 0)
   const otherW = others.reduce((a, i) => a + weight(kinds[i]), 0)
-  return kinds.map((k, i) => (MAIN[k] && otherW > 0 ? floor : MAIN[k] ? dayProteinG / mains.length : (left * weight(k)) / otherW))
+  return kinds.map((k) => (MAIN[k] && otherW > 0 ? floor : MAIN[k] ? dayProteinG / mains.length : (left * weight(k)) / otherW))
 }
 
 const hoursBetween = (a: number, b: number) => Math.trunc((b - a) / 60000) / 60

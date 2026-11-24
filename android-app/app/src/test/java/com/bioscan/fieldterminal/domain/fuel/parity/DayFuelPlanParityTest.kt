@@ -115,6 +115,11 @@ class DayFuelPlanParityTest {
             w += 2.5
         }
         out += sweep
+        // Meal splits at their edges: protein just covering the three main meals' floor (0.3 g/kg), just under it; key sessions of exactly an hour.
+        val hour = listOf(6, 10, 13, 16, 18, 21).mapIndexed { i, h -> day(i, item(d(i), h, 60.0, Intensity.HARD, "Hour $h", 650.0)) }
+        out += Scenario("protein_floor", hour, WeekEnergy(2600.0, 63.0, true), 70.0, null, listOf(null))
+        out += Scenario("protein_floor_under", hour, WeekEnergy(2600.0, 62.9, true), 70.0, null, listOf(null))
+        out += Scenario("protein_floor_over", hour, WeekEnergy(2600.0, 140.0, true), 70.0, null, listOf(null))
         // The one-decimal tie (5.05 g/kg: Java rounds it up, the binary value says down), found by search.
         for ((kcal, p, w) in listOf(Triple(2014.0, 120.0, 56.0), Triple(2039.0, 125.0, 56.0), Triple(2064.0, 130.0, 56.0), Triple(2115.0, 120.0, 60.0))) {
             out += Scenario("tie_${kcal.toInt()}", listOf(day(0, item(d(0), 18, 60.0, Intensity.MODERATE, "Steady", 0.0))), WeekEnergy(kcal, p, true), w, null, listOf(null))

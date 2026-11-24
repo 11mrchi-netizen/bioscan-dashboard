@@ -45,6 +45,8 @@ test('a planned day: easy session, a recording replaces it, the goal sets the en
   assert.equal(out.energy.dailyKcal, 2800)
   assert.equal(out.plans[out.todayIdx].proteinG, 150)
   assert.equal(out.days.length, 20)
+  assert.equal(out.meals.length, 20)
+  assert.deepEqual(out.meals[out.todayIdx].meals.map((m) => m.kind), ['BREAKFAST', 'LUNCH', 'SNACK', 'DINNER'])
 })
 
 test('the plan\'s own link and the stored answers: the stored answer wins', () => {

@@ -6,6 +6,7 @@ import {
   atTime, type CalendarOverride, type CalendarSessionInput, demandHistory, type DemandHistory, type EventInput, fatFreeMass, type PlannedSessionInput, type RecordedSessionInput,
   resolvePlannedDays, type StoredLink, weekEnergyOf, zdtString, aggregateMealsByDay, type MealRow, planInWeekBlocks, type DayFuelPlan, type PlannedDay, type WeekEnergy,
   type EventKind, type EventPriority, type EventSport, type EventStatus, type NutritionGoals,
+  codeMeals, DEFAULT_MEAL_TIMES, DEFAULT_TOLERATED_G_PER_H, type DayMeals, type MealTimes,
 } from '../../../supabase/functions/_shared/fuel-core/index.ts'
 import { restingHrAsOf, robustMaxHr } from '../../../supabase/functions/_shared/analysis-core/trainingLoad.ts'
 
@@ -71,14 +72,20 @@ export function ageYears(dob: string, asOf: string): number {
 
 export interface FuelDays {
   today: string; todayIdx: number; days: PlannedDay[]; plans: DayFuelPlan[]; energy: WeekEnergy; weightKg: number; fatFreeMassKg: number | null
+  /** each day's meals, coded under the settings given */
+  meals: DayMeals[]
 }
+
+/** The phone keeps these on the phone only (FuelSettingsStore); the web uses the same defaults until it has its own. */
+export interface FuelSettings { meals: MealTimes; trainLow: boolean; toleratedGPerHour: number }
+export const DEFAULT_FUEL_SETTINGS: FuelSettings = { meals: DEFAULT_MEAL_TIMES, trainLow: false, toleratedGPerHour: DEFAULT_TOLERATED_G_PER_H }
 
 /** The window the phone plans over: three days back (for the intake check) and the horizon ahead, as FuelPlanRepository.computeToday. */
 export const DAYS_BACK = 3
 export const DAYS_AHEAD = 14 + 3
 
 /** Today's plan and the days around it, or null while no weight is known (the plan is per kg). */
-export function buildFuelDays(rows: FuelRows, today: string, nowIso: string, zone: string): FuelDays | null {
+export function buildFuelDays(rows: FuelRows, today: string, nowIso: string, zone: string, settings: FuelSettings = DEFAULT_FUEL_SETTINGS): FuelDays | null {
   const from = plusDays(today, -DAYS_BACK)
   const count = DAYS_BACK + DAYS_AHEAD
   const to = plusDays(from, count)
@@ -126,7 +133,9 @@ export function buildFuelDays(rows: FuelRows, today: string, nowIso: string, zon
     aggregateMealsByDay(rows.meals), rows.body.filter((b) => b.weight_kg != null).map((b) => [b.date, b.weight_kg as number] as [string, number]), today,
   )
   const todayIdx = days.findIndex((d) => d.date === today)
-  return { today, todayIdx, days, plans: planInWeekBlocks(days, todayIdx, energy, weightKg, ffm), energy, weightKg, fatFreeMassKg: ffm }
+  const plans = planInWeekBlocks(days, todayIdx, energy, weightKg, ffm)
+  const meals = days.map((d, i) => codeMeals(plans[i], d, days[i + 1] ?? null, weightKg, zone, settings.meals, settings.trainLow, energy.deficit === true, settings.toleratedGPerHour))
+  return { today, todayIdx, days, plans, energy, weightKg, fatFreeMassKg: ffm, meals }
 }
 
 const localDay = (zdt: string) => zdt.slice(0, 10)

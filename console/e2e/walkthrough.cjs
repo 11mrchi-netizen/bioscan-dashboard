@@ -94,7 +94,7 @@ const dayPlus = (n) => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDat
 T.athlete_events = [{ id: 9301, user_id: 'u1', name: 'Test Half', kind: 'race', sport: 'run', priority: 'B', event_date: ymd(dayPlus(30)), start_time: null, status: 'planned', target_time_min: 150, expected_duration_min: null, distance_km: 21, ascent_m: 300, start_lat: 25.08, start_lon: 121.52,
   course_profile: [[0, 50], [5000, 120], [10500, 200], [16000, 90], [21000, 60]], aid_stations: [{ name: 'CP1', km: 8, water: true, food: false, drop_bag: false, cutoff_min: 90 }, { name: 'CP2', km: 15, water: true, food: true, drop_bag: true, cutoff_min: 140 }], course_source: null, planned_route_id: null, exercise_session_id: null, notes: null, calendar_event_id: null, location_name: null, descent_m: null }]
 T.planned_sessions = []
-for (let n = -70; n <= 70; n++) T.planned_sessions.push({ id: 5000 + n, block_id: null, week_index: null, sequence_no: null, domain: 'run', work_kind: 'easy', title: `Run ${n}`, scheduled_date: ymd(dayPlus(n)), original_date: null, start_time: '07:00:00', duration_min: 45, status: 'planned', exercise_session_id: null, match_status: null, gcal_pushed_at: null, zepp_pushed_at: null })
+for (let n = -70; n <= 70; n++) T.planned_sessions.push({ id: 5000 + n, block_id: null, week_index: null, sequence_no: null, domain: 'run', work_kind: 'easy', title: `Run ${n}`, scheduled_date: ymd(dayPlus(n)), original_date: null, start_time: '07:00:00', duration_min: n === 2 ? 120 : 45, status: 'planned', exercise_session_id: null, match_status: null, gcal_pushed_at: null, zepp_pushed_at: null })
 // recorded workouts on days that have an open plan: a Zepp strength session (with its watch measurements), a walk, a run
 T.exercise_sessions.push(
   { id: 900010, user_id: 'u1', type: 'strength', start_time: `${ymd(dayPlus(-2))}T18:00:00+00:00`, end_time: `${ymd(dayPlus(-2))}T18:55:00+00:00`, duration_min: 55, distance_km: null, avg_hr: 112, max_hr: 151, rpe: null, notes: null, source: 'zepp',
@@ -183,6 +183,11 @@ function postgrest(table, sp) {
 
 function writeRow(table, method, body, url) {
   const rows = Array.isArray(body) ? body : [body]
+  if (method === 'DELETE' && table === 'fuel_schedules') {
+    const q = new URL(url).searchParams
+    T[table] = (T[table] ?? []).filter((r) => !(`eq.${r.kind}` === q.get('kind') && `eq.${r.ref_key}` === q.get('ref_key')))
+    return []
+  }
   if (method === 'DELETE') {
     const id = new URL(url).searchParams.get('id')?.replace(/^eq\./, '')
     T[table] = (T[table] ?? []).filter((r) => String(r.id) !== id)
@@ -190,6 +195,14 @@ function writeRow(table, method, body, url) {
   }
   T[table] = T[table] ?? []
   const out = rows.map((r) => {
+    if (table === 'fuel_schedules') {
+      const old = T[table].find((x) => x.kind === r.kind && x.ref_key === r.ref_key)
+      if (old) { Object.assign(old, r); return old }
+    }
+    if (table === 'fuel_standards') {
+      const old = T[table].find((x) => x.name === r.name)
+      if (old) { Object.assign(old, r); return old }
+    }
     if (table === 'saved_views') {
       const old = T[table].find((x) => x.name === r.name)
       if (old) { Object.assign(old, r); return old }
@@ -897,6 +910,32 @@ async function waitForServer() {
     check((await text('.pg-card:has(h3:has-text("WHAT TO CARRY"))')).includes('CP1') || (await text('[data-testid="race-fuel"]')).includes('CP1'), 'the aid stations split the carry into legs')
     await page.waitForSelector('[data-testid="fuel-kept"]', { timeout: 10000 })
     check(requests.filter((q) => q === 'POST fuel_plans').length === 2 && T.fuel_plans[1].kind === 'event' && T.fuel_plans[1].ref_key === '9301' && T.fuel_plans[1].plan.by === 'web' && T.fuel_plans[1].plan.steps.length >= 5 && !requests.some((q) => /^(PATCH|DELETE) (fuel_plans|fuel_schedules)|^POST fuel_schedules/.test(q)), "the event's plan is kept once, and no schedule is touched", await text('[data-testid="fuel-kept"]'))
+
+    // 8n. long sessions from the day plan: a fuel schedule (the phone's fuel_schedules), filled by a rule, edited, kept, turned into a standard and used again
+    const longDay = ymd(dayPlus(2))
+    await page.goto(`${BASE}#/plan/food?day=${longDay}`); await page.waitForSelector('[data-testid="long-sessions"]', { timeout: 20000 })
+    check((await text('[data-testid="long-sessions"]')).includes('Run 2') && !(await page.locator('[data-testid="fuel-schedule"]').count()), 'a session of 90 minutes or more is listed under LONG SESSIONS, its schedule not opened yet')
+    await page.locator('[data-testid="long-sessions"] button:has-text("FUEL SCHEDULE")').click(); await page.waitForSelector('[data-testid="fuel-schedule"] button:has-text("START EMPTY")', { timeout: 10000 })
+    check((await page.locator('[data-testid="fuel-schedule"] button:has-text("START FROM THE PLAN")').count()) === 1, 'it can start from the planner\'s plan, from a standard, or empty')
+    await page.locator('button:has-text("START EMPTY")').click()
+    await page.locator('select[aria-label="fill product"]').selectOption({ label: 'Gel (25 g, generic) (25 g)' })
+    await page.locator('input[aria-label="fill every"]').fill('30'); await page.locator('input[aria-label="fill from"]').fill('30')
+    await page.locator('.fs-fill button:has-text("FILL")').first().click()
+    check((await text('[data-testid="schedule-totals"]')).includes('TOTAL 100 G CARBS (50 G/H)') && (await text('[data-testid="schedule-totals"]')).includes('4 INTAKES OVER 2 H 00'), 'one gel every 30 minutes from the 30th fills a 2-hour session with four (100 g, 50 g/h)', await text('[data-testid="schedule-totals"]'))
+    await page.locator('input[aria-label="Gel (25 g, generic) how many"]').fill('2')
+    check((await text('[data-testid="schedule-totals"]')).includes('TOTAL 50 G CARBS'), 'the count can be edited and the totals follow', await text('[data-testid="schedule-totals"]'))
+    await page.locator('button:has-text("SAVE THE SCHEDULE")').click(); await page.waitForSelector('[data-testid="fuel-schedule"] [role="status"]:has-text("Saved")', { timeout: 10000 })
+    const sch = T.fuel_schedules?.[0]
+    check(sch && sch.kind === 'planned' && sch.ref_key === 'planned:5002' && sch.duration_min === 120 && sch.blocks.length === 1 && sch.blocks[0].count === 2 && sch.blocks[0].intervalMin === 30 && 'supplementProductId' in sch.blocks[0] && 'fuelingProductId' in sch.blocks[0], 'it is kept in fuel_schedules under its plan item, in the phone\'s block shape', JSON.stringify(sch)?.slice(0, 260))
+    await page.locator('input[aria-label="standard name"]').fill('Easy filling'); await page.locator('button:has-text("SAVE AS A STANDARD")').click(); await page.waitForSelector('[data-testid="fuel-schedule"] [role="status"]:has-text("standard")', { timeout: 10000 })
+    check(T.fuel_standards?.[0]?.name === 'Easy filling' && T.fuel_standards[0].rules[0].everyMin === 30 && T.fuel_standards[0].rules[0].stopBeforeEndMin === 60, 'the schedule is saved as a standard: a gel every 30 minutes, none in the last hour', JSON.stringify(T.fuel_standards?.[0])?.slice(0, 220))
+    page.once('dialog', (d) => d.accept())
+    await page.locator('button:has-text("DELETE THE SCHEDULE")').click(); await page.waitForSelector('button:has-text("START EMPTY")', { timeout: 10000 })
+    check((T.fuel_schedules ?? []).length === 0, 'the schedule can be deleted')
+    await page.locator('button:has-text("START EMPTY")').click(); await page.locator('select[aria-label="standard"]').selectOption({ label: 'Easy filling' })
+    await page.locator('button:has-text("USE FOR THIS SESSION")').click()
+    check((await text('[data-testid="schedule-totals"]')).includes('TOTAL 50 G CARBS'), 'the standard fills the session as it was shaped', await text('[data-testid="schedule-totals"]'))
+    check(!requests.some((q) => /^(PATCH|DELETE) (fuel_plans|planned_sessions)|^POST planned_sessions/.test(q)), 'nothing of the plan is touched')
 
     // 9. old routes redirect
     await page.goto(`${BASE}#/overview`); await page.waitForTimeout(300)

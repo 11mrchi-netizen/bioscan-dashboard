@@ -7,6 +7,8 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useLoadEffect } from '../lib/useLoadEffect'
 import { loadFuelDays } from '../lib/fuelDay'
 import { storeDay, type StoreResult } from '../lib/fuelPlansStore'
+import { isLongNonEvent } from '../lib/fuelScheduleKey'
+import ScheduleEditor from './ScheduleEditor'
 import type { FuelDays } from '../lib/fuelInputs'
 import { formatGPerKg, type DayFuelPlan, type DayMeal, type PlannedItem, roundToInt } from '../../../supabase/functions/_shared/fuel-core/index.ts'
 import './PlanBlock.css'
@@ -133,6 +135,7 @@ function Day({ data, i }: { data: FuelDays; i: number }) {
           <p className="pg-note">Carbohydrate in a meal is a range of ±15 %. What is planned during sessions comes off the day's total first.</p>
         </section>
       </div>
+      <LongSessions data={data} i={i} />
     </div>
   )
 }
@@ -189,5 +192,25 @@ export function KeptNote({ kept, what = "today's plan" }: { kept: StoreResult; w
       {kept.state === 'phone' && <>The phone's stored plan differs from this one, so nothing was written.{lines || ' (Its settings, such as meal times, may differ from the defaults used here.)'}</>}
       {kept.state === 'error' && <span className="pg-warn">Could not keep {what} in the record: {kept.message}</span>}
     </p>
+  )
+}
+
+/** The day's long sessions (90 minutes or more, not events): each has a fuel schedule to plan, kept under its plan item as the phone keeps it. */
+function LongSessions({ data, i }: { data: FuelDays; i: number }) {
+  const long = data.days[i].items.filter(isLongNonEvent)
+  const [open, setOpen] = useState<Record<string, boolean>>({})
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  if (long.length === 0) return null
+  return (
+    <section className="pg-card wide" data-testid="long-sessions">
+      <h3 className="pg-card-title mono"><span>LONG SESSIONS</span><span>{long.length}</span></h3>
+      <p className="pg-note">A session of 90 minutes or more is where fuelling gets tried: plan what you will take and when, and afterwards the phone checks it against what you took.</p>
+      {long.map((it) => (
+        <div key={it.sourceId}>
+          <p className="pg-row-title">{it.title} <span className="pg-tag mono">{it.recorded ? 'DONE' : 'PLANNED'}</span> <button className="pb-chip small" aria-expanded={!!open[it.sourceId]} onClick={() => setOpen({ ...open, [it.sourceId]: !open[it.sourceId] })}>{open[it.sourceId] ? 'HIDE THE SCHEDULE' : 'FUEL SCHEDULE'}</button></p>
+          {open[it.sourceId] && <ScheduleEditor item={it} weightKg={data.weightKg} zone={zone} />}
+        </div>
+      ))}
+    </section>
   )
 }

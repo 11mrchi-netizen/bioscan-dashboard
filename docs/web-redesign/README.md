@@ -129,7 +129,12 @@ latest row is the phone's and differs, it writes nothing and says what differs. 
 
 On today's plan each meal also says what was logged against it (by the meal's own slot label, else the nearest meal within two hours: `mealForLog` / `adherence`, parity-tested).
 
-Not built yet: long sessions from the day plan (the phone offers them from Today).
+**Long sessions** (on the fuel plan, a session of 90 minutes or more that is not an event): FUEL SCHEDULE opens the editor for what to take and when, as blocks
+(`schedule.ts`: the phone's `FuelBlock`, parity-tested: expansion, totals, per-hour rates, warnings, the plan as blocks). It is kept in `fuel_schedules` under the
+plan item, as the phone keeps it (`fuelScheduleKey.ts`), so the phone shows and debriefs the same schedule. Start from the planner's plan, from a standard, or empty.
+**FILL** adds a rule in one step ("one serving of the gel every 30 minutes from the 30th, none in the last 10"). **Standards** (`standards.ts`, web only, table
+`fuel_standards`: migration `20261126000000_fuel_standards.sql`, apply it before standards can be saved) are reusable rules, applied to a session of any length;
+SAVE AS A STANDARD takes the shape of the schedule on screen. Not here: the debrief (the phone's), supplements in the product list, the phone's home place for weather.
 
 ## Look
 

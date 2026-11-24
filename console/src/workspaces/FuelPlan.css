@@ -22,3 +22,11 @@
 .rf-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
 .rf-table th { text-align: left; font-weight: 400; font-size: 10px; letter-spacing: .06em; color: var(--color-text-muted); padding: 4px 8px; border-bottom: 1px solid var(--color-border); }
 .rf-table td { padding: 6px 8px; border-bottom: 1px solid var(--color-border); vertical-align: top; }
+.fp-sched { margin-top: var(--sp-2); }
+.fs-table input, .fs-table select, .fs-fill input, .fs-fill select, .fs-std input, .fs-std select { background: var(--color-glass); color: var(--color-text-primary); border: 1px solid var(--color-border); border-radius: 6px; padding: 4px 6px; font: inherit; font-size: 12px; min-width: 0; }
+.fs-table input { width: 100%; min-width: 90px; }
+.fs-table input.n, .fs-fill input.n { width: 58px; min-width: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.fs-table select { max-width: 150px; }
+.fs-fill, .fs-std { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; font-size: 12px; color: var(--color-text-secondary); margin: var(--sp-3) 0 0; }
+.fs-label { font-size: 10px; letter-spacing: .06em; color: var(--color-text-muted); }
+.fs-rules { flex-basis: 100%; }

@@ -18,7 +18,7 @@ export default function LabExperiments() {
   const view = VIEWS.find((v) => v.id === params.get('view'))?.id ?? 'randomised'
   return (
     <>
-      <div className="lab-views" role="group" aria-label="Experiments">
+      <div className="tabbed-views" role="group" aria-label="Experiments">
         {VIEWS.map((v) => <button key={v.id} className="ft-chip" aria-current={v.id === view} onClick={() => setParams(v.id === 'randomised' ? {} : { view: v.id }, { replace: true })}>{v.label}</button>)}
       </div>
       <div className="rlab">

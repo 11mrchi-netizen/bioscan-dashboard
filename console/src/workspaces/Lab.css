@@ -1,7 +1,0 @@
-/* LAB: the six tabs in one row (FT chips), a sub-view row under them where a tab has several. */
-.lab { display: flex; flex-direction: column; min-width: 0; }
-.lab-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: var(--sp-4) var(--sp-4) 0; }
-.lab-title { font: 800 20px var(--ft-num, inherit); margin: 0 var(--sp-3) 0 0; color: var(--color-text-primary); }
-.lab-tab { text-decoration: none; }
-.lab-tab[aria-current="true"] { color: var(--ft-platinum-ink); border-color: transparent; font-weight: 700; background: var(--ft-platinum); }
-.lab-views { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: var(--sp-3) var(--sp-4) 0; }

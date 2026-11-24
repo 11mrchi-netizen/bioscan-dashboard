@@ -11,7 +11,7 @@ import { readFilters } from './dataFilters.ts'
 import { openView, viewPath, viewRow } from './savedViews.ts'
 import { seriesById } from './schema.ts'
 
-/** '#/data?table=x&id=1' -> { route: 'data', params } */
+/** '#/setup/data?table=x&id=1' -> { route: 'setup/data', params } */
 function follow(href: string | null): { route: string; params: URLSearchParams } {
   assert.ok(href, 'a link was expected')
   const [path, query = ''] = href.replace(/^#\//, '').split('?')
@@ -36,7 +36,7 @@ test('a data problem leads to its records, its period and its day', () => {
 
   const invalid = r.issues.find((i) => i.kind === 'invalid')!
   const toRecord = follow(hrefFor(invalid.refs[0]))
-  assert.equal(toRecord.route, 'data')
+  assert.equal(toRecord.route, 'setup/data')
   assert.deepEqual([readFilters(toRecord.params).table, readFilters(toRecord.params).id], ['wearable_daily', '77'])
 
   const missing = r.issues.find((i) => i.kind === 'missing' && i.seriesId === 'steps' && i.firstDate === '2026-10-03')!
@@ -47,7 +47,7 @@ test('a data problem leads to its records, its period and its day', () => {
   assert.deepEqual([readFilters(toDay.params).table, readFilters(toDay.params).from, readFilters(toDay.params).to], ['meals', '2026-10-05', '2026-10-05'])
 
   const toIntegrity = follow(integrityHref('steps'))
-  assert.deepEqual([toIntegrity.route, toIntegrity.params.get('series')], ['integrity', 'steps'])
+  assert.deepEqual([toIntegrity.route, toIntegrity.params.get('series')], ['setup/integrity', 'steps'])
 })
 
 const R = (kind: string, key: string, payload: unknown): ResultRow => ({ kind, key, as_of: '2026-10-26', engine_version: '3.0.0', inputs_hash: 'h', state: null, payload, calculated_at: '2026-10-26T20:30:00Z' })

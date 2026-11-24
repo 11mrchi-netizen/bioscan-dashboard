@@ -30,7 +30,7 @@ export default function Compare() {
   }
   return (
     <>
-      <div className="lab-views" role="group" aria-label="Compare">
+      <div className="tabbed-views" role="group" aria-label="Compare">
         <button className="ft-chip" aria-current={!periods} onClick={() => setView('days')}>DAYS · scores, inputs, series, pairs</button>
         <button className="ft-chip" aria-current={periods} onClick={() => setView('periods')}>PERIODS · weeks and months, drill-down</button>
       </div>

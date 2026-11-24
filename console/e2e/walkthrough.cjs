@@ -258,20 +258,20 @@ async function waitForServer() {
     await shot('2-inspector')
 
     // 4. Data: exact count, keyset LOAD MORE, filters from the URL
-    await page.goto(`${BASE}#/data?table=wearable_daily`)
+    await page.goto(`${BASE}#/setup/data?table=wearable_daily`)
     await page.waitForSelector('.de-table'); await page.waitForTimeout(300)
     check((await text('.de-meta')).includes('200 of 3,685'), 'Data shows the exact count', await text('.de-meta'))
     await page.click('.de-more'); await page.waitForTimeout(400)
     check((await text('.de-meta')).includes('400 of 3,685'), 'LOAD MORE adds the next page')
-    await page.goto(`${BASE}#/data?table=exercise_sessions&id=900002`); await page.waitForTimeout(500)
+    await page.goto(`${BASE}#/setup/data?table=exercise_sessions&id=900002`); await page.waitForTimeout(500)
     check((await text('.de-meta')).includes('1 of 1'), 'a record link opens that record')
 
     // 5. Integrity: tiles, matrix, planted problems, focus from the URL
-    await page.goto(`${BASE}#/integrity`)
+    await page.goto(`${BASE}#/setup/integrity`)
     await page.waitForSelector('.ig-tiles', { timeout: 20000 }); await page.waitForTimeout(300)
     check((await page.locator('.ig-tile').count()) === 4, 'Integrity shows the four overview tiles')
     check((await page.locator('.ig-row').count()) === 32, 'the source matrix has a row per series')
-    await page.goto(`${BASE}#/integrity?series=sleep_hours`); await page.waitForTimeout(400)
+    await page.goto(`${BASE}#/setup/integrity?series=sleep_hours`); await page.waitForTimeout(400)
     await page.click('.ig-sev-toggle.sev-info input'); await page.waitForTimeout(200)
     const sleepIssues = (await page.locator('.ig-issue').allTextContents()).join(' | ')
     check(/ISSUES · Sleep duration/.test(await text('.ig-issues-head')), 'Integrity opens focused on the series in the URL')
@@ -282,7 +282,7 @@ async function waitForServer() {
 
     // 6. Discovery: the planted alcohol -> next-morning HRV link is the one flagged cell; registering inserts a question
     await page.goto(`${BASE}#/evidence`)
-    await page.click('.lab-views .ft-chip >> text=DISCOVERY')
+    await page.click('.tabbed-views .ft-chip >> text=DISCOVERY')
     await page.waitForSelector('.disc-grid', { timeout: 20000 }); await page.waitForTimeout(300)
     const alc = page.locator('tr', { hasText: 'Alcohol' }).filter({ hasText: 'HRV' }).locator('.disc-cell').nth(1)
     check((await alc.getAttribute('class')).includes('flagged'), 'Discovery flags the planted link at lag 1')
@@ -294,7 +294,7 @@ async function waitForServer() {
     await shot('4-discovery')
 
     // 7. Decisions: queue, workbench, a recorded decision, the link to Integrity
-    await page.click('.lab-views .ft-chip >> text=DECISIONS')
+    await page.click('.tabbed-views .ft-chip >> text=DECISIONS')
     await page.waitForSelector('.dec-board', { timeout: 10000 })
     const col = async (i) => text(`.dec-col:nth-child(${i})`)
     check((await col(1)).includes('Alcohol and next-morning HRV') && (await col(1)).includes('Magnesium'), 'settled items wait for a decision')
@@ -312,7 +312,7 @@ async function waitForServer() {
     await shot('5-decisions')
     await page.click('text=OPEN IN INTEGRITY')
     await page.waitForSelector('.ig-tiles', { timeout: 20000 })
-    check(page.url().includes('#/integrity?series=hrv'), 'the workbench links to Integrity on the outcome', page.url().split('#')[1])
+    check(page.url().includes('#/setup/integrity?series=hrv'), 'the workbench links to Integrity on the outcome', page.url().split('#')[1])
     await page.locator('.dec-card').first().waitFor({ state: 'detached' }).catch(() => {})
     await page.goto(`${BASE}#/explore`); await page.waitForTimeout(200)
     await page.goto(`${BASE}#/evidence?question=stress_hrv`); await page.waitForTimeout(900)
@@ -323,7 +323,7 @@ async function waitForServer() {
     await page.click('.sv > button')
     await page.fill('.sv-input', 'HRV weekly'); await page.click('.sv-save button'); await page.waitForTimeout(400)
     check(T.saved_views.some((v) => v.name === 'HRV weekly' && v.path === '/lab/compare?view=periods&series=hrv,rhr&grain=week'), 'a view is saved with its route and filters')
-    await page.goto(`${BASE}#/data`); await page.waitForTimeout(300)
+    await page.goto(`${BASE}#/setup/data`); await page.waitForTimeout(300)
     await page.click('.sv > button'); await page.waitForTimeout(300)
     await page.locator('.sv-open', { hasText: 'HRV weekly' }).click(); await page.waitForTimeout(500)
     check(page.url().includes('#/lab/compare?view=periods&series=hrv,rhr&grain=week'), 'opening the view restores it', page.url().split('#')[1])
@@ -450,7 +450,7 @@ async function waitForServer() {
     for (const [tab, sel] of [['compare', '.metric-chart'], ['evidence', '.dec-bench, .dec-cols, .dec-col, .dec-queue'], ['experiments', '.conf-grid, .state-empty'], ['regimen', '.pg-title:has-text("REGIMEN")'], ['tests', '.pg-title:has-text("TESTS")'], ['routine', '.pg-title:has-text("ROUTINE")']]) {
       await page.goto(`${BASE}#/lab/${tab}`); await page.waitForSelector(sel, { timeout: 15000 }).catch(async () => { await shot(`lab-${tab}-broken`) })
       check((await page.locator(sel).count()) > 0 && (await page.locator('.error-boundary').count()) === 0, `Lab › ${tab.toUpperCase()} renders its own page, not an error screen`)
-      check((await page.locator('.lab-tab[aria-current="true"]').textContent({ timeout: 3000 }).catch(() => '')).toLowerCase() === tab, `and ${tab.toUpperCase()} is the marked tab`)
+      check((await page.locator('.tabbed-tab[aria-current="true"]').textContent({ timeout: 3000 }).catch(() => '')).toLowerCase() === tab, `and ${tab.toUpperCase()} is the marked tab`)
       check((await page.locator('.shell-rail .rail-item.active').allTextContents()).join('|') === 'Lab', 'and Lab is the marked entry in the rail', (await page.locator('.shell-rail .rail-item.active').allTextContents()).join('|'))
       if (['regimen', 'tests', 'routine'].includes(tab)) await shot(`lab-${tab}`)
     }
@@ -468,9 +468,9 @@ async function waitForServer() {
     await page.locator('.metric-compare-bar .ft-chip', { hasText: 'CHANGE METRIC' }).click(); await page.waitForSelector('.metric-picker', { timeout: 5000 })
     await page.locator('.metric-picker .ft-chip', { hasText: /^Mood$/ }).first().click(); await page.waitForTimeout(500)
     check(decodeURIComponent(page.url()).includes('m=series:mood') && !decodeURIComponent(page.url()).includes('with=series:mood'), 'making an extra the main metric takes it out of the extras', page.url().split('#')[1])
-    await page.locator('.lab-views .ft-chip', { hasText: 'PERIODS' }).click(); await page.waitForSelector('.ex-chart canvas', { timeout: 15000 })
+    await page.locator('.tabbed-views .ft-chip', { hasText: 'PERIODS' }).click(); await page.waitForSelector('.ex-chart canvas', { timeout: 15000 })
     check(page.url().includes('view=periods') && (await page.locator('.shell-header .range-control, .shell-header [class*="range"]').count()) > 0, 'PERIODS opens Explore and shows the header range')
-    await page.locator('.lab-views .ft-chip', { hasText: 'DAYS' }).click(); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
+    await page.locator('.tabbed-views .ft-chip', { hasText: 'DAYS' }).click(); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
     check(!page.url().includes('view=periods'), 'and DAYS comes back')
     await page.goto(`${BASE}#/lab/evidence`); await page.waitForTimeout(300)
     await page.goto(`${BASE}#/lab/compare?view=periods&series=hrv,steps&start=2025-10-01&end=2026-10-27`); await page.waitForSelector('.ex-chart canvas', { timeout: 15000 })
@@ -480,15 +480,15 @@ async function waitForServer() {
     for (const v of ['queue', 'board', 'ledger', 'events', 'discovery', 'trust']) { await page.goto(`${BASE}#/lab/evidence${v === 'queue' ? '' : `?view=${v}`}`); await page.waitForTimeout(700) }
     for (const v of ['randomised', 'interventions', 'repeatable', 'fueling']) { await page.goto(`${BASE}#/lab/experiments${v === 'randomised' ? '' : `?view=${v}`}`); await page.waitForTimeout(700) }
     check(errors.length === errsBefore, 'every Evidence and Experiments view renders without a page error', errors.slice(errsBefore).join(' | '))
-    check((await Promise.all(['/lab/evidence', '/lab/regimen', '/lab/tests', '/data', '/plan'].map(async (r) => { await page.goto(`${BASE}#${r}`); await page.waitForTimeout(250); return page.locator('.date-range-control').count() }))).every((n) => n === 0), 'pages that do not read the global range do not show it')
-    await page.goto(`${BASE}#/integrity`); await page.waitForTimeout(300)
+    check((await Promise.all(['/lab/evidence', '/lab/regimen', '/lab/tests', '/setup/data', '/plan/overview'].map(async (r) => { await page.goto(`${BASE}#${r}`); await page.waitForTimeout(250); return page.locator('.date-range-control').count() }))).every((n) => n === 0), 'pages that do not read the global range do not show it')
+    await page.goto(`${BASE}#/setup/integrity`); await page.waitForTimeout(300)
     check((await page.locator('.date-range-control').count()) === 1, 'Integrity, which reads it, does')
-    await page.goto(`${BASE}#/lab/evidence?view=board`); await page.waitForSelector('.lab-views', { timeout: 15000 })
-    check((await page.locator('.lab-views .ft-chip[aria-current="true"]').textContent()) === 'EVIDENCE BOARD', 'a sub-view link opens that view')
+    await page.goto(`${BASE}#/lab/evidence?view=board`); await page.waitForSelector('.tabbed-views', { timeout: 15000 })
+    check((await page.locator('.tabbed-views .ft-chip[aria-current="true"]').textContent()) === 'EVIDENCE BOARD', 'a sub-view link opens that view')
     await page.goto(`${BASE}#/lab/evidence?view=trust`); await page.waitForTimeout(600)
-    check((await page.locator('.lab-views .ft-chip[aria-current="true"]').textContent()) === 'TRUST', 'the Models view is Evidence › TRUST')
+    check((await page.locator('.tabbed-views .ft-chip[aria-current="true"]').textContent()) === 'TRUST', 'the Models view is Evidence › TRUST')
     await page.goto(`${BASE}#/lab/experiments?view=fueling`); await page.waitForTimeout(400)
-    check((await page.locator('.lab-views .ft-chip[aria-current="true"]').textContent()) === 'FUELLING', 'Experiments has its four views')
+    check((await page.locator('.tabbed-views .ft-chip[aria-current="true"]').textContent()) === 'FUELLING', 'Experiments has its four views')
     check((await page.locator('.shell-rail .rail-item', { hasText: /^Lab$/ }).count()) === 1 && (await page.locator('.shell-rail .rail-item', { hasText: /^(Explore|Models|Experiments|Interventions|Regimen|Tests|Routine|History)$/ }).count()) === 0, 'the rail has one Lab entry and none of the pages it absorbed')
     check(await page.evaluate(() => !!document.querySelector('.shell-rail .rail-item.active')), 'the Lab entry is marked on a Lab page')
     await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(300)
@@ -500,6 +500,44 @@ async function waitForServer() {
     await page.setViewportSize({ width: 1440, height: 1000 }); await page.waitForTimeout(200)
     await page.goto(`${BASE}#/lab/compare?m=series:energy&with=series:mood&with=series:hrv`); await page.waitForSelector('.metric-pair', { timeout: 15000 }); await page.waitForTimeout(500)
     await shot('compare-lab')
+
+    // 8g. the regroup (phase 5): Plan and Setup tabs, Body and Risk inside Me, the rail, old routes, the Google sign-in return
+    check(await to('/plan') === '/plan/overview' && await to('/plan?x=1') === '/plan/overview', 'the Plan root opens its Overview')
+    check(await to('/plan-block?week=2') === '/plan/training?week=2' && await to('/meal-prep') === '/plan/food' && await to('/sessions') === '/plan/sessions' && await to('/races') === '/plan/races', 'old plan routes land on the Plan tabs, query kept')
+    check(await to('/data?table=meals&id=42') === '/setup/data?table=meals&id=42' && await to('/integrity?series=hrv') === '/setup/integrity?series=hrv' && await to('/connections') === '/setup/connections', 'old data, integrity and connections routes land in Setup, query kept')
+    check(await to('/body') === '/me?tab=BODY' && await to('/risk') === '/me?tab=EXPOSURES', 'old Body and Risk routes open Me on their tab')
+    check(await to('/data-explorer') === '/setup/data' && await to('/data-quality') === '/setup/integrity' && await to('/setup') === '/setup/integrity', 'the v1 aliases and the Setup root go to the final place')
+    for (const [path, sel, label] of [['/plan/overview', '.pg-title:has-text("PLAN")', 'overview'], ['/plan/training', '.pb, .state-empty', 'training'], ['/plan/food', '.pb, .state-empty', 'food'], ['/plan/sessions', '.pg-title:has-text("SESSIONS")', 'sessions'], ['/plan/races', '.pg-title:has-text("RACES")', 'races'], ['/setup/integrity', '.ig', 'integrity'], ['/setup/data', '.de', 'data'], ['/setup/connections', '.pg-title:has-text("CONNECTIONS")', 'connections']]) {
+      await page.goto(`${BASE}#${path}`); await page.waitForSelector(sel, { timeout: 15000 }).catch(async () => { await shot(`broken-${label}`) })
+      check((await page.locator(sel).count()) > 0 && (await page.locator('.error-boundary').count()) === 0, `${path} renders its own page`)
+      check((await page.locator('.tabbed-tab[aria-current="true"]').textContent({ timeout: 3000 }).catch(() => '')).toLowerCase() === label, `and ${label.toUpperCase()} is the marked tab`)
+    }
+    check((await page.locator('.shell-rail .rail-item').allTextContents()).join('|') === 'Today|Me|Lab|Plan|Log|⚙ Setup', 'the rail is the five tabs and Setup', (await page.locator('.shell-rail .rail-item').allTextContents()).join('|'))
+    await page.goto(`${BASE}#/plan/races`); await page.waitForTimeout(300)
+    check((await page.locator('.shell-rail .rail-item.active').allTextContents()).join('|') === 'Plan', 'Plan is marked in the rail on a Plan page')
+    await page.goto(`${BASE}#/setup/data`); await page.waitForTimeout(300)
+    check((await page.locator('.shell-rail .rail-item.active').allTextContents()).join('|') === '⚙ Setup', 'Setup is marked in the rail on a Setup page')
+    await page.goto(`${BASE}#/me?tab=BODY`); await page.waitForSelector('.me-deeper .body-ws, .me-deeper .state-loading, .me-deeper', { timeout: 15000 }); await page.waitForTimeout(800)
+    check((await page.locator('.me-deeper').count()) === 1 && (await text('.me-deeper')).includes('BODY COMPOSITION') && (await page.locator('.error-boundary').count()) === 0, 'Me › BODY carries the scale analysis below the phone\'s picture', (await text('.me-deeper')).slice(0, 60))
+    await page.goto(`${BASE}#/me?tab=EXPOSURES`); await page.waitForTimeout(1200)
+    check((await page.locator('.me-deeper').count()) === 1 && (await page.locator('.error-boundary').count()) === 0, 'Me › EXPOSURES carries the risk analysis below it', (await text('.me-deeper')).slice(0, 60))
+    await page.goto(`${BASE}#/me?tab=HEALTH`); await page.waitForTimeout(500)
+    check((await page.locator('.me-deeper').count()) === 0, 'the other Me tabs carry nothing extra')
+    for (const tab of ['BODY', 'EXPOSURES']) {
+      await page.goto(`${BASE}#/me?tab=${tab}`); await page.waitForTimeout(900)
+      await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(400)
+      check(await page.evaluate(() => document.querySelector('.shell-canvas').scrollWidth <= 392), `Me › ${tab} fits at phone width`)
+      await shot(`me-${tab.toLowerCase()}-phone`)
+      await page.setViewportSize({ width: 1440, height: 1000 }); await page.waitForTimeout(300)
+    }
+    // the Google sign-in return, as production does it: Supabase sends the browser back to the page's address WITHOUT a hash, with
+    // the stored path waiting in sessionStorage. The new path, one stored before the Setup move, and an ordinary one must each land.
+    for (const [stored, expect] of [['/setup/connections', '/setup/connections'], ['/connections', '/setup/connections'], ['/log', '/log']]) {
+      await page.goto(`${BASE}#/today`); await page.waitForSelector('.today', { timeout: 15000 })
+      await page.evaluate((v) => sessionStorage.setItem('ft.console.returnTo', v), stored)
+      await page.goto(BASE); await page.waitForTimeout(1200)
+      check(page.url().split('#')[1] === expect, `the sign-in return lands on ${expect} (stored ${stored})`, page.url().split('#')[1])
+    }
 
     // 9. old routes redirect
     await page.goto(`${BASE}#/overview`); await page.waitForTimeout(300)

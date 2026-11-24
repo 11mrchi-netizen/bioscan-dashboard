@@ -10,19 +10,11 @@ import { DateRangeControl } from './DateRangeControl'
 import { SavedViews } from './SavedViews'
 import './Shell.css'
 
-// One web app (redesign phase 1): Today and Me lead, then the groups in the phone's language. Phases 3-5 regroup the rest
-// into LAB, PLAN and SETUP (docs/web-redesign).
+// One web app (web redesign): five tabs in the phone's order, in the rail as on the phone's dock. Setup, the plumbing, sits
+// apart at the foot as the phone's gear does.
 const GROUPS: { title: string; items: { to: string; label: string }[] }[] = [
-  { title: 'GLANCE', items: [{ to: 'today', label: 'Today' }, { to: 'me', label: 'Me' }] },
-  { title: 'LAB', items: [{ to: 'lab', label: 'Lab' }] },
-  { title: 'PLAN', items: [
-    { to: 'plan', label: 'Overview' }, { to: 'plan-block', label: 'Plan block' }, { to: 'meal-prep', label: 'Meal prep' },
-    { to: 'sessions', label: 'Sessions' }, { to: 'races', label: 'Races' },
-  ] },
-  { title: 'LOG', items: [{ to: 'log', label: 'Day log' }] },
-  // Interim (phase 5 moves Body and Risk into Me, and Data, Integrity and Connections under Setup).
-  { title: 'BODY AND DATA', items: [{ to: 'body', label: 'Body' }, { to: 'risk', label: 'Risk' }, { to: 'data', label: 'Data' }] },
-  { title: 'SYSTEM', items: [{ to: 'integrity', label: 'Integrity' }, { to: 'connections', label: 'Connections' }] },
+  { title: '', items: [{ to: 'today', label: 'Today' }, { to: 'me', label: 'Me' }, { to: 'lab', label: 'Lab' }, { to: 'plan', label: 'Plan' }, { to: 'log', label: 'Log' }] },
+  { title: '', items: [{ to: 'setup', label: '⚙ Setup' }] },
 ]
 
 /** Where to land after Google's consent page sends the browser back (set by Connections before it leaves). */
@@ -33,7 +25,7 @@ export const RETURN_KEY = 'ft.console.returnTo'
  * (Explore). Every other page has its own (a day, a tab, range chips, filters) or none, so the control would only mislead.
  */
 function usesGlobalRange(pathname: string, search: string): boolean {
-  if (pathname === '/integrity') return true
+  if (pathname === '/setup/integrity') return true
   return pathname === '/lab/compare' && new URLSearchParams(search).get('view') === 'periods'
 }
 
@@ -54,7 +46,8 @@ export function Shell() {
   useEffect(() => {
     let to: string | null = null
     try { to = sessionStorage.getItem(RETURN_KEY); sessionStorage.removeItem(RETURN_KEY) } catch { /* storage off */ }
-    if (to && /^\/[a-z-]+$/.test(to)) navigate(to, { replace: true })
+    // One or two segments (/log, /setup/connections); a value stored before the Setup move (/connections) still lands, through its redirect.
+    if (to && /^\/[a-z-]+(\/[a-z-]+)?$/.test(to)) navigate(to, { replace: true })
   }, [navigate])
   const inspectionTarget = useInspection()
   const clearInspection = useClearInspection()
@@ -90,7 +83,7 @@ export function Shell() {
         <nav className="shell-rail" aria-label="Workspace navigation">
           {GROUPS.map((g) => (
             <div key={g.title} className="rail-group" role="group" aria-label={g.title}>
-              <span className="rail-section mono">{railCollapsed ? '—' : g.title}</span>
+              {g.title && <span className="rail-section mono">{railCollapsed ? '—' : g.title}</span>}
               {g.items.map(({ to, label }) => (
                 <NavLink key={to} to={to} className={({ isActive }) => `rail-item mono ${isActive ? 'active' : ''}`}>
                   {railCollapsed ? label.slice(0, 2).toUpperCase() : label}

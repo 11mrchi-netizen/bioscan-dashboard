@@ -193,7 +193,7 @@ export default function Log() {
       </div>
       {isRange && daysBetween(day, rawTo ?? day) >= MAX_DAYS && <p className="pb-warn">A range is at most {MAX_DAYS} days: showing {long(day)} to {long(to)}.</p>}
 
-      {done && <p className="pb-ok" role="status">{done} The phone picks the change up on its next refresh; <a href="#/integrity">Integrity</a> checks the data again each time it is opened.</p>}
+      {done && <p className="pb-ok" role="status">{done} The phone picks the change up on its next refresh; <a href="#/setup/integrity">Integrity</a> checks the data again each time it is opened.</p>}
       {status.error && <p className="pb-warn">Could not load: {status.error}</p>}
       {status.loading && !log && <p className="state-loading">LOADING…</p>}
       {log && isEmpty(log) && <p className="state-empty">{isRange ? 'NOTHING WAS LOGGED IN THESE DAYS.' : 'NOTHING WAS LOGGED ON THIS DAY.'}</p>}

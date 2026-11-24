@@ -29,7 +29,7 @@ export function Evidence() {
   const open = (id: string) => setParams(id === 'queue' ? {} : { view: id }, { replace: true })
   return (
     <>
-      <div className="lab-views" role="group" aria-label="Evidence">
+      <div className="tabbed-views" role="group" aria-label="Evidence">
         {EVIDENCE_VIEWS.map((v) => <button key={v.id} className="ft-chip" aria-current={v.id === view} onClick={() => open(v.id)}>{v.label}</button>)}
       </div>
       <div className="rlab">

@@ -1,4 +1,4 @@
-// The Data workspace's filters as they live in the URL (#/data?table=..&from=..&to=..|date=..&id=..&source=..&col=..&empty=..),
+// The Data workspace's filters as they live in the URL (#/setup/data?table=..&from=..&to=..|date=..&id=..&source=..&col=..&empty=..),
 // so issues, evidence and the Inspector can link to a filtered view (lib/links.ts). Pure: tested in workflow.test.ts.
 export interface Filters {
   table: string

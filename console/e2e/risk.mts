@@ -132,7 +132,7 @@ try {
   const exp = Math.floor(Date.now() / 1000) + 3600
   const jwt = ['{"alg":"HS256","typ":"JWT"}', JSON.stringify({ sub: 'u1', exp, role: 'authenticated' }), 'sig'].map((s, i) => (i < 2 ? Buffer.from(s).toString('base64url') : s)).join('.')
   await ctx.addInitScript(([key, val]: string[]) => localStorage.setItem(key, val), [`sb-${REF}-auth-token`, JSON.stringify({ access_token: jwt, refresh_token: 'r', token_type: 'bearer', expires_in: 3600, expires_at: exp, user: { id: 'u1', aud: 'authenticated', role: 'authenticated' } })])
-  await page.goto(`${BASE}#/risk`)
+  await page.goto(`${BASE}#/me?tab=EXPOSURES`)
   await page.waitForSelector('canvas', { timeout: 15000 }); await page.waitForTimeout(800)
   const text = ((await page.textContent('.pg')) ?? '').replace(/\s+/g, ' ')
   check(text.includes('AIR · LAST 30 DAYS') && text.includes('PM2.5 BREATHED, MEAN'), 'air summary shows')

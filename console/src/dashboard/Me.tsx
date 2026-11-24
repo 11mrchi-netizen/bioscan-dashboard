@@ -10,6 +10,9 @@ import { loadMeView, ME_TABS, type MeRow, type MeTab, type MeViewRow } from './m
 import type { Concern } from './Body3D'
 
 const Body3D = lazy(() => import('./Body3D').then((m) => ({ default: m.Body3D })))
+// The console's deeper reads, below the phone's own picture of the tab (web redesign, phase 5): the scale's impedance on BODY, exposures and risks on EXPOSURES.
+const BodyAnalysis = lazy(() => import('../workspaces/Body'))
+const RiskAnalysis = lazy(() => import('../workspaces/Risk'))
 
 /** The tabs the phone sends so far (phase 3 builds them one by one). */
 
@@ -64,6 +67,9 @@ export function Me() {
             <p>The phone has not sent {tab} yet. It does when the tab is opened on the phone, and every few hours in the background once the updated app is installed.</p>
           </section>
         )}
+
+      {tab === 'BODY' && <Suspense fallback={null}><section className="me-deeper ft-skin" aria-label="The scale in depth"><BodyAnalysis /></section></Suspense>}
+      {tab === 'EXPOSURES' && <Suspense fallback={null}><section className="me-deeper ft-skin" aria-label="Exposures and risks in depth"><RiskAnalysis /></section></Suspense>}
     </div>
   )
 }

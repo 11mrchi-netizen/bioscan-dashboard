@@ -21,6 +21,9 @@ import com.bioscan.fieldterminal.domain.fuel.planFuelDays
 import com.bioscan.fieldterminal.domain.fuel.planRaceFuel
 import com.bioscan.fieldterminal.domain.fuel.sweatProfile
 import com.bioscan.fieldterminal.domain.fuel.withCatchUp
+import com.bioscan.fieldterminal.domain.fuel.EventSnapshot
+import com.bioscan.fieldterminal.domain.fuel.describeChanges
+import com.bioscan.fieldterminal.domain.fuel.snapshotOf
 import com.bioscan.fieldterminal.domain.trail.CoursePoint
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -287,16 +290,27 @@ class RaceFuelParityTest {
         val (heatIn, heatOut) = heatGrid()
         val (estIn, estOut) = estimateCases()
         val input = buildJsonObject { put("scenarios", JsonArray(scenarios)); put("intake", intakeIn); put("climatology", climIn); put("heat", heatIn); put("estimates", estIn) }
+        val plans = scenarios.map { run(it) }
+        val snaps = plans.map { snapshotOf(it) }
+        val snapshots = buildJsonObject {
+            scenarios.forEachIndexed { i, sc ->
+                val obj = json.encodeToJsonElement(EventSnapshot.serializer(), snaps[i]).jsonObject
+                put(sc.s("name")!!, buildJsonObject { put("snapshot", obj); put("text", obj.toString()); put("hash", obj.toString().hashCode().toString(16)) })
+            }
+            put("_changes", JsonArray(snaps.zipWithNext { a, b -> JsonArray(describeChanges(a, b).map { JsonPrimitive(it) }) }))
+        }
         val expected = buildJsonObject {
-            put("plans", buildJsonObject { scenarios.forEach { put(it.s("name")!!, json.encodeToJsonElement(RaceFuelPlan.serializer(), run(it))) } })
+            put("plans", buildJsonObject { scenarios.forEachIndexed { i, sc -> put(sc.s("name")!!, json.encodeToJsonElement(RaceFuelPlan.serializer(), plans[i])) } })
             put("intake", intakeOut); put("climatology", climOut); put("heat", heatOut); put("estimates", estOut)
         }
         if (System.getenv("FT_PARITY_WRITE") != null || !expectedFile.exists()) {
             dir.mkdirs()
             inputFile.writeText(json.encodeToString(JsonElement.serializer(), input) + "\n")
             expectedFile.writeText(json.encodeToString(JsonElement.serializer(), expected) + "\n")
+            File(dir, "snapshots-event.json").writeText(json.encodeToString(JsonElement.serializer(), snapshots) + "\n")
             return
         }
+        assertEquals(Json.parseToJsonElement(File(dir, "snapshots-event.json").readText()), snapshots)
         assertEquals(Json.parseToJsonElement(expectedFile.readText()), expected)
         assertEquals(Json.parseToJsonElement(inputFile.readText()), input)
     }

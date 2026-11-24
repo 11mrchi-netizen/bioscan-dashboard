@@ -5,7 +5,9 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useLoadEffect } from '../lib/useLoadEffect'
 import { loadRaceFuel, type RaceFuel } from '../lib/raceFuelData'
-import { fmtMin, roundToInt, type FuelStep, type CarryLeg, type PrepItem } from '../../../supabase/functions/_shared/fuel-core/index.ts'
+import { storeEvent, type StoreResult } from '../lib/fuelPlansStore'
+import { KeptNote } from './FuelPlan'
+import { eventSnapshot, fmtMin, roundToInt, type FuelStep, type CarryLeg, type PrepItem } from '../../../supabase/functions/_shared/fuel-core/index.ts'
 import './PlanBlock.css'
 import './Pages.css'
 import './FuelPlan.css'
@@ -16,7 +18,13 @@ const when = (zdt: string) => new Date(zdt.replace(/\[.*\]$/, '')).toLocaleStrin
 export default function RaceFuelPage() {
   const { id } = useParams()
   const [d, setD] = useState<RaceFuel | null | undefined>(undefined)
-  const st = useLoadEffect(async (cur) => { const x = await loadRaceFuel(Number(id)); if (cur()) setD(x) }, [id])
+  const [kept, setKept] = useState<StoreResult | null>(null)
+  const st = useLoadEffect(async (cur) => {
+    const x = await loadRaceFuel(Number(id))
+    if (!cur()) return
+    setD(x)
+    if (x) { const r = await storeEvent(x.event.id, eventSnapshot(x.plan)).catch((e) => ({ state: 'error', changes: [], message: String(e) }) as StoreResult); if (cur()) setKept(r) }
+  }, [id])
   const e = d?.event
   return (
     <div className="pg fp" data-testid="race-fuel">
@@ -30,12 +38,12 @@ export default function RaceFuelPage() {
       {st.error && <p className="pb-warn">Could not load: {st.error} <button className="pb-chip small" onClick={st.retry}>RETRY</button></p>}
       {st.loading && d === undefined && <p className="state-loading">LOADING…</p>}
       {d === null && <p className="state-empty">NO PLAN: THE EVENT HAS NO TARGET TIME OR EXPECTED DURATION, AND TOO FEW RECENT RUNS TO ESTIMATE ONE.</p>}
-      {d && <Plan d={d} />}
+      {d && <Plan d={d} kept={kept} />}
     </div>
   )
 }
 
-function Plan({ d }: { d: RaceFuel }) {
+function Plan({ d, kept }: { d: RaceFuel; kept: StoreResult | null }) {
   const p = d.plan
   return (
     <>
@@ -87,6 +95,7 @@ function Plan({ d }: { d: RaceFuel }) {
       <section className="pg-card wide fp-foot">
         <h3 className="pg-card-title mono"><span>WHAT THE PLAN ASSUMES</span><span>{p.assumptions.length}</span></h3>
         <ul className="fp-why">{p.assumptions.map((a) => <li key={a} className="fp-note">{a}</li>)}</ul>
+        {kept && <KeptNote kept={kept} what="this event's plan" />}
         <p className="pg-note">The carbohydrate your gut tolerates (60 g an hour), caffeine (off) and a salty sweat (off) are settings on the phone, which the web cannot read: the defaults are used here.</p>
       </section>
     </>

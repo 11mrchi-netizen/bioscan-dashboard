@@ -121,7 +121,13 @@ dates over ten years), what it assumes and what to watch for. Engine: `heat.ts`,
 The phone's home place (the weather of an event with no start point) and its carbohydrate tolerance, caffeine and salty-sweat settings are phone-only: no place means
 no weather, and the defaults are used.
 
-Not built yet: the intake against the plan, writing `fuel_plans`, long sessions from the day plan (the phone offers them from Today).
+**The record (`fuel_plans`)**: opening the fuel plan keeps today's plan, and opening an event's plan keeps that event's, as the phone does when it shows them: one
+append-only row (`kind`, `ref_key`, `engine_version` 4, `inputs_hash`, `plan`). `fuel-core/snapshot.ts` makes the snapshot and the hash the phone makes (Java's
+`String.hashCode` of the Kotlin JSON text; it reproduces all 83 hashes the phone has stored, and Kotlin fixtures cover the rest). The web never competes with the
+phone for a row: it writes a first copy when there is none, and a changed copy only over a row it wrote itself (`plan.by = "web"`, which the phone ignores); when the
+latest row is the phone's and differs, it writes nothing and says what differs. Rules: `fuelPlansDecide.ts`, `fuelPlansStore.ts`.
+
+Not built yet: the intake against the plan, long sessions from the day plan (the phone offers them from Today).
 
 ## Look
 

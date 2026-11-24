@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useLoadEffect } from '../lib/useLoadEffect'
 import { loadFuelDays } from '../lib/fuelDay'
+import { storeDay, type StoreResult } from '../lib/fuelPlansStore'
 import type { FuelDays } from '../lib/fuelInputs'
 import { formatGPerKg, type DayFuelPlan, type DayMeal, type PlannedItem, roundToInt } from '../../../supabase/functions/_shared/fuel-core/index.ts'
 import './PlanBlock.css'
@@ -16,6 +17,7 @@ const dayName = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('en-
 const longDay = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
 const hhmm = (zdt: string | null) => (zdt ? zdt.slice(11, 16) : 'no set time')
 const g = (x: number) => String(roundToInt(x))
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 const hm = (min: number) => { const m = roundToInt(min); return m >= 60 ? `${Math.trunc(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min` }
 const KIND: Record<string, string> = { BREAKFAST: 'BREAKFAST', LUNCH: 'LUNCH', SNACK: 'SNACK', DINNER: 'DINNER', PRE_SESSION: 'PRE-SESSION', RECOVERY: 'RECOVERY' }
 const SOURCE: Record<string, string> = { EVENT: 'EVENT', PLANNED_SESSION: 'PLAN', CALENDAR: 'CALENDAR', RECORDED: 'RECORDED' }
@@ -23,7 +25,14 @@ const SOURCE: Record<string, string> = { EVENT: 'EVENT', PLANNED_SESSION: 'PLAN'
 export default function FuelPlan() {
   const [params, setParams] = useSearchParams()
   const [data, setData] = useState<FuelDays | null | undefined>(undefined)
-  const status = useLoadEffect(async (cur) => { const d = await loadFuelDays(); if (cur()) setData(d) }, [])
+  const [kept, setKept] = useState<StoreResult | null>(null)
+  const status = useLoadEffect(async (cur) => {
+    const d = await loadFuelDays()
+    if (!cur()) return
+    setData(d)
+    // keep today's plan for the record, as the phone does (fuel_plans), without competing with the phone's own rows
+    if (d) { const r = await storeDay(d.today, d.snapshot).catch((e) => ({ state: 'error', changes: [], message: String(e) }) as StoreResult); if (cur()) setKept(r) }
+  }, [])
   const horizon = useMemo(() => (data ? data.days.map((_, i) => i).filter((i) => i >= data.todayIdx) : []), [data])
   const picked = data ? data.days.findIndex((d) => d.date === params.get('day')) : -1
   const idx = data ? (picked >= data.todayIdx ? picked : data.todayIdx) : -1
@@ -61,14 +70,14 @@ export default function FuelPlan() {
             })}
           </nav>
           <Day data={data} i={idx} />
-          <Energy data={data} />
+          <Energy data={data} kept={kept} />
         </>
       )}
     </div>
   )
 }
 
-function Energy({ data }: { data: FuelDays }) {
+function Energy({ data, kept }: { data: FuelDays; kept: StoreResult | null }) {
   const e = data.energy
   const basis = e.dailyKcal == null ? 'No calorie goal and not enough in your profile to estimate maintenance: the plan carries carbohydrate and protein only.'
     : `${e.fromGoal ? `Your goal of ${g(e.dailyKcal)} kcal` : `Maintenance of ${g(e.dailyKcal)} kcal`} is the week's average; each day adds its sessions' energy and takes off the week's mean${e.observedMaintenance ? ' (maintenance observed from what you log and your weight trend)' : ''}${e.deficit ? '; the goal is a deficit' : ''}.`
@@ -76,6 +85,7 @@ function Energy({ data }: { data: FuelDays }) {
     <section className="pg-card wide fp-foot">
       <h3 className="pg-card-title mono"><span>HOW IT IS WORKED OUT</span><span>{data.weightKg} KG{data.fatFreeMassKg ? ` · ${g(data.fatFreeMassKg)} KG FAT-FREE` : ''}</span></h3>
       <p className="pg-note">{basis}</p>
+      {kept && <KeptNote kept={kept} />}
       <p className="pg-note">Meal times (09:00, 12:30, 16:00, 19:30), training low before easy sessions (off) and the carbohydrate your gut tolerates (60 g an hour) are settings on the phone, which the web cannot read: the defaults are used here.</p>
     </section>
   )
@@ -162,5 +172,18 @@ function Meal({ meal }: { meal: DayMeal }) {
       </span>
       <span className="pg-row-sub">{meal.reason}{meal.beforeKeySession && ' Low in fat and fibre.'}</span>
     </li>
+  )
+}
+
+/** What became of today's plan in the record (fuel_plans). */
+export function KeptNote({ kept, what = "today's plan" }: { kept: StoreResult; what?: string }) {
+  const lines = kept.changes.length ? <> {kept.changes.join(' ')}</> : null
+  return (
+    <p className="pg-note" data-testid="fuel-kept">
+      {kept.state === 'stored' && <>{cap(what)} was kept in the record (fuel_plans), as the phone keeps it.{lines}</>}
+      {kept.state === 'unchanged' && <>{cap(what)} is as stored in the record.</>}
+      {kept.state === 'phone' && <>The phone's stored plan differs from this one, so nothing was written.{lines || ' (Its settings, such as meal times, may differ from the defaults used here.)'}</>}
+      {kept.state === 'error' && <span className="pg-warn">Could not keep {what} in the record: {kept.message}</span>}
+    </p>
   )
 }

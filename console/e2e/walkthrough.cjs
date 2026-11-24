@@ -876,7 +876,12 @@ async function waitForServer() {
     const picked = await page.locator('.fp-day.on').getAttribute('data-day')
     check((await page.evaluate(() => location.hash)).includes(`day=${picked}`), 'the open day is in the address', picked)
     check(picked === ymd(dayPlus(2)) && (await text('[data-testid="fuel-day"] .pg-card-title')).toLowerCase().includes(new Date(`${picked}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'long' }).toLowerCase()), 'a day is opened from the strip, and stays in the address', picked)
-    check(!requests.some((q) => /^(POST|PATCH|DELETE) (fuel_plans|fuel_week_plans)/.test(q)), 'the page writes nothing')
+    await page.waitForSelector('[data-testid="fuel-kept"]', { timeout: 10000 })
+    check(requests.filter((q) => q === 'POST fuel_plans').length === 1 && (await text('[data-testid="fuel-kept"]')).includes('kept in the record') && !requests.some((q) => /^(PATCH|DELETE) fuel_plans|^POST fuel_week_plans/.test(q)), "today's plan is kept in fuel_plans once, and nothing else is written", await text('[data-testid="fuel-kept"]'))
+    const stored = T.fuel_plans?.[0]
+    check(stored && stored.kind === 'day' && stored.engine_version === '4' && /^-?[0-9a-f]+$/.test(stored.inputs_hash) && stored.plan.by === 'web' && Array.isArray(stored.plan.meals) && stored.plan.carb_g > 0, 'the row has the phone\'s shape: kind, engine version 4, a hex hash, the snapshot, marked as the web\'s', JSON.stringify(stored)?.slice(0, 200))
+    await page.goto(`${BASE}#/plan/food`); await page.reload(); await page.waitForSelector('[data-testid="fuel-kept"]', { timeout: 20000 })
+    check(requests.filter((q) => q === 'POST fuel_plans').length === 1 && (await text('[data-testid="fuel-kept"]')).includes('as stored'), 'the same plan is not stored again', await text('[data-testid="fuel-kept"]'))
     await page.goto(`${BASE}#/plan/food?view=prep`); await page.waitForSelector('.pb', { timeout: 15000 })
     check(await crumb() === 'PLAN > FOOD > MEAL PREP' && (await navOn()).includes('plan/food/prep'), 'the meal prep is the other view of Food, marked in the menu', await crumb())
 
@@ -889,7 +894,8 @@ async function waitForServer() {
     check((await text('[data-testid="race-fuel"]')).includes('TYPICAL') && requests.some((q) => q === 'WEATHER archive-api.open-meteo.com'), 'a race 30 days out is planned on the typical weather of its dates (archive)')
     check((await page.locator('.pg-card:has(h3:has-text("BEFORE")) .pg-row').count()) >= 4 && (await page.locator('.pg-card:has(h3:has-text("AFTER")) .pg-row').count()) === 3, 'what to do before and after is listed')
     check((await text('.pg-card:has(h3:has-text("WHAT TO CARRY"))')).includes('CP1') || (await text('[data-testid="race-fuel"]')).includes('CP1'), 'the aid stations split the carry into legs')
-    check(!requests.some((q) => /^(POST|PATCH|DELETE) (fuel_plans|fuel_schedules)/.test(q)), 'the page writes nothing')
+    await page.waitForSelector('[data-testid="fuel-kept"]', { timeout: 10000 })
+    check(requests.filter((q) => q === 'POST fuel_plans').length === 2 && T.fuel_plans[1].kind === 'event' && T.fuel_plans[1].ref_key === '9301' && T.fuel_plans[1].plan.by === 'web' && T.fuel_plans[1].plan.steps.length >= 5 && !requests.some((q) => /^(PATCH|DELETE) (fuel_plans|fuel_schedules)|^POST fuel_schedules/.test(q)), "the event's plan is kept once, and no schedule is touched", await text('[data-testid="fuel-kept"]'))
 
     // 9. old routes redirect
     await page.goto(`${BASE}#/overview`); await page.waitForTimeout(300)

@@ -34,7 +34,7 @@ export const RETURN_KEY = 'ft.console.returnTo'
  */
 function usesGlobalRange(pathname: string, search: string): boolean {
   if (/^\/(today|me|m\/.*)$/.test(pathname)) return false
-  void search // Compare's days view will hide it once it is the default (next commit)
+  if (pathname === '/lab/compare') return new URLSearchParams(search).get('view') === 'periods'
   return true
 }
 

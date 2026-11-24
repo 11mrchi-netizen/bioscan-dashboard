@@ -38,8 +38,17 @@ const LAGS = [{ n: 0, label: 'SAME DAY' }, { n: 1, label: '+1' }, { n: 2, label:
 
 interface Item { ref: MetricRef; key: string; data: MetricData }
 
+/** The metric page of the address (#/m/<ref>). */
 export default function Metric() {
-  const { ref: raw } = useParams()
+  const { ref } = useParams()
+  return <MetricView rawRef={ref} />
+}
+
+/**
+ * The page's body. Embedded (Lab › COMPARE, days view) it takes its metric from the caller, has no wash of its own (the Lab
+ * is the page) and no back button, and offers CHANGE METRIC, which uses the compare picker to choose the main metric.
+ */
+export function MetricView({ rawRef: raw, embedded = false, setPrimary }: { rawRef: string | undefined; embedded?: boolean; setPrimary?: (ref: string) => void }) {
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
   const ref = useMemo(() => parseMetricRef(raw), [raw])
@@ -53,6 +62,7 @@ export default function Metric() {
   const [items, setItems] = useState<Item[]>([])
   const [failed, setFailed] = useState<{ key: string; message: string }[]>([])
   const [picking, setPicking] = useState(false)
+  const [changing, setChanging] = useState(false)
 
   const status = useLoadEffect(async (isCurrent) => {
     if (!ref) return
@@ -93,7 +103,8 @@ export default function Metric() {
   }
 
   if (!raw || !ref) {
-    return <Wash hue="var(--ft-domain-balance)"><main className="dash-main"><section className="ft-card"><p className="me-note">No such metric. <Link className="dash-link" to="/today">TODAY</Link></p></section></main></Wash>
+    const none = <section className="ft-card"><p className="me-note">No such metric. {embedded ? <button className="dash-link" onClick={() => setPrimary?.('series:hrv')}>START FROM HRV</button> : <Link className="dash-link" to="/today">TODAY</Link>}</p></section>
+    return embedded ? <main className="dash-main">{none}</main> : <Wash hue="var(--ft-domain-balance)"><main className="dash-main">{none}</main></Wash>
   }
   const setRange = (id: string) => setParam({ range: id })
   const behind = seriesBehind(ref)
@@ -103,11 +114,10 @@ export default function Metric() {
   const compared = extras.length > 0
   const panels = panelsByUnit(items.map((it) => ({ ...it, unit: it.data.axis })))
 
-  return (
-    <Wash hue={`var(--${washFor(ref)})`}>
+  const content = (
       <main className="dash-main metric">
         <header className="metric-head">
-          <button className="dash-link" onClick={() => (window.history.state?.idx > 0 ? navigate(-1) : navigate('/today'))} aria-label="Back">‹ BACK</button>
+          {!embedded && <button className="dash-link" onClick={() => (window.history.state?.idx > 0 ? navigate(-1) : navigate('/today'))} aria-label="Back">‹ BACK</button>}
           <div className="metric-title">
             <h2 className="metric-name">{data?.label ?? (ref.kind === 'me' ? splitMeLabel(ref.label).item : refString(ref))}</h2>
             {data && <p className="metric-sub">{data.source}</p>}
@@ -118,6 +128,7 @@ export default function Metric() {
         </header>
 
         <div className="metric-compare-bar">
+          {embedded && <button className="ft-chip" aria-expanded={changing} onClick={() => { setChanging((v) => !v); setPicking(false) }}>CHANGE METRIC ▾</button>}
           {extras.map((e) => (
             <button key={e.key} className="ft-chip metric-with" onClick={() => toggle(e.key)} aria-label={`Remove ${e.data.label}`}>
               <b className="metric-swatch" style={{ background: cssColor(e.data.hue) }} />{e.data.label} ✕
@@ -126,9 +137,10 @@ export default function Metric() {
           {failed.map((f) => (
             <button key={f.key} className="ft-chip metric-with metric-failed" title={f.message} onClick={() => toggle(f.key)} aria-label={`Remove ${f.key}`}>{f.key} · could not load ✕</button>
           ))}
-          {extraRefs.length < MAX_COMPARE && <button className="ft-chip" aria-expanded={picking} onClick={() => setPicking((v) => !v)}>+ COMPARE</button>}
+          {extraRefs.length < MAX_COMPARE && <button className="ft-chip" aria-expanded={picking} onClick={() => { setPicking((v) => !v); setChanging(false) }}>+ COMPARE</button>}
           {compared && <button className="ft-chip" onClick={() => setWith([])}>CLEAR</button>}
         </div>
+        {changing && <Candidates own={null} chosen={[refString(ref)]} full={false} what="Choose the metric this page is about." onPick={(r) => { setPrimary?.(r); setChanging(false) }} />}
         {picking && <Candidates own={ref} chosen={extraRefs.map(refString)} full={extraRefs.length >= MAX_COMPARE} onPick={(r) => { toggle(r); setPicking(false) }} />}
 
         {status.error && <section className="ft-card"><p className="me-note">Could not load: {status.error} <button className="dash-link" onClick={status.retry}>RETRY</button></p></section>}
@@ -198,8 +210,8 @@ export default function Metric() {
           </section>
         )}
       </main>
-    </Wash>
   )
+  return embedded ? content : <Wash hue={`var(--${washFor(ref)})`}>{content}</Wash>
 }
 
 const tableOf = (id: string) => seriesById(id)?.table ?? ''
@@ -296,7 +308,7 @@ function Pair({ a, b, extras, lag, setLag, thenKey, setThen, from }: {
 }
 
 /** What can be put beside the page's metric: the rings, the inputs of the newest kept morning, the series by ring. */
-function Candidates({ own, chosen, full, onPick }: { own: MetricRef; chosen: string[]; full: boolean; onPick: (ref: string) => void }) {
+function Candidates({ own, chosen, full, onPick, what }: { own: MetricRef | null; chosen: string[]; full: boolean; onPick: (ref: string) => void; what?: string }) {
   const [inputs, setInputs] = useState<{ key: string; label: string; domain: DomainKey }[]>([])
   useLoadEffect(async (isCurrent) => {
     const r = await supabase.from('score_snapshots').select('day,scores').order('day', { ascending: false }).limit(1).maybeSingle()
@@ -306,7 +318,7 @@ function Candidates({ own, chosen, full, onPick }: { own: MetricRef; chosen: str
     for (const [k, d] of Object.entries(s.domains)) for (const g of d?.raw.groups ?? []) for (const i of g.inputs) out.push({ key: i.spec.key, label: i.spec.label, domain: k as DomainKey })
     if (isCurrent()) setInputs(out)
   }, [])
-  const ownKey = refString(own)
+  const ownKey = own ? refString(own) : ''
   // An input and a series can carry one name (Resting heart rate): they are different pages (the input has your usual and starts on
   // 6 Oct 2026, the series has the whole history), so a clash is told apart in the label.
   const clash = new Set(inputs.map((i) => i.label).filter((l) => SERIES.some((s) => s.label === l)))
@@ -317,7 +329,7 @@ function Candidates({ own, chosen, full, onPick }: { own: MetricRef; chosen: str
   )
   return (
     <section className="ft-card metric-picker" aria-label="Compare with">
-      <p className="metric-sub">Pick up to {MAX_COMPARE} to draw on the same days. {full ? 'Remove one first.' : ''}</p>
+      <p className="metric-sub">{what ?? `Pick up to ${MAX_COMPARE} to draw on the same days. ${full ? 'Remove one first.' : ''}`}</p>
       <div className="metric-pick-group"><span className="metric-latest-k">SCORES</span>{RING_KEYS.map((k) => chip(k, k.toUpperCase(), k === 'charge' ? 'ft-charge-b' : DOMAINS.find((d) => d.key.toLowerCase() === k)?.hue.slice(6, -1) ?? 'ft-platinum'))}</div>
       {DOMAINS.map((d) => {
         const ins = inputs.filter((i) => i.domain === d.key)

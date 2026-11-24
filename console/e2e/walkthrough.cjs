@@ -445,11 +445,32 @@ async function waitForServer() {
     check(await to('/regimen') === '/lab/regimen' && await to('/routine') === '/lab/routine' && await to('/tests') === '/lab/tests', 'old regimen, routine and tests')
     check(await to('/overview') === '/lab/compare?view=periods', 'a v1 alias goes straight to the final place')
     check(await to('/lab') === '/lab/compare' && await to('/lab/nonsense') === '/lab/compare', 'the Lab root and an unknown tab open Compare')
-    for (const [tab, sel] of [['compare', '.ex'], ['evidence', '.dec-queue, .dec-cols, .dec-bench, .dec-col, .rlab'], ['experiments', '.rlab'], ['regimen', '.pg, .pg-sub, h2'], ['tests', '.pg, .pg-sub, h2'], ['routine', '.pg, .pg-sub, h2']]) {
+    for (const [tab, sel] of [['compare', '.metric'], ['evidence', '.dec-queue, .dec-cols, .dec-bench, .dec-col, .rlab'], ['experiments', '.rlab'], ['regimen', '.pg, .pg-sub, h2'], ['tests', '.pg, .pg-sub, h2'], ['routine', '.pg, .pg-sub, h2']]) {
       await page.goto(`${BASE}#/lab/${tab}`); await page.waitForSelector(sel, { timeout: 15000 })
       await page.waitForSelector('.lab-tab', { timeout: 5000 }).catch(async () => { await shot(`lab-${tab}-broken`); console.log('LAB TAB MISSING', tab, errors.slice(-2).join(' | '), (await text('.shell-canvas')).slice(0, 200)) })
       check((await page.locator('.lab-tab[aria-current="true"]').textContent({ timeout: 3000 }).catch(() => '')).toLowerCase() === tab, `Lab › ${tab.toUpperCase()} renders and is the marked tab`)
     }
+    // Compare (phase 4, second commit): the metric page's compare is the default view, Explore the long-range one
+    await page.goto(`${BASE}#/lab/compare`); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
+    check((await text('.metric-name')).includes('HRV') && (await page.locator('.metric-head .dash-link', { hasText: 'BACK' }).count()) === 0, 'Compare opens the days view on a default metric, with no back button')
+    check((await page.locator('.shell-header .range-control, .shell-header [class*="range"]').count()) === 0, 'the header range is hidden on the days view')
+    await page.locator('.metric-compare-bar .ft-chip', { hasText: 'CHANGE METRIC' }).click(); await page.waitForSelector('.metric-picker', { timeout: 5000 })
+    await page.locator('.metric-picker .ft-chip', { hasText: /^Energy$/ }).first().click(); await page.waitForTimeout(500)
+    check(decodeURIComponent(page.url()).includes('m=series:energy') && (await text('.metric-name')).includes('Energy'), 'CHANGE METRIC chooses the main metric', page.url().split('#')[1])
+    await page.locator('.metric-compare-bar .ft-chip', { hasText: '+ COMPARE' }).click()
+    await page.locator('.metric-picker .ft-chip', { hasText: /^Mood$/ }).first().click(); await page.waitForSelector('[data-testid=pair-words]', { timeout: 15000 })
+    check(/^A strong negative link/.test(await text('[data-testid=pair-words]')), 'the pair is read inside the Lab', await text('[data-testid=pair-words]'))
+    check(decodeURIComponent(page.url()).includes('/lab/compare') && decodeURIComponent(page.url()).includes('with=series:mood'), 'the comparison is in the Lab address', page.url().split('#')[1])
+    await page.locator('.metric-compare-bar .ft-chip', { hasText: 'CHANGE METRIC' }).click(); await page.waitForSelector('.metric-picker', { timeout: 5000 })
+    await page.locator('.metric-picker .ft-chip', { hasText: /^Mood$/ }).first().click(); await page.waitForTimeout(500)
+    check(decodeURIComponent(page.url()).includes('m=series:mood') && !decodeURIComponent(page.url()).includes('with=series:mood'), 'making an extra the main metric takes it out of the extras', page.url().split('#')[1])
+    await page.locator('.lab-views .ft-chip', { hasText: 'PERIODS' }).click(); await page.waitForSelector('.ex-chart canvas', { timeout: 15000 })
+    check(page.url().includes('view=periods') && (await page.locator('.shell-header .range-control, .shell-header [class*="range"]').count()) > 0, 'PERIODS opens Explore and shows the header range')
+    await page.locator('.lab-views .ft-chip', { hasText: 'DAYS' }).click(); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
+    check(!page.url().includes('view=periods'), 'and DAYS comes back')
+    await page.goto(`${BASE}#/lab/evidence`); await page.waitForTimeout(300)
+    await page.goto(`${BASE}#/lab/compare?view=periods&series=hrv,steps&start=2025-10-01&end=2026-10-27`); await page.waitForSelector('.ex-chart canvas', { timeout: 15000 })
+    check((await page.locator('.ex').count()) === 1 && (await text('.ex-title')).includes('Explore'), 'a long-range link opens the periods view with its series', page.url().split('#')[1])
     // every sub-view renders without a page error (the first crash this walk found was a mock that lacked the engine's payload)
     const errsBefore = errors.length
     for (const v of ['queue', 'board', 'ledger', 'events', 'discovery', 'trust']) { await page.goto(`${BASE}#/lab/evidence${v === 'queue' ? '' : `?view=${v}`}`); await page.waitForTimeout(700) }
@@ -466,7 +487,12 @@ async function waitForServer() {
     await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(300)
     check(await page.evaluate(() => document.querySelector('.shell-canvas').scrollWidth <= 392), 'the nested Lab rows fit at phone width')
     await shot('lab-phone')
+    await page.goto(`${BASE}#/lab/compare?m=series:energy&with=series:mood`); await page.waitForSelector('.metric-pair', { timeout: 15000 }); await page.waitForTimeout(400)
+    check(await page.evaluate(() => document.querySelector('.shell-canvas').scrollWidth <= 392), 'Compare fits at phone width')
+    await shot('compare-lab-phone')
     await page.setViewportSize({ width: 1440, height: 1000 }); await page.waitForTimeout(200)
+    await page.goto(`${BASE}#/lab/compare?m=series:energy&with=series:mood&with=series:hrv`); await page.waitForSelector('.metric-pair', { timeout: 15000 }); await page.waitForTimeout(500)
+    await shot('compare-lab')
 
     // 9. old routes redirect
     await page.goto(`${BASE}#/overview`); await page.waitForTimeout(300)

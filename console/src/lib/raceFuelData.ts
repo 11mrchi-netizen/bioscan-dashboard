@@ -6,8 +6,8 @@ import { supabase } from './supabase'
 import { localToday } from './dates'
 import { fetchHourly } from './weather'
 import { loadFuelDays } from './fuelDay'
-import { atTime, type FuelProductOption, instant, type Intensity, NO_WEATHER, type RecentRun, type SweatTest, type WeatherSeries, type IntakeHistoryResult } from '../../../supabase/functions/_shared/fuel-core/index.ts'
-import { buildRaceFuel, type EventRow, type RaceFuel } from './raceFuelPlan'
+import { atTime, instant, NO_WEATHER, type RecentRun, type WeatherSeries, type IntakeHistoryResult } from '../../../supabase/functions/_shared/fuel-core/index.ts'
+import { buildRaceFuel, type EventRow, type RaceFuel, productsOf, sweatTestsOf } from './raceFuelPlan'
 export type { EventRow, RaceFuel } from './raceFuelPlan'
 
 const num = (x: unknown) => (x == null ? null : Number(x))
@@ -27,19 +27,8 @@ export async function loadRaceFuel(eventId: number, now: Date = new Date()): Pro
     supabase.from('exercise_sessions').select('distance_km,elevation_gain_m,duration_min').eq('type', 'run').gte('start_time', new Date(Date.parse(`${today}T00:00:00Z`) - 120 * 86400000).toISOString().slice(0, 10)).order('start_time', { ascending: false }).limit(60),
   ])
   const weightKg = num((body.data?.[0] as { weight_kg: number } | undefined)?.weight_kg)
-  const sweatTests: SweatTest[] = ((tests.data ?? []) as Record<string, unknown>[]).map((t) => ({
-    date: String(t.tested_on), sessionType: String(t.session_type), intensity: (['EASY', 'MODERATE', 'HARD', 'LONG', 'RACE'].find((i) => i.toLowerCase() === t.intensity) ?? 'MODERATE') as Intensity,
-    durationMin: Number(t.duration_min), weightBeforeKg: Number(t.weight_before_kg), weightAfterKg: Number(t.weight_after_kg), fluidInMl: Number(t.fluid_in_ml ?? 0), urineMl: Number(t.urine_ml ?? 0),
-    tempC: num(t.temp_c), humidityPct: num(t.humidity_pct),
-  }))
-  const newest = new Map<number, Record<string, unknown>>()
-  for (const v of (versions.data ?? []) as Record<string, unknown>[]) { const p = Number(v.product_id); const cur = newest.get(p); if (!cur || Number(v.version) > Number(cur.version)) newest.set(p, v) }
-  const products: FuelProductOption[] = []
-  for (const p of (prods.data ?? []) as { id: number; kind: string; name: string; brand: string | null }[]) {
-    const v = newest.get(p.id)
-    if (!v || v.carbs_g == null) continue
-    products.push({ id: p.id, name: [p.brand, p.name].filter((x) => x != null).join(' '), kind: p.kind, carbsG: Number(v.carbs_g), fluidMl: num(v.fluid_ml), sodiumMg: num(v.sodium_mg), caffeineMg: num(v.caffeine_mg), fructoseG: num(v.fructose_g) })
-  }
+  const sweatTests = sweatTestsOf((tests.data ?? []) as Record<string, unknown>[])
+  const products = productsOf((prods.data ?? []) as { id: number; kind: string; name: string; brand: string | null }[], (versions.data ?? []) as Record<string, unknown>[])
   const recent: RecentRun[] = ((runs.data ?? []) as Record<string, unknown>[]).filter((r) => r.distance_km != null && r.duration_min != null).map((r) => ({ distanceKm: Number(r.distance_km), ascentM: Number(r.elevation_gain_m ?? 0), durationMin: Number(r.duration_min) }))
 
   // the weather at the start, when the event says where it is

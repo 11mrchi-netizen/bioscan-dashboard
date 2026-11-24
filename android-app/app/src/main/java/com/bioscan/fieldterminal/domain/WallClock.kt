@@ -10,10 +10,11 @@ import java.time.ZonedDateTime
 
 // This app's timestamp convention (AddEntrySheet's toIsoWithOffset, HealthConnectExerciseSyncRepository, zepp-extract's
 // toLocalLabeledUtcIso): every LOGGED time -- meals.logged_at, stool_log / grip / notes / body_checkins / scale_readings
-// occurred_at, exercise_sessions.start_time, athlete_events.start_time -- is the phone's LOCAL WALL-CLOCK reading labelled
+// occurred_at, exercise_sessions.start_time -- is the phone's LOCAL WALL-CLOCK reading labelled
 // with a zero (UTC) offset. Its digits are the local time; it is not a real instant.
 //
-// A few columns are real instants and are NOT read this way: calendar_events start/end (from Google), sleep_daily
+// A few columns are real instants and are NOT read this way: calendar_events start/end (from Google), athlete_events.start_time (written with
+// the event's real offset: 21:00Z on 5 March is 05:00 on the 6th in Taipei), sleep_daily
 // bedtime / wake_time (checked against the data: 16:01Z is a 00:01 bedtime in Taipei), Zepp's stress samples (epoch
 // milliseconds) and every created_at / synced_at.
 //

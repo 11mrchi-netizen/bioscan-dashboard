@@ -121,7 +121,20 @@ dates over ten years), what it assumes and what to watch for. Engine: `heat.ts`,
 The phone's home place (the weather of an event with no start point) and its carbohydrate tolerance, caffeine and salty-sweat settings are phone-only: no place means
 no weather, and the defaults are used.
 
-Not built yet: the intake against the plan, writing `fuel_plans`, long sessions from the day plan (the phone offers them from Today).
+**The record (`fuel_plans`)**: opening the fuel plan keeps today's plan, and opening an event's plan keeps that event's, as the phone does when it shows them: one
+append-only row (`kind`, `ref_key`, `engine_version` 4, `inputs_hash`, `plan`). `fuel-core/snapshot.ts` makes the snapshot and the hash the phone makes (Java's
+`String.hashCode` of the Kotlin JSON text; it reproduces all 83 hashes the phone has stored, and Kotlin fixtures cover the rest). The web never competes with the
+phone for a row: it writes a first copy when there is none, and a changed copy only over a row it wrote itself (`plan.by = "web"`, which the phone ignores); when the
+latest row is the phone's and differs, it writes nothing and says what differs. Rules: `fuelPlansDecide.ts`, `fuelPlansStore.ts`.
+
+On today's plan each meal also says what was logged against it (by the meal's own slot label, else the nearest meal within two hours: `mealForLog` / `adherence`, parity-tested).
+
+**Long sessions** (on the fuel plan, a session of 90 minutes or more that is not an event): FUEL SCHEDULE opens the editor for what to take and when, as blocks
+(`schedule.ts`: the phone's `FuelBlock`, parity-tested: expansion, totals, per-hour rates, warnings, the plan as blocks). It is kept in `fuel_schedules` under the
+plan item, as the phone keeps it (`fuelScheduleKey.ts`), so the phone shows and debriefs the same schedule. Start from the planner's plan, from a standard, or empty.
+**FILL** adds a rule in one step ("one serving of the gel every 30 minutes from the 30th, none in the last 10"). **Standards** (`standards.ts`, web only, table
+`fuel_standards`: migration `20261126000000_fuel_standards.sql`, apply it before standards can be saved) are reusable rules, applied to a session of any length;
+SAVE AS A STANDARD takes the shape of the schedule on screen. Not here: the debrief (the phone's), supplements in the product list, the phone's home place for weather.
 
 ## Look
 

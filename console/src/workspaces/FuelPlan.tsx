@@ -6,6 +6,9 @@ import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useLoadEffect } from '../lib/useLoadEffect'
 import { loadFuelDays } from '../lib/fuelDay'
+import { storeDay, type StoreResult } from '../lib/fuelPlansStore'
+import { isLongNonEvent } from '../lib/fuelScheduleKey'
+import ScheduleEditor from './ScheduleEditor'
 import type { FuelDays } from '../lib/fuelInputs'
 import { formatGPerKg, type DayFuelPlan, type DayMeal, type PlannedItem, roundToInt } from '../../../supabase/functions/_shared/fuel-core/index.ts'
 import './PlanBlock.css'
@@ -16,6 +19,7 @@ const dayName = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('en-
 const longDay = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
 const hhmm = (zdt: string | null) => (zdt ? zdt.slice(11, 16) : 'no set time')
 const g = (x: number) => String(roundToInt(x))
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 const hm = (min: number) => { const m = roundToInt(min); return m >= 60 ? `${Math.trunc(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min` }
 const KIND: Record<string, string> = { BREAKFAST: 'BREAKFAST', LUNCH: 'LUNCH', SNACK: 'SNACK', DINNER: 'DINNER', PRE_SESSION: 'PRE-SESSION', RECOVERY: 'RECOVERY' }
 const SOURCE: Record<string, string> = { EVENT: 'EVENT', PLANNED_SESSION: 'PLAN', CALENDAR: 'CALENDAR', RECORDED: 'RECORDED' }
@@ -23,7 +27,14 @@ const SOURCE: Record<string, string> = { EVENT: 'EVENT', PLANNED_SESSION: 'PLAN'
 export default function FuelPlan() {
   const [params, setParams] = useSearchParams()
   const [data, setData] = useState<FuelDays | null | undefined>(undefined)
-  const status = useLoadEffect(async (cur) => { const d = await loadFuelDays(); if (cur()) setData(d) }, [])
+  const [kept, setKept] = useState<StoreResult | null>(null)
+  const status = useLoadEffect(async (cur) => {
+    const d = await loadFuelDays()
+    if (!cur()) return
+    setData(d)
+    // keep today's plan for the record, as the phone does (fuel_plans), without competing with the phone's own rows
+    if (d) { const r = await storeDay(d.today, d.snapshot).catch((e) => ({ state: 'error', changes: [], message: String(e) }) as StoreResult); if (cur()) setKept(r) }
+  }, [])
   const horizon = useMemo(() => (data ? data.days.map((_, i) => i).filter((i) => i >= data.todayIdx) : []), [data])
   const picked = data ? data.days.findIndex((d) => d.date === params.get('day')) : -1
   const idx = data ? (picked >= data.todayIdx ? picked : data.todayIdx) : -1
@@ -61,14 +72,14 @@ export default function FuelPlan() {
             })}
           </nav>
           <Day data={data} i={idx} />
-          <Energy data={data} />
+          <Energy data={data} kept={kept} />
         </>
       )}
     </div>
   )
 }
 
-function Energy({ data }: { data: FuelDays }) {
+function Energy({ data, kept }: { data: FuelDays; kept: StoreResult | null }) {
   const e = data.energy
   const basis = e.dailyKcal == null ? 'No calorie goal and not enough in your profile to estimate maintenance: the plan carries carbohydrate and protein only.'
     : `${e.fromGoal ? `Your goal of ${g(e.dailyKcal)} kcal` : `Maintenance of ${g(e.dailyKcal)} kcal`} is the week's average; each day adds its sessions' energy and takes off the week's mean${e.observedMaintenance ? ' (maintenance observed from what you log and your weight trend)' : ''}${e.deficit ? '; the goal is a deficit' : ''}.`
@@ -76,6 +87,7 @@ function Energy({ data }: { data: FuelDays }) {
     <section className="pg-card wide fp-foot">
       <h3 className="pg-card-title mono"><span>HOW IT IS WORKED OUT</span><span>{data.weightKg} KG{data.fatFreeMassKg ? ` · ${g(data.fatFreeMassKg)} KG FAT-FREE` : ''}</span></h3>
       <p className="pg-note">{basis}</p>
+      {kept && <KeptNote kept={kept} />}
       <p className="pg-note">Meal times (09:00, 12:30, 16:00, 19:30), training low before easy sessions (off) and the carbohydrate your gut tolerates (60 g an hour) are settings on the phone, which the web cannot read: the defaults are used here.</p>
     </section>
   )
@@ -118,11 +130,12 @@ function Day({ data, i }: { data: FuelDays; i: number }) {
         <section className="pg-card">
           <h3 className="pg-card-title mono"><span>MEALS</span><span>{coded.meals.length}</span></h3>
           <ul className="pg-rows">
-            {coded.meals.map((m) => <Meal key={`${m.kind}${m.time}`} meal={m} />)}
+            {coded.meals.map((m) => <Meal key={`${m.kind}${m.time}`} meal={m} eaten={today ? data.logged[m.kind] : undefined} />)}
           </ul>
           <p className="pg-note">Carbohydrate in a meal is a range of ±15 %. What is planned during sessions comes off the day's total first.</p>
         </section>
       </div>
+      <LongSessions data={data} i={i} />
     </div>
   )
 }
@@ -152,7 +165,9 @@ function Session({ item, fuel }: { item: PlannedItem; fuel?: { kind: string; gPe
   )
 }
 
-function Meal({ meal }: { meal: DayMeal }) {
+const ADHERENCE: Record<string, string> = { WITHIN: 'ON PLAN', UNDER: 'UNDER', OVER: 'OVER', NOT_LOGGED: 'NOT LOGGED' }
+
+function Meal({ meal, eaten }: { meal: DayMeal; eaten?: { carbG: number | null; status: string } }) {
   return (
     <li className="pg-row">
       <span className="pg-row-title"><span className="mono">{hhmm(meal.time)}</span> {KIND[meal.kind]} <span className={`fp-code mono ${meal.code}`}>{meal.code}</span></span>
@@ -160,7 +175,42 @@ function Meal({ meal }: { meal: DayMeal }) {
         <span style={{ color: 'var(--m-carbs)' }}>{g(meal.carbLowG)}–{g(meal.carbHighG)} g</span> ·{' '}
         <span style={{ color: 'var(--m-protein)' }}>{g(meal.proteinG)} g</span>{meal.fatG != null && <> · <span style={{ color: 'var(--m-fat)' }}>{g(meal.fatG)} g</span></>}
       </span>
-      <span className="pg-row-sub">{meal.reason}{meal.beforeKeySession && ' Low in fat and fibre.'}</span>
+      <span className="pg-row-sub">{meal.reason}{meal.beforeKeySession && ' Low in fat and fibre.'}
+        {eaten && <><br /><span className="pg-tag mono" data-testid="meal-intake">{ADHERENCE[eaten.status]}</span> {eaten.carbG != null ? `${g(eaten.carbG)} g of carbohydrate logged against ${g(meal.carbLowG)}–${g(meal.carbHighG)}.` : 'Nothing logged for it yet.'}</>}
+      </span>
     </li>
+  )
+}
+
+/** What became of today's plan in the record (fuel_plans). */
+export function KeptNote({ kept, what = "today's plan" }: { kept: StoreResult; what?: string }) {
+  const lines = kept.changes.length ? <> {kept.changes.join(' ')}</> : null
+  return (
+    <p className="pg-note" data-testid="fuel-kept">
+      {kept.state === 'stored' && <>{cap(what)} was kept in the record (fuel_plans), as the phone keeps it.{lines}</>}
+      {kept.state === 'unchanged' && <>{cap(what)} is as stored in the record.</>}
+      {kept.state === 'phone' && <>The phone's stored plan differs from this one, so nothing was written.{lines || ' (Its settings, such as meal times, may differ from the defaults used here.)'}</>}
+      {kept.state === 'error' && <span className="pg-warn">Could not keep {what} in the record: {kept.message}</span>}
+    </p>
+  )
+}
+
+/** The day's long sessions (90 minutes or more, not events): each has a fuel schedule to plan, kept under its plan item as the phone keeps it. */
+function LongSessions({ data, i }: { data: FuelDays; i: number }) {
+  const long = data.days[i].items.filter(isLongNonEvent)
+  const [open, setOpen] = useState<Record<string, boolean>>({})
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  if (long.length === 0) return null
+  return (
+    <section className="pg-card wide" data-testid="long-sessions">
+      <h3 className="pg-card-title mono"><span>LONG SESSIONS</span><span>{long.length}</span></h3>
+      <p className="pg-note">A session of 90 minutes or more is where fuelling gets tried: plan what you will take and when, and afterwards the phone checks it against what you took.</p>
+      {long.map((it) => (
+        <div key={it.sourceId}>
+          <p className="pg-row-title">{it.title} <span className="pg-tag mono">{it.recorded ? 'DONE' : 'PLANNED'}</span> <button className="pb-chip small" aria-expanded={!!open[it.sourceId]} onClick={() => setOpen({ ...open, [it.sourceId]: !open[it.sourceId] })}>{open[it.sourceId] ? 'HIDE THE SCHEDULE' : 'FUEL SCHEDULE'}</button></p>
+          {open[it.sourceId] && <ScheduleEditor item={it} weightKg={data.weightKg} zone={zone} />}
+        </div>
+      ))}
+    </section>
   )
 }

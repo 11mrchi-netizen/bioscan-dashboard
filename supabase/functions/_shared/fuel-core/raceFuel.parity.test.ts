@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import {
   type AidStation, checkIntakeHistory, climatology, type CoursePoint, type DayFuelPlan, type FuelProductOption, type HourWeather, type Intensity, type LoggedDay, planFuelDays, planRaceFuel,
-  durationRange, estimateRunTime, type RecentRun, heatBand, heatIndexC, type PlannedDay, type RaceFuelSettings, type SweatTest, sweatProfile, type WeatherSeries, type WeekEnergy, withCatchUp, type IntakeHistoryResult,
+  durationRange, estimateRunTime, expandSchedule, type FuelBlock, scheduleTotals, scheduleWarnings, seedBlocks, type RecentRun, heatBand, heatIndexC, type PlannedDay, type RaceFuelSettings, type SweatTest, sweatProfile, type WeatherSeries, type WeekEnergy, withCatchUp, type IntakeHistoryResult,
 } from './index.ts'
 
 const dir = new URL('./fixtures/', import.meta.url)
@@ -76,6 +76,31 @@ test('the duration from the person\'s runs, and its range', () => {
     same(JSON.parse(JSON.stringify(durationRange(210, 180, e))), want.target, `target ${i}`)
     same(JSON.parse(JSON.stringify(durationRange(null, 540, e))), want.expected, `expected ${i}`)
   })
+})
+
+test('the schedule: the plan as blocks, what they expand into, add up to and warn about', () => {
+  const check = (name: string, blocks: FuelBlock[], duration: number, want: any) => {
+    same(JSON.parse(JSON.stringify(blocks)), want.blocks, `${name} blocks`)
+    same(expandSchedule(blocks), want.expanded, `${name} expanded`)
+    same(JSON.parse(JSON.stringify(scheduleTotals(blocks, duration))), want.totals, `${name} totals`)
+    same(JSON.parse(JSON.stringify(scheduleTotals(blocks, 1))), want.totalsShort, `${name} totals (1 min)`)
+    same(JSON.parse(JSON.stringify(scheduleTotals(blocks, 0))), want.totalsZero, `${name} totals (0 min)`)
+    same([60, 45, 30, 90].map((tol) => scheduleWarnings(blocks, duration, tol)), want.warnings, `${name} warnings`)
+    same(scheduleWarnings(blocks, 20, 60), want.warningsShort, `${name} warnings (20 min)`)
+  }
+  check('hand', expected.schedules._hand.blocks, 240, expected.schedules._hand)
+  check('hand_short', expected.schedules._hand_short.blocks, 90, expected.schedules._hand_short)
+  for (const s of input.scenarios as Scenario[]) {
+    const plan = planRaceFuel({
+      title: s.title, type: s.type, intensity: s.intensity, start: s.start, durationMin: s.durationMin, durationLowMin: s.durationLowMin, durationHighMin: s.durationHighMin,
+      durationBasis: s.durationBasis, course: s.course, distanceKm: s.distanceKm, aidStations: s.aidStations, weather: s.weather, sweat: sweatProfile(s.sweatTests, s.weightKg),
+      weightKg: s.weightKg, settings: s.settings, products: s.products, history: s.history, loadingDays: s.loadingDays,
+    })
+    const blocks = seedBlocks(plan)
+    check(s.name, blocks, Math.trunc(plan.durationMin), expected.schedules[s.name])
+  }
+  const all = JSON.stringify(expected.schedules)
+  for (const needle of ['seed-water', 'Water with electrolytes', 'seed-caf0', 'after the planned finish', 'above the', 'you tolerate', 'set how often', 'mg of caffeine is above']) assert.ok(all.includes(needle), `no schedule reaches: ${needle}`)
 })
 
 test('the scenarios reach what they should', () => {

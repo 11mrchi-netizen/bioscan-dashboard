@@ -446,7 +446,7 @@ suspend fun updateBlockAccessories(
 
     val sessions = supabase.postgrest.from("planned_sessions")
         .select(columns = Columns.list("id,title,work_kind,prescription")) {
-            filter { eq("block_id", block.row.id); eq("status", "planned"); gte("scheduled_date", from.toString()); eq("module_ref", "strength:${m.key}") }
+            filter { eq("block_id", block.row.id); eq("status", "planned"); exact("exercise_session_id", null); gte("scheduled_date", from.toString()); eq("module_ref", "strength:${m.key}") }
         }.decodeList<AccessorySessionRow>()
     val byTitle = m.sessions.associateBy { "${m.title}: ${it.label}" }
     val choice = ModuleChoice(accessories = accessories)
@@ -459,7 +459,9 @@ suspend fun updateBlockAccessories(
         val at = kept.indexOfLast { it.field("type") == "lift" } + 1
         val after = JsonArray(kept.take(at) + items.map { it.liftJson() } + kept.drop(at))
         if (after == JsonArray(before)) continue
-        supabase.postgrest.from("planned_sessions").update({ set("prescription", after); set("updated_at", java.time.Instant.now().toString()) }) { filter { eq("id", s.id) } }
+        // A session's prescription is immutable in the database (planned_sessions_immutable: "create a new revision"), so the change goes in as a new revision of the
+        // session, the old row set aside (supabase/migrations/20261125000000_plan_edit.sql), never as an update in place.
+        supabase.postgrest.rpc("revise_planned_session", buildJsonObject { put("p_id", s.id); put("p_today", from.toString()); put("p_prescription", after) })
         changed++
     }
     return changed

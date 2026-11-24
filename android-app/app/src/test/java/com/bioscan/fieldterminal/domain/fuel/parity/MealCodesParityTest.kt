@@ -5,6 +5,11 @@ import com.bioscan.fieldterminal.domain.fuel.MealTimes
 import com.bioscan.fieldterminal.domain.fuel.PlannedDay
 import com.bioscan.fieldterminal.domain.fuel.WeekEnergy
 import com.bioscan.fieldterminal.domain.fuel.codeMeals
+import com.bioscan.fieldterminal.domain.fuel.adherence
+import com.bioscan.fieldterminal.domain.fuel.mealForLog
+import com.bioscan.fieldterminal.domain.fuel.DaySnapshot
+import com.bioscan.fieldterminal.domain.fuel.describeChanges
+import com.bioscan.fieldterminal.domain.fuel.snapshotOf
 import com.bioscan.fieldterminal.domain.fuel.planFuelDays
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -53,6 +58,7 @@ class MealCodesParityTest {
         val days = Json.parseToJsonElement(File(dir, "day-input.json").readText()).jsonArray.map { it.jsonObject }
         val inputFile = File(dir, "meals-input.json")
         val expectedFile = File(dir, "meals-expected.json")
+        val snapFile = File(dir, "snapshots-day.json")
         // The hand-made weeks in full under every setting; the sweep (many one-day weeks) under the default only.
         val expected = buildJsonObject {
             var sweepSeen = 0
@@ -86,13 +92,72 @@ class MealCodesParityTest {
                 })
             }
         }
+        // What the phone stores for each day (default settings): the snapshot, its JSON text, the hash it keys the row by, and the changes between neighbouring days.
+        val snapshots = buildJsonObject {
+            var seen = 0
+            for (s in days) {
+                val name = s["name"]!!.jsonPrimitive.content
+                if (name.startsWith("sweep_") && seen++ % 8 != 0) continue
+                val e = s["energy"]!!.jsonObject
+                val energy = WeekEnergy(
+                    e["dailyKcal"]!!.takeIf { it !is JsonNull }?.jsonPrimitive?.doubleOrNull, e["proteinG"]!!.takeIf { it !is JsonNull }?.jsonPrimitive?.doubleOrNull,
+                    e["fromGoal"]!!.jsonPrimitive.booleanOrNull!!, e["deficit"]!!.jsonPrimitive.booleanOrNull!!, e["observedMaintenance"]!!.jsonPrimitive.booleanOrNull!!,
+                )
+                val weight = s["weightKg"]!!.jsonPrimitive.content.toDouble()
+                val plannedDays = json.decodeFromJsonElement(ListSerializer(PlannedDay.serializer()), s["days"]!!)
+                val plans = planFuelDays(plannedDays, energy, weight, s["fatFreeMassKg"]!!.takeIf { it !is JsonNull }?.jsonPrimitive?.doubleOrNull)
+                val snaps = plannedDays.indices.map { i -> snapshotOf(plans[i], codeMeals(plans[i], plannedDays[i], plannedDays.getOrNull(i + 1), weight, zone, MealTimes(), false, energy.deficit)) }
+                put(name, buildJsonObject {
+                    put("days", JsonArray(snaps.map { sn ->
+                        val obj = json.encodeToJsonElement(DaySnapshot.serializer(), sn).jsonObject
+                        buildJsonObject { put("snapshot", obj); put("text", obj.toString()); put("hash", obj.toString().hashCode().toString(16)) }
+                    }))
+                    put("changes", JsonArray(snaps.zipWithNext { a, b -> JsonArray(describeChanges(a, b).map { JsonPrimitive(it) }) }))
+                })
+            }
+        }
+        // A meal logged near a coded meal belongs to it (within two hours), and its carbohydrate is judged against the range.
+        val logs = buildJsonObject {
+            var seen = 0
+            for (s in days) {
+                val name = s["name"]!!.jsonPrimitive.content
+                if (!(name == "mixed_week" || name == "protein_floor" || name == "noon" || name == "ceiling")) continue
+                seen++
+                val e = s["energy"]!!.jsonObject
+                val energy = WeekEnergy(
+                    e["dailyKcal"]!!.takeIf { it !is JsonNull }?.jsonPrimitive?.doubleOrNull, e["proteinG"]!!.takeIf { it !is JsonNull }?.jsonPrimitive?.doubleOrNull,
+                    e["fromGoal"]!!.jsonPrimitive.booleanOrNull!!, e["deficit"]!!.jsonPrimitive.booleanOrNull!!, e["observedMaintenance"]!!.jsonPrimitive.booleanOrNull!!,
+                )
+                val weight = s["weightKg"]!!.jsonPrimitive.content.toDouble()
+                val plannedDays = json.decodeFromJsonElement(ListSerializer(PlannedDay.serializer()), s["days"]!!)
+                val plans = planFuelDays(plannedDays, energy, weight, s["fatFreeMassKg"]!!.takeIf { it !is JsonNull }?.jsonPrimitive?.doubleOrNull)
+                put(name, JsonArray(plannedDays.indices.map { i ->
+                    val coded = codeMeals(plans[i], plannedDays[i], plannedDays.getOrNull(i + 1), weight, zone, MealTimes(), false, energy.deficit)
+                    val cases = coded.meals.flatMap { m -> listOf(-130L, -121L, -90L, 0L, 45L, 119L, 120L, 121L).map { off -> m to off } }
+                    JsonArray(cases.map { (m, off) ->
+                        val at = m.time.plusMinutes(off)
+                        val hit = mealForLog(coded.meals, at)
+                        val g = listOf(0.8 * m.carbLowG, m.carbLowG, m.carbMidG, m.carbHighG, m.carbHighG + 1)
+                        buildJsonObject {
+                            put("meal", m.kind.name); put("at", at.toString()); put("hit", hit?.kind?.name?.let { JsonPrimitive(it) } ?: JsonNull)
+                            put("adherence", JsonArray(g.map { x -> JsonPrimitive(adherence(m, x).name) } + JsonPrimitive(adherence(m, null).name)))
+                            put("g", JsonArray(g.map { JsonPrimitive(it) }))
+                        }
+                    })
+                }))
+            }
+        }
         val input = buildJsonObject { put("variants", JsonArray(variants)) }
         if (System.getenv("FT_PARITY_WRITE") != null || !expectedFile.exists()) {
             dir.mkdirs()
             inputFile.writeText(json.encodeToString(JsonElement.serializer(), input) + "\n")
             expectedFile.writeText(json.encodeToString(JsonElement.serializer(), expected) + "\n")
+            File(dir, "logs-expected.json").writeText(json.encodeToString(JsonElement.serializer(), logs) + "\n")
+            snapFile.writeText(json.encodeToString(JsonElement.serializer(), snapshots) + "\n")
             return
         }
+        assertEquals(Json.parseToJsonElement(File(dir, "logs-expected.json").readText()), logs)
+        assertEquals(Json.parseToJsonElement(snapFile.readText()), snapshots)
         assertEquals(Json.parseToJsonElement(expectedFile.readText()), expected)
         assertEquals(Json.parseToJsonElement(inputFile.readText()), input)
     }

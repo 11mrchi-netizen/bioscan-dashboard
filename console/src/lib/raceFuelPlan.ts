@@ -46,3 +46,27 @@ export function buildRaceFuel(r: RaceRows): { plan: RaceFuelPlan; start: string;
   return { plan, start, hasPlace: e.start_lat != null && e.start_lon != null }
 }
 
+
+const num = (x: unknown) => (x == null ? null : Number(x))
+
+/** sweat_tests rows as the engine's tests. */
+export function sweatTestsOf(rows: Record<string, unknown>[]): SweatTest[] {
+  return rows.map((t) => ({
+    date: String(t.tested_on), sessionType: String(t.session_type), intensity: (['EASY', 'MODERATE', 'HARD', 'LONG', 'RACE'].find((i) => i.toLowerCase() === t.intensity) ?? 'MODERATE') as Intensity,
+    durationMin: Number(t.duration_min), weightBeforeKg: Number(t.weight_before_kg), weightAfterKg: Number(t.weight_after_kg), fluidInMl: Number(t.fluid_in_ml ?? 0), urineMl: Number(t.urine_ml ?? 0),
+    tempC: num(t.temp_c), humidityPct: num(t.humidity_pct),
+  }))
+}
+
+/** The fuel catalog with each product's newest recipe version (versions are append-only); a product with no carbohydrate on record is left out. */
+export function productsOf(prods: { id: number; kind: string; name: string; brand: string | null }[], versions: Record<string, unknown>[]): FuelProductOption[] {
+  const newest = new Map<number, Record<string, unknown>>()
+  for (const v of versions) { const p = Number(v.product_id); const cur = newest.get(p); if (!cur || Number(v.version) > Number(cur.version)) newest.set(p, v) }
+  const out: FuelProductOption[] = []
+  for (const p of prods) {
+    const v = newest.get(p.id)
+    if (!v || v.carbs_g == null) continue
+    out.push({ id: p.id, name: [p.brand, p.name].filter((x) => x != null).join(' '), kind: p.kind, carbsG: Number(v.carbs_g), fluidMl: num(v.fluid_ml), sodiumMg: num(v.sodium_mg), caffeineMg: num(v.caffeine_mg), fructoseG: num(v.fructose_g) })
+  }
+  return out
+}

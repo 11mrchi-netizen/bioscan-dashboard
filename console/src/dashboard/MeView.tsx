@@ -1,7 +1,6 @@
 // Draws a Me tab's document (meView.ts): sections of tiles, rows, trend charts, rings and notes, as the phone laid them out.
 import { useMemo } from 'react'
 import { hueVar, type MeBars, type MeChart, type MeItem, type MeRadar, type MeRibbons, type MeRing, type MeRow, type MeSection, type MeTile, type Point } from './meView'
-import { consoleHref } from '../lib/surfaces'
 import { meRef, metricHref } from '../lib/metrics'
 
 export function MeSections({ sections, sinceDay, tab }: { sections: MeSection[]; sinceDay: string | null; tab: string }) {
@@ -222,7 +221,7 @@ function Ribbons({ r }: { r: MeRibbons }) {
     <figure className="me-ribbons">
       <div className="me-ribbon-hours"><span /><span className="mono">00</span><span className="mono">06</span><span className="mono">12</span><span className="mono">18</span><span className="mono">24</span></div>
       {r.days.map((d) => (
-        <a key={d.date} className="me-ribbon-day" href={consoleHref(`#/log?day=${d.date}`)} title={`Open the log of ${d.date}`}>
+        <a key={d.date} className="me-ribbon-day" href={`#/log?day=${d.date}`} title={`Open the log of ${d.date}`}>
           <span className="mono">{DAY_LABEL(d.date)}</span>
           <svg viewBox={`0 0 ${r.slots} 1`} preserveAspectRatio="none" role="img" aria-label={d.date}>
             {d.spans.map(([f, t, h], i) => <rect key={i} x={f} y="0" width={Math.max(0, t - f - 0.15)} height="1" fill={hueVar(h)} opacity={h === 'ft-line' ? 0.5 : 1} />)}

@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe()
   }, [])
 
-  // One sign-in for the Dashboard and the Console (same origin, same stored session). It asks for the calendar and Drive
+  // One sign-in for the whole app. It asks for the calendar and Drive
   // scopes with offline access, as the old dashboard's login.html did, so signing in from either page keeps the Google
   // Calendar sync connected. The page Google returns to is the one that started the sign-in.
   const signInWithGoogle = async () => {

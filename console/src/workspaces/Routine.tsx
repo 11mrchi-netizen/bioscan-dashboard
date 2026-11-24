@@ -1,12 +1,11 @@
 // LAB › ROUTINE (web transition plan, phase 4): the practices and pastimes on the routine list with their schedule, and
 // what was logged against them in the last 8 weeks. Practices are added and changed on the phone (Lab › ROUTINE); where the
-// time went (ribbons, places, phone) is on the Dashboard's Me › Routine. Logged times (started_at, ended_at) are the phone's
+// time went (ribbons, places, phone) is on Me › Routine. Logged times (started_at, ended_at) are the phone's
 // wall clock: their digits are shown as they are.
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useLoadEffect } from '../lib/useLoadEffect'
 import { localDaysAgo } from '../lib/dates'
-import { dashboardHref } from '../lib/surfaces'
 import './PlanBlock.css'
 import './Pages.css'
 
@@ -53,7 +52,7 @@ export default function Routine() {
       <header className="pg-head">
         <div>
           <h2 className="pg-title mono">ROUTINE</h2>
-          <p className="pg-sub">Your practices and pastimes, and what was logged against them in the last 8 weeks. Where the days' time went is on the <a href={dashboardHref('#/me?tab=ROUTINE')}>Me › Routine</a>; a wrong entry is fixed on the phone.</p>
+          <p className="pg-sub">Your practices and pastimes, and what was logged against them in the last 8 weeks. Where the days' time went is on the <a href="#/me?tab=ROUTINE">Me › Routine</a>; a wrong entry is fixed on the phone.</p>
         </div>
         <div className="pb-chips"><button className={`pb-chip ${showArchived ? 'on' : ''}`} onClick={() => setShowArchived((v) => !v)}>{showArchived ? 'HIDE REMOVED' : 'SHOW REMOVED'}</button></div>
       </header>

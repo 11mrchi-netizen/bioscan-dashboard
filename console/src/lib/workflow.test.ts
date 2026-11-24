@@ -86,19 +86,20 @@ test('a decision keeps a link to its evidence and moves the item to decided', ()
 
 test('a saved view restores its route and range; a preset stays relative to today', () => {
   const now = new Date(2026, 9, 28, 12)
-  const row = viewRow('HRV weekly', '/explore', '?series=hrv,rhr&grain=week', { start: '2026-07-31', end: '2026-10-28' }, now)
+  const row = viewRow('HRV weekly', '/lab/compare', '?view=periods&series=hrv,rhr&grain=week', { start: '2026-07-31', end: '2026-10-28' }, now)
   assert.ok('path' in row)
-  assert.deepEqual([row.path, row.range], ['/explore?series=hrv,rhr&grain=week', { start: '2026-07-31', end: '2026-10-28' }]) // 89 days: not a preset
+  assert.deepEqual([row.path, row.range], ['/lab/compare?view=periods&series=hrv,rhr&grain=week', { start: '2026-07-31', end: '2026-10-28' }]) // 89 days: not a preset
   const later = new Date(2026, 10, 15, 12)
-  const ninety = viewRow('Integrity 90D', '/integrity', '', { start: '2026-07-30', end: '2026-10-28' }, now)
+  const ninety = viewRow('Integrity 90D', '/setup/integrity', '', { start: '2026-07-30', end: '2026-10-28' }, now)
   assert.ok('path' in ninety)
   assert.deepEqual(ninety.range, { days: 90 })
-  assert.deepEqual(openView(ninety, later), { path: '/integrity', range: { start: '2026-08-17', end: '2026-11-15' } })
-  const custom = viewRow('Autumn', '/data', '?table=meals', { start: '2026-09-01', end: '2026-09-30' }, now)
+  assert.deepEqual(openView(ninety, later), { path: '/setup/integrity', range: { start: '2026-08-17', end: '2026-11-15' } })
+  const custom = viewRow('Autumn', '/setup/data', '?table=meals', { start: '2026-09-01', end: '2026-09-30' }, now)
   assert.ok('path' in custom)
   assert.deepEqual(openView(custom, later)?.range, { start: '2026-09-01', end: '2026-09-30' })
   assert.deepEqual(viewRow('x', '/login', '', { start: '2026-09-01', end: '2026-09-30' }, now), { error: 'only a workspace view can be saved' })
-  assert.deepEqual(viewRow('  ', '/data', '', { start: '2026-09-01', end: '2026-09-30' }, now), { error: 'a name of 1 to 80 characters' })
+  assert.deepEqual(viewRow('  ', '/setup/data', '', { start: '2026-09-01', end: '2026-09-30' }, now), { error: 'a name of 1 to 80 characters' })
   assert.equal(openView({ path: '//evil.example/x', range: { days: 7 } }), null)
-  assert.equal(viewPath('/models', '?'), '/models')
+  assert.equal(viewPath('/lab/evidence', '?'), '/lab/evidence')
+  assert.equal(viewPath('/models', '?'), null) // an old name: no view was saved under it
 })

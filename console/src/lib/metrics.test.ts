@@ -89,7 +89,7 @@ test('the extra metrics of an address: known, distinct, not the page itself, at 
 test('a metric page is saved as a view with its metric and comparison', () => {
   assert.equal(viewPath('/m/series%3Ahrv', '?with=series%3Arhr&with=sleep'), '/m/series%3Ahrv?with=series%3Arhr&with=sleep')
   assert.equal(viewPath('/m', ''), null)
-  assert.equal(viewPath('/explore', '?series=hrv'), '/explore?series=hrv')
+  assert.equal(viewPath('/lab/compare', '?view=periods&series=hrv'), '/lab/compare?view=periods&series=hrv')
   assert.equal(viewPath('/today', ''), null)
 })
 
@@ -97,9 +97,10 @@ test('every series has a picker group', () => {
   for (const s of SERIES) assert.ok(['SLEEP', 'RECOVERY', 'LOAD', 'FUEL', 'BALANCE'].includes(seriesGroup(s.id)), s.id)
 })
 
-test('saved views: a Lab tab keeps its tab and query, and a view saved before the merge still opens', () => {
+test('saved views: a Lab or Setup tab keeps its tab and query; the old route names are not savable', () => {
   assert.equal(viewPath('/lab/evidence', '?view=board'), '/lab/evidence?view=board')
   assert.equal(viewPath('/lab/compare', '?view=periods&series=hrv%2Crhr'), '/lab/compare?view=periods&series=hrv%2Crhr')
   assert.equal(viewPath('/lab', ''), null)
-  for (const old of ['/explore', '/evidence', '/models']) assert.equal(viewPath(old, '?x=1'), `${old}?x=1`) // saved before the Lab merge: opened through the redirect
+  assert.equal(viewPath('/setup/data', '?table=meals'), '/setup/data?table=meals')
+  for (const old of ['/explore', '/evidence', '/models', '/data', '/integrity']) assert.equal(viewPath(old, '?x=1'), null) // the old names: no view was ever saved under them
 })

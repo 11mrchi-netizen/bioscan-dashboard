@@ -1,4 +1,4 @@
-// Today and Me inside the one shell (web redesign, phase 1): the pages of the former Dashboard, now two routes beside the
+// Today and Me inside the one shell (web redesign, phase 1): the pages of the former Dashboard surface, now two routes beside the
 // rest. The chosen day lives in the address (#/today?day=YYYY-MM-DD) so a past day can be bookmarked or linked to.
 import { useSearchParams } from 'react-router-dom'
 import { localToday } from '../lib/dates'

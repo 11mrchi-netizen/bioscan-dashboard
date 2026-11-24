@@ -1,10 +1,9 @@
-// Dashboard › Today: the phone's TODAY for any day, read from what the phone saved (todayData.ts): CHARGE and the five
+// Today: the phone's TODAY for any day, read from what the phone saved (todayData.ts): CHARGE and the five
 // rings, the overlays behind them (what moved CHARGE, each ring's inputs against your usual), the day's plan as a
 // timeline and eaten so far. Every score and input opens its history (workspaces/Metric.tsx); the day's log is one tap away.
 import { useEffect, useState } from 'react'
 import { useLoadEffect } from '../lib/useLoadEffect'
 import { localDateString, localToday } from '../lib/dates'
-import { consoleHref } from '../lib/surfaces'
 import { metricHref } from '../lib/metrics'
 import {
   bandWord, chargeRankLine, directionGlyph, directionWords, DOMAINS, domainSentence, driverSummary, formatJudgedValue, referenceLine,
@@ -65,7 +64,7 @@ export function Today({ day, onDay }: { day: string; onDay: (d: string) => void 
             </>
           )}
         <div className="today-links">
-          <a className="dash-link" href={consoleHref(`#/log?day=${day}`)}>DAY LOG →</a>
+          <a className="dash-link" href={`#/log?day=${day}`}>DAY LOG →</a>
           <a className="dash-link" href={historyHref('charge', day)}>CHARGE HISTORY →</a>
         </div>
       </section>
@@ -132,7 +131,7 @@ function PlanCard({ plan, day }: { plan: DayPlan | null; day: string }) {
       <section className="ft-card today-plan">
         <div className="today-strip-head"><span>THE DAY'S PLAN</span></div>
         <p className="today-hint">No plan was saved for this day: the phone saves TODAY's plan from 18 Nov 2026 on, each time it is opened. What was logged is in the day's log.</p>
-        <a className="dash-link" href={consoleHref(`#/log?day=${day}`)}>DAY LOG →</a>
+        <a className="dash-link" href={`#/log?day=${day}`}>DAY LOG →</a>
       </section>
     )
   }

@@ -41,7 +41,7 @@ export function Shell() {
     const t = idle ? idle(() => { void import('../../lib/echarts') }) : window.setTimeout(() => { void import('../../lib/echarts') }, 1500)
     return () => { if (!idle) window.clearTimeout(t) }
   }, [])
-  // Back from Google's consent page: the browser returns to the Console's root, so go on to the page that sent it there.
+  // Back from Google's consent page: the browser returns to the app's root, so go on to the page that sent it there.
   const navigate = useNavigate()
   useEffect(() => {
     let to: string | null = null

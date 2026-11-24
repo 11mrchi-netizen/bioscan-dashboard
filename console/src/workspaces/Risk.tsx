@@ -1,7 +1,7 @@
 // ANALYSIS › RISK (risk profile, docs/risk-profile/01-plan.md): exposures and risks to dig into, with ways to improve,
 // rather than one number. R1: the air breathed each day (analysis-core/airExposure.ts writes it nightly) with an hour-by-hour
 // view of any day; R0: home blood pressure series beside the clinic readings from lab draws. Read-only: readings are
-// logged on the phone. The same summary is the phone's Me › EXPOSURES, and the Dashboard's.
+// logged on the phone. The phone's own summary is drawn above it on Me › EXPOSURES, where this page now sits.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useChart } from '../lib/useChart'

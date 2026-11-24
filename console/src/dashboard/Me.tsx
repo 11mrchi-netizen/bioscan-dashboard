@@ -1,4 +1,4 @@
-// Dashboard › Me: the phone's six tabs in the phone's order, each drawn from what the phone worked out (me_views,
+// Me: the phone's six tabs in the phone's order, each drawn from what the phone worked out (me_views,
 // meView.ts), with when that was. Body adds the 3D body. Tabs the phone does not send yet say so.
 import { lazy, Suspense, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'

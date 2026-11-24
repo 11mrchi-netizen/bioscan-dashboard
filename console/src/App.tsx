@@ -6,16 +6,17 @@ import { Login } from './workspaces/Login'
 import { MePage, TodayPage } from './dashboard/DayPages'
 import { RedirectKeep } from './components/layout/Redirect'
 
-// The analysis hub's five workspaces (docs/analysis-console/IA.md §4).
+// The pages of the web app (docs/web-redesign/README.md): Today and Me (dashboard/DayPages), the Lab, Plan and Setup tab pages,
+// the metric page, the Log.
 // Planning (Nov 2026): the long-form work prepared on the web and carried out on the phone.
-// Web transition plan, phase 2: where the Dashboard's DAY LOG and OPEN IN CONSOLE land.
+// Where Today's DAY LOG lands, and the metric page every tappable number opens.
 const Log          = lazy(() => import('./workspaces/Log'))
 const Lab          = lazy(() => import('./workspaces/Lab'))
 const Plan         = lazy(() => import('./workspaces/Plan'))
 const Setup        = lazy(() => import('./workspaces/Setup'))
 const Metric       = lazy(() => import('./workspaces/Metric'))
 const HistoryRedirect = lazy(() => import('./workspaces/Metric').then((m) => ({ default: m.HistoryRedirect })))
-// Phase 4: the Console catch-up (LAB, PLAN and SYSTEM pages).
+// The tab pages: each holds the pages that were separate workspaces before the redesign.
 
 // Routes that moved, with where they went and what the new place needs besides the old query (web redesign, phase 4: the Lab
 // merge). A redirect keeps the query it was given, so #/explore?series=hrv&grain=week, #/evidence?question=... and the

@@ -1,14 +1,13 @@
 // LOG (web transition plan, phases 2 and 4): every entry of a day, or of a range of days, by kind, with filters. An entry
 // typed in by hand can be corrected or deleted here, with the same tables and columns as the phone's edit sheets
 // (lib/logEdit.ts); imported and synced rows (Health Connect, Zepp, Notion, the scale) are read-only. Where the
-// Dashboard's DAY LOG lands. Logged times (meals, supplements, sessions, stool, notes, body check-ins, grip) are the
+// Today's DAY LOG lands. Logged times (meals, supplements, sessions, stool, notes, body check-ins, grip) are the
 // phone's wall clock labelled +00: their digits are local, so a day is matched on those digits and never shifted.
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useLoadEffect } from '../lib/useLoadEffect'
 import { localDateString, localToday } from '../lib/dates'
-import { dashboardHref } from '../lib/surfaces'
 import { buildPatch, type EditSpec, isManual, MEAL_SLOTS, shown } from '../lib/logEdit'
 import './PlanBlock.css'
 import './Log.css'
@@ -185,7 +184,7 @@ export default function Log() {
           <input className="pb-input" type="date" value={to} min={day} max={today} onChange={(e) => e.target.value && set({ to: e.target.value === day ? null : e.target.value })} aria-label="To" />
           {!isRange && <button className="btn-ghost mono" disabled={day >= today} onClick={() => go(shift(day, 1))}>NEXT →</button>}
           {isRange && <button className="btn-ghost mono" onClick={() => set({ to: null })}>ONE DAY</button>}
-          {!isRange && <a className="btn-ghost mono log-dash" href={dashboardHref(`#/today?day=${day}`)}>TODAY →</a>}
+          {!isRange && <a className="btn-ghost mono log-dash" href={`#/today?day=${day}`}>TODAY →</a>}
         </div>
       </header>
       <div className="pb-chips log-filters" role="group" aria-label="Show">

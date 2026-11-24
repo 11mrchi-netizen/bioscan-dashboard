@@ -52,7 +52,7 @@ export function SavedViews() {
 
   const go = (v: SavedView) => {
     const target = openView(v)
-    if (!target) { setMessage('That view is not a console route.'); return }
+    if (!target) { setMessage('That view cannot be opened.'); return }
     if (target.range) setRange(target.range)
     navigate(target.path)
     setOpen(false)

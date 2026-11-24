@@ -1,8 +1,8 @@
 # Field Terminal — Analysis Console IA & Interaction Contract
 
-**Status:** Revised for the analysis hub (Phase 0, see [PLAN.md](PLAN.md))  
-**Version:** 2.0  
-**Date:** 2026-10-27 (v1.0: 2026-09-30)  
+**Status:** Revised for the analysis hub (Phase 0, see [PLAN.md](PLAN.md)). **The navigation (§3.1) and the workspace catalogue (§4) are superseded by [the web redesign](../web-redesign/README.md)** (2026-11-24): one app with five tabs and a Setup gear. The shell zones, header, interaction loop and boundary below still hold.  
+**Version:** 3.0 (navigation and catalogue); 2.0 otherwise  
+**Date:** 2026-11-24 (v2.0: 2026-10-27, v1.0: 2026-09-30)  
 **Linear:** DAV-306  
 **Visual authority:** [Futuristic Material Visual Contract](../../design/FUTURISTIC_MATERIAL_DESIGN_CONTRACT.md)  
 **Presentation authority:** [Analytical Presentation Contract](../../design/ANALYTICAL_PRESENTATION_CONTRACT.md)
@@ -44,23 +44,22 @@ Android app shows and were removed in Phase 0. Their charting role passes to Exp
 
 ### 3.1 Top-level navigation
 
-The left rail (desktop) or top bar (tablet) carries:
+The left rail (desktop) or top bar (tablet) carries the phone's five tabs and a Setup gear:
 
 ```
-INTEGRITY      health overview · source matrix · issue investigation
-EVIDENCE       decision queue · evidence workbench · decision records
-EXPLORE        any metrics, resolution follows the range, drill-down to records
-DATA           raw and derived tables, paged and filtered, linkable records
-MODELS         expected bands, typicality scorecard, series breaks, fitness-fatigue
+TODAY     the phone's TODAY for any day; rings and inputs open the metric page
+ME        the phone's tabs; BODY and EXPOSURES carry the deeper analysis
+LAB       COMPARE · EVIDENCE · EXPERIMENTS · REGIMEN · TESTS · ROUTINE
+PLAN      OVERVIEW · TRAINING · FOOD · SESSIONS · RACES
+LOG       the day's log and fixes
 ─────────────
-[Workspace selector]
-[Settings / auth]
+⚙ SETUP   INTEGRITY · DATA · CONNECTIONS
 ```
 
-The Inspector and the shared date range are global. Every issue, evidence point and decision links to the record it rests
-on through a Data URL (`#/data?table=…&…`).
-
-Workspaces are saved analytical environments, not fixed dashboards. The left rail navigation sets the *workspace type*; the workspace selector lets the user switch between named saved instances of that type.
+Every tappable number opens the metric page (`#/m/<ref>`), where metrics can be added to compare. The Inspector is global; the
+header range shows only on the pages that read it (Integrity and Compare's PERIODS view). Every issue, evidence point and
+decision links to the record it rests on through a Data URL (`#/setup/data?table=…&…`). See
+[the web redesign](../web-redesign/README.md) for the routes, the compare, and the old-route redirects.
 
 ### 3.2 Shell zones (≥ 1280 px)
 
@@ -101,15 +100,15 @@ Workspaces are saved analytical environments, not fixed dashboards. The left rai
 
 ## 4. Workspace catalogue
 
-Routes are hash routes under `/console/` (`#/integrity`, …). Old v1 routes redirect to the workspace that took over their role.
+Superseded by the tabs above. Where each v2.0 workspace went (hash routes; the old routes redirect):
 
-| Workspace | Route | Purpose | Built in |
-|---|---|---|---|
-| Integrity | `#/integrity` | What needs attention: capture coverage, source freshness, anomalies by severity, analysis readiness; a row per source or metric family; each issue traced to its records. Holds the series-break review. | Exists (phase C) |
-| Evidence | `#/evidence` | A queue of questions by state (needs data, under observation, ready to test, decision review); a workbench per question with shared time context; append-only decision records that snapshot their evidence. Evidence-board, ledger, event, experiment, intervention and fueling views live here as evidence-item views. | Exists (phase D: DECISIONS tab) |
-| Explore | `#/explore` | The one general charting surface: any metrics on one time axis, resolution following the range, drill-down period → day → records. | Exists (phase B) |
-| Data | `#/data` | Raw and derived tables with keyset paging and composable filters (range, source, identifier, empty or not); heavy payloads fetched only for a selected record. Duplicate rows are found by the integrity checks (phase C), which link to them here. | Exists (phase B) |
-| Models | `#/models` | How far the models can be trusted: expected-band calibration, flags and regimes, series breaks, typicality and its scorecard, fitness-fatigue spans. | Exists |
+| v2.0 workspace | Now |
+|---|---|
+| Integrity (`#/integrity`) | Setup › INTEGRITY (`#/setup/integrity`) |
+| Evidence (`#/evidence`) | Lab › EVIDENCE (`#/lab/evidence`) |
+| Explore (`#/explore`) | Lab › COMPARE › PERIODS (`#/lab/compare?view=periods`); the metric page's compare is the default view |
+| Data (`#/data`) | Setup › DATA (`#/setup/data`) |
+| Models (`#/models`) | Lab › EVIDENCE › TRUST (`#/lab/evidence?view=trust`) |
 
 The corrected discovery screen (Evidence > DISCOVERY, phase C2) scans the registrable questions on the older two-thirds of
 the history with a false-discovery correction and registers a promising pair as a question tested on new days only.

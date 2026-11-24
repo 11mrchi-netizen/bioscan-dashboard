@@ -1,0 +1,54 @@
+/* The Futuristic Material look for the console's pages (web redesign, phase 5). ONE class, `ft-skin`, bridges the console's
+   variables (tokens.css: --color-*, --font-*) to the Dashboard's tokens (design/tokens): the page is a domain wash, cards are
+   neutral glass, ink is the metric's, selection and the primary action are platinum, status is Ok / Warn / Bad. Put the class
+   on a page's root and everything under it takes the look; take it off and the page is as it was. Used on the Lab, on Body and
+   Risk inside Me, and on the shell's chrome (header, rail, Inspector).
+   Emerald meant two things in the console: selection (the common case) and "good outcome" (a few). The variable takes the
+   first; the few good-outcome rules are mapped to --ok below. */
+.ft-skin {
+  --color-base: transparent;
+  --color-surface: rgba(255, 255, 255, 0.045);
+  --color-elevated: rgba(255, 255, 255, 0.07);
+  --color-text-primary: var(--ft-fg);
+  --color-text-secondary: color-mix(in srgb, var(--ft-fg) 72%, transparent);
+  --color-text-muted: var(--ft-muted);
+  --color-border: var(--ft-line);
+  --color-glass: rgba(255, 255, 255, 0.06);
+  --color-glass-strong: rgba(255, 255, 255, 0.10);
+  /* selection, links, the active state */
+  --color-emerald: var(--ft-platinum);
+  --color-emerald-light: var(--ft-platinum);
+  --color-emerald-dark: color-mix(in srgb, var(--ft-platinum) 60%, transparent);
+  --color-emerald-wash: rgba(255, 255, 255, 0.08);
+  /* status says how something is; the information and analysis hues name no metric, so they are plain ink */
+  --color-warning: var(--warn);
+  --color-critical: var(--bad);
+  --color-info: var(--ft-fg);
+  --color-analysis: var(--ft-platinum);
+  --font-sans: var(--ft-body);
+  --font-mono: var(--ft-mono);
+  font-family: var(--ft-body);
+  color: var(--ft-fg);
+}
+
+/* glass, as the Dashboard's cards */
+.ft-skin .card {
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.028) 60%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+  backdrop-filter: blur(18px) saturate(1.1);
+  box-shadow: 0 12px 30px -18px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+/* a good outcome, not a selection: the status token */
+.ft-skin .fuel-status-consumed, .ft-skin .pg-ok, .ft-skin .pb-ok, .ft-skin .fr-fresh { color: var(--ok); }
+
+/* the page's own controls in the chip look */
+.ft-skin .rlab-tab, .ft-skin .dec-chip, .ft-skin .ex-grain, .ft-skin .ex-chip, .ft-skin .pb-chip { border-radius: 999px; }
+.ft-skin .rlab-tab-on, .ft-skin .dec-chip.on, .ft-skin .ex-grain.on, .ft-skin .ex-chip.on, .ft-skin .pb-chip.on {
+  color: var(--ft-platinum-ink); background: var(--ft-platinum); border-color: transparent; font-weight: 700;
+}
+
+/* a link with no class of its own (the pages' sentences point at others) is a link in the selection ink, not the browser's blue */
+:where(.ft-skin) a:not([class]) { color: var(--ft-platinum); }

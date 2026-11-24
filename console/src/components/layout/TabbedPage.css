@@ -5,3 +5,6 @@
 .tabbed-tab { text-decoration: none; }
 .tabbed-tab[aria-current="true"] { color: var(--ft-platinum-ink); border-color: transparent; font-weight: 700; background: var(--ft-platinum); }
 .tabbed-views { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: var(--sp-3) var(--sp-4) 0; }
+
+/* an embedded metric page lines up with the tabs above it instead of centring in the wide Lab */
+.tabbed > .dash-main { margin: 0; }

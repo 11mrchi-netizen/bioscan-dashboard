@@ -452,7 +452,7 @@ async function waitForServer() {
       check((await page.locator(sel).count()) > 0 && (await page.locator('.error-boundary').count()) === 0, `Lab › ${tab.toUpperCase()} renders its own page, not an error screen`)
       check((await page.locator('.tabbed-tab[aria-current="true"]').textContent({ timeout: 3000 }).catch(() => '')).toLowerCase() === tab, `and ${tab.toUpperCase()} is the marked tab`)
       check((await page.locator('.shell-rail .rail-item.active').allTextContents()).join('|') === 'Lab', 'and Lab is the marked entry in the rail', (await page.locator('.shell-rail .rail-item.active').allTextContents()).join('|'))
-      if (['regimen', 'tests', 'routine'].includes(tab)) await shot(`lab-${tab}`)
+      await page.waitForTimeout(400); await shot(`skin-${tab}`)
     }
     // Compare (phase 4, second commit): the metric page's compare is the default view, Explore the long-range one
     await page.goto(`${BASE}#/lab/compare`); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
@@ -477,8 +477,8 @@ async function waitForServer() {
     check((await page.locator('.ex').count()) === 1 && (await text('.ex-title')).includes('Explore'), 'a long-range link opens the periods view with its series', page.url().split('#')[1])
     // every sub-view renders without a page error (the first crash this walk found was a mock that lacked the engine's payload)
     const errsBefore = errors.length
-    for (const v of ['queue', 'board', 'ledger', 'events', 'discovery', 'trust']) { await page.goto(`${BASE}#/lab/evidence${v === 'queue' ? '' : `?view=${v}`}`); await page.waitForTimeout(700) }
-    for (const v of ['randomised', 'interventions', 'repeatable', 'fueling']) { await page.goto(`${BASE}#/lab/experiments${v === 'randomised' ? '' : `?view=${v}`}`); await page.waitForTimeout(700) }
+    for (const v of ['queue', 'board', 'ledger', 'events', 'discovery', 'trust']) { await page.goto(`${BASE}#/lab/evidence${v === 'queue' ? '' : `?view=${v}`}`); await page.waitForTimeout(700); await shot(`skin-evidence-${v}`) }
+    for (const v of ['randomised', 'interventions', 'repeatable', 'fueling']) { await page.goto(`${BASE}#/lab/experiments${v === 'randomised' ? '' : `?view=${v}`}`); await page.waitForTimeout(700); await shot(`skin-experiments-${v}`) }
     check(errors.length === errsBefore, 'every Evidence and Experiments view renders without a page error', errors.slice(errsBefore).join(' | '))
     check((await Promise.all(['/lab/evidence', '/lab/regimen', '/lab/tests', '/setup/data', '/plan/overview'].map(async (r) => { await page.goto(`${BASE}#${r}`); await page.waitForTimeout(250); return page.locator('.date-range-control').count() }))).every((n) => n === 0), 'pages that do not read the global range do not show it')
     await page.goto(`${BASE}#/setup/integrity`); await page.waitForTimeout(300)

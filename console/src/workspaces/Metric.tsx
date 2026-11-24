@@ -21,17 +21,11 @@ import {
   splitMeLabel, washFor, windowStats, RING_KEYS, type MetricRef,
 } from '../lib/metrics'
 import { loadMetric, type MetricData } from '../lib/metricData'
+import { cssColor } from '../lib/palette'
 import { ASSOCIATION_NOTE, correlate, correlationWords, panelsByUnit } from '../lib/compare'
 import { seriesById, SERIES } from '../lib/schema'
 import { Wash } from '../dashboard/DayPages'
 import './Metric.css'
-
-/** ECharts draws on a canvas and cannot read `var(--token)`: resolve it to the colour the page is using. */
-function cssColor(v: string): string {
-  const m = /^var\((--[a-z0-9-]+)\)$/i.exec(v)
-  if (!m) return v
-  return getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim() || '#8a949a'
-}
 
 const shortDay = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 const LAGS = [{ n: 0, label: 'SAME DAY' }, { n: 1, label: '+1' }, { n: 2, label: '+2' }, { n: 3, label: '+3' }]

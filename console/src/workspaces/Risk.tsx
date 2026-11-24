@@ -8,7 +8,6 @@ import { useChart } from '../lib/useChart'
 import { useLoadEffect } from '../lib/useLoadEffect'
 import { PALETTE } from '../lib/palette'
 import type { EChartsCoreOption } from '../lib/echarts'
-import { dashboardHref } from '../lib/surfaces'
 import { type BpRow, categorize, series as bpSeries, sittings } from '../lib/bp'
 import { CO2_POOR, CO2_VENTILATE, WHO_NO2_24H, WHO_O3_8H, WHO_PM25_24H, WHO_PM25_ANNUAL } from '../../../supabase/functions/_shared/analysis-core/airExposure.ts'
 import { RiskQuestionnaires, type Response } from './RiskQuestionnaires'
@@ -198,7 +197,7 @@ export default function Risk() {
       <header className="pg-head">
         <div>
           <h2 className="pg-title mono">RISK</h2>
-          <p className="pg-sub">Exposures and risks with ways to improve, not one number. Air is worked out each night from your places, the modelled outdoor air there (Open-Meteo, CAMS) and the home sensors; blood pressure from the home series on the phone (Lab › TESTS) and the clinic readings in your lab draws. The summary is also on the <a href={dashboardHref('#/me?tab=EXPOSURES')}>Me › Exposures</a>.</p>
+          <p className="pg-sub">Exposures and risks with ways to improve, not one number. Air is worked out each night from your places, the modelled outdoor air there (Open-Meteo, CAMS) and the home sensors; blood pressure from the home series on the phone (Lab › TESTS) and the clinic readings in your lab draws.</p>
         </div>
       </header>
       {st.error && <p className="pb-warn">Could not load: {st.error}</p>}

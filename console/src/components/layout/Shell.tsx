@@ -66,7 +66,7 @@ export function Shell() {
 
   return (
     <div className={`shell ${railCollapsed ? 'rail-collapsed' : ''} ${inspectorOpen ? 'inspector-open' : ''}`}>
-      <header className="shell-header">
+      <header className="shell-header ft-skin">
         <button className="rail-toggle mono" onClick={() => setRailCollapsed(v => !v)} aria-label="Toggle navigation">
           {railCollapsed ? '›' : '‹'}
         </button>
@@ -80,7 +80,7 @@ export function Shell() {
       </header>
 
       <div className="shell-body">
-        <nav className="shell-rail" aria-label="Workspace navigation">
+        <nav className="shell-rail ft-skin" aria-label="Workspace navigation">
           {GROUPS.map((g) => (
             <div key={g.title} className="rail-group" role="group" aria-label={g.title}>
               {g.title && <span className="rail-section mono">{railCollapsed ? '—' : g.title}</span>}
@@ -103,7 +103,7 @@ export function Shell() {
         </main>
 
         {inspectorOpen && (
-          <aside className="shell-inspector">
+          <aside className="shell-inspector ft-skin">
             <Inspector onClose={clearInspection} />
           </aside>
         )}

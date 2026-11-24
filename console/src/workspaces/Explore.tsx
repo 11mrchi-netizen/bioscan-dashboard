@@ -18,7 +18,8 @@ import { SERIES, seriesById } from '../lib/schema'
 import { chartSpecFor } from '../lib/chartSpec'
 import { cacheCounters, loadDaysMany, queryStats } from '../lib/seriesQuery'
 import { isAbort } from '../lib/rangeCache'
-import { PALETTE } from '../lib/palette'
+import { cssColor, PALETTE } from '../lib/palette'
+import { SERIES_HUE } from '../lib/metrics'
 import {
   aggregatePeriods,
   daySpan,
@@ -32,7 +33,8 @@ import {
 import './Explore.css'
 
 const DEFAULT_SERIES = ['hrv', 'rhr', 'sleep_hours', 'steps']
-const COLORS = ['#10B981', '#60A5FA', '#F59E0B', '#A78BFA', '#F43F5E', '#22D3EE', '#818CF8']
+/** One fixed hue per metric (design/tokens `--m-*`), the same on every page and on the phone. */
+const hueOf = (id: string): string => `var(--${SERIES_HUE[id] ?? 'ft-platinum'})`
 type GrainChoice = 'auto' | Grain
 
 interface Loaded {
@@ -198,15 +200,15 @@ export function Explore() {
       {panels.map(panel => (
         <div key={panel.unit} className={`card ex-panel ${busy ? 'ex-busy' : ''}`}>
           <div className="ex-panel-head mono">
-            {panel.items.map((it, i) => (
+            {panel.items.map((it) => (
               <span key={it.series.id} className="ex-legend">
-                <i style={{ background: COLORS[selected.indexOf(it.series.id) % COLORS.length] ?? COLORS[i] }} />
+                <i style={{ background: hueOf(it.series.id) }} />
                 {it.series.label} · {it.grain === 'day' ? DAY_METHOD[it.series.day] : `${METHOD[it.series.period]} per ${it.grain}`}
               </span>
             ))}
             <span className="ex-unit">{panel.unit}</span>
           </div>
-          <PeriodChart items={panel.items} colorOf={id => COLORS[selected.indexOf(id) % COLORS.length]} onPoint={openPoint} />
+          <PeriodChart items={panel.items} colorOf={hueOf} onPoint={openPoint} />
         </div>
       ))}
 
@@ -271,16 +273,18 @@ function PeriodChart({ items, colorOf, onPoint }: {
         splitLine: { lineStyle: { color: PALETTE.border } },
         axisLabel: { color: PALETTE.textMuted, fontSize: 10 },
       },
-      series: items.map(it => {
+      series: items.map((it, idx) => {
         const bar = chartSpecFor(it.series).kind === 'bar'
-        const color = colorOf(it.series.id)
+        const color = cssColor(colorOf(it.series.id))
+        // Two metrics of one hue (energy eaten and burned) are told apart by the line, never by a new colour.
+        const dup = items.slice(0, idx).filter(o => cssColor(colorOf(o.series.id)) === color).length
         return {
           name: it.series.label,
           type: bar ? 'bar' : 'line',
           connectNulls: false,
           showSymbol: it.periods.length <= 120,
           symbolSize: 5,
-          lineStyle: { width: 1.5, color },
+          lineStyle: { width: 1.5, color, type: dup === 0 ? 'solid' : dup === 1 ? 'dashed' : 'dotted' },
           itemStyle: { color },
           barMaxWidth: 14,
           data: it.periods.map(p => ({ value: p.value, itemStyle: { color, opacity: p.value !== null && p.coverage < 0.5 ? 0.35 : 1 } })),

@@ -872,6 +872,7 @@ async function waitForServer() {
     check(nums.length === 4 && nums[1].startsWith('150'), 'carbohydrate, protein (the goal\'s 150), fat and energy are shown', nums.join('|'))
     check((await page.locator('.fp-why li').count()) >= 1 && (await page.locator('.pg-card:has(h3:has-text("MEALS")) .pg-row').count()) >= 4, 'the reasons and at least the four meals are listed')
     check((await text('.fp-foot')).includes('2800 kcal'), 'the energy basis names the goal', await text('.fp-foot'))
+    check((await page.locator('[data-testid="meal-intake"]').count()) >= 4, "today's meals say what was logged against each range")
     await page.locator('.fp-day').nth(2).click(); await page.waitForSelector(`.fp-day.on[data-day="${ymd(dayPlus(2))}"]`, { timeout: 5000 }).catch(() => {})
     const picked = await page.locator('.fp-day.on').getAttribute('data-day')
     check((await page.evaluate(() => location.hash)).includes(`day=${picked}`), 'the open day is in the address', picked)

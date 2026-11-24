@@ -26,7 +26,7 @@ export interface Confidence { have: number; need: number }
 const met = (c: Confidence) => c.have >= c.need
 
 /** One logged meal row, as meals has it. */
-export interface MealRow { logged_at: string; calories: number | null; protein_g: number | null; fat_g: number | null; carbs_g: number | null }
+export interface MealRow { logged_at: string; calories: number | null; protein_g: number | null; fat_g: number | null; carbs_g: number | null; meal_slot?: string | null }
 
 /** Meals summed by the calendar date of their (wall-clock) logged time, ascending (Nutrition.kt aggregateMealsByDay). */
 export function aggregateMealsByDay(meals: MealRow[]): DailyNutrition[] {

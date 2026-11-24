@@ -128,7 +128,7 @@ function Day({ data, i }: { data: FuelDays; i: number }) {
         <section className="pg-card">
           <h3 className="pg-card-title mono"><span>MEALS</span><span>{coded.meals.length}</span></h3>
           <ul className="pg-rows">
-            {coded.meals.map((m) => <Meal key={`${m.kind}${m.time}`} meal={m} />)}
+            {coded.meals.map((m) => <Meal key={`${m.kind}${m.time}`} meal={m} eaten={today ? data.logged[m.kind] : undefined} />)}
           </ul>
           <p className="pg-note">Carbohydrate in a meal is a range of ±15 %. What is planned during sessions comes off the day's total first.</p>
         </section>
@@ -162,7 +162,9 @@ function Session({ item, fuel }: { item: PlannedItem; fuel?: { kind: string; gPe
   )
 }
 
-function Meal({ meal }: { meal: DayMeal }) {
+const ADHERENCE: Record<string, string> = { WITHIN: 'ON PLAN', UNDER: 'UNDER', OVER: 'OVER', NOT_LOGGED: 'NOT LOGGED' }
+
+function Meal({ meal, eaten }: { meal: DayMeal; eaten?: { carbG: number | null; status: string } }) {
   return (
     <li className="pg-row">
       <span className="pg-row-title"><span className="mono">{hhmm(meal.time)}</span> {KIND[meal.kind]} <span className={`fp-code mono ${meal.code}`}>{meal.code}</span></span>
@@ -170,7 +172,9 @@ function Meal({ meal }: { meal: DayMeal }) {
         <span style={{ color: 'var(--m-carbs)' }}>{g(meal.carbLowG)}–{g(meal.carbHighG)} g</span> ·{' '}
         <span style={{ color: 'var(--m-protein)' }}>{g(meal.proteinG)} g</span>{meal.fatG != null && <> · <span style={{ color: 'var(--m-fat)' }}>{g(meal.fatG)} g</span></>}
       </span>
-      <span className="pg-row-sub">{meal.reason}{meal.beforeKeySession && ' Low in fat and fibre.'}</span>
+      <span className="pg-row-sub">{meal.reason}{meal.beforeKeySession && ' Low in fat and fibre.'}
+        {eaten && <><br /><span className="pg-tag mono" data-testid="meal-intake">{ADHERENCE[eaten.status]}</span> {eaten.carbG != null ? `${g(eaten.carbG)} g of carbohydrate logged against ${g(meal.carbLowG)}–${g(meal.carbHighG)}.` : 'Nothing logged for it yet.'}</>}
+      </span>
     </li>
   )
 }

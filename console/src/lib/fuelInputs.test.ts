@@ -61,3 +61,22 @@ test('the plan\'s own link and the stored answers: the stored answer wins', () =
   const rec = out.days[out.todayIdx].items.find((i) => i.recorded)
   assert.equal(rec?.planRef, 'planned:2')
 })
+
+test('today\'s logged meals are placed by their own label, else by time, and judged against the range', () => {
+  const r = rows({
+    meals: [
+      { logged_at: '2026-11-24T08:50:00+00:00', calories: 600, protein_g: 30, fat_g: 20, carbs_g: 90, meal_slot: 'breakfast' },
+      { logged_at: '2026-11-24T12:40:00+00:00', calories: 700, protein_g: 30, fat_g: 20, carbs_g: 20, meal_slot: null },
+      { logged_at: '2026-11-24T19:45:00+00:00', calories: 700, protein_g: 30, fat_g: 20, carbs_g: 200, meal_slot: 'nonsense' },
+      { logged_at: '2026-11-23T19:45:00+00:00', calories: 700, protein_g: 30, fat_g: 20, carbs_g: 999, meal_slot: 'dinner' },
+    ],
+  })
+  const out = buildFuelDays(r, '2026-11-24', '2026-11-24T21:00:00+08:00', zone)
+  assert.ok(out)
+  assert.equal(out.logged.BREAKFAST.carbG, 90)
+  assert.equal(out.logged.LUNCH.carbG, 20)
+  assert.equal(out.logged.LUNCH.status, 'UNDER')
+  assert.equal(out.logged.DINNER.carbG, 200)
+  assert.equal(out.logged.DINNER.status, 'OVER')
+  assert.equal(out.logged.SNACK.status, 'NOT_LOGGED')
+})

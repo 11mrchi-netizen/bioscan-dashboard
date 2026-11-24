@@ -6,7 +6,7 @@ import {
   atTime, type CalendarOverride, type CalendarSessionInput, demandHistory, type DemandHistory, type EventInput, fatFreeMass, type PlannedSessionInput, type RecordedSessionInput,
   resolvePlannedDays, type StoredLink, weekEnergyOf, zdtString, aggregateMealsByDay, type MealRow, planInWeekBlocks, type DayFuelPlan, type PlannedDay, type WeekEnergy,
   type EventKind, type EventPriority, type EventSport, type EventStatus, type NutritionGoals,
-  checkIntakeHistory, daySnapshot, type DaySnapshot, type IntakeHistoryResult, type LoggedDay, withCatchUp, codeMeals, DEFAULT_MEAL_TIMES, DEFAULT_TOLERATED_G_PER_H, type DayMeals, type MealTimes,
+  adherence, type MealAdherence, mealForLog, checkIntakeHistory, daySnapshot, type DaySnapshot, type IntakeHistoryResult, type LoggedDay, withCatchUp, codeMeals, DEFAULT_MEAL_TIMES, DEFAULT_TOLERATED_G_PER_H, type DayMeals, type MealTimes,
 } from '../../../supabase/functions/_shared/fuel-core/index.ts'
 import { restingHrAsOf, robustMaxHr } from '../../../supabase/functions/_shared/analysis-core/trainingLoad.ts'
 
@@ -78,6 +78,8 @@ export interface FuelDays {
   history: IntakeHistoryResult
   /** what the phone would store for today (fuel_plans, kind day) */
   snapshot: DaySnapshot
+  /** today's logged carbohydrate per coded meal (by the meal's own slot label, else by time), against the meal's range */
+  logged: Record<string, { carbG: number | null; status: MealAdherence }>
 }
 
 /** The phone keeps these on the phone only (FuelSettingsStore); the web uses the same defaults until it has its own. */
@@ -151,7 +153,18 @@ export function buildFuelDays(rows: FuelRows, today: string, nowIso: string, zon
   const plans = plans0.map((p, i) => (i === todayIdx ? withCatchUp(p, raceSoon ? intakeHistory.catchUpG : 0) : p))
   const meals = days.map((d, i) => codeMeals(plans[i], d, days[i + 1] ?? null, weightKg, zone, settings.meals, settings.trainLow, energy.deficit === true, settings.toleratedGPerHour))
   const snapshot = daySnapshot(plans[todayIdx], meals[todayIdx], days[todayIdx].items)
-  return { today, todayIdx, days, plans, energy, weightKg, fatFreeMassKg: ffm, meals, history: intakeHistory, snapshot }
+  // Today's logged meals placed in their coded meals, as FuelPlanRepository.computeToday does: the meal's own label first, else the nearest meal within two hours.
+  const bySlot: Record<string, number> = {}
+  for (const m of rows.meals) {
+    if (m.logged_at.slice(0, 10) !== today) continue
+    const slot = (['BREAKFAST', 'LUNCH', 'SNACK', 'DINNER', 'PRE_SESSION', 'RECOVERY'] as string[]).find((k) => k === String(m.meal_slot ?? '').toUpperCase()) ?? null
+    let kind: string | null | undefined = slot
+    if (!kind) { const at = loggedInstant(m.logged_at, zone); kind = at ? mealForLog(meals[todayIdx].meals, Date.parse(at.replace(/\[.*\]$/, '')))?.kind : null }
+    if (kind) bySlot[kind] = (bySlot[kind] ?? 0) + (m.carbs_g ?? 0)
+  }
+  const logged2: FuelDays['logged'] = {}
+  for (const c of meals[todayIdx].meals) logged2[c.kind] = { carbG: bySlot[c.kind] ?? null, status: adherence(c, bySlot[c.kind] ?? null) }
+  return { today, todayIdx, days, plans, energy, weightKg, fatFreeMassKg: ffm, meals, history: intakeHistory, snapshot, logged: logged2 }
 }
 
 const localDay = (zdt: string) => zdt.slice(0, 10)

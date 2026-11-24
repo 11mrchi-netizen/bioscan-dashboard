@@ -127,7 +127,9 @@ append-only row (`kind`, `ref_key`, `engine_version` 4, `inputs_hash`, `plan`). 
 phone for a row: it writes a first copy when there is none, and a changed copy only over a row it wrote itself (`plan.by = "web"`, which the phone ignores); when the
 latest row is the phone's and differs, it writes nothing and says what differs. Rules: `fuelPlansDecide.ts`, `fuelPlansStore.ts`.
 
-Not built yet: the intake against the plan, long sessions from the day plan (the phone offers them from Today).
+On today's plan each meal also says what was logged against it (by the meal's own slot label, else the nearest meal within two hours: `mealForLog` / `adherence`, parity-tested).
+
+Not built yet: long sessions from the day plan (the phone offers them from Today).
 
 ## Look
 

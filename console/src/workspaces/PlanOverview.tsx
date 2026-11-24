@@ -7,6 +7,7 @@ import { type ExistingBlock, loadExistingBlocks, loadPlannerCatalog } from '../l
 import type { PlannerCatalog } from '../lib/blockPlanner'
 import { type AthleteEvent, daysUntil, loadAthleteEvents, loadPlannedSessions, longDate, type PlannedSession } from '../lib/planReads'
 import { RunningBlocks } from './PlanBlock'
+import { ShiftBlocks } from './ShiftBlocks'
 import { PlanSessionRows } from './PlanSessionRows'
 import './PlanBlock.css'
 import './Pages.css'
@@ -17,7 +18,7 @@ export default function PlanOverview() {
   const today = localToday()
   const [cat, setCat] = useState<PlannerCatalog | null>(null)
   const [blocks, setBlocks] = useState<ExistingBlock[]>([])
-  const [sessions, setSessions] = useState<{ sessions: PlannedSession[]; blockName: Map<number, string> }>({ sessions: [], blockName: new Map() })
+  const [sessions, setSessions] = useState<{ sessions: PlannedSession[]; blockName: Map<number, string>; blockShift?: Map<number, number> }>({ sessions: [], blockName: new Map() })
   const [events, setEvents] = useState<AthleteEvent[]>([])
   const [rev, setRev] = useState(0)
   const st = useLoadEffect(async (cur) => {
@@ -46,11 +47,12 @@ export default function PlanOverview() {
         <>
           {running.length === 0 && <p className="pg-note">No block under way.{next.length ? ` Next: ${next[0].name}, from ${longDate(next[0].start_date)}.` : ''} <a href="#/plan/training">Plan one</a>.</p>}
           <RunningBlocks blocks={blocks} cat={cat} onEnded={() => setRev((r) => r + 1)} />
+          <ShiftBlocks blocks={blocks} onMoved={() => setRev((r) => r + 1)} />
           <div className="pg-grid">
             <section className="pg-card">
               <h3 className="pg-card-title mono"><span>NEXT TWO WEEKS</span><a href="#/plan/sessions">ALL SESSIONS →</a></h3>
               {sessions.sessions.length === 0 ? <p className="pg-note">Nothing planned in the next two weeks.</p>
-                : <PlanSessionRows sessions={sessions.sessions} blockName={sessions.blockName} today={today} />}
+                : <PlanSessionRows sessions={sessions.sessions} blockName={sessions.blockName} blockShift={sessions.blockShift} today={today} />}
             </section>
             <section className="pg-card">
               <h3 className="pg-card-title mono"><span>NEXT EVENTS</span><a href="#/plan/races">RACES →</a></h3>

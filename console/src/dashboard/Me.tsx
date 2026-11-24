@@ -43,9 +43,6 @@ export function Me() {
 
   return (
     <div className="me">
-      <nav className="me-tabs-bar" aria-label="Me">
-        {ME_TABS.map((t) => <button key={t} className="ft-chip" aria-current={t === tab} onClick={() => set('tab', t)}>{t}</button>)}
-      </nav>
       <div className="me-head">
         {row?.view.range
           ? <span className="me-fixed-range mono">LAST {row.view.range.replace(/^(\d+)D$/, '$1 DAYS')}</span>

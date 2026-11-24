@@ -233,7 +233,7 @@ function DayGrid({ log, show, onChanged }: { log: DayLog; show: Set<Kind>; onCha
       {show.has('sessions') && log.sessions.length > 0 && (
         <Section title="SESSIONS">
           {log.sessions.map((x) => (
-            <Row key={x.id} time={wall(x.start_time)} source={x.source} title={x.type ?? 'session'}
+            <Row key={x.id} time={wall(x.start_time)} source={x.source} title={x.type ?? 'session'} open={`#/plan/sessions/${x.id}`}
               detail={[x.duration_min != null && `${Math.round(x.duration_min)} min`, x.distance_km != null && `${x.distance_km.toFixed(1)} km`, x.avg_hr != null && `avg ${Math.round(x.avg_hr)} bpm`, x.rpe != null && `RPE ${x.rpe}`].filter(Boolean).join(' · ')}
               items={x.notes ? [x.notes] : []} />
           ))}
@@ -281,9 +281,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return <section className="log-section"><h3 className="log-section-title mono">{title}</h3><ol className="log-rows">{children}</ol></section>
 }
 
-function Row({ time, title, detail, items, source, edit, deleteNote, onChanged }: {
+function Row({ time, title, detail, items, source, edit, deleteNote, onChanged, open }: {
   time: string; title: string; detail?: string; items?: string[]; source?: string | null
   edit?: EditSpec; deleteNote?: string; onChanged?: (what: string) => void
+  /** where the entry's own page is (a recorded workout): its numbers, and the effort and notes to add */
+  open?: string
 }) {
   const [mode, setMode] = useState<'view' | 'edit' | 'delete'>('view')
   return (
@@ -292,6 +294,7 @@ function Row({ time, title, detail, items, source, edit, deleteNote, onChanged }
       <div className="log-body">
         <div className="log-row-head">
           <div className="log-row-title">{title}{source && <span className="log-source mono">{source}</span>}</div>
+          {open && <a className="log-act mono" href={open} aria-label={`Open ${title} at ${time}`}>OPEN →</a>}
           {edit && mode === 'view' && (
             <span className="log-row-actions">
               <button className="log-act mono" onClick={() => setMode('edit')} aria-label={`Fix ${edit.title.toLowerCase()} at ${time}`}>FIX</button>

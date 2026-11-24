@@ -10,5 +10,5 @@ const TABS: readonly TabDef[] = [
 ]
 
 export default function Setup() {
-  return <TabbedPage title="SETUP" base="setup" tabs={TABS} />
+  return <TabbedPage base="setup" tabs={TABS} />
 }

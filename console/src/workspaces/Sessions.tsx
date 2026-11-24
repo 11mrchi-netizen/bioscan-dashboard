@@ -7,19 +7,26 @@ import { useLoadEffect } from '../lib/useLoadEffect'
 import { localToday, weekWindow, type WeekWindow } from '../lib/dates'
 import { loadPlannedSessions, longDate, mondayOf, type PlannedSession } from '../lib/planReads'
 import { PlanSessionRows } from './PlanSessionRows'
+import RecordedSessions from './RecordedSessions'
 import './PlanBlock.css'
 import './Pages.css'
 
 const WINDOWS = [{ id: 'ahead', label: 'NEXT 6 WEEKS' }, { id: 'recent', label: 'LAST 6 WEEKS' }, { id: 'both', label: 'BOTH' }]
 
 export default function Sessions() {
+  const [params] = useSearchParams()
+  // Two views (the side menu lists them): the planned sessions week by week, and every recorded workout.
+  return params.get('view') === 'recorded' ? <RecordedSessions /> : <PlannedSessions />
+}
+
+function PlannedSessions() {
   const [params, setParams] = useSearchParams()
   const win = params.get('w') ?? 'ahead'
   const status = params.get('status')
   const today = localToday()
   // Whole weeks, Monday to Sunday (lib/dates.ts weekWindow): the last week of NEXT 6 WEEKS is not cut short.
   const { from, to } = weekWindow((['ahead', 'recent', 'both'].includes(win) ? win : 'ahead') as WeekWindow, today)
-  const [d, setD] = useState<{ sessions: PlannedSession[]; blockName: Map<number, string> } | null>(null)
+  const [d, setD] = useState<{ sessions: PlannedSession[]; blockName: Map<number, string>; blockShift?: Map<number, number> } | null>(null)
   const st = useLoadEffect(async (cur) => { const x = await loadPlannedSessions(from, to); if (cur()) setD(x) }, [from, to])
   const set = (k: string, v: string | null) => { const n = new URLSearchParams(params); if (v == null) n.delete(k); else n.set(k, v); setParams(n) }
   const all = d?.sessions ?? []
@@ -54,7 +61,7 @@ export default function Sessions() {
           return (
             <section key={w} className="pg-card">
               <h3 className="pg-card-title mono"><span>WEEK OF {longDate(w).toUpperCase()}</span><span>{rows.length}</span></h3>
-              <PlanSessionRows sessions={rows} blockName={d!.blockName} today={today} />
+              <PlanSessionRows sessions={rows} blockName={d!.blockName} blockShift={d!.blockShift} today={today} />
             </section>
           )
         })}

@@ -106,7 +106,7 @@ const check = (ok, what, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} 
 
     await page.goto(`${BASE}#/plan/training`)
     await page.waitForSelector('.pb-steps', { timeout: 15000 })
-    check((await page.locator('.shell-rail .rail-item', { hasText: /^Plan$/ }).count()) === 1 && (await page.locator('.tabbed-tab', { hasText: 'TRAINING' }).count()) === 1, 'the rail has Plan, and Plan has the TRAINING tab')
+    check((await page.locator('.side-menu [data-nav="plan"]').count()) === 1 && (await page.locator('.side-menu [data-nav="plan/training"]').count()) === 1, 'the menu has Plan, and Plan has the Training tab')
     await shot('plan_1_when')
     check((await page.inputValue('input[type=time]')) === '06:30', 'session times start from training_settings')
 

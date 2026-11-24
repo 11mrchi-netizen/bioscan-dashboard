@@ -1,6 +1,7 @@
 // The Me tabs as the phone worked them out (me_views; android domain/meview/MeView.kt, view.v = 1). Every value arrives
 // formatted; the web only draws it. A hue names a design token ("m-weight" → var(--m-weight)).
 import { supabase } from '../lib/supabase'
+import { ME_TAB_IDS } from '../lib/nav'
 
 export type Tone = 'ok' | 'warn' | 'bad'
 export type Point = [string, number]
@@ -18,7 +19,7 @@ export interface MeViewDoc { v: number; tab: string; range?: string; sections: M
 export interface MeViewRow { view: MeViewDoc; builtAt: string }
 
 /** The phone's tabs, in the phone's order (MeScreen.kt). */
-export const ME_TABS = ['HEALTHSPAN', 'PERFORMANCE', 'BODY', 'HEALTH', 'BLOODWORK', 'ROUTINE', 'EXPOSURES'] as const
+export const ME_TABS = ME_TAB_IDS // the tabs themselves are in the side menu (lib/nav.ts)
 export type MeTab = typeof ME_TABS[number]
 
 export async function loadMeView(tab: MeTab): Promise<MeViewRow | null> {

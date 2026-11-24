@@ -1,4 +1,4 @@
-/* Three-zone shell — Futuristic Material tokens */
+/* Shell: one top bar, a side menu that can be hidden, the page, the Inspector. Futuristic Material tokens. */
 
 .shell {
   display: grid;
@@ -11,6 +11,7 @@
   overflow: hidden;
 }
 
+/* The one top bar: the menu button, where you are, the range where it applies, views, the account. */
 .shell-header {
   display: flex;
   align-items: center;
@@ -22,14 +23,33 @@
   flex-shrink: 0;
 }
 
-.shell-dash-link { text-decoration: none; white-space: nowrap; }
+.menu-toggle {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  line-height: 1;
+  padding: 5px 9px;
+  cursor: pointer;
+}
+.menu-toggle:hover, .menu-toggle[aria-expanded="true"] { color: var(--color-text-primary); }
 
-.shell-wordmark {
-  font-size: 11px;
-  letter-spacing: 0.12em;
+.crumbs {
+  margin: 0;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--color-text-muted);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+.crumb i { font-style: normal; opacity: 0.6; }
+.crumb.here { color: var(--color-text-primary); }
 
 .header-actions {
   display: flex;
@@ -38,43 +58,38 @@
   margin-left: auto;
 }
 
-.user-label {
-  font-size: 11px;
-  color: var(--color-text-muted);
-}
+.user-label { font-size: 11px; color: var(--color-text-muted); }
 
 .shell-body {
   display: grid;
-  grid-template-columns: var(--rail-w) 1fr;
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
   overflow: hidden;
 }
+.shell.menu-closed .shell-body { grid-template-columns: 0 minmax(0, 1fr); }
+.shell.inspector-open .shell-body { grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--inspector-w); }
+.shell.menu-closed.inspector-open .shell-body { grid-template-columns: 0 minmax(0, 1fr) var(--inspector-w); }
+.shell.menu-closed .side-menu { display: none; }
 
-.shell.inspector-open .shell-body {
-  grid-template-columns: var(--rail-w) 1fr var(--inspector-w);
-}
-
-.shell.rail-collapsed .shell-body {
-  grid-template-columns: var(--rail-collapsed-w) 1fr;
-}
-
-.shell.rail-collapsed.inspector-open .shell-body {
-  grid-template-columns: var(--rail-collapsed-w) 1fr var(--inspector-w);
-}
-
-/* Left rail */
-.shell-rail {
+/* The side menu: sections, the active one open to its tabs, the active tab open to its views. */
+.side-menu {
   display: flex;
   flex-direction: column;
-  gap: 2px;
   padding: var(--sp-3) var(--sp-2);
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
   overflow-y: auto;
+  min-width: 0;
 }
+.menu-brand { font-size: 10px; letter-spacing: 0.14em; color: var(--color-text-muted); padding: var(--sp-1) var(--sp-3) var(--sp-3); }
+.menu-list, .menu-sub { list-style: none; margin: 0; padding: 0; }
+.menu-list { display: flex; flex-direction: column; flex: 1; gap: 2px; }
+.menu-sec.menu-foot-sec { margin-top: auto; padding-top: var(--sp-3); border-top: 1px solid var(--color-border); }
+.menu-sub { padding-left: var(--sp-3); margin: 2px 0 var(--sp-2) var(--sp-3); border-left: 1px solid var(--color-border); }
+.menu-sub.menu-views { margin-left: var(--sp-2); }
 
-.rail-item {
+.menu-item {
   display: block;
-  padding: var(--sp-2) var(--sp-3);
+  padding: 7px var(--sp-3);
   border-radius: 8px;
   font-size: 12px;
   letter-spacing: 0.06em;
@@ -85,32 +100,17 @@
   text-overflow: ellipsis;
   transition: background 100ms, color 100ms;
 }
+.menu-item.level-1 { font-size: 13px; letter-spacing: 0.08em; padding: 9px var(--sp-3); }
+.menu-item.level-3 { font-size: 11px; padding: 5px var(--sp-3); color: var(--color-text-muted); }
+.menu-item:hover { background: var(--color-glass); color: var(--color-text-primary); }
+.menu-item.open { color: var(--color-text-primary); }
+.menu-item.on { background: var(--color-emerald-wash); color: var(--color-emerald); font-weight: 600; }
 
-.rail-item:hover {
-  background: var(--color-glass);
-  color: var(--color-text-primary);
-}
+.menu-account { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); padding: var(--sp-3); border-top: 1px solid var(--color-border); margin-top: var(--sp-3); }
 
-.rail-item.active {
-  background: var(--color-emerald-wash);
-  color: var(--color-emerald);
-}
-
-.rail-toggle {
-  flex-shrink: 0;
-  background: none;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  color: var(--color-text-muted);
-  font-size: 14px;
-  padding: 2px 8px;
-  cursor: pointer;
-}
-
-.rail-toggle:hover { color: var(--color-text-primary); }
-
-/* Central canvas */
+/* Central canvas: its own column, so hiding the menu (which leaves the grid) cannot move it into the menu's */
 .shell-canvas {
+  grid-column: 2;
   overflow-y: auto;
   padding: var(--sp-4);
   background: var(--color-base);
@@ -118,6 +118,7 @@
 
 /* Right inspector */
 .shell-inspector {
+  grid-column: 3;
   display: flex;
   flex-direction: column;
   background: var(--color-surface);
@@ -138,38 +139,40 @@
 
 .inspector-close:hover { color: var(--color-text-primary); }
 
-/* Responsive — tablet */
+/* Below 1280 px (a phone, a tablet, a narrow window, a zoomed page) the menu is a drawer over the page, opened by the top bar's
+   button, closed by choosing a page, by the scrim or by Escape. The account moves into its foot. */
 @media (max-width: 1279px) {
-  /* Below 1280 px the rail becomes a bar across the top (IA.md §3.1, "top bar (tablet)"). It used to be hidden with nothing
-     in its place, which left every page but the first unreachable on a laptop, a narrow window, a zoomed page or a tablet. */
   .shell-body,
   .shell.inspector-open .shell-body,
-  .shell.rail-collapsed .shell-body,
-  .shell.rail-collapsed.inspector-open .shell-body {
+  .shell.menu-closed .shell-body,
+  .shell.menu-closed.inspector-open .shell-body {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
   }
 
-  .shell-header { overflow-x: auto; overflow-y: hidden; }
-  .shell-header > * { flex-shrink: 0; }
+  .shell-canvas { grid-column: 1; }
 
-  .shell-rail {
-    flex-direction: row;
-    align-items: center;
-    gap: 4px;
-    padding: var(--sp-2) var(--sp-3);
-    border-right: none;
-    border-bottom: 1px solid var(--color-border);
-    overflow-x: auto;
-    overflow-y: hidden;
+  .shell-header { overflow-x: auto; overflow-y: hidden; gap: var(--sp-2); padding: 0 var(--sp-3); }
+  .shell-header > .crumbs { flex: 1 1 auto; }
+  .shell-header > .date-range-control, .shell-header > .header-actions { flex-shrink: 0; }
+  .header-actions { margin-left: 0; gap: var(--sp-2); }
+
+  .shell.narrow .side-menu, .shell.narrow.menu-closed .side-menu {
+    display: flex;
+    position: fixed;
+    top: var(--header-h);
+    left: 0;
+    bottom: 0;
+    width: min(86vw, 300px);
+    z-index: 160;
+    transform: translateX(-102%);
+    transition: transform 160ms ease;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+    /* solid: the skin's surfaces are translucent, and the page must not show through a drawer */
+    background-color: var(--ft-bg, #0a0c0e);
+    background-image: linear-gradient(rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05));
   }
-
-  .rail-item { flex-shrink: 0; padding: 6px 10px; }
-
-  .rail-section { flex-shrink: 0; padding: 0 var(--sp-2) 0 var(--sp-3); }
-
-  /* The bar shows every label; collapsing it to two letters is a desktop affordance. */
-  .rail-toggle { display: none; }
+  .shell.narrow.menu-open .side-menu { transform: translateX(0); }
+  .menu-scrim { position: fixed; top: var(--header-h); left: 0; right: 0; bottom: 0; z-index: 150; background: rgba(0, 0, 0, 0.5); }
 
   .shell-inspector {
     position: fixed;
@@ -182,6 +185,3 @@
     z-index: 200;
   }
 }
-
-.rail-section { display: block; font-size: 10px; letter-spacing: 0.1em; color: var(--color-text-muted); padding: var(--sp-4) var(--sp-4) var(--sp-1); }
-.rail-group { display: contents; }

@@ -14,11 +14,6 @@ export const DEFAULT_COMPARE = 'series:hrv'
 export default function Compare() {
   const [params, setParams] = useSearchParams()
   const periods = params.get('view') === 'periods'
-  const setView = (v: 'days' | 'periods') => {
-    const n = new URLSearchParams(params)
-    if (v === 'periods') n.set('view', 'periods'); else n.delete('view')
-    setParams(n, { replace: true })
-  }
   // A new main metric: it replaces the old one, and leaves the extras unless it was one of them.
   const setPrimary = (ref: string) => {
     const n = new URLSearchParams(params)
@@ -30,10 +25,6 @@ export default function Compare() {
   }
   return (
     <>
-      <div className="tabbed-views" role="group" aria-label="Compare">
-        <button className="ft-chip" aria-current={!periods} onClick={() => setView('days')}>DAYS · scores, inputs, series, pairs</button>
-        <button className="ft-chip" aria-current={periods} onClick={() => setView('periods')}>PERIODS · weeks and months, drill-down</button>
-      </div>
       {periods ? <Explore /> : <MetricView rawRef={params.get('m') ?? DEFAULT_COMPARE} embedded setPrimary={setPrimary} />}
     </>
   )

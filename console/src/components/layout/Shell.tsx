@@ -1,21 +1,16 @@
-// Three-zone shell: left rail · central canvas · right inspector
+// Shell: one top bar, a side menu that can be hidden, the page, and the Inspector on the right.
 // IA.md §3.2 — inspector visibility driven by AnalysisContext.inspectionTarget
 import { Suspense, useEffect, useState } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useInspection, useClearInspection } from '../../lib/analysisStore'
+import { usePageTitle } from '../../lib/pageTitle'
 import { ErrorBoundary } from '../shared/ErrorBoundary'
 import { Inspector } from '../shared/Inspector'
 import { DateRangeControl } from './DateRangeControl'
 import { SavedViews } from './SavedViews'
+import { crumbWords, SideMenu } from './SideMenu'
 import './Shell.css'
-
-// One web app (web redesign): five tabs in the phone's order, in the rail as on the phone's dock. Setup, the plumbing, sits
-// apart at the foot as the phone's gear does.
-const GROUPS: { title: string; items: { to: string; label: string }[] }[] = [
-  { title: '', items: [{ to: 'today', label: 'Today' }, { to: 'me', label: 'Me' }, { to: 'lab', label: 'Lab' }, { to: 'plan', label: 'Plan' }, { to: 'log', label: 'Log' }] },
-  { title: '', items: [{ to: 'setup', label: '⚙ Setup' }] },
-]
 
 /** Where to land after Google's consent page sends the browser back (set by Connections before it leaves). */
 export const RETURN_KEY = 'ft.console.returnTo'
@@ -28,6 +23,10 @@ function usesGlobalRange(pathname: string, search: string): boolean {
   if (pathname === '/setup/integrity') return true
   return pathname === '/lab/compare' && new URLSearchParams(search).get('view') === 'periods'
 }
+
+const MENU_KEY = 'ft.menu.open'
+const readMenu = (): boolean => { try { return localStorage.getItem(MENU_KEY) !== '0' } catch { return true } }
+const writeMenu = (open: boolean) => { try { localStorage.setItem(MENU_KEY, open ? '1' : '0') } catch { /* storage off */ } }
 
 export function Shell() {
   const { user, signOut } = useAuth()
@@ -51,47 +50,48 @@ export function Shell() {
   }, [navigate])
   const inspectionTarget = useInspection()
   const clearInspection = useClearInspection()
-  const [railToggled, setRailCollapsed] = useState(false)
-  // Below 1280 px the rail is a bar across the top (Shell.css) that always shows every label.
+  const pageTitle = usePageTitle((s) => s.title)
+
+  // Below 1280 px the menu is a drawer over the page: closed until asked for, closed again by choosing a page or Escape. Above it
+  // it sits beside the page and the choice (shown or hidden) is remembered.
   const [narrow, setNarrow] = useState(() => window.matchMedia('(max-width: 1279px)').matches)
+  const [menuOpen, setMenuOpen] = useState(() => (window.matchMedia('(max-width: 1279px)').matches ? false : readMenu()))
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 1279px)')
-    const on = () => setNarrow(mq.matches)
+    const on = () => { setNarrow(mq.matches); setMenuOpen(mq.matches ? false : readMenu()) }
     mq.addEventListener('change', on)
     return () => mq.removeEventListener('change', on)
   }, [])
-  const railCollapsed = railToggled && !narrow
+  const toggleMenu = () => setMenuOpen((open) => { if (!narrow) writeMenu(!open); return !open })
+  useEffect(() => { if (narrow) setMenuOpen(false) }, [location.pathname, location.search, narrow])
+  useEffect(() => {
+    if (!narrow || !menuOpen) return
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false) }
+    window.addEventListener('keydown', k)
+    return () => window.removeEventListener('keydown', k)
+  }, [narrow, menuOpen])
 
   const inspectorOpen = inspectionTarget !== null
+  const words = crumbWords(location.pathname, location.search, pageTitle)
 
   return (
-    <div className={`shell ${railCollapsed ? 'rail-collapsed' : ''} ${inspectorOpen ? 'inspector-open' : ''}`}>
+    <div className={`shell ${menuOpen ? 'menu-open' : 'menu-closed'} ${narrow ? 'narrow' : ''} ${inspectorOpen ? 'inspector-open' : ''}`}>
       <header className="shell-header ft-skin">
-        <button className="rail-toggle mono" onClick={() => setRailCollapsed(v => !v)} aria-label="Toggle navigation">
-          {railCollapsed ? '›' : '‹'}
-        </button>
-        <span className="shell-wordmark mono">FIELD TERMINAL</span>
+        <button className="menu-toggle mono" onClick={toggleMenu} aria-label={menuOpen ? 'Hide the menu' : 'Show the menu'} aria-expanded={menuOpen}>☰</button>
+        <h1 className="crumbs mono" aria-label="Where you are">
+          {words.map((w, i) => <span key={i} className={i === words.length - 1 ? 'crumb here' : 'crumb'}>{i > 0 && <i aria-hidden="true"> › </i>}{w}</span>)}
+        </h1>
         {usesGlobalRange(location.pathname, location.search) && <DateRangeControl />}
         <div className="header-actions">
           <SavedViews />
-          <span className="mono user-label">{user?.email}</span>
-          <button className="btn-ghost mono" onClick={signOut}>SIGN OUT</button>
+          {!narrow && <span className="mono user-label">{user?.email}</span>}
+          {!narrow && <button className="btn-ghost mono" onClick={signOut}>SIGN OUT</button>}
         </div>
       </header>
 
       <div className="shell-body">
-        <nav className="shell-rail ft-skin" aria-label="Workspace navigation">
-          {GROUPS.map((g) => (
-            <div key={g.title} className="rail-group" role="group" aria-label={g.title}>
-              {g.title && <span className="rail-section mono">{railCollapsed ? '—' : g.title}</span>}
-              {g.items.map(({ to, label }) => (
-                <NavLink key={to} to={to} className={({ isActive }) => `rail-item mono ${isActive ? 'active' : ''}`}>
-                  {railCollapsed ? label.slice(0, 2).toUpperCase() : label}
-                </NavLink>
-              ))}
-            </div>
-          ))}
-        </nav>
+        <SideMenu email={user?.email} onSignOut={signOut} narrow={narrow} />
+        {narrow && menuOpen && <div className="menu-scrim" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
 
         <main className="shell-canvas">
           {/* keyed by route: leaving a crashed workspace and coming back mounts it fresh instead of staying on the error screen */}

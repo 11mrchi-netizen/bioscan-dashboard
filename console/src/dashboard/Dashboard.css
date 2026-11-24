@@ -109,8 +109,8 @@
 
 /* Me: tabs, freshness, the published sections, the 3D body. */
 .me { display: flex; flex-direction: column; gap: 14px; }
-.me-tabs-bar, .me-ranges { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
-.me-tabs-bar .ft-chip, .me-ranges .ft-chip { flex-shrink: 0; cursor: pointer; background: var(--ft-chip-idle); color: var(--ft-muted); border: 1px solid var(--ft-glass-border); }
+.me-ranges { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.me-ranges .ft-chip { flex-shrink: 0; cursor: pointer; background: var(--ft-chip-idle); color: var(--ft-muted); border: 1px solid var(--ft-glass-border); }
 .me-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
 .me-fresh { font: 500 11px var(--ft-mono); color: var(--ft-dim); }
 .me-sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 14px; align-items: start; }
@@ -171,7 +171,7 @@
   .body3d-stage { min-height: 380px; }
   .body3d-panel { padding: 0 16px 16px; max-height: none; }
 }
-.me-tabs-bar .ft-chip[aria-current="true"], .me-ranges .ft-chip[aria-current="true"] { background: var(--ft-platinum); color: var(--ft-platinum-ink); border-color: transparent; font-weight: 700; }
+.me-ranges .ft-chip[aria-current="true"] { background: var(--ft-platinum); color: var(--ft-platinum-ink); border-color: transparent; font-weight: 700; }
 .body3d-hint { top: 10px; bottom: auto; }
 .me-radar { margin: 0; display: flex; justify-content: center; }
 .me-radar svg { width: min(100%, 340px); height: auto; overflow: visible; }

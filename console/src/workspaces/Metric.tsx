@@ -22,6 +22,7 @@ import {
 } from '../lib/metrics'
 import { loadMetric, type MetricData } from '../lib/metricData'
 import { cssColor } from '../lib/palette'
+import { usePageTitle } from '../lib/pageTitle'
 import { ASSOCIATION_NOTE, correlate, correlationWords, panelsByUnit } from '../lib/compare'
 import { seriesById, SERIES } from '../lib/schema'
 import { Wash } from '../dashboard/DayPages'
@@ -57,6 +58,7 @@ export function MetricView({ rawRef: raw, embedded = false, setPrimary }: { rawR
   const [failed, setFailed] = useState<{ key: string; message: string }[]>([])
   const [picking, setPicking] = useState(false)
   const [changing, setChanging] = useState(false)
+  const setPageTitle = usePageTitle((s) => s.set)
 
   const status = useLoadEffect(async (isCurrent) => {
     if (!ref) return
@@ -74,6 +76,9 @@ export function MetricView({ rawRef: raw, embedded = false, setPrimary }: { rawR
   const primary = items[0]?.key === (ref ? refString(ref) : '') ? items[0] : undefined
   const data = primary?.data
   const extras = items.slice(1)
+  // The top bar says which metric this is once it is known (the address holds only its ref).
+  const loadedLabel = primary?.data.label ?? null
+  useEffect(() => { if (!embedded) setPageTitle(loadedLabel); return () => setPageTitle(null) }, [loadedLabel, embedded, setPageTitle])
   const withValue = useMemo(() => (data?.points ?? []).filter((p) => p.value != null), [data])
   const latest = withValue[withValue.length - 1]
   const stats = useMemo(() => windowStats(data?.points ?? []), [data])

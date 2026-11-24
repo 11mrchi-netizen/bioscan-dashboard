@@ -21,6 +21,11 @@ import com.bioscan.fieldterminal.domain.fuel.planFuelDays
 import com.bioscan.fieldterminal.domain.fuel.planRaceFuel
 import com.bioscan.fieldterminal.domain.fuel.sweatProfile
 import com.bioscan.fieldterminal.domain.fuel.withCatchUp
+import com.bioscan.fieldterminal.domain.fuel.FuelBlock
+import com.bioscan.fieldterminal.domain.fuel.expandSchedule
+import com.bioscan.fieldterminal.domain.fuel.scheduleTotals
+import com.bioscan.fieldterminal.domain.fuel.scheduleWarnings
+import com.bioscan.fieldterminal.domain.fuel.seedBlocks
 import com.bioscan.fieldterminal.domain.fuel.EventSnapshot
 import com.bioscan.fieldterminal.domain.fuel.describeChanges
 import com.bioscan.fieldterminal.domain.fuel.snapshotOf
@@ -280,6 +285,36 @@ class RaceFuelParityTest {
         return input to expected
     }
 
+    // The schedule: the planner's plan as blocks, what they expand into, add up to and warn about (several tolerances, and a few hand-made blocks at the edges).
+    private fun scheduleJson(blocks: List<FuelBlock>, duration: Int): JsonElement {
+        fun totals(durationMin: Int) = scheduleTotals(blocks, durationMin).let { t ->
+            mapOf("carbsG" to t.carbsG, "fluidMl" to t.fluidMl, "sodiumMg" to t.sodiumMg, "caffeineMg" to t.caffeineMg, "intakes" to t.intakes, "preStartCarbsG" to t.preStartCarbsG,
+                "carbsPerHour" to t.carbsPerHour, "fluidPerHour" to t.fluidPerHour, "sodiumPerHour" to t.sodiumPerHour)
+        }
+        return buildJsonObject {
+            put("blocks", json.encodeToJsonElement(ListSerializer(FuelBlock.serializer()), blocks))
+            put("expanded", prim(expandSchedule(blocks).map { mapOf("blockId" to it.blockId, "index" to it.index, "elapsedMin" to it.elapsedMin) }))
+            put("totals", prim(totals(duration)))
+            put("totalsShort", prim(totals(1)))
+            put("totalsZero", prim(totals(0)))
+            put("warnings", prim(listOf(60.0, 45.0, 30.0, 90.0).map { tol -> scheduleWarnings(blocks, duration, tol) }))
+            put("warningsShort", prim(scheduleWarnings(blocks, 20, 60.0)))
+        }
+    }
+
+    private fun schedules(plans: List<Pair<String, RaceFuelPlan>>): JsonObject {
+        val hand = listOf(
+            FuelBlock("a", "Gel", "gel", 30, 30, 6, 25.0, 0.0, 50.0, 0.0, 1L, null), FuelBlock("b", "Pre-workout", "preworkout", -30, 0, 1, 0.0, 0.0, 0.0, 200.0, null, 7L),
+            FuelBlock("c", "Mix", "drink_mix", 0, 20, 12, 40.0, 500.0, 300.0, 0.0, 3L, null), FuelBlock("d", "Tab", "tablet", 60, 0, 3, 0.0, 0.0, 0.0, 150.0, null, null),
+            FuelBlock("e", "Bar", "bar", 45, 45, 4, 30.0, 0.0, 0.0, 0.0, null, null), FuelBlock("f", "Same time as a", "gel", 30, 60, 2, 10.0, 0.0, 0.0, 0.0, null, null),
+        )
+        return buildJsonObject {
+            put("_hand", scheduleJson(hand, 240))
+            put("_hand_short", scheduleJson(hand.take(2), 90))
+            plans.forEach { (name, plan) -> put(name, scheduleJson(seedBlocks(plan), plan.durationMin.toInt())) }
+        }
+    }
+
     @Test
     fun theWebPlansTheSameRace() {
         val inputFile = File(dir, "race-input.json")
@@ -302,6 +337,7 @@ class RaceFuelParityTest {
         val expected = buildJsonObject {
             put("plans", buildJsonObject { scenarios.forEachIndexed { i, sc -> put(sc.s("name")!!, json.encodeToJsonElement(RaceFuelPlan.serializer(), plans[i])) } })
             put("intake", intakeOut); put("climatology", climOut); put("heat", heatOut); put("estimates", estOut)
+            put("schedules", schedules(scenarios.indices.map { scenarios[it].s("name")!! to plans[it] }))
         }
         if (System.getenv("FT_PARITY_WRITE") != null || !expectedFile.exists()) {
             dir.mkdirs()

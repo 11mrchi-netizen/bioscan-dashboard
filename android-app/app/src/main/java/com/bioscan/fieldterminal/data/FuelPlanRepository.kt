@@ -4,6 +4,7 @@ package com.bioscan.fieldterminal.data
 import android.content.Context
 import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.domain.ActivityLevel
+import com.bioscan.fieldterminal.domain.DailyNutrition
 import com.bioscan.fieldterminal.domain.EnergyBalanceKind
 import com.bioscan.fieldterminal.domain.GlycaemicBand
 import com.bioscan.fieldterminal.domain.LOG_COMPLETE_MEALS
@@ -198,6 +199,32 @@ private val FUEL_TABLES = setOf(
     "sweat_tests", "fueling_products", "fueling_recipe_versions", "fueling_intake_log", "user_profile", "calendar_event_overrides", "meal_prep_weeks", "breakfast_templates", "session_plan_links",
 )
 
+/**
+ * Maintenance: the expenditure observed from logged intake and the weight trend (evaluateTdee, the adaptive approach
+ * MacroFactor popularised) once that is confident; until then Mifflin-St Jeor times the activity factor. The week's
+ * energy is the goal's calories, else maintenance; a goal below maintenance is a deficit. A pure function of its inputs
+ * (the web's fuel-core/weekEnergy.ts is checked against it: WeekEnergyParityTest).
+ */
+fun weekEnergyOf(
+    goals: NutritionGoals,
+    inputs: MaintenanceInputs,
+    nutritionDays: List<DailyNutrition>?,
+    weights: List<Pair<LocalDate, Double>>,
+    asOf: LocalDate = LocalDate.now(),
+): WeekEnergy {
+    val resting = restingEnergyKcal(inputs.sex, inputs.ageYears, inputs.heightCm, inputs.weightKg)
+    val observed = nutritionDays?.takeIf { it.isNotEmpty() }?.let { days ->
+        evaluateTdee(evaluateNutrition(days, asOf), evaluateWeightTrend(weights, asOf)).takeIf { it.confidence.met }?.tdeeKcal
+    }
+    val maintenance = observed ?: maintenanceEstimate(resting, ActivityLevel.of(goals.activityLevel), inputs.weeklyTrainingMin)?.kcal
+    val goalKcal = goals.caloriesKcal
+    val deficit = goalKcal != null && maintenance != null && energyBalance(goalKcal, maintenance).kind == EnergyBalanceKind.DEFICIT
+    return WeekEnergy(
+        dailyKcal = goalKcal ?: maintenance, proteinG = goals.proteinG, fromGoal = goalKcal != null, deficit = deficit,
+        observedMaintenance = observed != null,
+    )
+}
+
 class FuelPlanRepository(private val supabase: SupabaseClient) {
 
     private suspend fun bodyComposition(): List<BodyCompRow> = ReadCache.kept("fuel.body_comp", tables = setOf("body_metrics")) {
@@ -206,26 +233,11 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
             .decodeList<BodyCompRow>()
     }
 
-    // Maintenance: the expenditure observed from logged intake and the weight trend (evaluateTdee, the adaptive approach
-    // MacroFactor popularised) once that is confident; until then Mifflin-St Jeor times the activity factor.
-    private fun weekEnergy(context: Context, inputs: MaintenanceInputs, overview: NutritionOverview?, body: List<BodyCompRow>): WeekEnergy {
-        val goals = NutritionGoalsStore.getGoals(context)
-        val resting = restingEnergyKcal(inputs.sex, inputs.ageYears, inputs.heightCm, inputs.weightKg)
-        val observed = overview?.allDays?.takeIf { it.isNotEmpty() }?.let { days ->
-            val weights = body.mapNotNull { r -> r.weightKg?.let { LocalDate.parse(r.date) to it } }
-            evaluateTdee(
-                evaluateNutrition(days),
-                evaluateWeightTrend(weights),
-            ).takeIf { it.confidence.met }?.tdeeKcal
-        }
-        val maintenance = observed ?: maintenanceEstimate(resting, ActivityLevel.of(goals.activityLevel), inputs.weeklyTrainingMin)?.kcal
-        val goalKcal = goals.caloriesKcal
-        val deficit = goalKcal != null && maintenance != null && energyBalance(goalKcal, maintenance).kind == EnergyBalanceKind.DEFICIT
-        return WeekEnergy(
-            dailyKcal = goalKcal ?: maintenance, proteinG = goals.proteinG, fromGoal = goalKcal != null, deficit = deficit,
-            observedMaintenance = observed != null,
+    private fun weekEnergy(context: Context, inputs: MaintenanceInputs, overview: NutritionOverview?, body: List<BodyCompRow>): WeekEnergy =
+        weekEnergyOf(
+            NutritionGoalsStore.getGoals(context), inputs, overview?.allDays,
+            body.mapNotNull { r -> r.weightKg?.let { LocalDate.parse(r.date) to it } },
         )
-    }
 
     /**
      * Today's plan and the next ten days. Shared for a minute by the plan page and Today's line (the settings and the

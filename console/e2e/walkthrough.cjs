@@ -913,6 +913,8 @@ async function waitForServer() {
 
     // 8n. long sessions from the day plan: a fuel schedule (the phone's fuel_schedules), filled by a rule, edited, kept, turned into a standard and used again
     const longDay = ymd(dayPlus(2))
+    const planWrites = () => requests.filter((q) => /^(PATCH|DELETE) (fuel_plans|planned_sessions)|^POST planned_sessions/.test(q)).length
+    const planWrites0 = planWrites()
     await page.goto(`${BASE}#/plan/food?day=${longDay}`); await page.waitForSelector('[data-testid="long-sessions"]', { timeout: 20000 })
     check((await text('[data-testid="long-sessions"]')).includes('Run 2') && !(await page.locator('[data-testid="fuel-schedule"]').count()), 'a session of 90 minutes or more is listed under LONG SESSIONS, its schedule not opened yet')
     await page.locator('[data-testid="long-sessions"] button:has-text("FUEL SCHEDULE")').click(); await page.waitForSelector('[data-testid="fuel-schedule"] button:has-text("START EMPTY")', { timeout: 10000 })
@@ -935,7 +937,7 @@ async function waitForServer() {
     await page.locator('button:has-text("START EMPTY")').click(); await page.locator('select[aria-label="standard"]').selectOption({ label: 'Easy filling' })
     await page.locator('button:has-text("USE FOR THIS SESSION")').click()
     check((await text('[data-testid="schedule-totals"]')).includes('TOTAL 50 G CARBS'), 'the standard fills the session as it was shaped', await text('[data-testid="schedule-totals"]'))
-    check(!requests.some((q) => /^(PATCH|DELETE) (fuel_plans|planned_sessions)|^POST planned_sessions/.test(q)), 'nothing of the plan is touched')
+    check(planWrites() === planWrites0, 'nothing of the plan is touched')
 
     // 9. old routes redirect
     await page.goto(`${BASE}#/overview`); await page.waitForTimeout(300)

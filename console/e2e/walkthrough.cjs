@@ -613,7 +613,7 @@ async function waitForServer() {
     check(await to('/data?table=meals&id=42') === '/setup/data?table=meals&id=42' && await to('/integrity?series=hrv') === '/setup/integrity?series=hrv' && await to('/connections') === '/setup/connections', 'old data, integrity and connections routes land in Setup, query kept')
     check(await to('/body') === '/me?tab=BODY' && await to('/risk') === '/me?tab=EXPOSURES', 'old Body and Risk routes open Me on their tab')
     check(await to('/data-explorer') === '/setup/data' && await to('/data-quality') === '/setup/integrity' && await to('/setup') === '/setup/integrity', 'the v1 aliases and the Setup root go to the final place')
-    for (const [path, sel, label] of [['/plan/overview', '.pg-title:has-text("PLAN")', 'overview'], ['/plan/training', '.pb, .state-empty', 'training'], ['/plan/food', '.fp, .state-empty', 'food'], ['/plan/food?view=prep', '.pb, .state-empty', 'meal prep'], ['/plan/sessions', '.pg-title:has-text("SESSIONS")', 'sessions'], ['/plan/races', '.pg-title:has-text("RACES")', 'races'], ['/setup/integrity', '.ig', 'integrity'], ['/setup/data', '.de', 'data'], ['/setup/connections', '.pg-title:has-text("CONNECTIONS")', 'connections']]) {
+    for (const [path, sel, label] of [['/plan/overview', '.pg-title:has-text("PLAN")', 'overview'], ['/plan/training', '.pb, .state-empty', 'training'], ['/plan/food', '.fp, .state-empty', 'food'], ['/plan/sessions', '.pg-title:has-text("SESSIONS")', 'sessions'], ['/plan/races', '.pg-title:has-text("RACES")', 'races'], ['/setup/integrity', '.ig', 'integrity'], ['/setup/data', '.de', 'data'], ['/setup/connections', '.pg-title:has-text("CONNECTIONS")', 'connections']]) {
       await page.goto(`${BASE}#${path}`); await page.waitForSelector(sel, { timeout: 15000 }).catch(async () => { await shot(`broken-${label}`) })
       check((await page.locator(sel).count()) > 0 && (await page.locator('.error-boundary').count()) === 0, `${path} renders its own page`)
       check((await navOn()).some((n) => n.startsWith(path.slice(1))), `and ${label.toUpperCase()} is the marked item in the menu`, (await navOn()).join(','))
@@ -861,12 +861,13 @@ async function waitForServer() {
     check(nums.length === 4 && nums[1].startsWith('150'), 'carbohydrate, protein (the goal\'s 150), fat and energy are shown', nums.join('|'))
     check((await page.locator('.fp-why li').count()) >= 1 && (await page.locator('.pg-card:has(h3:has-text("MEALS")) .pg-row').count()) >= 4, 'the reasons and at least the four meals are listed')
     check((await text('.fp-foot')).includes('2800 kcal'), 'the energy basis names the goal', await text('.fp-foot'))
-    await page.locator('.fp-day').nth(2).click(); await page.waitForFunction(() => location.hash.includes('day='))
+    await page.locator('.fp-day').nth(2).click(); await page.waitForSelector(`.fp-day.on[data-day="${ymd(dayPlus(2))}"]`, { timeout: 5000 }).catch(() => {})
     const picked = await page.locator('.fp-day.on').getAttribute('data-day')
+    check((await page.evaluate(() => location.hash)).includes(`day=${picked}`), 'the open day is in the address', picked)
     check(picked === ymd(dayPlus(2)) && (await text('[data-testid="fuel-day"] .pg-card-title')).toLowerCase().includes(new Date(`${picked}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'long' }).toLowerCase()), 'a day is opened from the strip, and stays in the address', picked)
     check(!requests.some((q) => /^(POST|PATCH|DELETE) (fuel_plans|fuel_week_plans)/.test(q)), 'the page writes nothing')
     await page.goto(`${BASE}#/plan/food?view=prep`); await page.waitForSelector('.pb', { timeout: 15000 })
-    check(await crumb() === 'PLAN > FOOD > MEAL PREP', 'the meal prep is the other view of Food', await crumb())
+    check(await crumb() === 'PLAN > FOOD > MEAL PREP' && (await navOn()).includes('plan/food/prep'), 'the meal prep is the other view of Food, marked in the menu', await crumb())
 
     // 9. old routes redirect
     await page.goto(`${BASE}#/overview`); await page.waitForTimeout(300)

@@ -838,7 +838,7 @@ async function waitForServer() {
     check(T.training_blocks[0].start_date === shiftTo && T.training_blocks[0].choices.start_shift_days === 3 && psess(7102).scheduled_date === ymd(dayPlus(15)), 'the block and its sessions moved together, and the shift is recorded', JSON.stringify([T.training_blocks[0].start_date, T.training_blocks[0].choices]))
     // an overlap is refused with the neighbour named
     await page.fill('input[aria-label="New start of Mock block"]', ymd(dayPlus(32))); await page.locator('section[aria-label="Blocks that have not begun"] li', { hasText: 'Mock block' }).first().getByText('MOVE…').click(); await page.locator('.sd-confirm .pb-primary').click(); await page.waitForTimeout(600)
-    check((await text('.pb-warn')).includes('overlap the block "Later mock block"') && T.training_blocks[0].start_date === shiftTo, 'a block that would overlap another is refused and does not move')
+    check((await text('section[aria-label="Blocks that have not begun"] .pb-warn')).includes('overlap the block "Later mock block"') && T.training_blocks[0].start_date === shiftTo, 'a block that would overlap another is refused and does not move')
     // a shifted block's sessions are not "moved from"; one the person moved is
     await page.goto(`${BASE}#/plan/sessions`); await page.waitForSelector('section.pg-card', { timeout: 15000 })
     const rowsText = await page.locator('.pg-row').filter({ hasText: 'Upper day' }).first().textContent().catch(() => '')

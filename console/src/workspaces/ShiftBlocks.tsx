@@ -32,7 +32,7 @@ function Row({ b, today, onMoved }: { b: ExistingBlock; today: string; onMoved: 
   const move = async () => {
     setBusy(true); setMsg(null)
     try { await shiftTrainingBlock(b.id, today, start); setAsking(false); setMsg({ ok: true, text: `Moved to ${longDate(start)}.` }); onMoved() }
-    catch (e) { setMsg({ ok: false, text: e instanceof MigrationMissing ? e.message : e instanceof Error ? e.message : String(e) }) }
+    catch (e) { setAsking(false); setMsg({ ok: false, text: e instanceof MigrationMissing ? e.message : e instanceof Error ? e.message : String(e) }) }
     finally { setBusy(false) }
   }
   return (

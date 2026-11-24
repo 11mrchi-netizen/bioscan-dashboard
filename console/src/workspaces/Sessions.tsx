@@ -26,7 +26,7 @@ function PlannedSessions() {
   const today = localToday()
   // Whole weeks, Monday to Sunday (lib/dates.ts weekWindow): the last week of NEXT 6 WEEKS is not cut short.
   const { from, to } = weekWindow((['ahead', 'recent', 'both'].includes(win) ? win : 'ahead') as WeekWindow, today)
-  const [d, setD] = useState<{ sessions: PlannedSession[]; blockName: Map<number, string> } | null>(null)
+  const [d, setD] = useState<{ sessions: PlannedSession[]; blockName: Map<number, string>; blockShift?: Map<number, number> } | null>(null)
   const st = useLoadEffect(async (cur) => { const x = await loadPlannedSessions(from, to); if (cur()) setD(x) }, [from, to])
   const set = (k: string, v: string | null) => { const n = new URLSearchParams(params); if (v == null) n.delete(k); else n.set(k, v); setParams(n) }
   const all = d?.sessions ?? []
@@ -61,7 +61,7 @@ function PlannedSessions() {
           return (
             <section key={w} className="pg-card">
               <h3 className="pg-card-title mono"><span>WEEK OF {longDate(w).toUpperCase()}</span><span>{rows.length}</span></h3>
-              <PlanSessionRows sessions={rows} blockName={d!.blockName} today={today} />
+              <PlanSessionRows sessions={rows} blockName={d!.blockName} blockShift={d!.blockShift} today={today} />
             </section>
           )
         })}

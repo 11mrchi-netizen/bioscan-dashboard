@@ -10,7 +10,7 @@ import { supabase } from '../lib/supabase'
 import { warnOnError } from '../lib/schema'
 import { useChart } from '../lib/useChart'
 import { useLoadEffect } from '../lib/useLoadEffect'
-import { PALETTE } from '../lib/palette'
+import { cssColor, PALETTE } from '../lib/palette'
 import type { EChartsCoreOption } from '../lib/echarts'
 import {
   STATUS_LABEL, buildPoints, dailyLast, goodWeighIns, impedanceIndexByTimeOfDay,
@@ -35,6 +35,9 @@ const BASE_AXES = {
 function yAxis(name: string): EChartsCoreOption {
   return { type: 'value', name, scale: true, nameTextStyle: { color: PALETTE.textMuted }, axisLabel: { color: PALETTE.textMuted }, splitLine: { lineStyle: { color: PALETTE.border } } }
 }
+
+/** A metric's hue (design/tokens --m-*), resolved for the canvas. */
+const tok = (name: string) => cssColor(`var(--${name})`)
 
 function lineSeries(name: string, data: Array<[string, number]>, color: string, extra: object = {}): EChartsCoreOption {
   return { name, type: 'line', data, showSymbol: true, symbolSize: 5, itemStyle: { color }, lineStyle: { color, width: 2 }, ...extra }
@@ -87,7 +90,7 @@ export function Body() {
     const hcFat: Array<[string, number]> = metrics.filter((m) => m.body_fat_pct != null && m.source !== 'scale_bia').map((m) => [m.date, m.body_fat_pct!])
     const compare: EChartsCoreOption = {
       ...BASE_AXES, yAxis: yAxis('%'), legend: { top: 0, textStyle: { color: PALETTE.text } },
-      series: [lineSeries('Scale (Sun 2003)', scaleFat, PALETTE.emerald), lineSeries('Health Connect', hcFat, PALETTE.amber)],
+      series: [lineSeries('Scale (Sun 2003)', scaleFat, tok('m-body-fat')), lineSeries('Health Connect', hcFat, tok('m-body-fat'), { symbol: 'diamond', symbolSize: 7, lineStyle: { color: tok('m-body-fat'), width: 2, type: 'dashed' } })], // two sources of one metric: one hue, told apart by the line
     }
     const single = (name: string, unit: string, data: Array<[string, number]>, color: string): EChartsCoreOption => ({
       ...BASE_AXES, yAxis: yAxis(unit), series: [lineSeries(name, data, color)],
@@ -110,7 +113,7 @@ export function Body() {
       xAxis: { type: 'category', data: tod.map((b) => `${b.label} (n=${b.n})`), axisLabel: { color: PALETTE.textMuted } },
       yAxis: yAxis('cm²/Ω'), series: [{ type: 'bar', itemStyle: { color: PALETTE.emerald }, data: tod.map((b) => b.mean) }],
     }
-    return { compare, ffm: single('Fat-free mass', 'kg', ffm, PALETTE.emerald), index: single('Impedance index', 'cm²/Ω', index, PALETTE.emerald), water: single('Body water', '%', water, PALETTE.emerald), scatter, byHour, counts: { scaleFat, ffm, index, water, tod } }
+    return { compare, ffm: single('Fat-free mass', 'kg', ffm, tok('m-lean-mass')), index: single('Impedance index', 'cm²/Ω', index, PALETTE.emerald), water: single('Body water', '%', water, tok('m-hydration')), scatter, byHour, counts: { scaleFat, ffm, index, water, tod } }
   }, [good, points, metrics])
 
   const [today] = useState(() => new Date().toLocaleDateString('sv-SE')) // local YYYY-MM-DD, fixed for this visit

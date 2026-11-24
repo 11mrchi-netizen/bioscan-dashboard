@@ -1,4 +1,4 @@
-// Correcting a logged entry from the Console (web transition plan, phase 4). The same tables and columns as the phone's
+// Correcting a logged entry from the web app (web transition plan, phase 4). The same tables and columns as the phone's
 // edit sheets (android data/AddEntryRepository.kt update*), and only entries typed in by hand: imported and synced rows
 // (Zepp, Health Connect, Notion, the scale) stay read-only. Logged times are the phone's wall clock labelled +00: a new
 // time replaces the digits and keeps the day and the label, never converting anything.

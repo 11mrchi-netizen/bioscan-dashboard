@@ -46,7 +46,7 @@ const BREAK_SERIES: Record<string, string> = {
   deep_min: 'sleep_deep_min', rem_min: 'sleep_rem_min', light_min: 'sleep_light_min',
 }
 
-// Which analyses read each series (downstream impact). Everything is also in Explore.
+// Which analyses read each series (downstream impact). Everything is also in Lab › Compare.
 const USED_BY: Record<string, string> = {
   hrv: 'series breaks, expected bands, typicality, evidence board',
   rhr: 'series breaks, expected bands, typicality, evidence board',
@@ -87,7 +87,7 @@ export function Integrity() {
   const [busy, setBusy] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const [ms, setMs] = useState<number | null>(null)
-  // The focused series lives in the URL (#/integrity?series=hrv), so the Decisions workbench and saved views can open it.
+  // The focused series lives in the URL (#/setup/integrity?series=hrv), so the Decisions workbench and saved views can open it.
   const [params, setParams] = useSearchParams()
   const focusParam = params.get('series')
   const focus = focusParam && seriesById(focusParam) ? focusParam : null
@@ -239,7 +239,7 @@ export function Integrity() {
                   <tr className="ig-group mono"><td colSpan={7}>{table}</td></tr>
                   {list.map((s) => (
                     <tr key={s.seriesId} className={`ig-row ${focus === s.seriesId ? 'on' : ''}`} onClick={() => setFocus(focus === s.seriesId ? null : s.seriesId)}>
-                      <td className="ig-name" title={`Used by: ${USED_BY[s.seriesId] ?? 'Explore'}`}>{s.label}</td>
+                      <td className="ig-name" title={`Used by: ${USED_BY[s.seriesId] ?? 'Lab › Compare'}`}>{s.label}</td>
                       <td className="mono">{RULE[s.expect]}</td>
                       <td className="mono">
                         <span className={`fr fr-${s.freshness}`}>{s.lastSeen ?? 'never'}</span>
@@ -262,7 +262,7 @@ export function Integrity() {
 
           <section className="ig-issues" aria-label="Issues">
             <div className="ig-issues-head mono">
-              <span>ISSUES{focus ? ` · ${seriesById(focus)?.label} · used by ${USED_BY[focus] ?? 'Explore only'}` : ''}</span>
+              <span>ISSUES{focus ? ` · ${seriesById(focus)?.label} · used by ${USED_BY[focus] ?? 'Lab › Compare only'}` : ''}</span>
               {focus && <button className="btn-ghost mono" onClick={() => setFocus(null)}>ALL SERIES</button>}
               {(['critical', 'warning', 'info'] as const).map((sev) => (
                 <label key={sev} className={`ig-sev-toggle sev-${sev}`}>

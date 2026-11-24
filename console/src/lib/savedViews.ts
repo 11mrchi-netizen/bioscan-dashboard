@@ -10,16 +10,22 @@ export interface SavedView {
   range: SavedRange
 }
 
-const ROUTES = new Set(['integrity', 'evidence', 'explore', 'data', 'models'])
+// The routes a view can be saved from: a metric page, a Lab tab or a Setup tab (the tab is part of the path). The redirects of the
+// routes that moved (App.tsx) stay for bookmarks and links, but no view was ever saved under an old name (saved_views was empty when the
+// old names were dropped), so none is accepted here.
+const ROUTES = new Set(['m', 'lab', 'setup'])
 
-/** The route to save: the hash path with its query, only for the console's own workspaces. */
+/** The route to save: the hash path with its query, only for a page of metrics, the Lab or Setup. */
 export function viewPath(pathname: string, search: string): string | null {
-  const route = pathname.replace(/^\/+/, '').split('/')[0]
+  const parts = pathname.replace(/^\/+/, '').split('/')
+  const route = parts[0]
   if (!ROUTES.has(route)) return null
-  return `/${route}${search && search !== '?' ? search : ''}`
+  // A metric page is #/m/<ref>: the ref is part of the view (a comparison is saved with its metrics, which are repeated ?with=).
+  if ((route === 'm' || route === 'lab' || route === 'setup') && !parts[1]) return null
+  return `/${route === 'm' || route === 'lab' || route === 'setup' ? parts.slice(0, 2).join('/') : route}${search && search !== '?' ? search : ''}`
 }
 
-/** Opening a view: the route to navigate to and the range to set, or null for a row that is not a console route. */
+/** Opening a view: the route to navigate to and the range to set, or null for a row that names no savable route. */
 export function openView(v: Pick<SavedView, 'path' | 'range'>, now: Date = new Date()): { path: string; range: DateRange | null } | null {
   const [pathname, query = ''] = v.path.split('?')
   const path = viewPath(pathname, query ? `?${query}` : '')

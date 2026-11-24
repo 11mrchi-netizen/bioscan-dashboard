@@ -7,12 +7,13 @@ Sept 12 calendar event description (which hit Google Calendar's length limit).*
 (evenings/weekends style), not full-time effort, and don't account for debugging or platform
 surprises. Treat them as "roughly this scale," not a deadline.
 
-> **Nov 2026, web transition (phases 1–5 done).** The old dashboard page (`index.html` with `login.html` and the Web Push
-> worker `sw.js`) is retired. The web is now two surfaces built from `console/`: the **Dashboard** at the site root (Today,
-> any past day, and Me) and the **Console** at `/console/` (Log with fixes, Lab, Plan, Analysis, System › Connections with
-> the Google Calendar connection). `/legacy/` and `/login.html` redirect to the Dashboard; `sw.js` only unregisters itself
-> and its push subscription. Browser push alerts were dropped (the phone sends notifications), so the notes below on
-> `login.html`, `sw.js` and browser push describe history.
+> **Nov 2026, web redesign.** The old dashboard page (`index.html` with `login.html` and the Web Push worker `sw.js`) was retired
+> in the web transition; the web has since become **one app** built from `console/`, served at the site root: five tabs in the
+> phone's order (Today, Me, Lab, Plan, Log) and a Setup gear (Integrity, Data, Connections). Analysis comes first: every score
+> opens its detail, where metrics can be added to compare; the Lab joins the phone's Lab to the analysis workspaces. Planning,
+> logging and editing are secondary. `/console/` forwards to the root; `/legacy/` and `/login.html` redirect to it; `sw.js`
+> only unregisters itself and its push subscription. See [docs/web-redesign/README.md](docs/web-redesign/README.md). Browser push
+> alerts were dropped (the phone sends notifications), so the notes below on `login.html`, `sw.js` and browser push describe history.
 
 ---
 

@@ -4,13 +4,12 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useLoadEffect } from '../lib/useLoadEffect'
-import { localDaysAgo, localToday } from '../lib/dates'
+import { localToday, weekWindow, type WeekWindow } from '../lib/dates'
 import { loadPlannedSessions, longDate, mondayOf, type PlannedSession } from '../lib/planReads'
 import { PlanSessionRows } from './PlanSessionRows'
 import './PlanBlock.css'
 import './Pages.css'
 
-const plus = (d: string, n: number) => { const x = new Date(`${d}T12:00:00`); x.setDate(x.getDate() + n); return x.toLocaleDateString('sv-SE') }
 const WINDOWS = [{ id: 'ahead', label: 'NEXT 6 WEEKS' }, { id: 'recent', label: 'LAST 6 WEEKS' }, { id: 'both', label: 'BOTH' }]
 
 export default function Sessions() {
@@ -18,8 +17,8 @@ export default function Sessions() {
   const win = params.get('w') ?? 'ahead'
   const status = params.get('status')
   const today = localToday()
-  const from = win === 'ahead' ? today : localDaysAgo(41)
-  const to = win === 'recent' ? today : plus(today, 41)
+  // Whole weeks, Monday to Sunday (lib/dates.ts weekWindow): the last week of NEXT 6 WEEKS is not cut short.
+  const { from, to } = weekWindow((['ahead', 'recent', 'both'].includes(win) ? win : 'ahead') as WeekWindow, today)
   const [d, setD] = useState<{ sessions: PlannedSession[]; blockName: Map<number, string> } | null>(null)
   const st = useLoadEffect(async (cur) => { const x = await loadPlannedSessions(from, to); if (cur()) setD(x) }, [from, to])
   const set = (k: string, v: string | null) => { const n = new URLSearchParams(params); if (v == null) n.delete(k); else n.set(k, v); setParams(n) }

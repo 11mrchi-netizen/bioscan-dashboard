@@ -1,4 +1,4 @@
-// Dashboard › Me: the phone's six tabs in the phone's order, each drawn from what the phone worked out (me_views,
+// Me: the phone's six tabs in the phone's order, each drawn from what the phone worked out (me_views,
 // meView.ts), with when that was. Body adds the 3D body. Tabs the phone does not send yet say so.
 import { lazy, Suspense, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -10,6 +10,9 @@ import { loadMeView, ME_TABS, type MeRow, type MeTab, type MeViewRow } from './m
 import type { Concern } from './Body3D'
 
 const Body3D = lazy(() => import('./Body3D').then((m) => ({ default: m.Body3D })))
+// The console's deeper reads, below the phone's own picture of the tab (web redesign, phase 5): the scale's impedance on BODY, exposures and risks on EXPOSURES.
+const BodyAnalysis = lazy(() => import('../workspaces/Body'))
+const RiskAnalysis = lazy(() => import('../workspaces/Risk'))
 
 /** The tabs the phone sends so far (phase 3 builds them one by one). */
 
@@ -58,12 +61,15 @@ export function Me() {
 
       {status.loading && !row ? <p className="me-note muted">Loading {tab.toLowerCase()}…</p>
         : status.error ? <p className="me-note">Could not load: {status.error} <button className="dash-link" onClick={status.retry}>RETRY</button></p>
-        : row ? <MeSections sections={row.view.sections} sinceDay={since} />
+        : row ? <MeSections sections={row.view.sections} sinceDay={since} tab={tab} />
         : (
           <section className="ft-card me-soon">
             <p>The phone has not sent {tab} yet. It does when the tab is opened on the phone, and every few hours in the background once the updated app is installed.</p>
           </section>
         )}
+
+      {tab === 'BODY' && <Suspense fallback={null}><section className="me-deeper ft-skin" aria-label="The scale in depth"><BodyAnalysis /></section></Suspense>}
+      {tab === 'EXPOSURES' && <Suspense fallback={null}><section className="me-deeper ft-skin" aria-label="Exposures and risks in depth"><RiskAnalysis embedded /></section></Suspense>}
     </div>
   )
 }

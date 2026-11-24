@@ -17,8 +17,8 @@ export default defineConfig({
     rolldownOptions: {
       // The source entry is app.html. console/index.html is the SERVED build output: the deploy workflow copies dist/app.html
       // over it, so building from index.html (the default) re-bundled the previous build instead of src/ from 2026-09-30 on.
-      // Two entry pages, one app (Nov 2026): app.html is the Console, dashboard.html the Dashboard; they share the chunks.
-      input: { app: fileURLToPath(new URL('./app.html', import.meta.url)), dashboard: fileURLToPath(new URL('./dashboard.html', import.meta.url)) },
+      // One entry page, one app (web redesign, Nov 2026): Today, Me and everything else behind one router.
+      input: { app: fileURLToPath(new URL('./app.html', import.meta.url)) },
       output: {
         codeSplitting: true,
         manualChunks(id) {

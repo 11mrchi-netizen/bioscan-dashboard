@@ -1,14 +1,13 @@
 // ANALYSIS › RISK (risk profile, docs/risk-profile/01-plan.md): exposures and risks to dig into, with ways to improve,
 // rather than one number. R1: the air breathed each day (analysis-core/airExposure.ts writes it nightly) with an hour-by-hour
 // view of any day; R0: home blood pressure series beside the clinic readings from lab draws. Read-only: readings are
-// logged on the phone. The same summary is the phone's Me › EXPOSURES, and the Dashboard's.
+// logged on the phone. The phone's own summary is drawn above it on Me › EXPOSURES, where this page now sits.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useChart } from '../lib/useChart'
 import { useLoadEffect } from '../lib/useLoadEffect'
-import { PALETTE } from '../lib/palette'
+import { cssColor, PALETTE } from '../lib/palette'
 import type { EChartsCoreOption } from '../lib/echarts'
-import { dashboardHref } from '../lib/surfaces'
 import { type BpRow, categorize, series as bpSeries, sittings } from '../lib/bp'
 import { CO2_POOR, CO2_VENTILATE, WHO_NO2_24H, WHO_O3_8H, WHO_PM25_24H, WHO_PM25_ANNUAL } from '../../../supabase/functions/_shared/analysis-core/airExposure.ts'
 import { RiskQuestionnaires, type Response } from './RiskQuestionnaires'
@@ -18,7 +17,12 @@ import './Pages.css'
 
 // Metric hues for canvas charts: the values of design/tokens (--m-pm25, --m-no2, --m-ozone, --m-co2, --m-uv-index,
 // --m-blood-pressure). Charts need the colour itself, not the variable.
-const HUE = { pm25: '#d9a066', no2: '#c9644a', ozone: '#8fd0ff', co2: '#9fb4c8', uv: '#c8e04a', bp: '#e75bd0' } as const
+// One fixed hue per metric (design/tokens --m-*), resolved when read so the canvas charts and the page agree.
+const tok = (name: string) => cssColor(`var(--${name})`)
+const HUE = {
+  get pm25() { return tok('m-pm25') }, get no2() { return tok('m-no2') }, get ozone() { return tok('m-ozone') },
+  get co2() { return tok('m-co2') }, get uv() { return tok('m-uv-index') }, get bp() { return tok('m-blood-pressure') },
+}
 
 interface AirDay {
   date: string; coverage_h: number; pm25_ugm3: number | null; pm25_indoor_ugm3: number | null; pm25_outdoor_home_ugm3: number | null
@@ -64,7 +68,8 @@ function Chart({ option, height = 220, onPick }: { option: EChartsCoreOption; he
   return <div ref={ref} style={{ width: '100%', height }} />
 }
 
-export default function Risk() {
+/** `embedded`: inside Me › EXPOSURES, which already draws the phone's own sections above, so they are not drawn a second time here. */
+export default function Risk({ embedded = false }: { embedded?: boolean }) {
   const [days, setDays] = useState<AirDay[]>([])
   const [summary, setSummary] = useState<{ asOf: string; payload: Summary } | null>(null)
   const [bp, setBp] = useState<BpRow[]>([])
@@ -198,7 +203,7 @@ export default function Risk() {
       <header className="pg-head">
         <div>
           <h2 className="pg-title mono">RISK</h2>
-          <p className="pg-sub">Exposures and risks with ways to improve, not one number. Air is worked out each night from your places, the modelled outdoor air there (Open-Meteo, CAMS) and the home sensors; blood pressure from the home series on the phone (Lab › TESTS) and the clinic readings in your lab draws. The summary is also on the <a href={dashboardHref('#/me?tab=EXPOSURES')}>Dashboard's Me › Exposures</a>.</p>
+          <p className="pg-sub">Exposures and risks with ways to improve, not one number. Air is worked out each night from your places, the modelled outdoor air there (Open-Meteo, CAMS) and the home sensors; blood pressure from the home series on the phone (Lab › TESTS) and the clinic readings in your lab draws.</p>
         </div>
       </header>
       {st.error && <p className="pb-warn">Could not load: {st.error}</p>}
@@ -207,7 +212,7 @@ export default function Risk() {
 
       <RiskQuestionnaires responses={responses} missing={responsesMissing} onChanged={() => setAnswered((n) => n + 1)} />
 
-      <RiskFromPhone />
+      {!embedded && <RiskFromPhone />}
 
       <div className="pg-grid">
         <section className="pg-card">

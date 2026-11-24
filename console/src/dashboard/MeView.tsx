@@ -1,22 +1,22 @@
 // Draws a Me tab's document (meView.ts): sections of tiles, rows, trend charts, rings and notes, as the phone laid them out.
 import { useMemo } from 'react'
 import { hueVar, type MeBars, type MeChart, type MeItem, type MeRadar, type MeRibbons, type MeRing, type MeRow, type MeSection, type MeTile, type Point } from './meView'
-import { consoleHref } from '../lib/surfaces'
+import { meRef, metricHref } from '../lib/metrics'
 
-export function MeSections({ sections, sinceDay }: { sections: MeSection[]; sinceDay: string | null }) {
+export function MeSections({ sections, sinceDay, tab }: { sections: MeSection[]; sinceDay: string | null; tab: string }) {
   return (
     <div className="me-sections">
       {sections.map((s) => (
         <section key={s.title} className="ft-card me-section">
           <h3 className="me-section-title">{s.title}</h3>
-          <Items items={s.items} sinceDay={sinceDay} />
+          <Items items={s.items} sinceDay={sinceDay} tab={tab} section={s.title} />
         </section>
       ))}
     </div>
   )
 }
 
-function Items({ items, sinceDay }: { items: MeItem[]; sinceDay: string | null }) {
+function Items({ items, sinceDay, tab, section }: { items: MeItem[]; sinceDay: string | null; tab: string; section: string }) {
   // Tiles side by side, rows as a list, the rest full width, in the order given.
   const groups: MeItem[][] = []
   for (const i of items) {
@@ -28,9 +28,9 @@ function Items({ items, sinceDay }: { items: MeItem[]; sinceDay: string | null }
     <>
       {groups.map((g, k) => {
         const first = g[0]
-        if (first.kind === 'tile') return <div key={k} className="me-tiles">{(g as MeTile[]).map((t, j) => <Tile key={j} t={t} sinceDay={sinceDay} />)}</div>
+        if (first.kind === 'tile') return <div key={k} className="me-tiles">{(g as MeTile[]).map((t, j) => <Tile key={j} t={t} sinceDay={sinceDay} tab={tab} section={section} />)}</div>
         if (first.kind === 'row') return <ol key={k} className="me-rows">{(g as MeRow[]).map((r, j) => <Row key={j} r={r} />)}</ol>
-        if (first.kind === 'chart') return <Chart key={k} c={first} sinceDay={sinceDay} />
+        if (first.kind === 'chart') return <Chart key={k} c={first} sinceDay={sinceDay} tab={tab} section={section} />
         if (first.kind === 'bars') return <Bars key={k} b={first} sinceDay={sinceDay} />
         if (first.kind === 'radar') return <Radar key={k} r={first} />
         if (first.kind === 'ribbons') return <Ribbons key={k} r={first} />
@@ -43,15 +43,18 @@ function Items({ items, sinceDay }: { items: MeItem[]; sinceDay: string | null }
 
 const TONE: Record<string, string> = { ok: 'var(--ok)', warn: 'var(--warn)', bad: 'var(--bad)' }
 
-function Tile({ t, sinceDay }: { t: MeTile; sinceDay: string | null }) {
+function Tile({ t, sinceDay, tab, section }: { t: MeTile; sinceDay: string | null; tab: string; section: string }) {
   const pts = (t.series ?? []).filter((p) => !sinceDay || p[0] >= sinceDay)
+  // A tile that carries its points opens their history (the metric page); one without has nothing to open.
+  const opens = (t.series?.length ?? 0) > 1
+  const Box = opens ? 'a' : 'div'
   return (
-    <div className="me-tile" title={t.info}>
+    <Box className={`me-tile${opens ? ' tappable' : ''}`} title={t.info} {...(opens ? { href: metricHref(meRef(tab, section, t.label)) } : {})}>
       <span className="me-tile-label">{t.label}</span>
       <span className="me-tile-value" style={{ color: t.tone ? TONE[t.tone] : undefined }}>{t.value}{t.unit && <small> {t.unit}</small>}</span>
       {t.sub && <span className="me-tile-sub">{t.sub}</span>}
       {pts.length > 1 && <Spark points={pts} hue={hueVar(t.hue)} />}
-    </div>
+    </Box>
   )
 }
 
@@ -86,7 +89,7 @@ function path(points: Point[], w: number, h: number, pad: number, e = extent(poi
   }).join('')
 }
 
-function Chart({ c, sinceDay }: { c: MeChart; sinceDay: string | null }) {
+function Chart({ c, sinceDay, tab, section }: { c: MeChart; sinceDay: string | null; tab: string; section: string }) {
   const series = c.series.map((s) => ({ ...s, points: s.points.filter((p) => !sinceDay || p[0] >= sinceDay) })).filter((s) => s.points.length > 0)
   const all = series.flatMap((s) => s.points)
   if (all.length < 2) return <p className="me-note muted">{c.caption ?? ''} Not enough readings in this range.</p>
@@ -113,6 +116,7 @@ function Chart({ c, sinceDay }: { c: MeChart; sinceDay: string | null }) {
         <span>{day(ext.t0)} – {day(ext.t1)}{c.unit ? ` · ${c.unit}` : ''}</span>
         {series.length > 1 && <span className="me-legend">{series.map((s) => <span key={s.name}><b style={{ background: hueVar(s.hue) }} />{s.name}</span>)}</span>}
         {c.caption && <span className="me-chart-word">{c.caption}</span>}
+        <a className="dash-link" href={metricHref(meRef(tab, section, c.label))}>HISTORY →</a>
       </figcaption>
     </figure>
   )
@@ -217,7 +221,7 @@ function Ribbons({ r }: { r: MeRibbons }) {
     <figure className="me-ribbons">
       <div className="me-ribbon-hours"><span /><span className="mono">00</span><span className="mono">06</span><span className="mono">12</span><span className="mono">18</span><span className="mono">24</span></div>
       {r.days.map((d) => (
-        <a key={d.date} className="me-ribbon-day" href={consoleHref(`#/log?day=${d.date}`)} title={`Open the log of ${d.date}`}>
+        <a key={d.date} className="me-ribbon-day" href={`#/log?day=${d.date}`} title={`Open the log of ${d.date}`}>
           <span className="mono">{DAY_LABEL(d.date)}</span>
           <svg viewBox={`0 0 ${r.slots} 1`} preserveAspectRatio="none" role="img" aria-label={d.date}>
             {d.spans.map(([f, t, h], i) => <rect key={i} x={f} y="0" width={Math.max(0, t - f - 0.15)} height="1" fill={hueVar(h)} opacity={h === 'ft-line' ? 0.5 : 1} />)}

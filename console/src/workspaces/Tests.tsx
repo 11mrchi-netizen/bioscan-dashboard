@@ -1,11 +1,10 @@
 // LAB › TESTS (web transition plan, phase 4): the tests the phone runs (Lab › TESTS: grip, body check-in, sweat test,
 // running form), each with its history, then every blood draw with its results; a marker opens its history across
-// draws. Read-only: tests are taken on the phone. The judgement of a marker against your own variation (RCV) is on the
-// Dashboard's Me › Bloodwork, as the phone works it out. Logged times (occurred_at) are wall clock: their digits as they are.
+// draws. Read-only: tests are taken on the phone. The judgement of a marker against your own variation (RCV) is on
+// Me › Bloodwork, as the phone works it out. Logged times (occurred_at) are wall clock: their digits as they are.
 import { useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useLoadEffect } from '../lib/useLoadEffect'
-import { dashboardHref } from '../lib/surfaces'
 import './PlanBlock.css'
 import './Pages.css'
 
@@ -65,7 +64,7 @@ export default function Tests() {
       <header className="pg-head">
         <div>
           <h2 className="pg-title mono">TESTS</h2>
-          <p className="pg-sub">The tests taken on the phone (Lab › TESTS) and every blood draw with its results. Tap a marker for its history across draws. How a change compares with your own variation is on the <a href={dashboardHref('#/me?tab=BLOODWORK')}>Dashboard's Bloodwork</a>.</p>
+          <p className="pg-sub">The tests taken on the phone (Lab › TESTS) and every blood draw with its results. Tap a marker for its history across draws. How a change compares with your own variation is on the <a href="#/me?tab=BLOODWORK">Me › Bloodwork</a>.</p>
         </div>
         <input className="pb-input" placeholder="Find a marker" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a marker" />
       </header>

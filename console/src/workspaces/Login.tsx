@@ -1,7 +1,7 @@
 import { useAuth } from '../context/AuthContext'
 import './Login.css'
 
-export function Login({ title = 'Analysis Console', body = 'Large-screen analytical workstation for longitudinal health and performance data.' }: { title?: string; body?: string }) {
+export function Login({ title = 'Field Terminal', body = 'How you are today, the slow-moving picture, and the analysis, plans and log behind them.' }: { title?: string; body?: string }) {
   const { signInWithGoogle } = useAuth()
   return (
     <div className="login-page">

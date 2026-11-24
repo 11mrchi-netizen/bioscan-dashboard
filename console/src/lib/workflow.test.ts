@@ -11,7 +11,7 @@ import { readFilters } from './dataFilters.ts'
 import { openView, viewPath, viewRow } from './savedViews.ts'
 import { seriesById } from './schema.ts'
 
-/** '#/data?table=x&id=1' -> { route: 'data', params } */
+/** '#/setup/data?table=x&id=1' -> { route: 'setup/data', params } */
 function follow(href: string | null): { route: string; params: URLSearchParams } {
   assert.ok(href, 'a link was expected')
   const [path, query = ''] = href.replace(/^#\//, '').split('?')
@@ -36,18 +36,18 @@ test('a data problem leads to its records, its period and its day', () => {
 
   const invalid = r.issues.find((i) => i.kind === 'invalid')!
   const toRecord = follow(hrefFor(invalid.refs[0]))
-  assert.equal(toRecord.route, 'data')
+  assert.equal(toRecord.route, 'setup/data')
   assert.deepEqual([readFilters(toRecord.params).table, readFilters(toRecord.params).id], ['wearable_daily', '77'])
 
   const missing = r.issues.find((i) => i.kind === 'missing' && i.seriesId === 'steps' && i.firstDate === '2026-10-03')!
   const toPeriod = follow(hrefFor(missing.refs[0]))
-  assert.deepEqual([toPeriod.route, toPeriod.params.get('series'), toPeriod.params.get('start'), toPeriod.params.get('end')], ['explore', 'steps', '2026-10-03', '2026-10-05'])
+  assert.deepEqual([toPeriod.route, toPeriod.params.get('series'), toPeriod.params.get('start'), toPeriod.params.get('end')], ['lab/compare', 'steps', '2026-10-03', '2026-10-05'])
 
   const toDay = follow(hrefFor({ kind: 'day', series: 'meal_energy', date: '2026-10-05' }))
   assert.deepEqual([readFilters(toDay.params).table, readFilters(toDay.params).from, readFilters(toDay.params).to], ['meals', '2026-10-05', '2026-10-05'])
 
   const toIntegrity = follow(integrityHref('steps'))
-  assert.deepEqual([toIntegrity.route, toIntegrity.params.get('series')], ['integrity', 'steps'])
+  assert.deepEqual([toIntegrity.route, toIntegrity.params.get('series')], ['setup/integrity', 'steps'])
 })
 
 const R = (kind: string, key: string, payload: unknown): ResultRow => ({ kind, key, as_of: '2026-10-26', engine_version: '3.0.0', inputs_hash: 'h', state: null, payload, calculated_at: '2026-10-26T20:30:00Z' })
@@ -63,7 +63,7 @@ test("every evidence item's result link leads back to the same item; question li
   assert.equal(items.length, 4)
   for (const it of items) {
     const { route, params } = follow(hrefFor(it.result))
-    assert.equal(route, 'evidence')
+    assert.equal(route, 'lab/evidence')
     assert.equal(itemIdFromParams(params), it.id, it.id)
   }
   assert.equal(itemIdFromParams(follow(hrefFor({ kind: 'question', questionId: 'alcohol_hrv' })).params), 'q:alcohol_hrv')
@@ -86,19 +86,20 @@ test('a decision keeps a link to its evidence and moves the item to decided', ()
 
 test('a saved view restores its route and range; a preset stays relative to today', () => {
   const now = new Date(2026, 9, 28, 12)
-  const row = viewRow('HRV weekly', '/explore', '?series=hrv,rhr&grain=week', { start: '2026-07-31', end: '2026-10-28' }, now)
+  const row = viewRow('HRV weekly', '/lab/compare', '?view=periods&series=hrv,rhr&grain=week', { start: '2026-07-31', end: '2026-10-28' }, now)
   assert.ok('path' in row)
-  assert.deepEqual([row.path, row.range], ['/explore?series=hrv,rhr&grain=week', { start: '2026-07-31', end: '2026-10-28' }]) // 89 days: not a preset
+  assert.deepEqual([row.path, row.range], ['/lab/compare?view=periods&series=hrv,rhr&grain=week', { start: '2026-07-31', end: '2026-10-28' }]) // 89 days: not a preset
   const later = new Date(2026, 10, 15, 12)
-  const ninety = viewRow('Integrity 90D', '/integrity', '', { start: '2026-07-30', end: '2026-10-28' }, now)
+  const ninety = viewRow('Integrity 90D', '/setup/integrity', '', { start: '2026-07-30', end: '2026-10-28' }, now)
   assert.ok('path' in ninety)
   assert.deepEqual(ninety.range, { days: 90 })
-  assert.deepEqual(openView(ninety, later), { path: '/integrity', range: { start: '2026-08-17', end: '2026-11-15' } })
-  const custom = viewRow('Autumn', '/data', '?table=meals', { start: '2026-09-01', end: '2026-09-30' }, now)
+  assert.deepEqual(openView(ninety, later), { path: '/setup/integrity', range: { start: '2026-08-17', end: '2026-11-15' } })
+  const custom = viewRow('Autumn', '/setup/data', '?table=meals', { start: '2026-09-01', end: '2026-09-30' }, now)
   assert.ok('path' in custom)
   assert.deepEqual(openView(custom, later)?.range, { start: '2026-09-01', end: '2026-09-30' })
   assert.deepEqual(viewRow('x', '/login', '', { start: '2026-09-01', end: '2026-09-30' }, now), { error: 'only a workspace view can be saved' })
-  assert.deepEqual(viewRow('  ', '/data', '', { start: '2026-09-01', end: '2026-09-30' }, now), { error: 'a name of 1 to 80 characters' })
+  assert.deepEqual(viewRow('  ', '/setup/data', '', { start: '2026-09-01', end: '2026-09-30' }, now), { error: 'a name of 1 to 80 characters' })
   assert.equal(openView({ path: '//evil.example/x', range: { days: 7 } }), null)
-  assert.equal(viewPath('/models', '?'), '/models')
+  assert.equal(viewPath('/lab/evidence', '?'), '/lab/evidence')
+  assert.equal(viewPath('/models', '?'), null) // an old name: no view was saved under it
 })

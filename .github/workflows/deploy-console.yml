@@ -1,4 +1,4 @@
-name: Deploy Dashboard and Console
+name: Deploy web app
 
 on:
   push:
@@ -40,19 +40,23 @@ jobs:
           VITE_SUPABASE_ANON_KEY: sb_publishable_GyandyvuVbF0RxZLnugz4A_GlNIstPc
         run: npm run build
 
-      # Copy built output into console/ in-place so GitHub Pages (main branch) serves it.
-      # Clears stale hashed assets first to avoid accumulation.
-      # Two pages from one build (transition plan, Nov 2026): the Console at console/ and the Dashboard at the site root.
-      # They share the hashed chunks in console/assets; the root page points into that folder.
+      # One app (web redesign, Nov 2026): the site root serves the build, so Today is the landing page. The hashed chunks stay in
+      # console/assets (the root page points into that folder); console/index.html is only a stub that carries the old
+      # /console/#/... links, hash included, to the root.
       - name: Stage built files into console/ and the site root
         run: |
           rm -rf console/assets
-          cp console/dist/app.html console/index.html
           cp -r console/dist/assets console/assets
           cp console/dist/favicon.svg console/favicon.svg 2>/dev/null || true
           cp console/dist/icons.svg console/icons.svg 2>/dev/null || true
-          sed -e 's#"\./assets/#"./console/assets/#g' -e 's#"\./favicon\.svg"#"./console/favicon.svg"#g' console/dist/dashboard.html > index.html
-          grep -q 'console/assets/dashboard-' index.html
+          sed -e 's#"\./assets/#"./console/assets/#g' -e 's#"\./favicon\.svg"#"./console/favicon.svg"#g' console/dist/app.html > index.html
+          grep -q 'console/assets/app-' index.html
+          cat > console/index.html <<'STUB'
+          <!doctype html>
+          <meta charset="utf-8"><title>Field Terminal</title>
+          <script>location.replace('../' + location.hash)</script>
+          <p>This page moved to <a href="../">the app</a>.</p>
+          STUB
 
       - name: Commit and push built console
         run: |

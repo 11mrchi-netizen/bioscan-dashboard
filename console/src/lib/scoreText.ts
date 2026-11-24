@@ -1,5 +1,5 @@
 // The score screens' words and number formats, ported one to one from the phone (domain/score/ScorePresentation.kt), so
-// the web Dashboard says what TODAY said. Reads the scores the phone kept (score_snapshots.scores); computes no score.
+// the web Today says what the phone's TODAY said. Reads the scores the phone kept (score_snapshots.scores); computes no score.
 
 export type DomainKey = 'SLEEP' | 'RECOVERY' | 'LOAD' | 'FUEL' | 'BALANCE'
 export type Direction = 'ABOVE' | 'NORMAL' | 'BELOW' | 'ON_TARGET' | 'SHORT' | 'OVER'

@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useChart } from '../lib/useChart'
-import { PALETTE } from '../lib/palette'
+import { cssColor, PALETTE } from '../lib/palette'
 import type { EChartsCoreOption } from '../lib/echarts'
 import './PlanBlock.css'
 import { DEFS, dueOn, type Instrument, INSTRUMENTS, localToday, optionsOf, score } from '../lib/instruments'
@@ -13,7 +13,9 @@ import { DEFS, dueOn, type Instrument, INSTRUMENTS, localToday, optionsOf, score
 export interface Response { id: number; instrument: string; local_date: string; score: number; band: string | null; flags: string[]; source: string }
 
 // Each questionnaire's hue: the values of design/tokens (--m-phq9 ... --m-work-hours), for canvas charts.
-const HUE: Record<string, string> = { phq9: '#b58cff', gad7: '#ff8fd0', who5: '#7ad7a8', ucla3: '#8fb8ff', cbi_work: '#e0a26b', work_hours: '#c2c27a' }
+// The metric hue of each instrument (design/tokens --m-*), resolved when read.
+const HUE_TOKEN: Record<string, string> = { phq9: 'm-phq9', gad7: 'm-gad7', who5: 'm-who5', ucla3: 'm-loneliness', cbi_work: 'm-burnout', work_hours: 'm-work-hours' }
+const hueOf = (id: string): string => cssColor(`var(--${HUE_TOKEN[id] ?? 'ft-platinum'})`)
 const STATE: Record<string, string> = { ok: 'var(--ft-ok, #10B981)', warn: 'var(--ft-warn, #F59E0B)', bad: 'var(--ft-bad, #EF4444)' }
 const DOMAINS: [string, string][] = [['mind', 'MIND'], ['connection', 'CONNECTION'], ['work', 'WORK']]
 
@@ -112,7 +114,7 @@ export function RiskQuestionnaires({ responses, missing, onChanged }: { response
             grid: { left: 40, right: 12, top: 28, bottom: 24 }, tooltip: { trigger: 'axis' }, legend: { top: 0, textStyle: { color: PALETTE.text } },
             xAxis: { type: 'time', axisLabel: { color: PALETTE.textMuted } },
             yAxis: { type: 'value', axisLabel: { color: PALETTE.textMuted }, splitLine: { lineStyle: { color: PALETTE.border } } },
-            series: series.map((i) => ({ name: i.short, type: 'line', showSymbol: true, symbolSize: 6, itemStyle: { color: HUE[i.id] }, lineStyle: { color: HUE[i.id], width: 2 }, data: (byInst.get(i.id) ?? []).map((r) => [r.local_date, Number(r.score)]) })),
+            series: series.map((i) => ({ name: i.short, type: 'line', showSymbol: true, symbolSize: 6, itemStyle: { color: hueOf(i.id) }, lineStyle: { color: hueOf(i.id), width: 2 }, data: (byInst.get(i.id) ?? []).map((r) => [r.local_date, Number(r.score)]) })),
           }
           return (
             <section key={domain} className="pg-card">
@@ -126,9 +128,9 @@ export function RiskQuestionnaires({ responses, missing, onChanged }: { response
                   const band = last ? i.bands.find((b) => Number(last.score) >= b.min && Number(last.score) <= b.max) : undefined
                   return (
                     <li key={i.id} className="pg-row">
-                      <span className="pg-row-title mono" style={{ color: HUE[i.id] }}>{i.name.toUpperCase()} · {i.short}</span>
+                      <span className="pg-row-title mono" style={{ color: hueOf(i.id) }}>{i.name.toUpperCase()} · {i.short}</span>
                       <span className="pg-row-value">
-                        {last ? <><b style={{ color: HUE[i.id] }}>{Number(last.score)}</b> {i.unit} · <span style={{ color: band ? STATE[band.state] : undefined }}>{last.band}</span> · {last.local_date}</> : 'not taken'}
+                        {last ? <><b style={{ color: hueOf(i.id) }}>{Number(last.score)}</b> {i.unit} · <span style={{ color: band ? STATE[band.state] : undefined }}>{last.band}</span> · {last.local_date}</> : 'not taken'}
                         {' · '}{isDue ? 'due now' : `next ${due}`}{' '}
                         <button className="btn-ghost" onClick={() => setTaking(i.id)}>{isDue ? 'TAKE' : 'AGAIN'}</button>
                       </span>

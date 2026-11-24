@@ -1,4 +1,4 @@
-// What Dashboard › Today reads for a day, all of it written by the phone: the kept scores (score_snapshots, with every
+// What Today reads for a day, all of it written by the phone: the kept scores (score_snapshots, with every
 // input since 6 Oct 2026), the scoring history (score_history, numbers only, since Mar 2026) and the day's plan as TODAY
 // drew it (today_plans, from 18 Nov 2026). Nothing is recomputed here.
 import { supabase } from '../lib/supabase'

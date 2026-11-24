@@ -104,9 +104,9 @@ const check = (ok, what, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} 
     const shot = (name) => page.screenshot({ path: path.join(OUT, `${name}.png`), fullPage: true })
     const step = async (label) => { await page.click(`.pb-step:has-text("${label}")`); await page.waitForTimeout(200) }
 
-    await page.goto(`${BASE}#/plan-block`)
+    await page.goto(`${BASE}#/plan/training`)
     await page.waitForSelector('.pb-steps', { timeout: 15000 })
-    check((await page.textContent('.shell-rail')).includes('Plan block'), 'the rail lists Plan block under PLAN')
+    check((await page.locator('.shell-rail .rail-item', { hasText: /^Plan$/ }).count()) === 1 && (await page.locator('.tabbed-tab', { hasText: 'TRAINING' }).count()) === 1, 'the rail has Plan, and Plan has the TRAINING tab')
     await shot('plan_1_when')
     check((await page.inputValue('input[type=time]')) === '06:30', 'session times start from training_settings')
 
@@ -159,7 +159,7 @@ const check = (ok, what, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} 
     check(tests.length > 0 && tests.every((p) => !p.prescription.some((e) => e.role === 'accessory')), 'test weeks leave accessory work out')
 
     // ---- ACCESSORY WORK ON THE BLOCK UNDER WAY ----
-    await page.goto(`${BASE}#/plan-block`)
+    await page.goto(`${BASE}#/plan/training`)
     await page.waitForSelector('.pb-steps', { timeout: 15000 })
     await page.click('.pb-step:has-text("WHEN")')
     await page.click('.pb-detail:has-text("Velocity") button:has-text("ACCESSORIES")')
@@ -178,7 +178,7 @@ const check = (ok, what, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} 
     check(writes.some((w) => w.method === 'PATCH' && w.table === 'training_blocks' && w.body.choices?.clusters?.['example.three_day']?.accessories?.D3?.[0]?.exercise === 'Hanging Leg Raise'), 'the block\'s choices keep the accessory work')
 
     // ---- END A BLOCK EARLY, THEN BUILD TOWARD THE RACE ----
-    await page.goto(`${BASE}#/plan-block`)
+    await page.goto(`${BASE}#/plan/training`)
     await page.waitForSelector('.pb-steps', { timeout: 15000 })
     await page.click('.pb-step:has-text("WHEN")')
     await page.click('.pb-detail:has-text("Velocity") button:has-text("END EARLY")')
@@ -215,7 +215,7 @@ const check = (ok, what, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} 
     check(rec && rec.body.status === 'completed' && cyc && cyc.url.includes('id=eq.5') && cyc.body.end_date === rec.body.end_date, 'a recorded block ends, and its training cycle with it', cyc && JSON.stringify(cyc.body))
 
     // ---- MEAL PREP ----
-    await page.goto(`${BASE}#/meal-prep`)
+    await page.goto(`${BASE}#/plan/food`)
     await page.waitForSelector('.pb-steps', { timeout: 15000 })
     await page.click('.pb-chip:has-text("NEXT WEEK")')
     await page.waitForSelector('text=LUNCH AND DINNER')

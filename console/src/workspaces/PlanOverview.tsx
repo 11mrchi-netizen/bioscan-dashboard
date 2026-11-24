@@ -36,24 +36,24 @@ export default function PlanOverview() {
           <p className="pg-sub">Where the plan stands: the block under way, the next two weeks, the next events. Training blocks are planned here and carried out on the phone.</p>
         </div>
         <div className="pb-row tight">
-          <a className="btn-ghost mono" href="#/plan-block">PLAN A BLOCK →</a>
-          <a className="btn-ghost mono" href="#/meal-prep">MEAL PREP →</a>
+          <a className="btn-ghost mono" href="#/plan/training">PLAN A BLOCK →</a>
+          <a className="btn-ghost mono" href="#/plan/food">MEAL PREP →</a>
         </div>
       </header>
       {st.error && <p className="pb-warn">Could not load: {st.error}</p>}
       {st.loading && !cat && <p className="state-loading">LOADING…</p>}
       {cat && (
         <>
-          {running.length === 0 && <p className="pg-note">No block under way.{next.length ? ` Next: ${next[0].name}, from ${longDate(next[0].start_date)}.` : ''} <a href="#/plan-block">Plan one</a>.</p>}
+          {running.length === 0 && <p className="pg-note">No block under way.{next.length ? ` Next: ${next[0].name}, from ${longDate(next[0].start_date)}.` : ''} <a href="#/plan/training">Plan one</a>.</p>}
           <RunningBlocks blocks={blocks} cat={cat} onEnded={() => setRev((r) => r + 1)} />
           <div className="pg-grid">
             <section className="pg-card">
-              <h3 className="pg-card-title mono"><span>NEXT TWO WEEKS</span><a href="#/sessions">ALL SESSIONS →</a></h3>
+              <h3 className="pg-card-title mono"><span>NEXT TWO WEEKS</span><a href="#/plan/sessions">ALL SESSIONS →</a></h3>
               {sessions.sessions.length === 0 ? <p className="pg-note">Nothing planned in the next two weeks.</p>
                 : <PlanSessionRows sessions={sessions.sessions} blockName={sessions.blockName} today={today} />}
             </section>
             <section className="pg-card">
-              <h3 className="pg-card-title mono"><span>NEXT EVENTS</span><a href="#/races">RACES →</a></h3>
+              <h3 className="pg-card-title mono"><span>NEXT EVENTS</span><a href="#/plan/races">RACES →</a></h3>
               {upcoming.length === 0 ? <p className="pg-note">No events ahead. Races are added on the phone.</p> : (
                 <ul className="pg-rows">{upcoming.map((e) => (
                   <li key={e.id} className="pg-row">

@@ -1,53 +1,46 @@
-// Evidence workspace (was the Relationship Lab). Phase 0 of the analysis hub (docs/analysis-console/PLAN.md) moved the
-// existing views here unchanged; Phase D replaces the tabs with the decision queue, the evidence workbench and decision
-// records, and the views below become evidence-item views. Views:
-//   DECISIONS     the decision queue, the evidence workbench and decision records (phase D; Decisions.tsx). Default tab;
-//                 links to a question or a result (lib/links.ts) open the item here.
-//   EVIDENCE      the evidence board (analysis review phase D): every question of the fixed catalogue drawn to scale
-//                 against its no-effect zone with a verdict word, its event and lag curves, and what came before off
-//                 mornings (case-crossover, exploratory). Internal key 'confirmatory'.
-//   DISCOVERY     the corrected discovery screen (phase C2; Discovery.tsx), replacing the exploratory lag scan retired in
-//                 October 2026: registrable questions only, older two-thirds of the history, false-discovery corrected.
-//   EXPERIMENTS   randomised self-experiments (read-only; plans are registered in the app).
-//   INTERVENTIONS, FUELING  read-only views of those engines.
-//   LEDGER        every nightly verdict of every question, and every change of verdict (analysis review phase G).
-//   EVENTS        the event explorer: any logged exposure against a morning outcome, on the nightly engine, in the browser.
-// The model diagnostics that used to be a tab here are the Models workspace.
-
-import { useState } from 'react'
+// LAB › EVIDENCE (was the Evidence workspace and the Models workspace; web redesign, phase 4). The view is in the address
+// (#/lab/evidence?view=board), so a link can open any of them. Views:
+//   (queue)   the decision queue, the evidence workbench and decision records (phase D; Decisions.tsx). Default; links to a
+//             question or a result (lib/links.ts) open the item here.
+//   board     the evidence board (analysis review phase D): every question of the fixed catalogue drawn to scale against its
+//             no-effect zone with a verdict word, its event and lag curves, and what came before off mornings (Confirmatory.tsx).
+//   ledger    every nightly verdict of every question, and every change of verdict (analysis review phase G).
+//   events    the event explorer: any logged exposure against a morning outcome, on the nightly engine, in the browser.
+//   discovery the corrected discovery screen (phase C2): registrable questions only, false-discovery corrected.
+//   trust     how far the models can be trusted (Diagnostics.tsx; was the Models workspace).
+// The experiments, interventions, repeatable and fuelling views moved to LAB › EXPERIMENTS.
+import { useSearchParams } from 'react-router-dom'
 import { Confirmatory } from './Confirmatory'
-import { Experiments } from './Experiments'
-import { Interventions } from './Interventions'
-import { Repeatable } from './Repeatable'
-import { Fueling } from './Fueling'
 import { Ledger } from './Ledger'
 import { EventExplorer } from './EventExplorer'
 import { Discovery } from './Discovery'
 import { Decisions } from './Decisions'
+import { Diagnostics } from './Diagnostics'
 import './Evidence.css'
 
-type Tab = 'decisions' | 'confirmatory' | 'discovery' | 'experiments' | 'interventions' | 'repeatable' | 'fueling' | 'ledger' | 'events'
+export const EVIDENCE_VIEWS = [
+  { id: 'queue', label: 'DECISIONS' }, { id: 'board', label: 'EVIDENCE BOARD' }, { id: 'ledger', label: 'LEDGER' },
+  { id: 'events', label: 'EVENTS' }, { id: 'discovery', label: 'DISCOVERY' }, { id: 'trust', label: 'TRUST' },
+] as const
 
 export function Evidence() {
-  const [tab, setTab] = useState<Tab>('decisions')
+  const [params, setParams] = useSearchParams()
+  const view = EVIDENCE_VIEWS.find((v) => v.id === params.get('view'))?.id ?? 'queue'
+  const open = (id: string) => setParams(id === 'queue' ? {} : { view: id }, { replace: true })
   return (
-    <div className="rlab-shell">
-      <div className="rlab-tabs">
-        <h2 className="rlab-shell-title">Evidence</h2>
-        {(['decisions', 'confirmatory', 'ledger', 'events', 'discovery', 'experiments', 'interventions', 'repeatable', 'fueling'] as const).map(t => (
-          <button key={t} className={`rlab-tab mono ${tab === t ? 'rlab-tab-on' : ''}`} onClick={() => setTab(t)}>{t === 'confirmatory' ? 'EVIDENCE' : t.toUpperCase()}</button>
-        ))}
+    <>
+      <div className="tabbed-views" role="group" aria-label="Evidence">
+        {EVIDENCE_VIEWS.map((v) => <button key={v.id} className="ft-chip" aria-current={v.id === view} onClick={() => open(v.id)}>{v.label}</button>)}
       </div>
-      {tab === 'decisions' ? <div className="rlab"><Decisions /></div>
-        : tab === 'confirmatory' ? <div className="rlab"><Confirmatory /></div>
-        : tab === 'experiments' ? <div className="rlab"><Experiments /></div>
-        : tab === 'interventions' ? <div className="rlab"><Interventions /></div>
-        : tab === 'repeatable' ? <div className="rlab"><Repeatable /></div>
-        : tab === 'fueling' ? <div className="rlab"><Fueling /></div>
-        : tab === 'ledger' ? <div className="rlab"><Ledger /></div>
-        : tab === 'events' ? <div className="rlab"><EventExplorer /></div>
-        : <div className="rlab"><Discovery /></div>}
-    </div>
+      <div className="rlab">
+        {view === 'queue' ? <Decisions />
+          : view === 'board' ? <Confirmatory />
+          : view === 'ledger' ? <Ledger />
+          : view === 'events' ? <EventExplorer />
+          : view === 'discovery' ? <Discovery />
+          : <Diagnostics />}
+      </div>
+    </>
   )
 }
 

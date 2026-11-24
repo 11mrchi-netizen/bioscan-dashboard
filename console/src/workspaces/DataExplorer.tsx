@@ -1,6 +1,6 @@
 // Data workspace (rebuilt in the analysis hub's phase B): raw rows of the canonical tables.
 // - Filters live in the URL (table, from, to or date, id, source, a column that is or is not empty), so issues, evidence
-//   and the Inspector link straight to a filtered view (lib/links.ts: #/data?table=meals&id=42).
+//   and the Inspector link straight to a filtered view (lib/links.ts: #/setup/data?table=meals&id=42).
 // - The count of matching rows is exact; rows load newest first in pages of 200 with keyset paging (time column, id), so
 //   nothing is cut silently and LOAD MORE never repeats or skips a row.
 // - Large JSON columns stay out of the table; selecting a row loads the whole record, those columns included.

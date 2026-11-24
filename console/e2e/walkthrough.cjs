@@ -57,6 +57,47 @@ for (let t = Date.UTC(2025, 9, 1); t <= Date.UTC(2026, 9, 26); t += 864e5) {
   T.evening_checkins.push({ id: id++, user_id: 'u1', date: d, drinks, caffeine_after_14: r() < 0.3, late_meal: r() < 0.25, stress: 1 + Math.floor(r() * 5) })
 }
 for (const w of T.wearable_daily) if (w.hrv !== null && drinkDays.has(w.date)) w.hrv = +(w.hrv * 0.9).toFixed(1)
+// a planted link for the metric page's pair mode (phase 3): mood the day after is 10 - 1.5 x energy, plus a little noise
+T.wellbeing_daily = []
+for (let i = 0; i < 118; i++) {
+  const t = Date.UTC(2026, 6, 1) + i * 864e5
+  const energy = 3 + (i % 5)
+  T.wellbeing_daily.push({ id: id++, user_id: 'u1', date: day(t), energy, mood: i === 0 ? 5 : +(10 - 1.5 * (3 + ((i - 1) % 5)) + ((i - 1) % 3 === 0 ? 0.3 : -0.2)).toFixed(2), stress: 3, soreness: 2 })
+}
+// the phone's kept scores (phase 3 follow-up): a ring history, and a snapshot per morning with the inputs of RECOVERY and SLEEP,
+// keyed as the phone keys them (an input is on the morning it is published on: the same day as its wearable / sleep row)
+T.score_history = []
+T.score_snapshots = []
+for (let t = Date.UTC(2026, 8, 1); t <= Date.UTC(2026, 9, 26); t += 864e5) {
+  const d = day(t), k = (t - Date.UTC(2026, 8, 1)) / 864e5
+  const w = T.wearable_daily.find((x) => x.date === d), sl = T.sleep_daily.find((x) => x.date === d)
+  T.score_history.push({ day: d, charge: 90 + (k % 7), recovery: 85 + (k % 5), sleep: 88, load: 100, fuel: 95, balance: 92 })
+  const inp = (key, label, value, reference) => ({ spec: { key, label, weight: 1 }, value, score: 80, reference, spread: 5, direction: 'NORMAL' })
+  const dom = (key, score, inputs) => ({ key, score, raw: { groups: [{ group: { key: `${key}g`, label: key, weight: 1 }, score, coverage: 1, inputs }] } })
+  T.score_snapshots.push({ day: d, scores: { day: d, charge: { score: 90 + (k % 7), percentile: 0.7, drivers: [{ key: 'RECOVERY', points: 6 }, { key: 'SLEEP', points: -3 }] }, domains: {
+    RECOVERY: dom('RECOVERY', 85 + (k % 5), [inp('recovery.hrv', 'Overnight HRV', w?.hrv ?? 55, 55), inp('recovery.rhr', 'Resting heart rate', w?.rhr ?? 54, 54)]),
+    SLEEP: dom('SLEEP', 88, [inp('sleep.hours', 'Sleep duration', sl?.hours ?? 7, 7)]),
+  } } })
+}
+// the scale, for Me › BODY's analysis (Body.tsx): impedance weigh-ins, the Health Connect body fat beside them, the profile
+T.scale_readings = []; T.body_metrics = []
+for (let i = 0; i < 70; i++) {
+  const t = Date.UTC(2026, 7, 20) + i * 864e5
+  T.scale_readings.push({ id: id++, user_id: 'u1', occurred_at: `${day(t)}T07:${String(10 + (i % 40)).padStart(2, '0')}:00+00:00`, weight_kg: +(73 - i * 0.03 + ((i * 7) % 5) * 0.1).toFixed(2), impedance_ohm: Math.round(520 + ((i * 13) % 31) - i * 0.4) })
+  if (i % 2 === 0) T.body_metrics.push({ id: id++, user_id: 'u1', date: day(t), body_fat_pct: +(18.5 - i * 0.02 + ((i * 3) % 4) * 0.2).toFixed(1), height_cm: 178, source: 'health_connect' })
+}
+T.user_profile = [{ id: 1, user_id: 'u1', date_of_birth: '1990-05-01', sex: 'male', height_cm: 178 }]
+// one planned session every day around today, for Plan › Sessions' week cards (the last week of a window must be whole)
+const ymd = (d) => d.toLocaleDateString('sv-SE')
+const dayPlus = (n) => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + n); return d }
+T.planned_sessions = []
+for (let n = -70; n <= 70; n++) T.planned_sessions.push({ id: 5000 + n, block_id: null, week_index: null, sequence_no: null, domain: 'run', work_kind: 'easy', title: `Run ${n}`, scheduled_date: ymd(dayPlus(n)), original_date: null, start_time: '07:00:00', duration_min: 45, status: 'planned', exercise_session_id: null, match_status: null, gcal_pushed_at: null, zepp_pushed_at: null })
+// the phone's Me › BODY: a tile with points, a tile without, a row (phase 2: only the first opens a history)
+T.me_views = [{ tab: 'BODY', built_at: new Date().toISOString(), view: { v: 1, tab: 'BODY', sections: [{ title: 'WEIGHT', items: [
+  { kind: 'tile', label: 'Weight', value: '72.4', unit: 'kg', hue: 'm-weight', series: Array.from({ length: 40 }, (_, i) => [day(Date.UTC(2026, 8, 17 + i)), +(73 - i * 0.03).toFixed(2)]) },
+  { kind: 'tile', label: 'Lean mass', value: '58.1', unit: 'kg' },
+  { kind: 'row', label: 'Waist', value: '81 cm' },
+] }] } }]
 T.collector_heartbeats = [{ stream: 'location', ts: new Date(Date.now() - 3600e3).toISOString() }]
 T.daily_field_provenance = [{ writer: 'zepp-extract', origin: 'zepp', written_at: new Date(Date.now() - 7200e3).toISOString() }]
 T.analysis_results = [{ kind: 'series_break', key: 'rhr', as_of: '2026-10-26', payload: { deviceSensitive: false, breaks: [{ date: '2026-09-01', kind: 'level', score: 4.2, status: 'candidate', reason: null, before: { n: 60, median: 52, robustSd: 2, integerShare: 0.1 }, after: { n: 50, median: 55, robustSd: 2, integerShare: 0.1 } }] } }]
@@ -67,8 +108,12 @@ T.analysis_results.push(
   R('relationship', 'caffeine_pm_sleep', relP('Caffeine after 14:00 and that night\'s sleep', 'sleep', 'unclear', { value: -1.5, lo: -4.2, hi: 1.1, unit: '%' })),
   R('relationship', 'stress_hrv', relP('A high-stress day and next-morning HRV', 'hrv', 'unclear', { value: -2.0, lo: -5, hi: 1, unit: '%' })),
   R('relationship', 'late_meal_sleep', relP('A meal after 21:00 and that night\'s sleep', 'sleep', 'not_yet', null)),
-  R('experiment', '11', { name: 'Magnesium before bed', stage: 'complete', metrics: [{ metric: 'hrv', verdict: 'negligible', n0: 20, n1: 21, diff: { value: 0.4, lo: -1.2, hi: 2, unit: '%' }, zone: 2, summary: 'No difference beyond the zone' }] }),
-  R('intervention_its', '3', { state: 'collecting', metrics: [{ metric: 'rhr', label: 'Resting HR', activeDays: 6 }] }),
+  // the engine's full payload shape (Experiments.tsx: Payload), so the Experiments view can be walked
+  R('experiment', '11', { name: 'Magnesium before bed', stage: 'complete', status: 'complete', preregisteredAt: '2026-08-30T10:00:00Z',
+    adherence: { interventionDays: 21, interventionLogged: 20, rate: 0.95, baselineLogged: 0, ok: true },
+    protocol: { design: 'AB', phases: [{ label: 'A', start: '2026-09-01', end: '2026-09-21' }, { label: 'B', start: '2026-09-22', end: '2026-10-12' }], washoutDays: 2, minAdherence: 0.8, zone: 2 },
+    metrics: [{ metric: 'hrv', label: 'HRV', role: 'primary', verdict: 'negligible', n0: 20, n1: 21, diff: { value: 0.4, lo: -1.2, hi: 2, unit: '%' }, mde: null, preTrendPerWeek: null, trendWarning: false, replicated: null, zone: 2, summary: 'No difference beyond the zone', notes: [] }] }),
+  R('intervention_its', '3', { preStart: '2026-08-01', activeStart: '2026-10-20', evaluateOn: '2026-11-17', state: 'collecting', metrics: [{ metric: 'rhr', label: 'Resting HR', state: 'collecting', verdict: null, gap: null, zone: 2, preDays: 56, activeDays: 6, evaluateOn: '2026-11-17', summary: 'Collecting: 6 of 28 days since the start' }] }),
 )
 T.evidence_ledger = [['2026-10-01', 'not_yet'], ['2026-10-10', 'unclear'], ['2026-10-20', 'clear'], ['2026-10-26', 'clear']].map(([d, v], i) => ({ id: i + 1, user_id: 'u1', question_id: 'alcohol_hrv', as_of: d, verdict: v, estimate: -6, lo: -9, hi: -2, unit: '%', engine_version: '3.0.0-alpha.9' }))
 // the newest nightly integrity report, for the Decisions workbench
@@ -176,7 +221,12 @@ async function waitForServer() {
       }
       requests.push(`${req.method()} ${table}?${decodeURIComponent(u.searchParams.toString())}`)
       try {
-        const { rows, total } = postgrest(table, u.searchParams)
+        let { rows, total } = postgrest(table, u.searchParams)
+        // PostgREST JSON-path aliases the console selects from score_snapshots (groups:scores->domains->X->raw->groups, charge:scores->charge->score)
+        const sel = u.searchParams.get('select') ?? ''
+        const gm = /groups:scores->domains->(\w+)->raw->groups/.exec(sel)
+        if (table === 'score_snapshots' && gm) rows = rows.map((r) => ({ day: r.day, groups: r.scores.domains[gm[1]]?.raw.groups ?? null }))
+        else if (table === 'score_snapshots' && /charge:scores->charge->score/.test(sel)) rows = rows.map((r) => ({ day: r.day, charge: r.scores.charge.score }))
         const prefer = req.headers()['prefer'] ?? ''
         const headers = { 'content-type': 'application/json', 'content-range': `0-${Math.max(rows.length - 1, 0)}/${prefer.includes('count=exact') ? total : '*'}`, 'access-control-expose-headers': 'content-range' }
         if (req.method() === 'HEAD') return route.fulfill({ status: 200, headers, body: '' })
@@ -221,20 +271,20 @@ async function waitForServer() {
     await shot('2-inspector')
 
     // 4. Data: exact count, keyset LOAD MORE, filters from the URL
-    await page.goto(`${BASE}#/data?table=wearable_daily`)
+    await page.goto(`${BASE}#/setup/data?table=wearable_daily`)
     await page.waitForSelector('.de-table'); await page.waitForTimeout(300)
     check((await text('.de-meta')).includes('200 of 3,685'), 'Data shows the exact count', await text('.de-meta'))
     await page.click('.de-more'); await page.waitForTimeout(400)
     check((await text('.de-meta')).includes('400 of 3,685'), 'LOAD MORE adds the next page')
-    await page.goto(`${BASE}#/data?table=exercise_sessions&id=900002`); await page.waitForTimeout(500)
+    await page.goto(`${BASE}#/setup/data?table=exercise_sessions&id=900002`); await page.waitForTimeout(500)
     check((await text('.de-meta')).includes('1 of 1'), 'a record link opens that record')
 
     // 5. Integrity: tiles, matrix, planted problems, focus from the URL
-    await page.goto(`${BASE}#/integrity`)
+    await page.goto(`${BASE}#/setup/integrity`)
     await page.waitForSelector('.ig-tiles', { timeout: 20000 }); await page.waitForTimeout(300)
     check((await page.locator('.ig-tile').count()) === 4, 'Integrity shows the four overview tiles')
     check((await page.locator('.ig-row').count()) === 32, 'the source matrix has a row per series')
-    await page.goto(`${BASE}#/integrity?series=sleep_hours`); await page.waitForTimeout(400)
+    await page.goto(`${BASE}#/setup/integrity?series=sleep_hours`); await page.waitForTimeout(400)
     await page.click('.ig-sev-toggle.sev-info input'); await page.waitForTimeout(200)
     const sleepIssues = (await page.locator('.ig-issue').allTextContents()).join(' | ')
     check(/ISSUES · Sleep duration/.test(await text('.ig-issues-head')), 'Integrity opens focused on the series in the URL')
@@ -245,7 +295,7 @@ async function waitForServer() {
 
     // 6. Discovery: the planted alcohol -> next-morning HRV link is the one flagged cell; registering inserts a question
     await page.goto(`${BASE}#/evidence`)
-    await page.click('.rlab-tab >> text=DISCOVERY')
+    await page.click('.tabbed-views .ft-chip >> text=DISCOVERY')
     await page.waitForSelector('.disc-grid', { timeout: 20000 }); await page.waitForTimeout(300)
     const alc = page.locator('tr', { hasText: 'Alcohol' }).filter({ hasText: 'HRV' }).locator('.disc-cell').nth(1)
     check((await alc.getAttribute('class')).includes('flagged'), 'Discovery flags the planted link at lag 1')
@@ -257,7 +307,7 @@ async function waitForServer() {
     await shot('4-discovery')
 
     // 7. Decisions: queue, workbench, a recorded decision, the link to Integrity
-    await page.click('.rlab-tab >> text=DECISIONS')
+    await page.click('.tabbed-views .ft-chip >> text=DECISIONS')
     await page.waitForSelector('.dec-board', { timeout: 10000 })
     const col = async (i) => text(`.dec-col:nth-child(${i})`)
     check((await col(1)).includes('Alcohol and next-morning HRV') && (await col(1)).includes('Magnesium'), 'settled items wait for a decision')
@@ -275,7 +325,7 @@ async function waitForServer() {
     await shot('5-decisions')
     await page.click('text=OPEN IN INTEGRITY')
     await page.waitForSelector('.ig-tiles', { timeout: 20000 })
-    check(page.url().includes('#/integrity?series=hrv'), 'the workbench links to Integrity on the outcome', page.url().split('#')[1])
+    check(page.url().includes('#/setup/integrity?series=hrv'), 'the workbench links to Integrity on the outcome', page.url().split('#')[1])
     await page.locator('.dec-card').first().waitFor({ state: 'detached' }).catch(() => {})
     await page.goto(`${BASE}#/explore`); await page.waitForTimeout(200)
     await page.goto(`${BASE}#/evidence?question=stress_hrv`); await page.waitForTimeout(900)
@@ -285,15 +335,249 @@ async function waitForServer() {
     await page.goto(`${BASE}#/explore?series=hrv,rhr&grain=week`); await page.waitForTimeout(500)
     await page.click('.sv > button')
     await page.fill('.sv-input', 'HRV weekly'); await page.click('.sv-save button'); await page.waitForTimeout(400)
-    check(T.saved_views.some((v) => v.name === 'HRV weekly' && v.path === '/explore?series=hrv,rhr&grain=week'), 'a view is saved with its route and filters')
-    await page.goto(`${BASE}#/data`); await page.waitForTimeout(300)
+    check(T.saved_views.some((v) => v.name === 'HRV weekly' && v.path === '/lab/compare?view=periods&series=hrv,rhr&grain=week'), 'a view is saved with its route and filters')
+    await page.goto(`${BASE}#/setup/data`); await page.waitForTimeout(300)
     await page.click('.sv > button'); await page.waitForTimeout(300)
     await page.locator('.sv-open', { hasText: 'HRV weekly' }).click(); await page.waitForTimeout(500)
-    check(page.url().includes('#/explore?series=hrv,rhr&grain=week'), 'opening the view restores it', page.url().split('#')[1])
+    check(page.url().includes('#/lab/compare?view=periods&series=hrv,rhr&grain=week'), 'opening the view restores it', page.url().split('#')[1])
+
+    // 8b. one app (web redesign phase 1): the root lands on Today, Today and Me are rail items beside the rest
+    await page.goto(BASE); await page.waitForSelector('.today', { timeout: 15000 })
+    check(page.url().endsWith('#/today'), 'the app opens on Today', page.url().split('#')[1])
+    check((await page.locator('.shell-rail .rail-item', { hasText: /^Today$/ }).count()) === 1 && (await page.locator('.shell-rail .rail-item', { hasText: /^Me$/ }).count()) === 1, 'Today and Me are in the rail')
+    check((await page.locator('a', { hasText: /CONSOLE →|← DASHBOARD/ }).count()) === 0, 'there is no Dashboard / Console switch')
+    check((await page.locator('.date-range-control').count()) === 0, 'Today has no header range')
+    await shot('today')
+    await page.locator('.shell-rail .rail-item', { hasText: /^Me$/ }).click(); await page.waitForSelector('.me', { timeout: 15000 })
+    check(page.url().includes('#/me'), 'the rail opens Me', page.url().split('#')[1])
+    await shot('me')
+    await page.goto(`${BASE}#/today`); await page.waitForSelector('.today-hero', { timeout: 15000 })
+    await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(300)
+    await shot('today-phone')
+    const ringTop = await page.locator('.today-hero').boundingBox()
+    check(ringTop !== null && ringTop.y < 420, 'on a phone the day starts in the first screen, not below the navigation', ringTop?.y)
+    check(await page.evaluate(() => document.documentElement.scrollWidth <= 392), 'no sideways scroll on a phone')
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await page.goto(`${BASE}#/today?day=2026-10-20`); await page.waitForSelector('.today', { timeout: 15000 })
+    check((await page.inputValue('.dash-date')) === '2026-10-20', 'a past day is read from the address')
+
+    // 8c. the metric page (phase 2): a series with its whole history, the old History address, a Me tile, a tile without points
+    await page.goto(`${BASE}#/m/series:hrv?range=365`); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
+    check((await text('.metric-name')).includes('HRV'), 'the metric page opens a series by its id', await text('.metric-name'))
+    check((await page.locator('.metric-tiles .me-tile').count()) === 4, 'it shows the four numbers of the window')
+    check((await text('.metric-latest')).includes('ms'), 'the latest value carries its unit', await text('.metric-latest'))
+    check((await page.locator('.metric-links a', { hasText: 'RECORDS' }).count()) > 0, 'each day links to the records behind it')
+    await page.locator('.metric-ranges .ft-chip', { hasText: '30 DAYS' }).click(); await page.waitForTimeout(300)
+    check(page.url().includes('range=30'), 'the range chips write the range into the address')
+    await page.goto(`${BASE}#/history?metric=recovery.hrv&day=2026-10-20`); await page.waitForSelector('.metric', { timeout: 15000 })
+    check(page.url().includes('#/m/recovery.hrv') && page.url().includes('day=2026-10-20'), 'the old History address lands on the metric page', page.url().split('#')[1])
+    check((await page.locator('.metric-links a', { hasText: 'RECORDS' }).count()) === 0 && (await text('.metric')).includes('WHOLE HISTORY'), 'an input with a series behind it offers the whole history')
+    await page.goto(`${BASE}#/m/nonsense`); await page.waitForTimeout(300)
+    check((await text('.dash-main')).includes('No such metric'), 'an unknown metric says so')
+    await page.goto(`${BASE}#/me?tab=BODY`); await page.waitForSelector('.me-tile', { timeout: 15000 })
+    check((await page.locator('a.me-tile').count()) === 1 && (await page.locator('div.me-tile').count()) === 1, 'a Me tile with points is a link; one without is not')
+    await page.locator('a.me-tile').click(); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
+    check((await text('.metric-name')).includes('Weight') && (await text('.metric-latest')).includes('kg'), 'the Me tile opens its history with its unit', await text('.metric-latest'))
+    check(decodeURIComponent(await page.url()).includes('me:BODY:WEIGHT::Weight'), 'the Me tile ref carries its section title', page.url().split('#')[1])
+    await shot('metric')
+    await page.goto(`${BASE}#/m/series:hrv?day=2026-05-01`); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
+    check((await page.locator('.metric-ranges .ft-chip[aria-current="true"]').textContent()).includes('1 YEAR'), 'a day months back opens a range that holds it', await page.locator('.metric-ranges .ft-chip[aria-current="true"]').textContent())
+    await page.goto(`${BASE}#/m/series:hrv`); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
+    await page.locator('.metric-head .dash-link').click(); await page.waitForTimeout(300)
+    check(page.url().endsWith('#/today'), 'BACK on a page opened by address goes to Today', page.url().split('#')[1])
+    await page.goto(`${BASE}#/m/series:hrv?range=365`); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
+    await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(300)
+    check(await page.evaluate(() => document.documentElement.scrollWidth <= 392 && document.querySelector('.shell-canvas').scrollWidth <= 392), 'no sideways scroll on the metric page at phone width')
+    await shot('metric-phone')
+    await page.setViewportSize({ width: 1440, height: 1000 })
+
+    // 8d. compare (phase 3): a second metric on the page, the pair read at a lag, a second unit in its own panel
+    await page.goto(`${BASE}#/m/series:energy?range=90&with=series:mood&lag=1`); await page.waitForSelector('[data-testid=pair-words]', { timeout: 15000 })
+    check((await page.locator('.metric-card').count()) === 1, 'two metrics of one unit share one panel', await page.locator('.metric-card').count())
+    const w1 = await text('[data-testid=pair-words]')
+    check(/^A strong negative link: r −0\.9/.test(w1), 'the planted +1 day link is found at +1', w1)
+    await page.locator('.metric-pair .ft-chip', { hasText: 'SAME DAY' }).click(); await page.waitForTimeout(300)
+    const w0 = await text('[data-testid=pair-words]')
+    check(page.url().includes('lag=0') && /^(No clear link|A weak)/.test(w0), 'and not at the same day', w0)
+    await page.locator('.metric-pair .ft-chip', { hasText: '+1' }).click(); await page.waitForTimeout(300)
+    check(/^A strong negative link/.test(await text('[data-testid=pair-words]')), 'the lag chip writes the lag into the address and back')
+    check((await text('.metric-pair')).includes('Not proof of cause') || (await text('.metric-pair')).includes('not proof of cause'), 'the pair carries the association note')
+    await page.goto(`${BASE}#/m/series:energy?range=90&with=series:mood&with=series:hrv`); await page.waitForSelector('.metric-card', { timeout: 15000 }); await page.waitForTimeout(500)
+    check((await page.locator('.metric-card').count()) === 2, 'a metric of another unit gets its own panel', await page.locator('.metric-card').count())
+    check((await page.locator('.metric-table thead th').allTextContents()).join(' ').includes('MOOD') && (await page.locator('.metric-table thead th').allTextContents()).join(' ').includes('HRV'), 'the days table has a column per metric')
+    await page.locator('.metric-with', { hasText: 'HRV' }).click(); await page.waitForTimeout(300)
+    check(!decodeURIComponent(page.url()).includes('series:hrv') && decodeURIComponent(page.url()).includes('series:mood'), 'removing a metric takes it out of the address', page.url().split('#')[1])
+    await page.locator('.metric-compare-bar .ft-chip', { hasText: 'CLEAR' }).click(); await page.waitForTimeout(300)
+    check(!page.url().includes('with=') && (await page.locator('.metric-pair').count()) === 0, 'CLEAR returns to the single metric')
+    await page.locator('.metric-compare-bar .ft-chip', { hasText: '+ COMPARE' }).click()
+    await page.locator('.metric-picker .ft-chip', { hasText: 'Stress' }).first().click(); await page.waitForTimeout(400)
+    check(page.url().includes('with=series%3Astress') || page.url().includes('with=series:stress'), 'the picker adds a metric', page.url().split('#')[1])
+    await page.goto(`${BASE}#/m/series:energy?with=series:mood&with=series:stress&with=series:soreness&with=series:hrv&with=series:rhr`); await page.waitForSelector('.metric-card', { timeout: 15000 })
+    check((await page.locator('.metric-with').count()) === 3, 'at most three are drawn beside the page\'s metric', await page.locator('.metric-with').count())
+    await page.goto(`${BASE}#/m/series:energy?with=series:mood&with=series:hrv`); await page.waitForSelector('.metric-pair', { timeout: 15000 })
+    await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(400)
+    check(await page.evaluate(() => document.querySelector('.shell-canvas').scrollWidth <= 392), 'the comparison fits at phone width')
+    await shot('compare-phone')
+    await page.setViewportSize({ width: 1440, height: 1000 }); await page.waitForTimeout(300)
+    await page.goto(`${BASE}#/m/series:energy?with=series:mood&with=series:hrv`); await page.waitForSelector('.metric-pair', { timeout: 15000 }); await page.waitForTimeout(500)
+    await shot('compare')
+
+    // 8e. the path from a score to compare (the user's point 2): Today > ring > input > metric page > + COMPARE > a series, in a browser
+    await page.goto(`${BASE}#/today?day=2026-10-20`); await page.waitForSelector('.ring-btn', { timeout: 15000 })
+    await page.locator('.today-rings .ring-btn', { hasText: 'RECOVERY' }).click()
+    await page.waitForSelector('.ov-input', { timeout: 5000 })
+    check((await page.locator('.ov-input').count()) === 2, 'a ring opens its inputs', await page.locator('.ov-input').count())
+    await page.locator('.ov-input', { hasText: 'Overnight HRV' }).click(); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
+    check(page.url().includes('#/m/recovery.hrv') && page.url().includes('day=2026-10-20'), 'an input opens its metric page on that morning', page.url().split('#')[1])
+    check((await text('.metric-name')).includes('Overnight HRV') && (await text('.metric-latest')).includes('ms'), 'the input is drawn with its unit', await text('.metric-latest'))
+    check((await text('.metric')).includes('WHOLE HISTORY'), 'and offers the series behind it')
+    await page.locator('.metric-compare-bar .ft-chip', { hasText: '+ COMPARE' }).click(); await page.waitForSelector('.metric-picker', { timeout: 5000 })
+    await page.waitForSelector('.metric-picker .ft-chip:has-text("SCORE INPUT")', { timeout: 5000 }).catch(() => {})
+    const pickerText = await text('.metric-picker')
+    check(pickerText.includes('Resting heart rate · SCORE INPUT') && pickerText.includes('Resting heart rate · SERIES') && pickerText.includes('Sleep duration') && pickerText.includes('CHARGE'), 'the picker lists the rings and the inputs of the newest kept morning', pickerText.slice(0, 120))
+    await page.locator('.metric-picker .ft-chip', { hasText: 'Resting heart rate · SCORE INPUT' }).click(); await page.waitForSelector('.metric-pair', { timeout: 15000 })
+    check(decodeURIComponent(page.url()).includes('with=recovery.rhr'), 'an input is added as the second metric', page.url().split('#')[1])
+    check((await text('[data-testid=pair-words]')).includes('days.'), 'and the pair is read', await text('[data-testid=pair-words]'))
+    check(!(await text('.metric-pair')).includes('is dated by'), 'two inputs share their dating: no dating note')
+    await page.goto(`${BASE}#/m/recovery.hrv?with=series:hrv&with=charge&range=90`); await page.waitForSelector('.metric-pair', { timeout: 15000 }); await page.waitForTimeout(400)
+    check((await text('.metric-pair')).includes('is dated by the morning it is published on'), 'an input against a series says how each is dated', (await text('.metric-pair')).slice(0, 80))
+    check((await page.locator('.metric-with').count()) === 2, 'a ring and a series can be extras beside an input')
+    await page.locator('.metric-pair .ft-chip', { hasText: 'HRV (RMSSD)' }).click(); await page.waitForTimeout(300)
+    await page.locator('.metric-pair .ft-chip', { hasText: 'SAME DAY' }).click(); await page.waitForTimeout(300)
+    check(/r 1\.00|r 0\.99/.test(await text('[data-testid=pair-words]')), 'an input and its series match on the same day, not a day off', await text('[data-testid=pair-words]'))
+    await page.goto(`${BASE}#/m/series:energy?with=series:mood&with=series:nope&with=sleep`); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
+    check((await page.locator('.metric-chart').count()) >= 1 && (await text('.metric-name')).includes('Energy'), 'an unknown extra in the address is ignored and the page stays')
+
+    // 8f. the Lab merge (phase 4): every old route lands on its new place with its query intact; each tab renders; views are links
+    const to = async (from) => { await page.goto(`${BASE}#${from}`); await page.waitForTimeout(350); return page.url().split('#')[1] }
+    check(await to('/explore?series=hrv&grain=week') === '/lab/compare?view=periods&series=hrv&grain=week', 'old #/explore keeps its query and opens the long-range view')
+    check(await to('/evidence?question=stress_hrv') === '/lab/evidence?question=stress_hrv', 'old #/evidence keeps ?question=')
+    check(await to('/evidence?result=relationship&key=alcohol_hrv&asOf=2026-10-26') === '/lab/evidence?result=relationship&key=alcohol_hrv&asOf=2026-10-26', 'old #/evidence keeps a result link')
+    check(await to('/models') === '/lab/evidence?view=trust', 'old #/models opens the trust view')
+    check(await to('/experiments') === '/lab/experiments', 'old #/experiments')
+    check(await to('/interventions') === '/lab/experiments?view=interventions', 'old #/interventions')
+    check(await to('/regimen') === '/lab/regimen' && await to('/routine') === '/lab/routine' && await to('/tests') === '/lab/tests', 'old regimen, routine and tests')
+    check(await to('/overview') === '/lab/compare?view=periods', 'a v1 alias goes straight to the final place')
+    check(await to('/lab') === '/lab/compare' && await to('/lab/nonsense') === '/lab/compare', 'the Lab root and an unknown tab open Compare')
+    // one selector unique to each page (not the Lab's own heading), no error screen, and the Lab entry itself marked in the rail
+    for (const [tab, sel] of [['compare', '.metric-chart'], ['evidence', '.dec-bench, .dec-cols, .dec-col, .dec-queue'], ['experiments', '.conf-grid, .state-empty'], ['regimen', '.pg-title:has-text("REGIMEN")'], ['tests', '.pg-title:has-text("TESTS")'], ['routine', '.pg-title:has-text("ROUTINE")']]) {
+      await page.goto(`${BASE}#/lab/${tab}`); await page.waitForSelector(sel, { timeout: 15000 }).catch(async () => { await shot(`lab-${tab}-broken`) })
+      check((await page.locator(sel).count()) > 0 && (await page.locator('.error-boundary').count()) === 0, `Lab › ${tab.toUpperCase()} renders its own page, not an error screen`)
+      check((await page.locator('.tabbed-tab[aria-current="true"]').textContent({ timeout: 3000 }).catch(() => '')).toLowerCase() === tab, `and ${tab.toUpperCase()} is the marked tab`)
+      check((await page.locator('.shell-rail .rail-item.active').allTextContents()).join('|') === 'Lab', 'and Lab is the marked entry in the rail', (await page.locator('.shell-rail .rail-item.active').allTextContents()).join('|'))
+      await page.waitForTimeout(400); await shot(`skin-${tab}`)
+    }
+    // Compare (phase 4, second commit): the metric page's compare is the default view, Explore the long-range one
+    await page.goto(`${BASE}#/lab/compare`); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
+    check((await text('.metric-name')).includes('HRV') && (await page.locator('.metric-head .dash-link', { hasText: 'BACK' }).count()) === 0, 'Compare opens the days view on a default metric, with no back button')
+    check((await page.locator('.shell-header .range-control, .shell-header [class*="range"]').count()) === 0, 'the header range is hidden on the days view')
+    await page.locator('.metric-compare-bar .ft-chip', { hasText: 'CHANGE METRIC' }).click(); await page.waitForSelector('.metric-picker', { timeout: 5000 })
+    await page.locator('.metric-picker .ft-chip', { hasText: /^Energy$/ }).first().click(); await page.waitForTimeout(500)
+    check(decodeURIComponent(page.url()).includes('m=series:energy') && (await text('.metric-name')).includes('Energy'), 'CHANGE METRIC chooses the main metric', page.url().split('#')[1])
+    await page.locator('.metric-compare-bar .ft-chip', { hasText: '+ COMPARE' }).click()
+    await page.locator('.metric-picker .ft-chip', { hasText: /^Mood$/ }).first().click(); await page.waitForSelector('[data-testid=pair-words]', { timeout: 15000 })
+    check(/^A strong negative link/.test(await text('[data-testid=pair-words]')), 'the pair is read inside the Lab', await text('[data-testid=pair-words]'))
+    check(decodeURIComponent(page.url()).includes('/lab/compare') && decodeURIComponent(page.url()).includes('with=series:mood'), 'the comparison is in the Lab address', page.url().split('#')[1])
+    await page.locator('.metric-compare-bar .ft-chip', { hasText: 'CHANGE METRIC' }).click(); await page.waitForSelector('.metric-picker', { timeout: 5000 })
+    await page.locator('.metric-picker .ft-chip', { hasText: /^Mood$/ }).first().click(); await page.waitForTimeout(500)
+    check(decodeURIComponent(page.url()).includes('m=series:mood') && !decodeURIComponent(page.url()).includes('with=series:mood'), 'making an extra the main metric takes it out of the extras', page.url().split('#')[1])
+    await page.locator('.tabbed-views .ft-chip', { hasText: 'PERIODS' }).click(); await page.waitForSelector('.ex-chart canvas', { timeout: 15000 })
+    check(page.url().includes('view=periods') && (await page.locator('.shell-header .range-control, .shell-header [class*="range"]').count()) > 0, 'PERIODS opens Explore and shows the header range')
+    await page.locator('.tabbed-views .ft-chip', { hasText: 'DAYS' }).click(); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
+    check(!page.url().includes('view=periods'), 'and DAYS comes back')
+    await page.goto(`${BASE}#/lab/evidence`); await page.waitForTimeout(300)
+    await page.goto(`${BASE}#/lab/compare?view=periods&series=hrv,steps&start=2025-10-01&end=2026-10-27`); await page.waitForSelector('.ex-chart canvas', { timeout: 15000 })
+    check((await page.locator('.ex').count()) === 1 && (await text('.ex-title')).includes('Periods'), 'a long-range link opens the periods view with its series', page.url().split('#')[1])
+    // every sub-view renders without a page error (the first crash this walk found was a mock that lacked the engine's payload)
+    const errsBefore = errors.length
+    for (const v of ['queue', 'board', 'ledger', 'events', 'discovery', 'trust']) { await page.goto(`${BASE}#/lab/evidence${v === 'queue' ? '' : `?view=${v}`}`); await page.waitForTimeout(700); await shot(`skin-evidence-${v}`) }
+    for (const v of ['randomised', 'interventions', 'repeatable', 'fueling']) { await page.goto(`${BASE}#/lab/experiments${v === 'randomised' ? '' : `?view=${v}`}`); await page.waitForTimeout(700); await shot(`skin-experiments-${v}`) }
+    check(errors.length === errsBefore, 'every Evidence and Experiments view renders without a page error', errors.slice(errsBefore).join(' | '))
+    check((await Promise.all(['/lab/evidence', '/lab/regimen', '/lab/tests', '/setup/data', '/plan/overview'].map(async (r) => { await page.goto(`${BASE}#${r}`); await page.waitForTimeout(250); return page.locator('.date-range-control').count() }))).every((n) => n === 0), 'pages that do not read the global range do not show it')
+    await page.goto(`${BASE}#/setup/integrity`); await page.waitForTimeout(300)
+    check((await page.locator('.date-range-control').count()) === 1, 'Integrity, which reads it, does')
+    await page.goto(`${BASE}#/lab/evidence?view=board`); await page.waitForSelector('.tabbed-views', { timeout: 15000 })
+    check((await page.locator('.tabbed-views .ft-chip[aria-current="true"]').textContent()) === 'EVIDENCE BOARD', 'a sub-view link opens that view')
+    await page.goto(`${BASE}#/lab/evidence?view=trust`); await page.waitForTimeout(600)
+    check((await page.locator('.tabbed-views .ft-chip[aria-current="true"]').textContent()) === 'TRUST', 'the Models view is Evidence › TRUST')
+    await page.goto(`${BASE}#/lab/experiments?view=fueling`); await page.waitForTimeout(400)
+    check((await page.locator('.tabbed-views .ft-chip[aria-current="true"]').textContent()) === 'FUELLING', 'Experiments has its four views')
+    check((await page.locator('.shell-rail .rail-item', { hasText: /^Lab$/ }).count()) === 1 && (await page.locator('.shell-rail .rail-item', { hasText: /^(Explore|Models|Experiments|Interventions|Regimen|Tests|Routine|History)$/ }).count()) === 0, 'the rail has one Lab entry and none of the pages it absorbed')
+    check(await page.evaluate(() => !!document.querySelector('.shell-rail .rail-item.active')), 'the Lab entry is marked on a Lab page')
+    await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(300)
+    check(await page.evaluate(() => document.querySelector('.shell-canvas').scrollWidth <= 392), 'the nested Lab rows fit at phone width')
+    await shot('lab-phone')
+    await page.goto(`${BASE}#/lab/compare?m=series:energy&with=series:mood`); await page.waitForSelector('.metric-pair', { timeout: 15000 }); await page.waitForTimeout(400)
+    check(await page.evaluate(() => document.querySelector('.shell-canvas').scrollWidth <= 392), 'Compare fits at phone width')
+    await shot('compare-lab-phone')
+    await page.setViewportSize({ width: 1440, height: 1000 }); await page.waitForTimeout(200)
+    await page.goto(`${BASE}#/lab/compare?m=series:energy&with=series:mood&with=series:hrv`); await page.waitForSelector('.metric-pair', { timeout: 15000 }); await page.waitForTimeout(500)
+    await shot('compare-lab')
+
+    // 8g. the regroup (phase 5): Plan and Setup tabs, Body and Risk inside Me, the rail, old routes, the Google sign-in return
+    check(await to('/plan') === '/plan/overview' && await to('/plan?x=1') === '/plan/overview', 'the Plan root opens its Overview')
+    check(await to('/plan-block?week=2') === '/plan/training?week=2' && await to('/meal-prep') === '/plan/food' && await to('/sessions') === '/plan/sessions' && await to('/races') === '/plan/races', 'old plan routes land on the Plan tabs, query kept')
+    check(await to('/data?table=meals&id=42') === '/setup/data?table=meals&id=42' && await to('/integrity?series=hrv') === '/setup/integrity?series=hrv' && await to('/connections') === '/setup/connections', 'old data, integrity and connections routes land in Setup, query kept')
+    check(await to('/body') === '/me?tab=BODY' && await to('/risk') === '/me?tab=EXPOSURES', 'old Body and Risk routes open Me on their tab')
+    check(await to('/data-explorer') === '/setup/data' && await to('/data-quality') === '/setup/integrity' && await to('/setup') === '/setup/integrity', 'the v1 aliases and the Setup root go to the final place')
+    for (const [path, sel, label] of [['/plan/overview', '.pg-title:has-text("PLAN")', 'overview'], ['/plan/training', '.pb, .state-empty', 'training'], ['/plan/food', '.pb, .state-empty', 'food'], ['/plan/sessions', '.pg-title:has-text("SESSIONS")', 'sessions'], ['/plan/races', '.pg-title:has-text("RACES")', 'races'], ['/setup/integrity', '.ig', 'integrity'], ['/setup/data', '.de', 'data'], ['/setup/connections', '.pg-title:has-text("CONNECTIONS")', 'connections']]) {
+      await page.goto(`${BASE}#${path}`); await page.waitForSelector(sel, { timeout: 15000 }).catch(async () => { await shot(`broken-${label}`) })
+      check((await page.locator(sel).count()) > 0 && (await page.locator('.error-boundary').count()) === 0, `${path} renders its own page`)
+      check((await page.locator('.tabbed-tab[aria-current="true"]').textContent({ timeout: 3000 }).catch(() => '')).toLowerCase() === label, `and ${label.toUpperCase()} is the marked tab`)
+    }
+    check((await page.locator('.shell-rail .rail-item').allTextContents()).join('|') === 'Today|Me|Lab|Plan|Log|⚙ Setup', 'the rail is the five tabs and Setup', (await page.locator('.shell-rail .rail-item').allTextContents()).join('|'))
+    await page.goto(`${BASE}#/plan/races`); await page.waitForTimeout(300)
+    check((await page.locator('.shell-rail .rail-item.active').allTextContents()).join('|') === 'Plan', 'Plan is marked in the rail on a Plan page')
+    await page.goto(`${BASE}#/setup/data`); await page.waitForTimeout(300)
+    check((await page.locator('.shell-rail .rail-item.active').allTextContents()).join('|') === '⚙ Setup', 'Setup is marked in the rail on a Setup page')
+    await page.goto(`${BASE}#/me?tab=BODY`); await page.waitForSelector('.me-deeper .body-ws', { timeout: 15000 }); await page.waitForTimeout(1200)
+    check((await page.locator('.me-deeper canvas').count()) >= 4, 'the scale analysis draws its charts', await page.locator('.me-deeper canvas').count())
+    await page.evaluate(() => document.querySelector('.me-deeper .body-ws').scrollIntoView()); await page.waitForTimeout(500); await shot('me-body')
+    await page.evaluate(() => document.querySelector('.me-deeper .body-ws canvas').scrollIntoView({ block: 'center' })); await page.waitForTimeout(500); await shot('me-body-charts')
+    check((await page.locator('.me-deeper').count()) === 1 && (await text('.me-deeper')).includes('BODY COMPOSITION') && (await page.locator('.error-boundary').count()) === 0, 'Me › BODY carries the scale analysis below the phone\'s picture', (await text('.me-deeper')).slice(0, 60))
+    await page.goto(`${BASE}#/me?tab=EXPOSURES`); await page.waitForTimeout(1200)
+    check((await page.locator('.me-deeper').count()) === 1 && (await page.locator('.error-boundary').count()) === 0, 'Me › EXPOSURES carries the risk analysis below it', (await text('.me-deeper')).slice(0, 60))
+    check(!(await text('.me-deeper')).includes('As worked out on the phone'), "and does not draw the phone's own sections a second time")
+    await page.goto(`${BASE}#/me?tab=HEALTH`); await page.waitForTimeout(500)
+    check((await page.locator('.me-deeper').count()) === 0, 'the other Me tabs carry nothing extra')
+    for (const tab of ['BODY', 'EXPOSURES']) {
+      await page.goto(`${BASE}#/me?tab=${tab}`); await page.waitForTimeout(900)
+      await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(400)
+      check(await page.evaluate(() => document.querySelector('.shell-canvas').scrollWidth <= 392), `Me › ${tab} fits at phone width`)
+      await shot(`me-${tab.toLowerCase()}-phone`)
+      await page.setViewportSize({ width: 1440, height: 1000 }); await page.waitForTimeout(300)
+    }
+    // the Google sign-in return, as production does it: Supabase sends the browser back to the page's address WITHOUT a hash, with
+    // the stored path waiting in sessionStorage. The new path, one stored before the Setup move, and an ordinary one must each land.
+    for (const [stored, expect] of [['/setup/connections', '/setup/connections'], ['/connections', '/setup/connections'], ['/log', '/log']]) {
+      await page.goto(`${BASE}#/today`); await page.waitForSelector('.today', { timeout: 15000 })
+      await page.evaluate((v) => sessionStorage.setItem('ft.console.returnTo', v), stored)
+      await page.goto(BASE); await page.waitForTimeout(1200)
+      check(page.url().split('#')[1] === expect, `the sign-in return lands on ${expect} (stored ${stored})`, page.url().split('#')[1])
+    }
+
+    // 8h. Plan › Sessions draws whole weeks: the last week of NEXT 6 WEEKS holds all seven days (it once held the Monday only)
+    {
+      const dow = (d) => (d.getDay() + 6) % 7 // 0 = Monday
+      const mon = dayPlus(-dow(dayPlus(0)))
+      const cards = async () => page.locator('section.pg-card').evaluateAll((els) => els.map((e) => ({ title: e.querySelector('.pg-card-title span').textContent, n: Number(e.querySelector('.pg-card-title span:last-child').textContent) })))
+      await page.goto(`${BASE}#/plan/sessions`); await page.waitForSelector('section.pg-card', { timeout: 15000 }); await page.waitForTimeout(300)
+      let c = await cards()
+      check(c.length === 6, 'NEXT 6 WEEKS draws six week cards', c.length)
+      check(c[c.length - 1].n === 7, 'and the last one holds all seven days', JSON.stringify(c[c.length - 1]))
+      check(c.slice(1).every((x) => x.n === 7) && c[0].n === 7 - dow(dayPlus(0)), 'every later week is whole; this week holds today onward', c.map((x) => x.n).join(','))
+      await page.goto(`${BASE}#/plan/sessions?w=recent`); await page.waitForSelector('section.pg-card', { timeout: 15000 }); await page.waitForTimeout(300)
+      c = await cards()
+      check(c.length === 6 && c[0].n === dow(dayPlus(0)) + 1, 'LAST 6 WEEKS: this week up to today, newest first', c.map((x) => x.n).join(','))
+      check(c[c.length - 1].n === 7, 'and its oldest week is whole (it began mid-week)', JSON.stringify(c[c.length - 1]))
+      await page.goto(`${BASE}#/plan/sessions?w=both`); await page.waitForSelector('section.pg-card', { timeout: 15000 }); await page.waitForTimeout(300)
+      c = await cards()
+      check(c.length === 11 && c[0].n === 7 && c[c.length - 1].n === 7, 'BOTH is eleven weeks, whole at both ends', c.map((x) => x.n).join(','))
+    }
 
     // 9. old routes redirect
     await page.goto(`${BASE}#/overview`); await page.waitForTimeout(300)
-    check(page.url().endsWith('#/explore'), 'v1 routes redirect')
+    check(page.url().endsWith('#/lab/compare?view=periods'), 'v1 routes redirect')
     check(errors.length === 0, 'no page errors', errors.join(' | '))
   } finally {
     await b.close()

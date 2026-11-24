@@ -79,6 +79,14 @@ for (let t = Date.UTC(2026, 8, 1); t <= Date.UTC(2026, 9, 26); t += 864e5) {
     SLEEP: dom('SLEEP', 88, [inp('sleep.hours', 'Sleep duration', sl?.hours ?? 7, 7)]),
   } } })
 }
+// the scale, for Me › BODY's analysis (Body.tsx): impedance weigh-ins, the Health Connect body fat beside them, the profile
+T.scale_readings = []; T.body_metrics = []
+for (let i = 0; i < 70; i++) {
+  const t = Date.UTC(2026, 7, 20) + i * 864e5
+  T.scale_readings.push({ id: id++, user_id: 'u1', occurred_at: `${day(t)}T07:${String(10 + (i % 40)).padStart(2, '0')}:00+00:00`, weight_kg: +(73 - i * 0.03 + ((i * 7) % 5) * 0.1).toFixed(2), impedance_ohm: Math.round(520 + ((i * 13) % 31) - i * 0.4) })
+  if (i % 2 === 0) T.body_metrics.push({ id: id++, user_id: 'u1', date: day(t), body_fat_pct: +(18.5 - i * 0.02 + ((i * 3) % 4) * 0.2).toFixed(1), height_cm: 178, source: 'health_connect' })
+}
+T.user_profile = [{ id: 1, user_id: 'u1', date_of_birth: '1990-05-01', sex: 'male', height_cm: 178 }]
 // the phone's Me › BODY: a tile with points, a tile without, a row (phase 2: only the first opens a history)
 T.me_views = [{ tab: 'BODY', built_at: new Date().toISOString(), view: { v: 1, tab: 'BODY', sections: [{ title: 'WEIGHT', items: [
   { kind: 'tile', label: 'Weight', value: '72.4', unit: 'kg', hue: 'm-weight', series: Array.from({ length: 40 }, (_, i) => [day(Date.UTC(2026, 8, 17 + i)), +(73 - i * 0.03).toFixed(2)]) },
@@ -474,7 +482,7 @@ async function waitForServer() {
     check(!page.url().includes('view=periods'), 'and DAYS comes back')
     await page.goto(`${BASE}#/lab/evidence`); await page.waitForTimeout(300)
     await page.goto(`${BASE}#/lab/compare?view=periods&series=hrv,steps&start=2025-10-01&end=2026-10-27`); await page.waitForSelector('.ex-chart canvas', { timeout: 15000 })
-    check((await page.locator('.ex').count()) === 1 && (await text('.ex-title')).includes('Explore'), 'a long-range link opens the periods view with its series', page.url().split('#')[1])
+    check((await page.locator('.ex').count()) === 1 && (await text('.ex-title')).includes('Periods'), 'a long-range link opens the periods view with its series', page.url().split('#')[1])
     // every sub-view renders without a page error (the first crash this walk found was a mock that lacked the engine's payload)
     const errsBefore = errors.length
     for (const v of ['queue', 'board', 'ledger', 'events', 'discovery', 'trust']) { await page.goto(`${BASE}#/lab/evidence${v === 'queue' ? '' : `?view=${v}`}`); await page.waitForTimeout(700); await shot(`skin-evidence-${v}`) }
@@ -517,10 +525,14 @@ async function waitForServer() {
     check((await page.locator('.shell-rail .rail-item.active').allTextContents()).join('|') === 'Plan', 'Plan is marked in the rail on a Plan page')
     await page.goto(`${BASE}#/setup/data`); await page.waitForTimeout(300)
     check((await page.locator('.shell-rail .rail-item.active').allTextContents()).join('|') === '⚙ Setup', 'Setup is marked in the rail on a Setup page')
-    await page.goto(`${BASE}#/me?tab=BODY`); await page.waitForSelector('.me-deeper .body-ws, .me-deeper .state-loading, .me-deeper', { timeout: 15000 }); await page.waitForTimeout(800)
+    await page.goto(`${BASE}#/me?tab=BODY`); await page.waitForSelector('.me-deeper .body-ws', { timeout: 15000 }); await page.waitForTimeout(1200)
+    check((await page.locator('.me-deeper canvas').count()) >= 4, 'the scale analysis draws its charts', await page.locator('.me-deeper canvas').count())
+    await page.evaluate(() => document.querySelector('.me-deeper .body-ws').scrollIntoView()); await page.waitForTimeout(500); await shot('me-body')
+    await page.evaluate(() => document.querySelector('.me-deeper .body-ws canvas').scrollIntoView({ block: 'center' })); await page.waitForTimeout(500); await shot('me-body-charts')
     check((await page.locator('.me-deeper').count()) === 1 && (await text('.me-deeper')).includes('BODY COMPOSITION') && (await page.locator('.error-boundary').count()) === 0, 'Me › BODY carries the scale analysis below the phone\'s picture', (await text('.me-deeper')).slice(0, 60))
     await page.goto(`${BASE}#/me?tab=EXPOSURES`); await page.waitForTimeout(1200)
     check((await page.locator('.me-deeper').count()) === 1 && (await page.locator('.error-boundary').count()) === 0, 'Me › EXPOSURES carries the risk analysis below it', (await text('.me-deeper')).slice(0, 60))
+    check(!(await text('.me-deeper')).includes('As worked out on the phone'), "and does not draw the phone's own sections a second time")
     await page.goto(`${BASE}#/me?tab=HEALTH`); await page.waitForTimeout(500)
     check((await page.locator('.me-deeper').count()) === 0, 'the other Me tabs carry nothing extra')
     for (const tab of ['BODY', 'EXPOSURES']) {

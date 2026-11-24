@@ -69,7 +69,7 @@ export function Me() {
         )}
 
       {tab === 'BODY' && <Suspense fallback={null}><section className="me-deeper ft-skin" aria-label="The scale in depth"><BodyAnalysis /></section></Suspense>}
-      {tab === 'EXPOSURES' && <Suspense fallback={null}><section className="me-deeper ft-skin" aria-label="Exposures and risks in depth"><RiskAnalysis /></section></Suspense>}
+      {tab === 'EXPOSURES' && <Suspense fallback={null}><section className="me-deeper ft-skin" aria-label="Exposures and risks in depth"><RiskAnalysis embedded /></section></Suspense>}
     </div>
   )
 }

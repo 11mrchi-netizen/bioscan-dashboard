@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useChart } from '../lib/useChart'
 import { useLoadEffect } from '../lib/useLoadEffect'
-import { PALETTE } from '../lib/palette'
+import { cssColor, PALETTE } from '../lib/palette'
 import type { EChartsCoreOption } from '../lib/echarts'
 import { type BpRow, categorize, series as bpSeries, sittings } from '../lib/bp'
 import { CO2_POOR, CO2_VENTILATE, WHO_NO2_24H, WHO_O3_8H, WHO_PM25_24H, WHO_PM25_ANNUAL } from '../../../supabase/functions/_shared/analysis-core/airExposure.ts'
@@ -17,7 +17,12 @@ import './Pages.css'
 
 // Metric hues for canvas charts: the values of design/tokens (--m-pm25, --m-no2, --m-ozone, --m-co2, --m-uv-index,
 // --m-blood-pressure). Charts need the colour itself, not the variable.
-const HUE = { pm25: '#d9a066', no2: '#c9644a', ozone: '#8fd0ff', co2: '#9fb4c8', uv: '#c8e04a', bp: '#e75bd0' } as const
+// One fixed hue per metric (design/tokens --m-*), resolved when read so the canvas charts and the page agree.
+const tok = (name: string) => cssColor(`var(--${name})`)
+const HUE = {
+  get pm25() { return tok('m-pm25') }, get no2() { return tok('m-no2') }, get ozone() { return tok('m-ozone') },
+  get co2() { return tok('m-co2') }, get uv() { return tok('m-uv-index') }, get bp() { return tok('m-blood-pressure') },
+}
 
 interface AirDay {
   date: string; coverage_h: number; pm25_ugm3: number | null; pm25_indoor_ugm3: number | null; pm25_outdoor_home_ugm3: number | null
@@ -63,7 +68,8 @@ function Chart({ option, height = 220, onPick }: { option: EChartsCoreOption; he
   return <div ref={ref} style={{ width: '100%', height }} />
 }
 
-export default function Risk() {
+/** `embedded`: inside Me › EXPOSURES, which already draws the phone's own sections above, so they are not drawn a second time here. */
+export default function Risk({ embedded = false }: { embedded?: boolean }) {
   const [days, setDays] = useState<AirDay[]>([])
   const [summary, setSummary] = useState<{ asOf: string; payload: Summary } | null>(null)
   const [bp, setBp] = useState<BpRow[]>([])
@@ -206,7 +212,7 @@ export default function Risk() {
 
       <RiskQuestionnaires responses={responses} missing={responsesMissing} onChanged={() => setAnswered((n) => n + 1)} />
 
-      <RiskFromPhone />
+      {!embedded && <RiskFromPhone />}
 
       <div className="pg-grid">
         <section className="pg-card">

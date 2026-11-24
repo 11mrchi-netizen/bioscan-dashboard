@@ -159,7 +159,7 @@ export function Explore() {
   return (
     <div className="ex">
       <div className="ex-header">
-        <h2 className="ex-title">Explore</h2>
+        <h2 className="ex-title">Periods</h2>
         <div className="ex-crumbs mono">
           <span className={windowRange ? 'ex-crumb-link' : ''} onClick={() => windowRange && setParam({ start: null, end: null })}>
             RANGE {globalRange.start} → {globalRange.end}

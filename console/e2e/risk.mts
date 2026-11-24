@@ -154,8 +154,11 @@ try {
   await page.screenshot({ path: path.join(OUT, 'risk-phq9.png'), fullPage: true })
   // R5: the phone's screens and prevention, without its air sections; a way to improve started as an intervention.
   const after = ((await page.textContent('.pg')) ?? '').replace(/\s+/g, ' ')
-  check(after.includes('PREVENTIVE CARE') && after.includes('Flu vaccine') && after.includes('HEART · PREVENT'), "the phone's screens and prevention show")
-  check(!after.includes('drawn by the console itself'), "the phone's air sections are left to the console's own views")
+  // Inside Me › EXPOSURES (web redesign, phase 5) the phone's own sections are Me's: drawn once, not again by the Risk page.
+  const me = ((await page.textContent('.me')) ?? '').replace(/\s+/g, ' ')
+  const times = (t: string) => me.split(t).length - 1
+  check(times('PREVENTIVE CARE') === 1 && me.includes('Flu vaccine') && times('HEART · PREVENT') === 1, "the phone's screens and prevention show once")
+  check(!after.includes('drawn by the console itself') && !after.includes('As worked out on the phone'), "the Risk page does not draw the phone's sections again")
   await page.getByRole('button', { name: 'START AS AN INTERVENTION' }).first().click()
   await page.getByText(/STARTED \d{4}-\d{2}-\d{2}/).first().waitFor({ timeout: 5000 })
   const iv = posted.find((p) => p.table === 'interventions')?.rows[0]

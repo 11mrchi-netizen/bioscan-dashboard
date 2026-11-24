@@ -6,25 +6,41 @@
 // Not here: building the PlannedDay from events, planned sessions, the calendar and recordings (PlannedDay.kt, SessionDemand.kt,
 // SessionMatching.kt), the week's energy (FuelPlanRepository), and the coded meals (MealCodes.kt).
 
+export type EventPriority = 'A' | 'B' | 'C'
 export type Intensity = 'EASY' | 'MODERATE' | 'HARD' | 'LONG' | 'RACE'
 const INTENSITY_ORDER: Intensity[] = ['EASY', 'MODERATE', 'HARD', 'LONG', 'RACE']
 const intensityOrdinal = (i: Intensity) => INTENSITY_ORDER.indexOf(i)
 export const isKeyIntensity = (i: Intensity) => i === 'HARD' || i === 'LONG' || i === 'RACE'
 
-export type EventPriority = 'A' | 'B' | 'C'
+export type PlanSource = 'EVENT' | 'PLANNED_SESSION' | 'CALENDAR' | 'RECORDED'
+export type EventKind = 'RACE' | 'LONG_SESSION' | 'MATCH' | 'HIKE_DAY' | 'OTHER_HARD_DAY'
 
-/** The fields of the phone's PlannedItem the day engine reads; the rest is carried and ignored. */
+/** The phone's PlannedItem, as it serialises. */
 export interface PlannedItem {
+  source: PlanSource
+  sourceId: string
   title: string
+  /** exercise_sessions type: run, ride, hike, strength, swim, other. */
+  type: string
   /** Kotlin ZonedDateTime.toString(), "2026-11-24T08:00+08:00[Asia/Taipei]"; null when only the day is known. */
   start: string | null
   durationMin: number
   intensity: Intensity
+  intensityReason: string
   kcal: number | null
-  eventPriority?: EventPriority | null
-  [more: string]: unknown
+  recorded: boolean
+  eventId: number | null
+  eventKind: EventKind | null
+  eventPriority: EventPriority | null
+  distanceKm: number | null
+  planRef: string | null
+  planTitle: string | null
+  matchConfidence: number | null
+  matchStored: boolean
+  matchManual: boolean
 }
-export interface PlannedDay { date: string; items: PlannedItem[]; [more: string]: unknown }
+export interface CalendarReview { eventId: string; title: string; description: string | null; start: string; end: string | null; clockMin: number }
+export interface PlannedDay { date: string; items: PlannedItem[]; reviews: CalendarReview[]; plans: PlannedItem[] }
 
 export interface WeekEnergy {
   dailyKcal: number | null

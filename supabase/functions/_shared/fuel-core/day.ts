@@ -12,6 +12,8 @@ const INTENSITY_ORDER: Intensity[] = ['EASY', 'MODERATE', 'HARD', 'LONG', 'RACE'
 const intensityOrdinal = (i: Intensity) => INTENSITY_ORDER.indexOf(i)
 export const isKeyIntensity = (i: Intensity) => i === 'HARD' || i === 'LONG' || i === 'RACE'
 
+import { roundToInt } from './plates.ts'
+
 export type PlanSource = 'EVENT' | 'PLANNED_SESSION' | 'CALENDAR' | 'RECORDED'
 export type EventKind = 'RACE' | 'LONG_SESSION' | 'MATCH' | 'HIKE_DAY' | 'OTHER_HARD_DAY'
 
@@ -89,8 +91,6 @@ export interface DayFuelPlan {
 
 // ---- Kotlin's rounding and number text ----
 
-/** Kotlin Double.roundToInt(): half up (Math.round), NaN is 0. */
-export const roundToInt = (v: number) => (Number.isNaN(v) ? 0 : Math.round(v))
 
 /**
  * Java's String.format("%.<digits>f"): HALF_UP on the decimal digits of the value's shortest representation (not on the binary

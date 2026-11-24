@@ -7,7 +7,8 @@
 // Callers pass what the database holds: planned sessions must already exclude status 'superseded' (a revised session has two rows).
 // Time zones: a local time becomes an instant with the zone's offset at that time (Intl), like java.time outside a DST gap or overlap.
 
-import { type CalendarReview, type EventKind, type EventPriority, fmt, type Intensity, type PlannedDay, type PlannedItem, roundToInt } from './day.ts'
+import { type CalendarReview, type EventKind, type EventPriority, fmt, type Intensity, type PlannedDay, type PlannedItem } from './day.ts'
+import { roundToInt } from './plates.ts'
 
 // ---- instants and zones ----
 

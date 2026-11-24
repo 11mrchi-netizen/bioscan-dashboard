@@ -4,7 +4,8 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
-import { fatFreeMass, fmt, type PlannedDay, planFuelDays, planInWeekBlocks, roundToInt, type WeekEnergy } from './day.ts'
+import { fatFreeMass, fmt, type PlannedDay, planFuelDays, planInWeekBlocks, type WeekEnergy } from './day.ts'
+import { roundToInt } from './plates.ts'
 
 const dir = new URL('./fixtures/', import.meta.url)
 const input = JSON.parse(readFileSync(new URL('day-input.json', dir), 'utf8')) as {

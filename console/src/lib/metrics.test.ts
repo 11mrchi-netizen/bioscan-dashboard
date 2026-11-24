@@ -96,3 +96,10 @@ test('a metric page is saved as a view with its metric and comparison', () => {
 test('every series has a picker group', () => {
   for (const s of SERIES) assert.ok(['SLEEP', 'RECOVERY', 'LOAD', 'FUEL', 'BALANCE'].includes(seriesGroup(s.id)), s.id)
 })
+
+test('saved views: a Lab tab keeps its tab and query, and a view saved before the merge still opens', () => {
+  assert.equal(viewPath('/lab/evidence', '?view=board'), '/lab/evidence?view=board')
+  assert.equal(viewPath('/lab/compare', '?view=periods&series=hrv%2Crhr'), '/lab/compare?view=periods&series=hrv%2Crhr')
+  assert.equal(viewPath('/lab', ''), null)
+  for (const old of ['/explore', '/evidence', '/models']) assert.equal(viewPath(old, '?x=1'), `${old}?x=1`) // saved before the Lab merge: opened through the redirect
+})

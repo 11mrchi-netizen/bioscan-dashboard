@@ -8,7 +8,7 @@
 //   Record     a decision (adopt, reject, continue testing, inconclusive) with threshold, rationale and review
 //              condition; adopt and reject need a settled verdict. The row keeps a snapshot of the evidence it rested on
 //              (append-only `decisions`), so the record stays readable when later results change.
-// Deep links: #/evidence?question=<catalogue id | reg_N> and #/evidence?result=<kind>&key=<key> select an item.
+// Deep links: #/lab/evidence?question=<catalogue id | reg_N> and #/lab/evidence?result=<kind>&key=<key> select an item.
 
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -109,7 +109,11 @@ export function Decisions() {
 
   const select = (id: string | null) => {
     setSelected(id)
-    if (params.get('question') || params.get('result')) setParams(new URLSearchParams())
+    if (params.get('question') || params.get('result') || params.get('key') || params.get('asOf')) {
+      const n = new URLSearchParams(params)
+      for (const k of ['question', 'result', 'key', 'asOf']) n.delete(k)
+      setParams(n)
+    }
   }
 
   if (error) return <LoadBanner error={error} onRetry={() => setAttempt((a) => a + 1)} />
@@ -288,8 +292,8 @@ function Workbench({ item, state, reason, history, onClose, onRecorded }: {
       {item.summary && <p className="dec-summary">{item.summary}</p>}
       <p className="dec-limits">{CLASS_LIMITS[item.evidenceClass]}</p>
       <div className="dec-links mono">
-        {exploreHref && <a href={exploreHref}>OUTCOME IN EXPLORE (180 D) →</a>}
-        {resultHref && item.evidenceClass === 'association' && <a href="#/evidence">EVIDENCE BOARD →</a>}
+        {exploreHref && <a href={exploreHref}>OUTCOME OVER TIME (180 D) →</a>}
+        {resultHref && item.evidenceClass === 'association' && <a href="#/lab/evidence?view=board">EVIDENCE BOARD →</a>}
       </div>
 
       {series && (

@@ -41,7 +41,7 @@ test('a data problem leads to its records, its period and its day', () => {
 
   const missing = r.issues.find((i) => i.kind === 'missing' && i.seriesId === 'steps' && i.firstDate === '2026-10-03')!
   const toPeriod = follow(hrefFor(missing.refs[0]))
-  assert.deepEqual([toPeriod.route, toPeriod.params.get('series'), toPeriod.params.get('start'), toPeriod.params.get('end')], ['explore', 'steps', '2026-10-03', '2026-10-05'])
+  assert.deepEqual([toPeriod.route, toPeriod.params.get('series'), toPeriod.params.get('start'), toPeriod.params.get('end')], ['lab/compare', 'steps', '2026-10-03', '2026-10-05'])
 
   const toDay = follow(hrefFor({ kind: 'day', series: 'meal_energy', date: '2026-10-05' }))
   assert.deepEqual([readFilters(toDay.params).table, readFilters(toDay.params).from, readFilters(toDay.params).to], ['meals', '2026-10-05', '2026-10-05'])
@@ -63,7 +63,7 @@ test("every evidence item's result link leads back to the same item; question li
   assert.equal(items.length, 4)
   for (const it of items) {
     const { route, params } = follow(hrefFor(it.result))
-    assert.equal(route, 'evidence')
+    assert.equal(route, 'lab/evidence')
     assert.equal(itemIdFromParams(params), it.id, it.id)
   }
   assert.equal(itemIdFromParams(follow(hrefFor({ kind: 'question', questionId: 'alcohol_hrv' })).params), 'q:alcohol_hrv')

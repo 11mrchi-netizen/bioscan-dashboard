@@ -2,9 +2,9 @@
 // decision points at its data through one of these, so the convention lives in one place.
 //   record   -> Data, that row          #/data?table=meals&id=42
 //   day      -> Data, the series' table on that day
-//   period   -> Explore, the series over that span
-//   result   -> Evidence, the published result
-//   question -> Evidence, the question
+//   period   -> Lab › Compare, long-range view, the series over that span
+//   result   -> Lab › Evidence, the published result
+//   question -> Lab › Evidence, the question
 // and the way back: itemIdFromParams reads an Evidence link into the evidence item it names (evidenceItems.ts ids), and
 // integrityHref opens the Integrity workspace on one series.
 import type { DataRef } from '../../../supabase/functions/_shared/analysis-core/dataRef.ts'
@@ -24,11 +24,11 @@ export function hrefFor(ref: DataRef): string | null {
       return s ? href('data', { table: s.table, date: ref.date }) : null
     }
     case 'period':
-      return seriesById(ref.series) ? href('explore', { series: ref.series, start: ref.start, end: ref.end }) : null
+      return seriesById(ref.series) ? href('lab/compare', { view: 'periods', series: ref.series, start: ref.start, end: ref.end }) : null
     case 'result':
-      return href('evidence', { result: ref.resultKind, key: ref.key, asOf: ref.asOf })
+      return href('lab/evidence', { result: ref.resultKind, key: ref.key, asOf: ref.asOf })
     case 'question':
-      return href('evidence', { question: ref.questionId })
+      return href('lab/evidence', { question: ref.questionId })
   }
 }
 

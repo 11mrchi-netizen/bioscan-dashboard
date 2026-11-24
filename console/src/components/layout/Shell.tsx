@@ -14,25 +14,29 @@ import './Shell.css'
 // into LAB, PLAN and SETUP (docs/web-redesign).
 const GROUPS: { title: string; items: { to: string; label: string }[] }[] = [
   { title: 'GLANCE', items: [{ to: 'today', label: 'Today' }, { to: 'me', label: 'Me' }] },
-  { title: 'LOG', items: [{ to: 'log', label: 'Day log' }] },
-  { title: 'LAB', items: [
-    { to: 'regimen', label: 'Regimen' }, { to: 'experiments', label: 'Experiments' }, { to: 'interventions', label: 'Interventions' },
-    { to: 'routine', label: 'Routine' }, { to: 'tests', label: 'Tests' },
-  ] },
+  { title: 'LAB', items: [{ to: 'lab', label: 'Lab' }] },
   { title: 'PLAN', items: [
     { to: 'plan', label: 'Overview' }, { to: 'plan-block', label: 'Plan block' }, { to: 'meal-prep', label: 'Meal prep' },
     { to: 'sessions', label: 'Sessions' }, { to: 'races', label: 'Races' },
   ] },
-  { title: 'ANALYSIS', items: [
-    { to: 'evidence', label: 'Evidence' }, { to: 'explore', label: 'Explore' },
-    { to: 'data', label: 'Data' }, { to: 'models', label: 'Models' }, { to: 'body', label: 'Body' },
-    { to: 'risk', label: 'Risk' },
-  ] },
+  { title: 'LOG', items: [{ to: 'log', label: 'Day log' }] },
+  // Interim (phase 5 moves Body and Risk into Me, and Data, Integrity and Connections under Setup).
+  { title: 'BODY AND DATA', items: [{ to: 'body', label: 'Body' }, { to: 'risk', label: 'Risk' }, { to: 'data', label: 'Data' }] },
   { title: 'SYSTEM', items: [{ to: 'integrity', label: 'Integrity' }, { to: 'connections', label: 'Connections' }] },
 ]
 
 /** Where to land after Google's consent page sends the browser back (set by Connections before it leaves). */
 export const RETURN_KEY = 'ft.console.returnTo'
+
+/**
+ * Where the header's range applies: Evidence, Integrity, Data, Explore's long-range view and the like read it. Today, Me, the metric
+ * page and Compare's days view have their own (a day, a tab, range chips), so the control would only mislead there.
+ */
+function usesGlobalRange(pathname: string, search: string): boolean {
+  if (/^\/(today|me|m\/.*)$/.test(pathname)) return false
+  void search // Compare's days view will hide it once it is the default (next commit)
+  return true
+}
 
 export function Shell() {
   const { user, signOut } = useAuth()
@@ -75,7 +79,7 @@ export function Shell() {
           {railCollapsed ? '›' : '‹'}
         </button>
         <span className="shell-wordmark mono">FIELD TERMINAL</span>
-        {!/^\/(today|me|m\/.*)$/.test(location.pathname) && <DateRangeControl />}
+        {usesGlobalRange(location.pathname, location.search) && <DateRangeControl />}
         <div className="header-actions">
           <SavedViews />
           <span className="mono user-label">{user?.email}</span>

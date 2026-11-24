@@ -95,8 +95,12 @@ T.analysis_results.push(
   R('relationship', 'caffeine_pm_sleep', relP('Caffeine after 14:00 and that night\'s sleep', 'sleep', 'unclear', { value: -1.5, lo: -4.2, hi: 1.1, unit: '%' })),
   R('relationship', 'stress_hrv', relP('A high-stress day and next-morning HRV', 'hrv', 'unclear', { value: -2.0, lo: -5, hi: 1, unit: '%' })),
   R('relationship', 'late_meal_sleep', relP('A meal after 21:00 and that night\'s sleep', 'sleep', 'not_yet', null)),
-  R('experiment', '11', { name: 'Magnesium before bed', stage: 'complete', metrics: [{ metric: 'hrv', verdict: 'negligible', n0: 20, n1: 21, diff: { value: 0.4, lo: -1.2, hi: 2, unit: '%' }, zone: 2, summary: 'No difference beyond the zone' }] }),
-  R('intervention_its', '3', { state: 'collecting', metrics: [{ metric: 'rhr', label: 'Resting HR', activeDays: 6 }] }),
+  // the engine's full payload shape (Experiments.tsx: Payload), so the Experiments view can be walked
+  R('experiment', '11', { name: 'Magnesium before bed', stage: 'complete', status: 'complete', preregisteredAt: '2026-08-30T10:00:00Z',
+    adherence: { interventionDays: 21, interventionLogged: 20, rate: 0.95, baselineLogged: 0, ok: true },
+    protocol: { design: 'AB', phases: [{ label: 'A', start: '2026-09-01', end: '2026-09-21' }, { label: 'B', start: '2026-09-22', end: '2026-10-12' }], washoutDays: 2, minAdherence: 0.8, zone: 2 },
+    metrics: [{ metric: 'hrv', label: 'HRV', role: 'primary', verdict: 'negligible', n0: 20, n1: 21, diff: { value: 0.4, lo: -1.2, hi: 2, unit: '%' }, mde: null, preTrendPerWeek: null, trendWarning: false, replicated: null, zone: 2, summary: 'No difference beyond the zone', notes: [] }] }),
+  R('intervention_its', '3', { preStart: '2026-08-01', activeStart: '2026-10-20', evaluateOn: '2026-11-17', state: 'collecting', metrics: [{ metric: 'rhr', label: 'Resting HR', state: 'collecting', verdict: null, gap: null, zone: 2, preDays: 56, activeDays: 6, evaluateOn: '2026-11-17', summary: 'Collecting: 6 of 28 days since the start' }] }),
 )
 T.evidence_ledger = [['2026-10-01', 'not_yet'], ['2026-10-10', 'unclear'], ['2026-10-20', 'clear'], ['2026-10-26', 'clear']].map(([d, v], i) => ({ id: i + 1, user_id: 'u1', question_id: 'alcohol_hrv', as_of: d, verdict: v, estimate: -6, lo: -9, hi: -2, unit: '%', engine_version: '3.0.0-alpha.9' }))
 // the newest nightly integrity report, for the Decisions workbench
@@ -278,7 +282,7 @@ async function waitForServer() {
 
     // 6. Discovery: the planted alcohol -> next-morning HRV link is the one flagged cell; registering inserts a question
     await page.goto(`${BASE}#/evidence`)
-    await page.click('.rlab-tab >> text=DISCOVERY')
+    await page.click('.lab-views .ft-chip >> text=DISCOVERY')
     await page.waitForSelector('.disc-grid', { timeout: 20000 }); await page.waitForTimeout(300)
     const alc = page.locator('tr', { hasText: 'Alcohol' }).filter({ hasText: 'HRV' }).locator('.disc-cell').nth(1)
     check((await alc.getAttribute('class')).includes('flagged'), 'Discovery flags the planted link at lag 1')
@@ -290,7 +294,7 @@ async function waitForServer() {
     await shot('4-discovery')
 
     // 7. Decisions: queue, workbench, a recorded decision, the link to Integrity
-    await page.click('.rlab-tab >> text=DECISIONS')
+    await page.click('.lab-views .ft-chip >> text=DECISIONS')
     await page.waitForSelector('.dec-board', { timeout: 10000 })
     const col = async (i) => text(`.dec-col:nth-child(${i})`)
     check((await col(1)).includes('Alcohol and next-morning HRV') && (await col(1)).includes('Magnesium'), 'settled items wait for a decision')
@@ -318,11 +322,11 @@ async function waitForServer() {
     await page.goto(`${BASE}#/explore?series=hrv,rhr&grain=week`); await page.waitForTimeout(500)
     await page.click('.sv > button')
     await page.fill('.sv-input', 'HRV weekly'); await page.click('.sv-save button'); await page.waitForTimeout(400)
-    check(T.saved_views.some((v) => v.name === 'HRV weekly' && v.path === '/explore?series=hrv,rhr&grain=week'), 'a view is saved with its route and filters')
+    check(T.saved_views.some((v) => v.name === 'HRV weekly' && v.path === '/lab/compare?view=periods&series=hrv,rhr&grain=week'), 'a view is saved with its route and filters')
     await page.goto(`${BASE}#/data`); await page.waitForTimeout(300)
     await page.click('.sv > button'); await page.waitForTimeout(300)
     await page.locator('.sv-open', { hasText: 'HRV weekly' }).click(); await page.waitForTimeout(500)
-    check(page.url().includes('#/explore?series=hrv,rhr&grain=week'), 'opening the view restores it', page.url().split('#')[1])
+    check(page.url().includes('#/lab/compare?view=periods&series=hrv,rhr&grain=week'), 'opening the view restores it', page.url().split('#')[1])
 
     // 8b. one app (web redesign phase 1): the root lands on Today, Today and Me are rail items beside the rest
     await page.goto(BASE); await page.waitForSelector('.today', { timeout: 15000 })
@@ -421,7 +425,7 @@ async function waitForServer() {
     check(decodeURIComponent(page.url()).includes('with=recovery.rhr'), 'an input is added as the second metric', page.url().split('#')[1])
     check((await text('[data-testid=pair-words]')).includes('days.'), 'and the pair is read', await text('[data-testid=pair-words]'))
     check(!(await text('.metric-pair')).includes('is dated by'), 'two inputs share their dating: no dating note')
-    await page.goto(`${BASE}#/m/recovery.hrv?with=series:hrv&with=charge&range=90`); await page.waitForSelector('.metric-pair', { timeout: 15000 })
+    await page.goto(`${BASE}#/m/recovery.hrv?with=series:hrv&with=charge&range=90`); await page.waitForSelector('.metric-pair', { timeout: 15000 }); await page.waitForTimeout(400)
     check((await text('.metric-pair')).includes('is dated by the morning it is published on'), 'an input against a series says how each is dated', (await text('.metric-pair')).slice(0, 80))
     check((await page.locator('.metric-with').count()) === 2, 'a ring and a series can be extras beside an input')
     await page.locator('.metric-pair .ft-chip', { hasText: 'HRV (RMSSD)' }).click(); await page.waitForTimeout(300)
@@ -430,9 +434,43 @@ async function waitForServer() {
     await page.goto(`${BASE}#/m/series:energy?with=series:mood&with=series:nope&with=sleep`); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })
     check((await page.locator('.metric-chart').count()) >= 1 && (await text('.metric-name')).includes('Energy'), 'an unknown extra in the address is ignored and the page stays')
 
+    // 8f. the Lab merge (phase 4): every old route lands on its new place with its query intact; each tab renders; views are links
+    const to = async (from) => { await page.goto(`${BASE}#${from}`); await page.waitForTimeout(350); return page.url().split('#')[1] }
+    check(await to('/explore?series=hrv&grain=week') === '/lab/compare?view=periods&series=hrv&grain=week', 'old #/explore keeps its query and opens the long-range view')
+    check(await to('/evidence?question=stress_hrv') === '/lab/evidence?question=stress_hrv', 'old #/evidence keeps ?question=')
+    check(await to('/evidence?result=relationship&key=alcohol_hrv&asOf=2026-10-26') === '/lab/evidence?result=relationship&key=alcohol_hrv&asOf=2026-10-26', 'old #/evidence keeps a result link')
+    check(await to('/models') === '/lab/evidence?view=trust', 'old #/models opens the trust view')
+    check(await to('/experiments') === '/lab/experiments', 'old #/experiments')
+    check(await to('/interventions') === '/lab/experiments?view=interventions', 'old #/interventions')
+    check(await to('/regimen') === '/lab/regimen' && await to('/routine') === '/lab/routine' && await to('/tests') === '/lab/tests', 'old regimen, routine and tests')
+    check(await to('/overview') === '/lab/compare?view=periods', 'a v1 alias goes straight to the final place')
+    check(await to('/lab') === '/lab/compare' && await to('/lab/nonsense') === '/lab/compare', 'the Lab root and an unknown tab open Compare')
+    for (const [tab, sel] of [['compare', '.ex'], ['evidence', '.dec-queue, .dec-cols, .dec-bench, .dec-col, .rlab'], ['experiments', '.rlab'], ['regimen', '.pg, .pg-sub, h2'], ['tests', '.pg, .pg-sub, h2'], ['routine', '.pg, .pg-sub, h2']]) {
+      await page.goto(`${BASE}#/lab/${tab}`); await page.waitForSelector(sel, { timeout: 15000 })
+      await page.waitForSelector('.lab-tab', { timeout: 5000 }).catch(async () => { await shot(`lab-${tab}-broken`); console.log('LAB TAB MISSING', tab, errors.slice(-2).join(' | '), (await text('.shell-canvas')).slice(0, 200)) })
+      check((await page.locator('.lab-tab[aria-current="true"]').textContent({ timeout: 3000 }).catch(() => '')).toLowerCase() === tab, `Lab › ${tab.toUpperCase()} renders and is the marked tab`)
+    }
+    // every sub-view renders without a page error (the first crash this walk found was a mock that lacked the engine's payload)
+    const errsBefore = errors.length
+    for (const v of ['queue', 'board', 'ledger', 'events', 'discovery', 'trust']) { await page.goto(`${BASE}#/lab/evidence${v === 'queue' ? '' : `?view=${v}`}`); await page.waitForTimeout(700) }
+    for (const v of ['randomised', 'interventions', 'repeatable', 'fueling']) { await page.goto(`${BASE}#/lab/experiments${v === 'randomised' ? '' : `?view=${v}`}`); await page.waitForTimeout(700) }
+    check(errors.length === errsBefore, 'every Evidence and Experiments view renders without a page error', errors.slice(errsBefore).join(' | '))
+    await page.goto(`${BASE}#/lab/evidence?view=board`); await page.waitForSelector('.lab-views', { timeout: 15000 })
+    check((await page.locator('.lab-views .ft-chip[aria-current="true"]').textContent()) === 'EVIDENCE BOARD', 'a sub-view link opens that view')
+    await page.goto(`${BASE}#/lab/evidence?view=trust`); await page.waitForTimeout(600)
+    check((await page.locator('.lab-views .ft-chip[aria-current="true"]').textContent()) === 'TRUST', 'the Models view is Evidence › TRUST')
+    await page.goto(`${BASE}#/lab/experiments?view=fueling`); await page.waitForTimeout(400)
+    check((await page.locator('.lab-views .ft-chip[aria-current="true"]').textContent()) === 'FUELLING', 'Experiments has its four views')
+    check((await page.locator('.shell-rail .rail-item', { hasText: /^Lab$/ }).count()) === 1 && (await page.locator('.shell-rail .rail-item', { hasText: /^(Explore|Models|Experiments|Interventions|Regimen|Tests|Routine|History)$/ }).count()) === 0, 'the rail has one Lab entry and none of the pages it absorbed')
+    check(await page.evaluate(() => !!document.querySelector('.shell-rail .rail-item.active')), 'the Lab entry is marked on a Lab page')
+    await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(300)
+    check(await page.evaluate(() => document.querySelector('.shell-canvas').scrollWidth <= 392), 'the nested Lab rows fit at phone width')
+    await shot('lab-phone')
+    await page.setViewportSize({ width: 1440, height: 1000 }); await page.waitForTimeout(200)
+
     // 9. old routes redirect
     await page.goto(`${BASE}#/overview`); await page.waitForTimeout(300)
-    check(page.url().endsWith('#/explore'), 'v1 routes redirect')
+    check(page.url().endsWith('#/lab/compare?view=periods'), 'v1 routes redirect')
     check(errors.length === 0, 'no page errors', errors.join(' | '))
   } finally {
     await b.close()

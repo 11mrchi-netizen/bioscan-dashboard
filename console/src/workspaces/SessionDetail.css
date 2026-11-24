@@ -21,3 +21,6 @@
 .rs-link { color: inherit; text-decoration: none; }
 .rs-link:hover { text-decoration: underline; }
 .sd-ex > .btn-ghost, .sd-exercise > .btn-ghost { align-self: flex-start; }
+.pe-lifts td { vertical-align: middle; padding: 4px 10px 4px 0; }
+.pe-range { white-space: nowrap; }
+.sd-confirm { display: inline-flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }

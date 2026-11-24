@@ -137,7 +137,7 @@ function Detail({ row, plan, onChanged, onBack }: { row: SessionRow; plan: { lin
 
         <div className="sd-actions">
           <button className="pb-primary mono" disabled={busy || !verdict.dirty || !!verdict.error} onClick={() => void save()}>{busy ? 'SAVING…' : 'SAVE'}</button>
-          {verdict.dirty && <button className="btn-ghost mono" disabled={busy} onClick={onChanged}>DISCARD CHANGES</button>}
+          {(verdict.dirty || verdict.error) && <button className="btn-ghost mono" disabled={busy} onClick={onChanged}>DISCARD CHANGES</button>}
           {verdict.error && <span className="pb-warn">{verdict.error}</span>}
           {message && <span className={message.ok ? 'pb-ok' : 'pb-warn'} role="status">{message.text}</span>}
         </div>

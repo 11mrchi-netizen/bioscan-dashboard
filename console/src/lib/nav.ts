@@ -56,7 +56,7 @@ export function locate(pathname: string, search: string): NavLocation {
     tab = section.tabs.find((t) => t.id === want) ?? (section.tabParam ? section.tabs.find((t) => t.id === ME_DEFAULT_TAB) ?? null : null)
   }
   let view: NavView | null = null
-  if (tab?.views) view = (parts[2] && tab.detailView ? tab.views.find((v) => v.id === tab.detailView) : null) ?? tab.views.find((v) => v.value === q.get('view')) ?? tab.views[0]
+  if (tab?.views) view = (parts[2] === 'planned' ? tab.views.find((v) => v.id === 'planned') : parts[2] && tab.detailView ? tab.views.find((v) => v.id === tab.detailView) : null) ?? tab.views.find((v) => v.value === q.get('view')) ?? tab.views[0]
   return { section, tab, view }
 }
 

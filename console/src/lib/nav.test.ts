@@ -69,5 +69,6 @@ test('Plan > Sessions has Planned and Recorded, and one recorded session\'s page
   assert.equal(locate('/plan/sessions', '?view=recorded&type=run').view?.id, 'recorded')
   assert.equal(locate('/plan/sessions/812', '').view?.id, 'recorded')
   assert.deepEqual(crumbs(locate('/plan/sessions/812', '')), ['Plan', 'Sessions', 'Recorded'])
+  assert.equal(locate('/plan/sessions/planned/68', '').view?.id, 'planned') // a planned session's page belongs to Planned
   assert.equal(locate('/plan/overview/812', '').view, null)
 })

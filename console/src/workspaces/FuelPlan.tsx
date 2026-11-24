@@ -8,7 +8,7 @@ import { useLoadEffect } from '../lib/useLoadEffect'
 import { loadFuelDays } from '../lib/fuelDay'
 import { storeDay, type StoreResult } from '../lib/fuelPlansStore'
 import { isLongNonEvent } from '../lib/fuelScheduleKey'
-import ScheduleEditor from './ScheduleEditor'
+import { PlannedScheduleEditor } from './ScheduleEditor'
 import type { FuelDays } from '../lib/fuelInputs'
 import { formatGPerKg, type DayFuelPlan, type DayMeal, type PlannedItem, roundToInt } from '../../../supabase/functions/_shared/fuel-core/index.ts'
 import './PlanBlock.css'
@@ -66,7 +66,7 @@ export default function FuelPlan() {
                   <span className="fp-day-name mono">{i === data.todayIdx ? 'TODAY' : dayName(d.date).toUpperCase()}</span>
                   <span className="fp-day-class mono">{p.dayClass}</span>
                   <span className="fp-day-num" style={{ color: 'var(--m-carbs)' }}>{g(p.carbG)} g</span>
-                  <span className="fp-day-sub">{d.items.length === 0 ? 'rest' : `${d.items.length} session${d.items.length === 1 ? '' : 's'}`}</span>
+                  <span className="fp-day-sub">{d.items.length === 0 ? 'rest' : `${d.items.length} session${d.items.length === 1 ? '' : 's'}`}{d.items.some(isLongNonEvent) ? ' · long' : ''}</span>
                 </button>
               )
             })}
@@ -198,17 +198,17 @@ export function KeptNote({ kept, what = "today's plan" }: { kept: StoreResult; w
 /** The day's long sessions (90 minutes or more, not events): each has a fuel schedule to plan, kept under its plan item as the phone keeps it. */
 function LongSessions({ data, i }: { data: FuelDays; i: number }) {
   const long = data.days[i].items.filter(isLongNonEvent)
-  const [open, setOpen] = useState<Record<string, boolean>>({})
+  const [closed, setClosed] = useState<Record<string, boolean>>({})
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone
   if (long.length === 0) return null
   return (
     <section className="pg-card wide" data-testid="long-sessions">
       <h3 className="pg-card-title mono"><span>LONG SESSIONS</span><span>{long.length}</span></h3>
-      <p className="pg-note">A session of 90 minutes or more is where fuelling gets tried: plan what you will take and when, and afterwards the phone checks it against what you took.</p>
+      <p className="pg-note">A session of 90 minutes or more is where fuelling gets tried. The plan below is yours to change: start from the generated one, edit what you will take and when, and the phone shows it and checks it against what you took.</p>
       {long.map((it) => (
         <div key={it.sourceId}>
-          <p className="pg-row-title">{it.title} <span className="pg-tag mono">{it.recorded ? 'DONE' : 'PLANNED'}</span> <button className="pb-chip small" aria-expanded={!!open[it.sourceId]} onClick={() => setOpen({ ...open, [it.sourceId]: !open[it.sourceId] })}>{open[it.sourceId] ? 'HIDE THE SCHEDULE' : 'FUEL SCHEDULE'}</button></p>
-          {open[it.sourceId] && <ScheduleEditor item={it} weightKg={data.weightKg} zone={zone} />}
+          <p className="pg-row-title">{it.title} <span className="pg-tag mono">{it.recorded ? 'DONE' : 'PLANNED'}</span> <button className="pb-chip small" aria-expanded={!closed[it.sourceId]} onClick={() => setClosed({ ...closed, [it.sourceId]: !closed[it.sourceId] })}>{closed[it.sourceId] ? 'SHOW YOUR FUEL SCHEDULE' : 'HIDE'}</button></p>
+          {!closed[it.sourceId] && <PlannedScheduleEditor item={it} weightKg={data.weightKg} zone={zone} />}
         </div>
       ))}
     </section>

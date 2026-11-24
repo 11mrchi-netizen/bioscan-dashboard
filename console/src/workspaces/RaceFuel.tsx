@@ -7,7 +7,8 @@ import { useLoadEffect } from '../lib/useLoadEffect'
 import { loadRaceFuel, type RaceFuel } from '../lib/raceFuelData'
 import { storeEvent, type StoreResult } from '../lib/fuelPlansStore'
 import { KeptNote } from './FuelPlan'
-import { eventSnapshot, fmtMin, roundToInt, type FuelStep, type CarryLeg, type PrepItem } from '../../../supabase/functions/_shared/fuel-core/index.ts'
+import ScheduleEditor from './ScheduleEditor'
+import { eventSnapshot, fmtMin, roundToInt, seedBlocks, type FuelStep, type CarryLeg, type PrepItem } from '../../../supabase/functions/_shared/fuel-core/index.ts'
 import './PlanBlock.css'
 import './Pages.css'
 import './FuelPlan.css'
@@ -47,8 +48,9 @@ function Plan({ d, kept }: { d: RaceFuel; kept: StoreResult | null }) {
   const p = d.plan
   return (
     <>
+      <ScheduleEditor title={d.event.name} kind="event" refKey={String(d.event.id)} durationMin={p.durationMin} seed={async () => seedBlocks(p)} />
       <section className="pg-card wide">
-        <h3 className="pg-card-title mono"><span>THE PLAN</span><span>{fmtMin(p.durationMin)} · LIKELY {fmtMin(p.durationLowMin)}–{fmtMin(p.durationHighMin)}</span></h3>
+        <h3 className="pg-card-title mono"><span>THE GENERATED PLAN</span><span>{fmtMin(p.durationMin)} · LIKELY {fmtMin(p.durationLowMin)}–{fmtMin(p.durationHighMin)}</span></h3>
         <div className="fp-nums">
           <Num label="CARBOHYDRATE" value={p.carbsPerHourHigh > 0 ? `${p.carbsPerHourLow > 0 ? `${g(p.carbsPerHourLow)}–` : ''}${g(p.carbsPerHourHigh)}` : '–'} unit="g/h" sub={`${g(p.totalCarbsG)} G IN ALL`} color="var(--m-carbs)" />
           <Num label="FLUID" value={p.fluidMlPerHourHigh > 0 ? `${g(p.fluidMlPerHourLow)}–${g(p.fluidMlPerHourHigh)}` : 'to thirst'} unit={p.fluidMlPerHourHigh > 0 ? 'ml/h' : ''} sub={`${g(p.totalFluidMl)} ML IN ALL`} color="var(--m-hydration)" />

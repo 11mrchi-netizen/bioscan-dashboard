@@ -12,7 +12,7 @@ export function PlanSessionRows({ sessions, blockName, blockShift, today }: { se
           <span className="mono">{longDate(s.scheduled_date).toUpperCase()}{s.start_time ? ` · ${s.start_time.slice(0, 5)}` : ''}</span>{'  '}{s.title ?? s.work_kind ?? 'Session'}
           {s.scheduled_date === today && <span className="pg-tag mono">TODAY</span>}
         </span>
-        <span className={`pg-row-value mono ${STATUS_CLASS[s.status] ?? ''}`}>{s.status.toUpperCase()}{s.status === 'planned' && s.exercise_session_id == null && s.scheduled_date >= today && <> · <a href={`#/plan/sessions/planned/${s.id}`}>EDIT</a></>}{s.status === 'superseded' && s.scheduled_date >= today && <> · <a href={`#/plan/sessions/planned/${s.id}`}>OPEN</a></>}</span>
+        <span className={`pg-row-value mono ${STATUS_CLASS[s.status] ?? ''}`}>{s.status.toUpperCase()}{s.status === 'planned' && s.exercise_session_id == null && s.scheduled_date >= today && <> · <a href={`#/plan/sessions/planned/${s.id}`}>EDIT</a></>}{s.status === 'superseded' && s.scheduled_date >= today && <> · <a href={`#/plan/sessions/planned/${s.id}`}>OPEN</a></>}{s.status === 'planned' && (s.duration_min ?? 0) >= 90 && s.scheduled_date >= today && <> · <a href={`#/plan/food?day=${s.scheduled_date}`}>FUEL</a></>}</span>
         <span className="pg-row-sub">{s.exercise_session_id != null && <><a href={`#/plan/sessions/${s.exercise_session_id}`}>RECORDED SESSION{s.match_status ? ` (${s.match_status})` : ''} →</a>{' · '}</>}{[
           s.domain?.replaceAll('_', ' '), s.duration_min ? hm(s.duration_min) : null,
           s.block_id != null ? `${blockName.get(s.block_id) ?? 'block'}${s.week_index ? ` · week ${s.week_index}` : ''}` : null,

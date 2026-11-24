@@ -2,7 +2,7 @@
 // fuel_schedules (the phone's table, so the phone shows and debriefs the same schedule). Starts: from the planner's plan, from a STANDARD, or empty. Standards are
 // reusable ways of fuelling ("a gel every 30 minutes from the 30th") applied to a session of any length; FILL adds one rule in a step. Totals, per-hour rates and
 // warnings follow every edit.
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   applyStandard, describeRule, expandSchedule, FUEL_FORMS, type FuelBlock, type FuelProductOption, type PlannedItem, roundToInt, ruleProblems, scheduleTotals, scheduleWarnings,
   standardFromBlocks, type StandardRule,
@@ -22,9 +22,21 @@ const PRESETS: FuelProductOption[] = [
   { id: null, name: 'Gel (25 g, generic)', kind: 'gel', carbsG: 25, fluidMl: 0, sodiumMg: 50, caffeineMg: 0, fructoseG: null },
 ]
 
-export default function ScheduleEditor({ item, weightKg, zone, toleratedGPerHour = 60 }: { item: PlannedItem; weightKg: number; zone: string; toleratedGPerHour?: number }) {
+/** For a long session of the plan: where its schedule is kept, and the plan to start from. */
+export function PlannedScheduleEditor({ item, weightKg, zone }: { item: PlannedItem; weightKg: number; zone: string }) {
   const key = scheduleKey(item)
-  const duration = Math.round(item.durationMin)
+  const seed = useCallback(() => seedScheduleFor(item, weightKg, zone), [item, weightKg, zone])
+  if (!key) return null
+  return <ScheduleEditor title={item.title} kind={key[0]} refKey={key[1]} durationMin={item.durationMin} seed={seed} />
+}
+
+/**
+ * The editor for any schedule: kind and refKey say where it is kept (the phone's fuel_schedules: 'event' on the event id, 'planned' on the plan item, 'session' on a recording),
+ * seed builds the generated plan as blocks to start from.
+ */
+export default function ScheduleEditor({ title, kind, refKey, durationMin, seed, toleratedGPerHour = 60 }: { title: string; kind: string; refKey: string; durationMin: number; seed: () => Promise<FuelBlock[]>; toleratedGPerHour?: number }) {
+  const key: [string, string] = [kind, refKey]
+  const duration = Math.round(durationMin)
   const [loaded, setLoaded] = useState(false)
   const [blocks, setBlocks] = useState<FuelBlock[]>([])
   const [saved, setSaved] = useState('')
@@ -51,9 +63,8 @@ export default function ScheduleEditor({ item, weightKg, zone, toleratedGPerHour
       if (live) setLoaded(true)
     })()
     return () => { live = false }
-  }, [key?.[0], key?.[1]]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [kind, refKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!key) return null
   const dirty = JSON.stringify(blocks) !== (saved || '[]')
   const totals = scheduleTotals(blocks, duration)
   const warnings = scheduleWarnings(blocks, duration, toleratedGPerHour)
@@ -97,13 +108,13 @@ export default function ScheduleEditor({ item, weightKg, zone, toleratedGPerHour
 
   return (
     <section className="pg-card wide fp-sched" data-testid="fuel-schedule">
-      <h3 className="pg-card-title mono"><span>FUEL SCHEDULE · {item.title.toUpperCase()}</span><span>{clock(duration)}{dirty ? ' · UNSAVED' : exists ? ' · SAVED' : ''}</span></h3>
+      <h3 className="pg-card-title mono"><span>YOUR FUEL SCHEDULE · {title.toUpperCase()}</span><span>{clock(duration)}{dirty ? ' · UNSAVED' : exists ? ' · SAVED' : ''}</span></h3>
       {!loaded && <p className="pg-note">Loading…</p>}
       {loaded && !exists && blocks.length === 0 && (
         <div className="fs-start">
           <p className="pg-note">What you will take and when: gels, drink mixes, water, electrolytes. Start from the plan, from one of your standards, or empty; edit anything after.</p>
           <div className="pg-actions">
-            <button className="pb-chip on" disabled={busy} onClick={() => run(async () => { const b = await seedScheduleFor(item, weightKg, zone); setBlocks(byStart(b)); setSeededFrom('plan'); setNote({ text: 'The plan as blocks. Save to keep it.', bad: false }) })}>START FROM THE PLAN</button>
+            <button className="pb-chip on" disabled={busy} onClick={() => run(async () => { const b = await seed(); setBlocks(byStart(b.map(cleanBlock))); setSeededFrom('plan'); setNote({ text: 'The plan as blocks. Save to keep it.', bad: false }) })}>START FROM THE PLAN</button>
             <button className="pb-chip" disabled={busy} onClick={() => { setBlocks([]); setSeededFrom('manual'); setExists(true) }}>START EMPTY</button>
           </div>
         </div>

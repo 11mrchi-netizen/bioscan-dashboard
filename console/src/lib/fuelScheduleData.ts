@@ -10,7 +10,8 @@ export interface ScheduleRow { duration_min: number; blocks: FuelBlock[]; seeded
 
 /** A block as the phone reads it: every field present, numbers as numbers. */
 export function cleanBlock(b: Partial<FuelBlock> & { id: string }): FuelBlock {
-  const n = (x: unknown, d = 0) => (Number.isFinite(Number(x)) ? Number(x) : d)
+  // amounts to a tenth: a seeded schedule divides fluid over the steps (123.333…), which no one types
+  const n = (x: unknown, d = 0) => (Number.isFinite(Number(x)) ? Math.round(Number(x) * 10) / 10 : d)
   return {
     id: b.id, label: String(b.label ?? ''), form: String(b.form ?? 'other'), startMin: Math.round(n(b.startMin)), intervalMin: Math.round(n(b.intervalMin)), count: Math.max(1, Math.round(n(b.count, 1))),
     carbsG: n(b.carbsG), fluidMl: n(b.fluidMl), sodiumMg: n(b.sodiumMg), caffeineMg: n(b.caffeineMg), fuelingProductId: b.fuelingProductId ?? null, supplementProductId: b.supplementProductId ?? null,

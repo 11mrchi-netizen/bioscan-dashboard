@@ -260,6 +260,23 @@ class RaceFuelParityTest {
         return input to expected
     }
 
+    private fun estimateCases(): Pair<JsonElement, JsonElement> {
+        val runs = listOf(Triple(10.0, 150.0, 62.0), Triple(12.5, 300.0, 85.0), Triple(8.0, 40.0, 46.0), Triple(21.0, 520.0, 158.0), Triple(15.0, 200.0, 96.0), Triple(5.0, 20.0, 28.0), Triple(2.0, 0.0, 12.0), Triple(9.0, 10.0, 25.0))
+        val recent = runs.map { com.bioscan.fieldterminal.domain.fuel.RecentRun(it.first, it.second, it.third) }
+        val asks = listOf(5.0 to 0.0, 10.0 to 100.0, 21.1 to 600.0, 42.0 to 1500.0, 50.6 to 1400.0, 3.0 to 0.0)
+        val cases = asks.flatMap { (km, up) -> listOf(recent, recent.take(4), recent.drop(2)).map { rs -> Triple(km, up, rs) } }
+        val input = prim(cases.map { (km, up, rs) -> mapOf("km" to km, "ascentM" to up, "runs" to rs.map { mapOf("distanceKm" to it.distanceKm, "ascentM" to it.ascentM, "durationMin" to it.durationMin) }) })
+        val expected = prim(cases.map { (km, up, rs) ->
+            val e = com.bioscan.fieldterminal.domain.fuel.estimateRunTime(km, up, rs)
+            val r1 = com.bioscan.fieldterminal.domain.fuel.durationRange(null, null, e)
+            val r2 = com.bioscan.fieldterminal.domain.fuel.durationRange(210.0, 180.0, e)
+            val r3 = com.bioscan.fieldterminal.domain.fuel.durationRange(null, 540.0, e)
+            fun r(t: Triple<Double, Pair<Double, Double>, String>?) = t?.let { mapOf("base" to it.first, "low" to it.second.first, "high" to it.second.second, "basis" to it.third) }
+            mapOf("estimate" to e?.let { mapOf("minutes" to it.minutes, "lowMinutes" to it.lowMinutes, "highMinutes" to it.highMinutes, "basis" to it.basis) }, "history" to r(r1), "target" to r(r2), "expected" to r(r3))
+        })
+        return input to expected
+    }
+
     @Test
     fun theWebPlansTheSameRace() {
         val inputFile = File(dir, "race-input.json")
@@ -268,10 +285,11 @@ class RaceFuelParityTest {
         val (intakeIn, intakeOut) = intakeCases()
         val (climIn, climOut) = climatologyCase()
         val (heatIn, heatOut) = heatGrid()
-        val input = buildJsonObject { put("scenarios", JsonArray(scenarios)); put("intake", intakeIn); put("climatology", climIn); put("heat", heatIn) }
+        val (estIn, estOut) = estimateCases()
+        val input = buildJsonObject { put("scenarios", JsonArray(scenarios)); put("intake", intakeIn); put("climatology", climIn); put("heat", heatIn); put("estimates", estIn) }
         val expected = buildJsonObject {
             put("plans", buildJsonObject { scenarios.forEach { put(it.s("name")!!, json.encodeToJsonElement(RaceFuelPlan.serializer(), run(it))) } })
-            put("intake", intakeOut); put("climatology", climOut); put("heat", heatOut)
+            put("intake", intakeOut); put("climatology", climOut); put("heat", heatOut); put("estimates", estOut)
         }
         if (System.getenv("FT_PARITY_WRITE") != null || !expectedFile.exists()) {
             dir.mkdirs()

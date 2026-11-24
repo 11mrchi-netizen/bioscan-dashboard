@@ -115,7 +115,13 @@ only on the phone, so the web uses the defaults; the phone's answers to "what is
 (`calendar_event_overrides`) but cannot be given here. To regenerate the fixtures after a deliberate rule change:
 `FT_PARITY_WRITE=1 ./gradlew :app:testDebugUnitTest --tests '*ParityTest*'` in `android-app`.
 
-Not built yet: race and long-session fuel (`RaceFuelPlan.kt`), the intake against the plan, writing `fuel_plans`.
+**Races** (Plan › Races › FUEL PLAN on an event): the plan for a race or long session, by time and by aid station: carbohydrate, fluid and sodium per hour and in all,
+the steps down the course, what to carry between stations, before and after, the weather (Open-Meteo: the forecast within 16 days, else the typical weather of those
+dates over ten years), what it assumes and what to watch for. Engine: `heat.ts`, `sweat.ts`, `course.ts`, `raceFuel.ts`; reads: `raceFuelData.ts`, `weather.ts`.
+The phone's home place (the weather of an event with no start point) and its carbohydrate tolerance, caffeine and salty-sweat settings are phone-only: no place means
+no weather, and the defaults are used.
+
+Not built yet: the intake against the plan, writing `fuel_plans`, long sessions from the day plan (the phone offers them from Today).
 
 ## Look
 

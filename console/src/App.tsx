@@ -16,6 +16,7 @@ const Plan         = lazy(() => import('./workspaces/Plan'))
 const Setup        = lazy(() => import('./workspaces/Setup'))
 const SessionDetail = lazy(() => import('./workspaces/SessionDetail'))
 const PlannedSessionEdit = lazy(() => import('./workspaces/PlannedSessionEdit'))
+const RaceFuelPage = lazy(() => import('./workspaces/RaceFuel'))
 const Metric       = lazy(() => import('./workspaces/Metric'))
 const HistoryRedirect = lazy(() => import('./workspaces/Metric').then((m) => ({ default: m.HistoryRedirect })))
 // The tab pages: each holds the pages that were separate workspaces before the redesign.
@@ -70,6 +71,7 @@ export default function App() {
         <Route path="history" element={<HistoryRedirect />} />
         <Route path="lab" element={<Navigate to="/lab/compare" replace />} />
         <Route path="plan" element={<Navigate to="/plan/overview" replace />} />
+        <Route path="plan/races/:id" element={<RaceFuelPage />} />
         <Route path="plan/sessions/planned/:id" element={<PlannedSessionEdit />} />
         <Route path="plan/sessions/:id" element={<SessionDetail />} />
         <Route path="plan/:tab" element={<Plan />} />

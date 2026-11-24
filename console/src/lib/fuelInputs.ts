@@ -6,7 +6,7 @@ import {
   atTime, type CalendarOverride, type CalendarSessionInput, demandHistory, type DemandHistory, type EventInput, fatFreeMass, type PlannedSessionInput, type RecordedSessionInput,
   resolvePlannedDays, type StoredLink, weekEnergyOf, zdtString, aggregateMealsByDay, type MealRow, planInWeekBlocks, type DayFuelPlan, type PlannedDay, type WeekEnergy,
   type EventKind, type EventPriority, type EventSport, type EventStatus, type NutritionGoals,
-  codeMeals, DEFAULT_MEAL_TIMES, DEFAULT_TOLERATED_G_PER_H, type DayMeals, type MealTimes,
+  checkIntakeHistory, type IntakeHistoryResult, type LoggedDay, codeMeals, DEFAULT_MEAL_TIMES, DEFAULT_TOLERATED_G_PER_H, type DayMeals, type MealTimes,
 } from '../../../supabase/functions/_shared/fuel-core/index.ts'
 import { restingHrAsOf, robustMaxHr } from '../../../supabase/functions/_shared/analysis-core/trainingLoad.ts'
 
@@ -74,6 +74,8 @@ export interface FuelDays {
   today: string; todayIdx: number; days: PlannedDay[]; plans: DayFuelPlan[]; energy: WeekEnergy; weightKg: number; fatFreeMassKg: number | null
   /** each day's meals, coded under the settings given */
   meals: DayMeals[]
+  /** the days before against what was planned (the phone's check before a race), today onward not included */
+  history: IntakeHistoryResult
 }
 
 /** The phone keeps these on the phone only (FuelSettingsStore); the web uses the same defaults until it has its own. */
@@ -135,7 +137,16 @@ export function buildFuelDays(rows: FuelRows, today: string, nowIso: string, zon
   const todayIdx = days.findIndex((d) => d.date === today)
   const plans = planInWeekBlocks(days, todayIdx, energy, weightKg, ffm)
   const meals = days.map((d, i) => codeMeals(plans[i], d, days[i + 1] ?? null, weightKg, zone, settings.meals, settings.trainLow, energy.deficit === true, settings.toleratedGPerHour))
-  return { today, todayIdx, days, plans, energy, weightKg, fatFreeMassKg: ffm, meals }
+  // The days before, as FuelPlanRepository.computeToday: planned plans of the days before today against the Log's full days; a race today or tomorrow;
+  // this morning's weight against the median of the seven weights before it.
+  const logged: LoggedDay[] = aggregateMealsByDay(rows.meals).map((d) => ({ date: d.date, mealsLogged: d.mealCount, carbG: d.carbsG, kcal: d.calories }))
+  const raceSoon = days.filter((d) => d.date === today || d.date === plusDays(today, 1)).some((d) => d.items.some((i) => i.intensity === 'RACE' && i.eventPriority !== 'C'))
+  const weights = rows.body.filter((b) => b.weight_kg != null)
+  const morning = weights.find((b) => b.date === today)?.weight_kg ?? null
+  const previous = weights.filter((b) => b.date !== today).slice(0, 7).map((b) => b.weight_kg as number).sort((a, b) => a - b)
+  const usual = previous.length ? previous[Math.trunc(previous.length / 2)] : null
+  const intakeHistory = checkIntakeHistory(plans.slice(0, todayIdx), logged, weightKg, raceSoon, morning, usual)
+  return { today, todayIdx, days, plans, energy, weightKg, fatFreeMassKg: ffm, meals, history: intakeHistory }
 }
 
 const localDay = (zdt: string) => zdt.slice(0, 10)

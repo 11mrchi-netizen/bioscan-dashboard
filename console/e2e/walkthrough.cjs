@@ -91,6 +91,8 @@ T.body_metrics.push({ id: id++, user_id: 'u1', date: new Date().toLocaleDateStri
 // one planned session every day around today, for Plan › Sessions' week cards (the last week of a window must be whole)
 const ymd = (d) => d.toLocaleDateString('sv-SE')
 const dayPlus = (n) => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + n); return d }
+T.athlete_events = [{ id: 9301, user_id: 'u1', name: 'Test Half', kind: 'race', sport: 'run', priority: 'B', event_date: ymd(dayPlus(30)), start_time: null, status: 'planned', target_time_min: 150, expected_duration_min: null, distance_km: 21, ascent_m: 300, start_lat: 25.08, start_lon: 121.52,
+  course_profile: [[0, 50], [5000, 120], [10500, 200], [16000, 90], [21000, 60]], aid_stations: [{ name: 'CP1', km: 8, water: true, food: false, drop_bag: false, cutoff_min: 90 }, { name: 'CP2', km: 15, water: true, food: true, drop_bag: true, cutoff_min: 140 }], course_source: null, planned_route_id: null, exercise_session_id: null, notes: null, calendar_event_id: null, location_name: null, descent_m: null }]
 T.planned_sessions = []
 for (let n = -70; n <= 70; n++) T.planned_sessions.push({ id: 5000 + n, block_id: null, week_index: null, sequence_no: null, domain: 'run', work_kind: 'easy', title: `Run ${n}`, scheduled_date: ymd(dayPlus(n)), original_date: null, start_time: '07:00:00', duration_min: 45, status: 'planned', exercise_session_id: null, match_status: null, gcal_pushed_at: null, zepp_pushed_at: null })
 // recorded workouts on days that have an open plan: a Zepp strength session (with its watch measurements), a walk, a run
@@ -223,6 +225,15 @@ async function waitForServer() {
     const errors = []
     page.on('pageerror', (e) => errors.push(e.message))
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
+    // Open-Meteo, as the weather of a race 30 days out is its archive: a mild day, hour by hour, for each date asked
+    await ctx.route(/^https:\/\/(archive-api|api)\.open-meteo\.com\//, async (route) => {
+      const q = new URL(route.request().url()).searchParams
+      requests.push(`WEATHER ${new URL(route.request().url()).hostname}`)
+      const time = [], t = Date.parse(`${q.get('start_date')}T00:00:00Z`), end = Date.parse(`${q.get('end_date')}T00:00:00Z`)
+      for (let d = t; d <= end; d += 864e5) for (let h = 0; h < 24; h++) time.push(`${new Date(d).toISOString().slice(0, 10)}T${String(h).padStart(2, '0')}:00`)
+      const col = (f) => time.map((_, i) => f(i % 24))
+      await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ hourly: { time, temperature_2m: col((h) => 16 + h / 3), relative_humidity_2m: col(() => 70), dew_point_2m: col(() => 11), apparent_temperature: col(() => 16), shortwave_radiation: col((h) => h * 25), windspeed_10m: col(() => 7), precipitation: col(() => 0) } }) })
+    })
     await ctx.route(`https://${REF}.supabase.co/**`, async (route) => {
       const req = route.request()
       const u = new URL(req.url())
@@ -868,6 +879,17 @@ async function waitForServer() {
     check(!requests.some((q) => /^(POST|PATCH|DELETE) (fuel_plans|fuel_week_plans)/.test(q)), 'the page writes nothing')
     await page.goto(`${BASE}#/plan/food?view=prep`); await page.waitForSelector('.pb', { timeout: 15000 })
     check(await crumb() === 'PLAN > FOOD > MEAL PREP' && (await navOn()).includes('plan/food/prep'), 'the meal prep is the other view of Food, marked in the menu', await crumb())
+
+    // 8m. an event's fuel plan: Plan > Races > FUEL PLAN, worked out with the phone's rules, the weather read from Open-Meteo, read only
+    await page.goto(`${BASE}#/plan/races`); await page.waitForSelector('a[href="#/plan/races/9301"]', { timeout: 15000 })
+    await page.locator('a[href="#/plan/races/9301"]').click(); await page.waitForSelector('[data-testid="race-fuel"] .fp-num', { timeout: 30000 })
+    const rnums = await page.locator('[data-testid="race-fuel"] .fp-num-value').allTextContents()
+    check(rnums.length === 4 && /g\/h/.test(rnums[0]) && /ml\/h/.test(rnums[1]), 'the plan names carbohydrate, fluid, sodium and the expected loss', rnums.join('|'))
+    check((await page.locator('.rf-table tbody tr').count()) >= 5, 'the steps down the course are listed')
+    check((await text('[data-testid="race-fuel"]')).includes('TYPICAL') && requests.some((q) => q === 'WEATHER archive-api.open-meteo.com'), 'a race 30 days out is planned on the typical weather of its dates (archive)')
+    check((await page.locator('.pg-card:has(h3:has-text("BEFORE")) .pg-row').count()) >= 4 && (await page.locator('.pg-card:has(h3:has-text("AFTER")) .pg-row').count()) === 3, 'what to do before and after is listed')
+    check((await text('.pg-card:has(h3:has-text("WHAT TO CARRY"))')).includes('CP1') || (await text('[data-testid="race-fuel"]')).includes('CP1'), 'the aid stations split the carry into legs')
+    check(!requests.some((q) => /^(POST|PATCH|DELETE) (fuel_plans|fuel_schedules)/.test(q)), 'the page writes nothing')
 
     // 9. old routes redirect
     await page.goto(`${BASE}#/overview`); await page.waitForTimeout(300)

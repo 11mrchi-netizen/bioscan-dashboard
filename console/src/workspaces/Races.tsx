@@ -1,6 +1,7 @@
 // PLAN › RACES (web transition plan, phase 4): the races and long sessions ahead and behind, each with its course, target
 // and fuel plan where one was made. Read-only: events and their fuel plans are made on the phone.
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useLoadEffect } from '../lib/useLoadEffect'
 import { localToday } from '../lib/dates'
@@ -63,6 +64,7 @@ export default function Races() {
                   {f && <span className="pg-row-sub">updated {new Date(f.updated_at).toLocaleDateString('en-GB')}{f.duration_min ? ` · for ${hm(f.duration_min)}` : ''}</span>}</li>
                 {e.exercise_session_id && <li className="pg-row"><span className="pg-row-title">Result</span><span className="pg-row-value pg-ok">RECORDED</span></li>}
               </ul>
+              {e.status !== 'cancelled' && e.status !== 'dns' && <div className="pg-actions"><Link className="btn-ghost mono" to={`/plan/races/${e.id}`}>FUEL PLAN →</Link></div>}
               {e.notes && <p className="pg-note">{e.notes}</p>}
             </section>
           )

@@ -154,7 +154,7 @@ export function estimateSessionKcal(type: string, durationMin: number, intensity
 
 export const RIEGEL_EXPONENT = 1.06
 export interface RecentRun { distanceKm: number; ascentM: number; durationMin: number }
-export interface TimeEstimate { minutes: number; lowMinutes: number; highMinutes: number }
+export interface TimeEstimate { minutes: number; lowMinutes: number; highMinutes: number; basis: string }
 export const kmEffort = (distanceKm: number, ascentM: number) => distanceKm + ascentM / 100
 
 export function estimateRunTime(distanceKm: number, ascentM: number, runs: RecentRun[]): TimeEstimate | null {
@@ -165,7 +165,10 @@ export function estimateRunTime(distanceKm: number, ascentM: number, runs: Recen
   const typicalEffort = usable.map((r) => kmEffort(r.distanceKm, r.ascentM)).sort((a, b) => a - b)[Math.trunc(usable.length / 2)]
   const effort = kmEffort(distanceKm, ascentM)
   const riegel = Math.pow(Math.max(effort / typicalEffort, 1), RIEGEL_EXPONENT - 1)
-  return { minutes: q(0.5) * effort * riegel, lowMinutes: q(0.25) * effort * riegel, highMinutes: q(0.75) * effort * riegel }
+  return {
+    minutes: q(0.5) * effort * riegel, lowMinutes: q(0.25) * effort * riegel, highMinutes: q(0.75) * effort * riegel,
+    basis: `your last ${usable.length} runs (median ${fmt(q(0.5), 1)} min per km-effort), longer efforts slowed by Riegel's 1.06`,
+  }
 }
 
 // ---- what a calendar entry says (CalendarWorkout.kt) ----

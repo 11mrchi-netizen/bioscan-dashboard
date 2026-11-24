@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import {
   type AidStation, checkIntakeHistory, climatology, type CoursePoint, type DayFuelPlan, type FuelProductOption, type HourWeather, type Intensity, type LoggedDay, planFuelDays, planRaceFuel,
-  heatBand, heatIndexC, type PlannedDay, type RaceFuelSettings, type SweatTest, sweatProfile, type WeatherSeries, type WeekEnergy, withCatchUp, type IntakeHistoryResult,
+  durationRange, estimateRunTime, type RecentRun, heatBand, heatIndexC, type PlannedDay, type RaceFuelSettings, type SweatTest, sweatProfile, type WeatherSeries, type WeekEnergy, withCatchUp, type IntakeHistoryResult,
 } from './index.ts'
 
 const dir = new URL('./fixtures/', import.meta.url)
@@ -63,6 +63,18 @@ test('the heat index and its bands over a grid of temperature and humidity', () 
     const got = c.humidityPct == null ? c.tempC : heatIndexC(c.tempC, c.humidityPct)
     assert.ok(Math.abs(got - want.index) <= 1e-9 * Math.max(1, Math.abs(want.index)), `index ${c.tempC}/${c.humidityPct}: ${got} vs ${want.index}`)
     assert.equal(heatBand(c.tempC, c.humidityPct), want.band, `band ${c.tempC}/${c.humidityPct}`)
+  })
+})
+
+test('the duration from the person\'s runs, and its range', () => {
+  const cases = input.estimates as { km: number; ascentM: number; runs: RecentRun[] }[]
+  cases.forEach((c, i) => {
+    const e = estimateRunTime(c.km, c.ascentM, c.runs)
+    const want = expected.estimates[i]
+    same(JSON.parse(JSON.stringify(e)), want.estimate, `estimate ${i}`)
+    same(JSON.parse(JSON.stringify(durationRange(null, null, e))), want.history, `history ${i}`)
+    same(JSON.parse(JSON.stringify(durationRange(210, 180, e))), want.target, `target ${i}`)
+    same(JSON.parse(JSON.stringify(durationRange(null, 540, e))), want.expected, `expected ${i}`)
   })
 })
 

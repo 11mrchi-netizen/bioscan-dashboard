@@ -4,7 +4,7 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useLoadEffect } from '../lib/useLoadEffect'
-import { localDaysAgo, localToday } from '../lib/dates'
+import { localToday } from '../lib/dates'
 import { loadPlannedSessions, longDate, mondayOf, type PlannedSession } from '../lib/planReads'
 import { PlanSessionRows } from './PlanSessionRows'
 import './PlanBlock.css'
@@ -18,8 +18,11 @@ export default function Sessions() {
   const win = params.get('w') ?? 'ahead'
   const status = params.get('status')
   const today = localToday()
-  const from = win === 'ahead' ? today : localDaysAgo(41)
-  const to = win === 'recent' ? today : plus(today, 41)
+  // Whole weeks: the window starts on a Monday and ends on a Sunday, so no week is cut short (a window of
+  // "today + 41 days" ended on a Monday and showed that last week with one session).
+  const thisMonday = mondayOf(today)
+  const from = win === 'ahead' ? today : plus(thisMonday, -35)
+  const to = win === 'recent' ? today : plus(thisMonday, 41)
   const [d, setD] = useState<{ sessions: PlannedSession[]; blockName: Map<number, string> } | null>(null)
   const st = useLoadEffect(async (cur) => { const x = await loadPlannedSessions(from, to); if (cur()) setD(x) }, [from, to])
   const set = (k: string, v: string | null) => { const n = new URLSearchParams(params); if (v == null) n.delete(k); else n.set(k, v); setParams(n) }

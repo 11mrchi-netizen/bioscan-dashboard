@@ -5,7 +5,7 @@ import { supabase } from './supabase'
 import {
   endEarlyPreview, type MaxStep, type ModuleChoice, type PlannedLite, type StrengthModuleDef, topPct,
   type DatedSet, type Definition, DefinitionIndex, deriveBlockDomains, type GeneratedBlock, localToday, movementKey, parseDefinition, plusDays,
-  prescriptionJson, type RecordedMax, resolveMaxes, type Accessory, accessoriesFrom, accessoriesJson, accessoriesFor, accessoryItemsFor, liftJson, type GenEquipment, type MaxEntry,
+  prescriptionJson, type RecordedMax, resolveMaxes, type Accessory, accessoriesFrom, accessoriesJson, type GenEquipment, type MaxEntry,
 } from '../../../supabase/functions/_shared/training-core/index.ts'
 import { type AccessorySession, accessoryRevisions } from './accessoryRevisions'
 import {

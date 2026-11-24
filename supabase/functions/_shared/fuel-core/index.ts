@@ -1,3 +1,12 @@
 // The meal prep engine in TypeScript (port of the Android domain/fuel MealPrep and portion solver), shared by the console.
 export * from './plates.ts'
 export * from './prep.ts'
+export * from './day.ts'
+export * from './plannedDay.ts'
+export * from './weekEnergy.ts'
+export * from './mealCodes.ts'
+export * from './heat.ts'
+export * from './sweat.ts'
+export * from './course.ts'
+export * from './raceFuel.ts'
+export { fmtMin, fmtNum } from './text.ts'

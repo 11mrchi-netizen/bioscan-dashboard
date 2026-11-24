@@ -16,6 +16,7 @@ const Plan         = lazy(() => import('./workspaces/Plan'))
 const Setup        = lazy(() => import('./workspaces/Setup'))
 const SessionDetail = lazy(() => import('./workspaces/SessionDetail'))
 const PlannedSessionEdit = lazy(() => import('./workspaces/PlannedSessionEdit'))
+const RaceFuelPage = lazy(() => import('./workspaces/RaceFuel'))
 const Metric       = lazy(() => import('./workspaces/Metric'))
 const HistoryRedirect = lazy(() => import('./workspaces/Metric').then((m) => ({ default: m.HistoryRedirect })))
 // The tab pages: each holds the pages that were separate workspaces before the redesign.
@@ -33,7 +34,7 @@ const MOVED: Record<string, { to: string; add?: Record<string, string> }> = {
   routine: { to: '/lab/routine' },
   tests: { to: '/lab/tests' },
   // web redesign, phase 5: Plan and Setup tabs, Body and Risk inside Me
-  'plan-block': { to: '/plan/training' }, 'meal-prep': { to: '/plan/food' }, sessions: { to: '/plan/sessions' }, races: { to: '/plan/races' },
+  'plan-block': { to: '/plan/training' }, 'meal-prep': { to: '/plan/food', add: { view: 'prep' } }, sessions: { to: '/plan/sessions' }, races: { to: '/plan/races' },
   integrity: { to: '/setup/integrity' }, data: { to: '/setup/data' }, connections: { to: '/setup/connections' },
   body: { to: '/me', add: { tab: 'BODY' } }, risk: { to: '/me', add: { tab: 'EXPOSURES' } },
   // the removed v1 dashboards and renamed workspaces
@@ -70,6 +71,7 @@ export default function App() {
         <Route path="history" element={<HistoryRedirect />} />
         <Route path="lab" element={<Navigate to="/lab/compare" replace />} />
         <Route path="plan" element={<Navigate to="/plan/overview" replace />} />
+        <Route path="plan/races/:id" element={<RaceFuelPage />} />
         <Route path="plan/sessions/planned/:id" element={<PlannedSessionEdit />} />
         <Route path="plan/sessions/:id" element={<SessionDetail />} />
         <Route path="plan/:tab" element={<Plan />} />

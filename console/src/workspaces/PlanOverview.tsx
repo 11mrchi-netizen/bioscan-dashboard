@@ -38,7 +38,7 @@ export default function PlanOverview() {
         </div>
         <div className="pb-row tight">
           <a className="btn-ghost mono" href="#/plan/training">PLAN A BLOCK →</a>
-          <a className="btn-ghost mono" href="#/plan/food">MEAL PREP →</a>
+          <a className="btn-ghost mono" href="#/plan/food?view=prep">MEAL PREP →</a>
         </div>
       </header>
       {st.error && <p className="pb-warn">Could not load: {st.error}</p>}

@@ -34,7 +34,7 @@ export const NAV: readonly NavSection[] = [
     { id: 'regimen', label: 'Regimen' }, { id: 'tests', label: 'Tests' }, { id: 'routine', label: 'Routine' },
   ] },
   { id: 'plan', label: 'Plan', tabs: [
-    { id: 'overview', label: 'Overview' }, { id: 'training', label: 'Training' }, { id: 'food', label: 'Food' },
+    { id: 'overview', label: 'Overview' }, { id: 'training', label: 'Training' }, { id: 'food', label: 'Food', views: [{ id: 'plan', label: 'Fuel plan', value: null }, { id: 'prep', label: 'Meal prep', value: 'prep' }] },
     { id: 'sessions', label: 'Sessions', detailView: 'recorded', views: [{ id: 'planned', label: 'Planned', value: null }, { id: 'recorded', label: 'Recorded', value: 'recorded' }] },
     { id: 'races', label: 'Races' },
   ] },

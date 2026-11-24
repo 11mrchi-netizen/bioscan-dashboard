@@ -86,10 +86,13 @@ for (let i = 0; i < 70; i++) {
   T.scale_readings.push({ id: id++, user_id: 'u1', occurred_at: `${day(t)}T07:${String(10 + (i % 40)).padStart(2, '0')}:00+00:00`, weight_kg: +(73 - i * 0.03 + ((i * 7) % 5) * 0.1).toFixed(2), impedance_ohm: Math.round(520 + ((i * 13) % 31) - i * 0.4) })
   if (i % 2 === 0) T.body_metrics.push({ id: id++, user_id: 'u1', date: day(t), body_fat_pct: +(18.5 - i * 0.02 + ((i * 3) % 4) * 0.2).toFixed(1), height_cm: 178, source: 'health_connect' })
 }
-T.user_profile = [{ id: 1, user_id: 'u1', date_of_birth: '1990-05-01', sex: 'male', height_cm: 178 }]
+T.user_profile = [{ id: 1, user_id: 'u1', date_of_birth: '1990-05-01', sex: 'male', height_cm: 178, nutrition_goals: { caloriesKcal: 2800, proteinG: 150 } }]
+T.body_metrics.push({ id: id++, user_id: 'u1', date: new Date().toLocaleDateString('sv-SE'), weight_kg: 73.5, source: 'scale' }) // the weight the fuel plan is per kilogram of
 // one planned session every day around today, for Plan › Sessions' week cards (the last week of a window must be whole)
 const ymd = (d) => d.toLocaleDateString('sv-SE')
 const dayPlus = (n) => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + n); return d }
+T.athlete_events = [{ id: 9301, user_id: 'u1', name: 'Test Half', kind: 'race', sport: 'run', priority: 'B', event_date: ymd(dayPlus(30)), start_time: null, status: 'planned', target_time_min: 150, expected_duration_min: null, distance_km: 21, ascent_m: 300, start_lat: 25.08, start_lon: 121.52,
+  course_profile: [[0, 50], [5000, 120], [10500, 200], [16000, 90], [21000, 60]], aid_stations: [{ name: 'CP1', km: 8, water: true, food: false, drop_bag: false, cutoff_min: 90 }, { name: 'CP2', km: 15, water: true, food: true, drop_bag: true, cutoff_min: 140 }], course_source: null, planned_route_id: null, exercise_session_id: null, notes: null, calendar_event_id: null, location_name: null, descent_m: null }]
 T.planned_sessions = []
 for (let n = -70; n <= 70; n++) T.planned_sessions.push({ id: 5000 + n, block_id: null, week_index: null, sequence_no: null, domain: 'run', work_kind: 'easy', title: `Run ${n}`, scheduled_date: ymd(dayPlus(n)), original_date: null, start_time: '07:00:00', duration_min: 45, status: 'planned', exercise_session_id: null, match_status: null, gcal_pushed_at: null, zepp_pushed_at: null })
 // recorded workouts on days that have an open plan: a Zepp strength session (with its watch measurements), a walk, a run
@@ -222,6 +225,15 @@ async function waitForServer() {
     const errors = []
     page.on('pageerror', (e) => errors.push(e.message))
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
+    // Open-Meteo, as the weather of a race 30 days out is its archive: a mild day, hour by hour, for each date asked
+    await ctx.route(/^https:\/\/(archive-api|api)\.open-meteo\.com\//, async (route) => {
+      const q = new URL(route.request().url()).searchParams
+      requests.push(`WEATHER ${new URL(route.request().url()).hostname}`)
+      const time = [], t = Date.parse(`${q.get('start_date')}T00:00:00Z`), end = Date.parse(`${q.get('end_date')}T00:00:00Z`)
+      for (let d = t; d <= end; d += 864e5) for (let h = 0; h < 24; h++) time.push(`${new Date(d).toISOString().slice(0, 10)}T${String(h).padStart(2, '0')}:00`)
+      const col = (f) => time.map((_, i) => f(i % 24))
+      await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ hourly: { time, temperature_2m: col((h) => 16 + h / 3), relative_humidity_2m: col(() => 70), dew_point_2m: col(() => 11), apparent_temperature: col(() => 16), shortwave_radiation: col((h) => h * 25), windspeed_10m: col(() => 7), precipitation: col(() => 0) } }) })
+    })
     await ctx.route(`https://${REF}.supabase.co/**`, async (route) => {
       const req = route.request()
       const u = new URL(req.url())
@@ -608,11 +620,11 @@ async function waitForServer() {
 
     // 8g. the regroup (phase 5): Plan and Setup tabs, Body and Risk inside Me, the rail, old routes, the Google sign-in return
     check(await to('/plan') === '/plan/overview' && await to('/plan?x=1') === '/plan/overview', 'the Plan root opens its Overview')
-    check(await to('/plan-block?week=2') === '/plan/training?week=2' && await to('/meal-prep') === '/plan/food' && await to('/sessions') === '/plan/sessions' && await to('/races') === '/plan/races', 'old plan routes land on the Plan tabs, query kept')
+    check(await to('/plan-block?week=2') === '/plan/training?week=2' && await to('/meal-prep') === '/plan/food?view=prep' && await to('/sessions') === '/plan/sessions' && await to('/races') === '/plan/races', 'old plan routes land on the Plan tabs, query kept')
     check(await to('/data?table=meals&id=42') === '/setup/data?table=meals&id=42' && await to('/integrity?series=hrv') === '/setup/integrity?series=hrv' && await to('/connections') === '/setup/connections', 'old data, integrity and connections routes land in Setup, query kept')
     check(await to('/body') === '/me?tab=BODY' && await to('/risk') === '/me?tab=EXPOSURES', 'old Body and Risk routes open Me on their tab')
     check(await to('/data-explorer') === '/setup/data' && await to('/data-quality') === '/setup/integrity' && await to('/setup') === '/setup/integrity', 'the v1 aliases and the Setup root go to the final place')
-    for (const [path, sel, label] of [['/plan/overview', '.pg-title:has-text("PLAN")', 'overview'], ['/plan/training', '.pb, .state-empty', 'training'], ['/plan/food', '.pb, .state-empty', 'food'], ['/plan/sessions', '.pg-title:has-text("SESSIONS")', 'sessions'], ['/plan/races', '.pg-title:has-text("RACES")', 'races'], ['/setup/integrity', '.ig', 'integrity'], ['/setup/data', '.de', 'data'], ['/setup/connections', '.pg-title:has-text("CONNECTIONS")', 'connections']]) {
+    for (const [path, sel, label] of [['/plan/overview', '.pg-title:has-text("PLAN")', 'overview'], ['/plan/training', '.pb, .state-empty', 'training'], ['/plan/food', '.fp, .state-empty', 'food'], ['/plan/sessions', '.pg-title:has-text("SESSIONS")', 'sessions'], ['/plan/races', '.pg-title:has-text("RACES")', 'races'], ['/setup/integrity', '.ig', 'integrity'], ['/setup/data', '.de', 'data'], ['/setup/connections', '.pg-title:has-text("CONNECTIONS")', 'connections']]) {
       await page.goto(`${BASE}#${path}`); await page.waitForSelector(sel, { timeout: 15000 }).catch(async () => { await shot(`broken-${label}`) })
       check((await page.locator(sel).count()) > 0 && (await page.locator('.error-boundary').count()) === 0, `${path} renders its own page`)
       check((await navOn()).some((n) => n.startsWith(path.slice(1))), `and ${label.toUpperCase()} is the marked item in the menu`, (await navOn()).join(','))
@@ -850,6 +862,34 @@ async function waitForServer() {
     await shot('planned-edit-phone')
     await page.setViewportSize({ width: 1440, height: 1000 }); await page.waitForTimeout(300)
     await page.goto(`${BASE}#/plan/sessions/planned/7102`); await page.waitForSelector('.pe-lifts', { timeout: 15000 }); await shot('planned-edit')
+
+    // 8l. the fuel plan: Plan > Food, the day's targets and meals worked out with the phone's rules, read only
+    await page.goto(`${BASE}#/plan/food`); await page.waitForSelector('[data-testid="fuel-day"]', { timeout: 20000 })
+    check(await crumb() === 'PLAN > FOOD > FUEL PLAN', 'Food opens on the fuel plan, in the menu as a view of Food', await crumb())
+    const strip = await page.locator('.fp-day').count()
+    check(strip === 17 && (await text('.fp-day.on .fp-day-name')) === 'TODAY', 'a strip of the days from today to the horizon (17), today selected', String(strip))
+    const nums = await page.locator('.fp-num-value').allTextContents()
+    check(nums.length === 4 && nums[1].startsWith('150'), 'carbohydrate, protein (the goal\'s 150), fat and energy are shown', nums.join('|'))
+    check((await page.locator('.fp-why li').count()) >= 1 && (await page.locator('.pg-card:has(h3:has-text("MEALS")) .pg-row').count()) >= 4, 'the reasons and at least the four meals are listed')
+    check((await text('.fp-foot')).includes('2800 kcal'), 'the energy basis names the goal', await text('.fp-foot'))
+    await page.locator('.fp-day').nth(2).click(); await page.waitForSelector(`.fp-day.on[data-day="${ymd(dayPlus(2))}"]`, { timeout: 5000 }).catch(() => {})
+    const picked = await page.locator('.fp-day.on').getAttribute('data-day')
+    check((await page.evaluate(() => location.hash)).includes(`day=${picked}`), 'the open day is in the address', picked)
+    check(picked === ymd(dayPlus(2)) && (await text('[data-testid="fuel-day"] .pg-card-title')).toLowerCase().includes(new Date(`${picked}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'long' }).toLowerCase()), 'a day is opened from the strip, and stays in the address', picked)
+    check(!requests.some((q) => /^(POST|PATCH|DELETE) (fuel_plans|fuel_week_plans)/.test(q)), 'the page writes nothing')
+    await page.goto(`${BASE}#/plan/food?view=prep`); await page.waitForSelector('.pb', { timeout: 15000 })
+    check(await crumb() === 'PLAN > FOOD > MEAL PREP' && (await navOn()).includes('plan/food/prep'), 'the meal prep is the other view of Food, marked in the menu', await crumb())
+
+    // 8m. an event's fuel plan: Plan > Races > FUEL PLAN, worked out with the phone's rules, the weather read from Open-Meteo, read only
+    await page.goto(`${BASE}#/plan/races`); await page.waitForSelector('a[href="#/plan/races/9301"]', { timeout: 15000 })
+    await page.locator('a[href="#/plan/races/9301"]').click(); await page.waitForSelector('[data-testid="race-fuel"] .fp-num', { timeout: 30000 })
+    const rnums = await page.locator('[data-testid="race-fuel"] .fp-num-value').allTextContents()
+    check(rnums.length === 4 && /g\/h/.test(rnums[0]) && /ml\/h/.test(rnums[1]), 'the plan names carbohydrate, fluid, sodium and the expected loss', rnums.join('|'))
+    check((await page.locator('.rf-table tbody tr').count()) >= 5, 'the steps down the course are listed')
+    check((await text('[data-testid="race-fuel"]')).includes('TYPICAL') && requests.some((q) => q === 'WEATHER archive-api.open-meteo.com'), 'a race 30 days out is planned on the typical weather of its dates (archive)')
+    check((await page.locator('.pg-card:has(h3:has-text("BEFORE")) .pg-row').count()) >= 4 && (await page.locator('.pg-card:has(h3:has-text("AFTER")) .pg-row').count()) === 3, 'what to do before and after is listed')
+    check((await text('.pg-card:has(h3:has-text("WHAT TO CARRY"))')).includes('CP1') || (await text('[data-testid="race-fuel"]')).includes('CP1'), 'the aid stations split the carry into legs')
+    check(!requests.some((q) => /^(POST|PATCH|DELETE) (fuel_plans|fuel_schedules)/.test(q)), 'the page writes nothing')
 
     // 9. old routes redirect
     await page.goto(`${BASE}#/overview`); await page.waitForTimeout(300)

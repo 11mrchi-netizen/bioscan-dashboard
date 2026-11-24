@@ -1,1 +1,0 @@
-import{t as e}from"./react-C4-HjdcZ.js";import"./Evidence-CxNQdwAM.js";import{t}from"./Interventions-CQg5FfVR.js";var n=e();function r(){return(0,n.jsx)(`div`,{className:`rlab`,children:(0,n.jsx)(t,{})})}export{r as default};

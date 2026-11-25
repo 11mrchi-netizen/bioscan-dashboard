@@ -194,3 +194,19 @@
 /* A Me tile with points is a link to its history. */
 a.me-tile.tappable { text-decoration: none; color: inherit; cursor: pointer; }
 a.me-tile.tappable:hover { border-color: var(--ft-muted); }
+
+/* Hovering a Me chart: a cursor on the day (or week) and a readout of its numbers. */
+.me-plot { position: relative; }
+.me-hoverable { outline: none; cursor: crosshair; touch-action: pan-y; }
+.me-hoverable:focus-visible { outline: 1px solid var(--ft-muted); outline-offset: 2px; border-radius: 6px; }
+.me-cursor { stroke: var(--ft-muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.me-cursor-band { fill: var(--ft-line); opacity: .5; }
+.me-readout { position: absolute; top: 4px; pointer-events: none; display: flex; flex-direction: column; gap: 3px; min-width: 110px; padding: 7px 10px; border-radius: 10px; background: var(--ft-bg); border: 1px solid var(--ft-glass-border); box-shadow: 0 6px 18px rgba(0, 0, 0, .28); z-index: 3; }
+.me-readout-title { font: 500 10px var(--ft-mono); letter-spacing: .08em; color: var(--ft-muted); white-space: nowrap; }
+.me-readout-line { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.me-readout-name { font: 500 10.5px var(--ft-mono); color: var(--ft-muted); white-space: nowrap; }
+.me-readout-name b { display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 5px; }
+.me-readout-value { font: 800 14px var(--ft-num); color: var(--ft-fg); font-variant-numeric: tabular-nums; white-space: nowrap; margin-left: auto; }
+.me-spark-plot { display: block; }
+.me-spark-plot .me-readout { top: calc(100% - 4px); min-width: 0; padding: 5px 8px; }
+.me-tile { position: relative; }

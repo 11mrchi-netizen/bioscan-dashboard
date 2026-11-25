@@ -1,10 +1,12 @@
 // LAB › TESTS (web transition plan, phase 4): the tests the phone runs (Lab › TESTS: grip, body check-in, sweat test,
 // running form), each with its history, then every blood draw with its results; a marker opens its history across
-// draws. Read-only: tests are taken on the phone. The judgement of a marker against your own variation (RCV) is on
+// draws; every number opens its metric page (grip by hand, sweat rate, each marker across draws: lib/metrics.ts). Read-only: tests are taken on the phone. The judgement of a marker against your own variation (RCV) is on
 // Me › Bloodwork, as the phone works it out. Logged times (occurred_at) are wall clock: their digits as they are.
 import { useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useLoadEffect } from '../lib/useLoadEffect'
+import { metricHref } from '../lib/metrics'
+import { outsideRange as outside, rangeText as range, sweatRate } from '../lib/labTests'
 import './PlanBlock.css'
 import './Pages.css'
 
@@ -17,16 +19,11 @@ interface Sweat { id: number; tested_on: string; session_type: string | null; in
 interface Form { id: number; recorded_on: string; view: string | null; surface: string | null; quality: string | null; steps_measured: number | null; notes: string | null }
 interface Taken { grip: Grip[]; body: BodyCheck[]; sweat: Sweat[]; form: Form[] }
 
-/** Sweat rate in ml an hour, the phone's rule (domain/fuel/SweatProfile.kt): null when impossible (under 100 or over 4000). */
-function sweatRate(t: Sweat): number | null {
-  if (!t.duration_min || t.duration_min <= 0 || t.weight_before_kg == null || t.weight_after_kg == null) return null
-  const loss = (t.weight_before_kg - t.weight_after_kg) * 1000 + (t.fluid_in_ml ?? 0) - (t.urine_ml ?? 0)
-  const rate = loss / (t.duration_min / 60)
-  return rate >= 100 && rate <= 4000 ? rate : null
-}
-
-const range = (r: Result) => r.ref_low != null && r.ref_high != null ? `${r.ref_low}–${r.ref_high}` : r.ref_low != null ? `≥ ${r.ref_low}` : r.ref_high != null ? `≤ ${r.ref_high}` : ''
-const outside = (r: Result) => r.value != null && ((r.ref_low != null && r.value < r.ref_low) || (r.ref_high != null && r.value > r.ref_high))
+/** A number that opens its metric page, on the day it was taken. */
+const Num = ({ to, day, warn, children }: { to: string; day: string; warn?: boolean; children: React.ReactNode }) => (
+  <a className={`pg-row-value pg-num ${warn ? 'pg-warn' : ''}`} href={metricHref(to, { day })}>{children}</a>
+)
+const gripRef = (hand: string | null) => (hand && /^[a-z]+$/i.test(hand) ? `test:grip:${hand.toLowerCase()}` : 'test:grip')
 
 export default function Tests() {
   const [draws, setDraws] = useState<Draw[]>([])
@@ -64,7 +61,7 @@ export default function Tests() {
       <header className="pg-head">
         <div>
           <h2 className="pg-title mono">TESTS</h2>
-          <p className="pg-sub">The tests taken on the phone (Lab › TESTS) and every blood draw with its results. Tap a marker for its history across draws. How a change compares with your own variation is on the <a href="#/me?tab=BLOODWORK">Me › Bloodwork</a>.</p>
+          <p className="pg-sub">The tests taken on the phone (Lab › TESTS) and every blood draw with its results. Tap a marker for its draws here, or any number for its history over time. How a change compares with your own variation is on the <a href="#/me?tab=BLOODWORK">Me › Bloodwork</a>.</p>
         </div>
         <input className="pb-input" placeholder="Find a marker" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a marker" />
       </header>
@@ -76,7 +73,7 @@ export default function Tests() {
           <h3 className="pg-card-title mono"><span>GRIP STRENGTH</span><span>{taken.grip.length}</span></h3>
           {taken.grip.length === 0 ? <p className="pg-note">No grip test yet.</p> : (
             <ul className="pg-rows">{taken.grip.slice(0, 8).map((x) => (
-              <li key={x.id} className="pg-row"><span className="pg-row-title mono">{x.occurred_at.slice(0, 10)} · {x.occurred_at.slice(11, 16)} · {(x.hand ?? '').toUpperCase()}</span><span className="pg-row-value">{x.kg ?? '–'} kg</span></li>
+              <li key={x.id} className="pg-row"><span className="pg-row-title mono">{x.occurred_at.slice(0, 10)} · {x.occurred_at.slice(11, 16)} · {(x.hand ?? '').toUpperCase()}</span>{x.kg != null ? <Num to={gripRef(x.hand)} day={x.occurred_at.slice(0, 10)}>{x.kg} kg</Num> : <span className="pg-row-value">– kg</span>}</li>
             ))}</ul>
           )}
         </section>
@@ -95,7 +92,7 @@ export default function Tests() {
             <ul className="pg-rows">{taken.sweat.map((x) => {
               const r = sweatRate(x)
               return (
-                <li key={x.id} className="pg-row"><span className="pg-row-title mono">{x.tested_on}</span><span className="pg-row-value">{r != null ? `${Math.round(r)} ml/h` : 'not readable'}</span>
+                <li key={x.id} className="pg-row"><span className="pg-row-title mono">{x.tested_on}</span>{r != null ? <Num to="test:sweat_rate" day={x.tested_on}>{Math.round(r)} ml/h</Num> : <span className="pg-row-value">not readable</span>}
                   <span className="pg-row-sub">{[x.session_type, x.intensity, x.duration_min && `${Math.round(x.duration_min)} min`, x.temp_c != null && `${x.temp_c} °C`].filter(Boolean).join(' · ')}</span></li>
               )
             })}</ul>
@@ -120,7 +117,8 @@ export default function Tests() {
           <h3 className="pg-card-title mono"><span>{marker.toUpperCase()} · {history.length} DRAW{history.length === 1 ? '' : 'S'}</span><button className="pb-chip" onClick={() => setMarker(null)}>CLOSE</button></h3>
           <ul className="pg-rows">{history.map((r) => (
             <li key={r.id} className="pg-row"><span className="pg-row-title mono">{dateOf.get(r.draw_id)}</span>
-              <span className={`pg-row-value ${outside(r) ? 'pg-warn' : ''}`}>{r.value ?? r.value_text ?? '–'} {r.unit ?? ''}</span>
+              {r.value != null ? <Num to={`lab:${r.marker_name}`} day={dateOf.get(r.draw_id) ?? ''} warn={outside(r)}>{r.value} {r.unit ?? ''}</Num>
+                : <span className="pg-row-value">{r.value_text ?? '–'} {r.unit ?? ''}</span>}
               {range(r) && <span className="pg-row-sub">reference {range(r)}{r.flag ? ` · ${r.flag}` : ''}</span>}</li>
           ))}</ul>
         </section>
@@ -137,7 +135,8 @@ export default function Tests() {
               <ul className="pg-rows">{rows.map((r) => (
                 <li key={r.id} className="pg-row">
                   <button className="pg-row-title pg-link" onClick={() => setMarker(r.marker_name)}>{r.marker_name}</button>
-                  <span className={`pg-row-value ${outside(r) ? 'pg-warn' : ''}`}>{r.value ?? r.value_text ?? '–'} {r.unit ?? ''}</span>
+                  {r.value != null ? <Num to={`lab:${r.marker_name}`} day={d.draw_date} warn={outside(r)}>{r.value} {r.unit ?? ''}</Num>
+                    : <span className="pg-row-value">{r.value_text ?? '–'} {r.unit ?? ''}</span>}
                   {(range(r) || r.flag) && <span className="pg-row-sub">{range(r) && `reference ${range(r)}`}{r.flag ? ` · ${r.flag}` : ''}</span>}
                 </li>
               ))}</ul>

@@ -57,9 +57,16 @@ numbers of the window, what it is, the days behind it.
 | `recovery.hrv`, `sleep.hours`, ... | a score input | `score_snapshots` (value and your usual), since 6 Oct 2026 |
 | `series:hrv`, ... | a daily series of the contract file | its table, the whole history |
 | `me:BODY:SECTION::Weight` | a tile or chart of a Me tab | the points the phone sent with it |
+| `lab:Ferritin` | a blood marker (Lab › Tests) | `lab_results`, one point per draw, with the lab's reference range |
+| `test:grip:left`, `test:grip`, `test:sweat_rate` | a test taken on the phone | `grip_strength_log` (best of the day), `sweat_tests` |
 
 Eight inputs are read straight from a raw column (`INPUT_SERIES` in `lib/metrics.ts`); their page offers the whole history.
 Day keying was checked against the live data: an input and its raw series match on the same day.
+
+Numbers outside Today and Me link here too: each value on Lab › Tests (blood markers, grip, sweat rate), and a recorded
+session's duration, distance, average heart rate and RPE where a series follows them for its type (`sessionSeries`).
+A click on a point of the chart marks its day and opens what is behind it in the Inspector: the day's records of a series (or of
+the series behind an input), the one result of a blood marker.
 
 `+ COMPARE` draws up to three more metrics on the same days (`?with=a&with=b`, repeated parameters: refs hold commas and
 colons). One panel per unit, one time axis, each metric in its own hue (`--m-*`); two metrics of one hue are told apart by
@@ -152,10 +159,11 @@ forwards `/console/#/...` to the root. Both are written by CI, never by hand.
 
 ## Not done
 
-- Clicking a point on the metric page does not open the Inspector (the days table's RECORDS links cover it).
 - Me tiles and charts can be a page's metric, not an extra in a comparison.
+- On the metric page, a click on a score, an input with no series behind it, a Me item, grip or sweat rate marks its day only:
+  none has records the Inspector can show.
+- Body check-ins and running form open no metric page: neither has one number to follow.
 - Me **rows** open nothing: the phone sends them with a label and a finished value only. Giving them a key is an Android
   change to `me_views`.
-- Numbers outside Today and Me (Tests markers, Lab results, Plan outcomes) do not link to the metric page yet.
 - Compare's two views are not unified.
 - The web screens are not on the Field Terminal Map (the map covers the Android app).

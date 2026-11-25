@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { compareRefs, seriesGroup, washFor, rangeFor, INPUT_HUE, INPUT_SERIES, meRef, splitMeLabel, metricHref, parseMetricRef, refString, SERIES_HUE, seriesBehind, windowStats } from './metrics.ts'
+import { compareRefs, sessionSeries, seriesGroup, washFor, rangeFor, INPUT_HUE, INPUT_SERIES, meRef, splitMeLabel, metricHref, parseMetricRef, refString, SERIES_HUE, seriesBehind, windowStats } from './metrics.ts'
 import { SERIES } from './schema.ts'
 import { viewPath } from './savedViews.ts'
 
@@ -103,4 +103,30 @@ test('saved views: a Lab or Setup tab keeps its tab and query; the old route nam
   assert.equal(viewPath('/lab', ''), null)
   assert.equal(viewPath('/setup/data', '?table=meals'), '/setup/data?table=meals')
   for (const old of ['/explore', '/evidence', '/models', '/data', '/integrity']) assert.equal(viewPath(old, '?x=1'), null) // the old names: no view was ever saved under them
+})
+
+test('blood markers and phone tests have refs of their own, and survive the address', () => {
+  assert.deepEqual(parseMetricRef('lab:Ferritin'), { kind: 'lab', key: 'Ferritin' })
+  assert.deepEqual(parseMetricRef('test:grip:left'), { kind: 'test', key: 'grip:left' })
+  assert.deepEqual(parseMetricRef('test:grip'), { kind: 'test', key: 'grip' })
+  assert.deepEqual(parseMetricRef('test:sweat_rate'), { kind: 'test', key: 'sweat_rate' })
+  assert.equal(parseMetricRef('lab:'), null)
+  assert.equal(parseMetricRef('test:form'), null)
+  for (const raw of ['lab:Vitamin D (25-OH)', 'lab:LDL: calc', 'test:grip:right', 'test:sweat_rate']) {
+    assert.equal(refString(parseMetricRef(raw)!), raw)
+    assert.equal(refString(parseMetricRef(decodeURIComponent(metricHref(raw).slice(4).split('?')[0]))!), raw)
+  }
+  assert.equal(washFor(parseMetricRef('test:sweat_rate')!), 'ft-domain-fuel')
+  assert.equal(washFor(parseMetricRef('test:grip')!), 'ft-domain-load')
+  assert.equal(washFor(parseMetricRef('lab:Ferritin')!), 'ft-domain-balance')
+})
+
+test('a session number opens the series that follows it for that type, or nothing', () => {
+  assert.equal(sessionSeries('run', 'distance'), 'run_distance')
+  assert.equal(sessionSeries('run', 'duration'), 'run_duration')
+  assert.equal(sessionSeries('run', 'avg_hr'), 'run_avg_hr')
+  assert.equal(sessionSeries('strength', 'duration'), 'strength_duration')
+  assert.equal(sessionSeries('ride', 'rpe'), 'session_rpe')
+  assert.equal(sessionSeries('ride', 'distance'), null)
+  assert.equal(sessionSeries(null, 'duration'), null)
 })

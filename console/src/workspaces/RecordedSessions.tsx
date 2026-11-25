@@ -5,10 +5,20 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { hm, longDate } from '../lib/planReads'
 import { loadRecordedPage, PAGE, type ListRow } from '../lib/sessionData'
+import { metricHref, sessionSeries, type SessionField } from '../lib/metrics'
 import './PlanBlock.css'
 import './Pages.css'
 
 const TYPES = ['run', 'strength', 'ride', 'hike', 'yoga', 'other', 'walk']
+
+/** A number of a session that a series follows opens that series on the session's day; the others are plain text. */
+function SessionNum({ s, field, children }: { s: ListRow; field: SessionField; children: string }) {
+  const id = sessionSeries(s.type, field)
+  return id ? <a className="pg-num" href={metricHref(`series:${id}`, { day: s.start_time.slice(0, 10) })}>{children}</a> : <>{children}</>
+}
+
+/** Parts joined by " · ", the falsy ones left out. */
+const joined = (parts: (React.ReactNode | false | null)[]) => parts.filter(Boolean).flatMap((p, i) => (i ? [' · ', p] : [p]))
 
 export default function RecordedSessions() {
   const [params, setParams] = useSearchParams()
@@ -55,8 +65,15 @@ export default function RecordedSessions() {
             <span className="pg-row-title">
               <Link to={`/plan/sessions/${s.id}`} className="rs-link"><span className="mono">{longDate(s.start_time.slice(0, 10)).toUpperCase()} · {s.start_time.slice(11, 16)}</span>{'  '}{(s.type ?? 'session').toUpperCase()}</Link>
             </span>
-            <span className="pg-row-value mono">{[s.duration_min != null && hm(s.duration_min), s.distance_km != null && `${s.distance_km.toFixed(1)} km`].filter(Boolean).join(' · ')}</span>
-            <span className="pg-row-sub">{[s.avg_hr != null && `avg ${Math.round(s.avg_hr)} bpm`, s.rpe != null && `RPE ${s.rpe}`, s.source?.replaceAll('_', ' '), s.notes].filter(Boolean).join(' · ')}</span>
+            <span className="pg-row-value mono">{joined([
+              s.duration_min != null && <SessionNum key="d" s={s} field="duration">{hm(s.duration_min)}</SessionNum>,
+              s.distance_km != null && <SessionNum key="k" s={s} field="distance">{`${s.distance_km.toFixed(1)} km`}</SessionNum>,
+            ])}</span>
+            <span className="pg-row-sub">{joined([
+              s.avg_hr != null && <SessionNum key="h" s={s} field="avg_hr">{`avg ${Math.round(s.avg_hr)} bpm`}</SessionNum>,
+              s.rpe != null && <SessionNum key="r" s={s} field="rpe">{`RPE ${s.rpe}`}</SessionNum>,
+              s.source?.replaceAll('_', ' ') || null, s.notes || null,
+            ])}</span>
           </li>
         ))}
       </ul>

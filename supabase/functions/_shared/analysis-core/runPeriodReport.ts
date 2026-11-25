@@ -76,11 +76,14 @@ async function readStool(admin: Admin, userId: string, start: string, end: strin
   return { normal, discomfort }
 }
 
+/** nutrient_intake rows that are food; supplement doses are written there too (source_type `supplement`) and are left out. */
+export const FOOD_SOURCES = ['meal_item', 'fueling_intake']
+
 /** Food micronutrients per local day (nutrient_intake holds the phone's wall clock), in each reference's unit. */
 async function readMicros(admin: Admin, userId: string, start: string, end: string): Promise<{ daily: Map<string, DailySeries>; foodDays: Set<string> }> {
   const keys = MICRO_REFERENCES.map((m) => m.key)
   const { rows, error } = await fetchAll<{ logged_at: string; nutrient: string; amount: number | null; unit: string | null }>((a, b) =>
-    admin.from('nutrient_intake').select('id, logged_at, nutrient, amount, unit').eq('user_id', userId).in('nutrient', [...keys, 'calories'])
+    admin.from('nutrient_intake').select('id, logged_at, nutrient, amount, unit').eq('user_id', userId).in('nutrient', [...keys, 'calories']).in('source_type', FOOD_SOURCES)
       .gte('logged_at', `${start}T00:00:00`).lte('logged_at', `${end}T23:59:59.999`).order('logged_at').order('id').range(a, b))
   if (error) throw new Error(`nutrient_intake: ${error}`)
   const daily = new Map<string, DailySeries>()

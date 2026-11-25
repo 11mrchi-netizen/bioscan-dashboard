@@ -80,9 +80,10 @@ function tables(): Record<string, Row[]> {
     analysis_results: [{ user_id: U, kind: 'intervention_its', key: 'iv1', state: 'evaluated', calculated_at: '2026-11-22T20:00:00Z', payload: { metrics: [{ metric: 'sleep_hours', label: 'Sleep', verdict: 'negligible', gap: { value: 0.1, unit: 'h' } }] } }],
     experiments: [],
     nutrient_intake: [
-      { id: 1, user_id: U, logged_at: '2026-11-17T12:00:00+00:00', nutrient: 'magnesium', amount: 150, unit: 'mg' },
-      { id: 2, user_id: U, logged_at: '2026-11-17T12:00:00+00:00', nutrient: 'omega_3', amount: 400, unit: 'mg' },
-      { id: 3, user_id: U, logged_at: '2026-11-18T12:00:00+00:00', nutrient: 'calories', amount: 2000, unit: 'kcal' },
+      { id: 1, user_id: U, logged_at: '2026-11-17T12:00:00+00:00', nutrient: 'magnesium', amount: 150, unit: 'mg', source_type: 'meal_item' },
+      { id: 2, user_id: U, logged_at: '2026-11-17T12:00:00+00:00', nutrient: 'omega_3', amount: 400, unit: 'mg', source_type: 'meal_item' },
+      { id: 3, user_id: U, logged_at: '2026-11-18T12:00:00+00:00', nutrient: 'calories', amount: 2000, unit: 'kcal', source_type: 'meal_item' },
+      { id: 4, user_id: U, logged_at: '2026-11-18T08:00:00+00:00', nutrient: 'magnesium', amount: 400, unit: 'mg', source_type: 'supplement' },
     ],
     stool_log: [],
   }
@@ -124,7 +125,7 @@ test('a week report from the database: metrics, adherence, Lab and suggestions',
   assert.deepEqual(r.summary.wasted, ['Magnesium before bed'])
   assert.ok(r.summary.notFollowed.includes('Creatine'))
   assert.equal(r.micro.foodDays, 2)
-  assert.equal(r.micro.lines.find((l) => l.key === 'magnesium')!.value, 75)
+  assert.equal(r.micro.lines.find((l) => l.key === 'magnesium')!.value, 75, 'a supplement dose is not food')
   assert.equal(r.micro.lines.find((l) => l.key === 'omega_3')!.value, 0.2, 'mg are converted to the reference unit')
   assert.equal(r.suggestions[0].id, 'sleep_short')
   assert.ok(r.suggestions.some((s) => s.id === 'regimen_4'))

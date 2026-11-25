@@ -14,7 +14,7 @@ micronutrients, carbs, sleep phases, water and food against stool are in the met
 |---|---|
 | The report, pure (periods, metric lines, adherence, Lab verdicts, micronutrients, food and stool, rules) | `supabase/functions/_shared/analysis-core/periodReport.ts` |
 | Reading the database and writing the report | `supabase/functions/_shared/analysis-core/runPeriodReport.ts` |
-| Nightly run: group `reports`, 20:48 UTC (04:48 local) | `supabase/functions/analysis-run/index.ts`, `runGroups.ts`, migration `20261125090000_period_reports.sql` |
+| Nightly run: group `reports`, 20:48 UTC (04:48 local) | `supabase/functions/analysis-run/index.ts`, `runGroups.ts`, migration `20261125073854_period_reports.sql` |
 | On demand: `{ action: "report", keys: ["week:2026-11-16"] }` or `{ action: "report", weeks: 8, months: 3 }` | `analysis-run` |
 | Web page Lab › Reports, Today's card | `console/src/workspaces/Reports.tsx`, `console/src/lib/reports.ts`, `console/src/dashboard/Today.tsx` |
 | Phone: notification and Lab › N=1 card | `domain/notifications/ReportPrompts.kt`, `data/ReportsRepository.kt`, `NotificationDispatchWorker.kt`, `ui/screens/status/ReportsCard.kt` |

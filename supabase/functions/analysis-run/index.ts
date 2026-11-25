@@ -199,7 +199,11 @@ Deno.serve(async (req) => {
       // Risk profile R1: the air breathed each day (outdoor feed + indoor sensors + places), group `exposures`.
       if (want.has("air")) out.air = await run("air", () => runAir(admin, id, new Date()));
       // Weekly and monthly reports read their own rows and the Lab's published results (group `reports`, last).
-      if (want.has("reports")) out.reports = await run("reports", () => runReports(admin, id, seriesFile as SeriesFile));
+      // The scheduler may name periods (`keys`) or ask for the last `weeks` / `months` (a first fill); otherwise the due ones.
+      const reportOpts = isScheduler && Array.isArray(body.keys) ? { keys: body.keys.filter((k): k is string => typeof k === "string").slice(0, 24) }
+        : isScheduler && (body.weeks !== undefined || body.months !== undefined) ? { weeks: Math.max(0, Math.min(12, Math.round(body.weeks ?? 0))), months: Math.max(0, Math.min(6, Math.round(body.months ?? 0))) }
+        : {};
+      if (want.has("reports")) out.reports = await run("reports", () => runReports(admin, id, seriesFile as SeriesFile, new Date(), reportOpts));
       // The frame is read once and shared; one engine failing must not hide the others: each reports its own error.
       // Typicality and the expected bands run in a later group than the series breaks because they restart at confirmed ones.
       if (needsFrame(group)) {

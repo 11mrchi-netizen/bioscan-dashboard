@@ -57,11 +57,14 @@ export function sessionChanges(orig: SessionValues, form: SessionForm, today: st
 // ---- prescription ----
 
 export type PrescriptionItem = Record<string, unknown>
+const MAX_BASED = new Set(['pct_1rm', 'added', 'pct_max_reps', 'unresolved'])
 export type LoadChoice = 'planned' | 'fixed' | 'pct' | 'rpe'
 
 export interface LiftForm {
   /** position of the lift in the prescription array */
   index: number; exercise: string; role: string
+  /** the exercise to do instead ('' or the same name: no swap) */
+  swapTo: string
   setsMin: string; setsMax: string; repsMin: string; repsMax: string
   load: LoadChoice; kg: string; pct: string; rpe: string
   /** how the load reads now, in words */
@@ -102,7 +105,7 @@ export function liftForms(prescription: unknown): LiftForm[] {
     const [sMin, sMax] = rangeOf(o.sets), [rMin, rMax] = rangeOf(o.reps)
     const l = (o.load ?? {}) as Record<string, unknown>
     out.push({
-      index, exercise: String(o.exercise ?? ''), role: String(o.role ?? ''), setsMin: txt(sMin), setsMax: txt(sMax), repsMin: txt(rMin), repsMax: txt(rMax),
+      index, exercise: String(o.exercise ?? ''), role: String(o.role ?? ''), swapTo: '', setsMin: txt(sMin), setsMax: txt(sMax), repsMin: txt(rMin), repsMax: txt(rMax),
       load: 'planned', kg: l.kind === 'fixed' ? txt(l.kg as number) : '', pct: l.kind === 'pct_1rm' ? txt(l.pct as number) : '', rpe: l.kind === 'rpe' ? txt(l.rpe as number) : '',
       loadNow: loadWords(o.load),
     })
@@ -128,6 +131,18 @@ export function buildPrescription(prescription: unknown, forms: LiftForm[], ctx:
     const o = out[f.index]
     if (!o || o.type !== 'lift') throw new Error('The session changed while you were editing it: reload it.')
     const label = f.exercise || 'A lift'
+    const swap = f.swapTo.trim()
+    const swapped = swap !== '' && swap !== f.exercise
+    const name = swapped ? swap : f.exercise
+    if (swapped) {
+      if (swap.length > 80) throw new Error(`${label}: an exercise name is at most 80 characters.`)
+      o.exercise = swap
+      delete o.projected
+      // a load worked out from the old lift's max says nothing about the new one: it needs a load of its own
+      if (f.load === 'planned' && MAX_BASED.has(String((o.load as { kind?: unknown } | undefined)?.kind))) {
+        throw new Error(`${label} → ${swap}: choose a load for ${swap} (a fixed weight, % of its 1RM, or RPE); the planned one was worked out from the ${f.exercise} max.`)
+      }
+    }
     const sMin = pos(f.setsMin, `${label}: sets`, 20), sMax = f.setsMax.trim() === '' ? sMin : pos(f.setsMax, `${label}: sets`, 20)
     if (sMax < sMin) throw new Error(`${label}: the most sets cannot be fewer than the least.`)
     const rMin = pos(f.repsMin, `${label}: reps`, 100), rMax = f.repsMax.trim() === '' ? rMin : pos(f.repsMax, `${label}: reps`, 100)
@@ -141,8 +156,8 @@ export function buildPrescription(prescription: unknown, forms: LiftForm[], ctx:
     else if (f.load === 'rpe') { const r = pos(f.rpe, `${label}: RPE`, 10, false); spec = { kind: 'rpe', rpe: r } }
     else {
       const pct = pos(f.pct, `${label}: the percentage`, 200, false)
-      const base = oneRmKg(f.exercise)
-      if (base == null) throw new Error(`${label}: there is no 1RM recorded to take ${pct}% of. Record one on the phone, or choose a fixed weight.`)
+      const base = oneRmKg(name)
+      if (base == null) throw new Error(`${name}: there is no 1RM recorded to take ${pct}% of. Set one in MAXES on PLAN, or choose a fixed weight.`)
       spec = { kind: 'pct_1rm', pct }
       o.load = loadJson(resolveLoad({ slot: String(o.slot ?? ''), load: spec, weightedCalisthenics: false }, { ...ctx, oneRmKg: base }))
       continue

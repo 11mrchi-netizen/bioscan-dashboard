@@ -2,6 +2,9 @@
 import { hm, longDate, type PlannedSession } from '../lib/planReads'
 import { movedFrom } from '../lib/planEdit'
 
+/** A session that can still be changed (the database's own rule, plan_edit.sql): planned, not recorded, today or later. */
+const editable = (s: PlannedSession, today: string) => s.status === 'planned' && s.exercise_session_id == null && s.scheduled_date >= today
+
 const STATUS_CLASS: Record<string, string> = { done: 'pg-ok', confirmed: 'pg-ok', completed: 'pg-ok', skipped: 'pg-warn', missed: 'pg-bad' }
 
 export function PlanSessionRows({ sessions, blockName, blockShift, today }: { sessions: PlannedSession[]; blockName: Map<number, string>; blockShift?: Map<number, number>; today: string }) {
@@ -9,10 +12,11 @@ export function PlanSessionRows({ sessions, blockName, blockShift, today }: { se
     <ul className="pg-rows">{sessions.map((s) => (
       <li key={s.id} className="pg-row">
         <span className="pg-row-title">
-          <span className="mono">{longDate(s.scheduled_date).toUpperCase()}{s.start_time ? ` · ${s.start_time.slice(0, 5)}` : ''}</span>{'  '}{s.title ?? s.work_kind ?? 'Session'}
+          <span className="mono">{longDate(s.scheduled_date).toUpperCase()}{s.start_time ? ` · ${s.start_time.slice(0, 5)}` : ''}</span>{'  '}
+          {editable(s, today) ? <a href={`#/plan/sessions/planned/${s.id}`}>{s.title ?? s.work_kind ?? 'Session'}</a> : (s.title ?? s.work_kind ?? 'Session')}
           {s.scheduled_date === today && <span className="pg-tag mono">TODAY</span>}
         </span>
-        <span className={`pg-row-value mono ${STATUS_CLASS[s.status] ?? ''}`}>{s.status.toUpperCase()}{s.status === 'planned' && s.exercise_session_id == null && s.scheduled_date >= today && <> · <a href={`#/plan/sessions/planned/${s.id}`}>EDIT</a></>}{s.status === 'superseded' && s.scheduled_date >= today && <> · <a href={`#/plan/sessions/planned/${s.id}`}>OPEN</a></>}{s.status === 'planned' && (s.duration_min ?? 0) >= 90 && s.scheduled_date >= today && <> · <a href={`#/plan/food?day=${s.scheduled_date}`}>FUEL</a></>}</span>
+        <span className={`pg-row-value mono ${STATUS_CLASS[s.status] ?? ''}`}>{s.status.toUpperCase()}{editable(s, today) && <> · <a className="pg-edit" href={`#/plan/sessions/planned/${s.id}`}>EDIT ›</a></>}{s.status === 'superseded' && s.scheduled_date >= today && <> · <a href={`#/plan/sessions/planned/${s.id}`}>OPEN</a></>}{s.status === 'planned' && (s.duration_min ?? 0) >= 90 && s.scheduled_date >= today && <> · <a href={`#/plan/food?day=${s.scheduled_date}`}>FUEL</a></>}</span>
         <span className="pg-row-sub">{s.exercise_session_id != null && <><a href={`#/plan/sessions/${s.exercise_session_id}`}>RECORDED SESSION{s.match_status ? ` (${s.match_status})` : ''} →</a>{' · '}</>}{[
           s.domain?.replaceAll('_', ' '), s.duration_min ? hm(s.duration_min) : null,
           s.block_id != null ? `${blockName.get(s.block_id) ?? 'block'}${s.week_index ? ` · week ${s.week_index}` : ''}` : null,

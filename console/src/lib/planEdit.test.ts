@@ -94,3 +94,16 @@ test('"moved from" is for the sessions the person moved, not for a block whose s
   assert.equal(movedFrom('2026-11-30', '2026-12-07', 7), null) // the block shifted a week: not a move
   assert.equal(movedFrom('2026-11-30', '2026-12-09', 7), '2026-11-30') // moved two days within a shifted block
 })
+
+test('a lift swapped for another in one session takes the new name and needs a load of its own when the planned one came from a max', () => {
+  const f = liftForms(presc); f[0].swapTo = 'Front Squat'
+  assert.throws(() => buildPrescription(presc, f, ctx, () => null), /choose a load for Front Squat/)
+  f[0].load = 'pct'; f[0].pct = '75'
+  const out = buildPrescription(presc, f, ctx, (ex) => (ex === 'Front Squat' ? 100 : ex === 'Squat' ? 150 : null))
+  assert.equal(out[0].exercise, 'Front Squat')
+  assert.equal((out[0].load as { target_kg: number }).target_kg, 75) // the new lift's own max
+  const r = liftForms(presc); r[0].swapTo = 'Belt Squat'; r[0].load = 'rpe'; r[0].rpe = '8'
+  assert.deepEqual(buildPrescription(presc, r, ctx, () => null)[0], { ...presc[0], exercise: 'Belt Squat', load: { kind: 'rpe', rpe: 8 } })
+  const same = liftForms(presc); same[0].swapTo = 'Squat'
+  assert.deepEqual(buildPrescription(presc, same, ctx, () => null), presc) // the same name is no swap
+})

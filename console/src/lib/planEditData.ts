@@ -44,12 +44,14 @@ export async function loadEquipment(): Promise<Omit<ResolveContext, 'oneRmKg'>> 
   return { trainingMaxKg: null, maxReps: null, bodyweightKg: null, barKg: row.bars?.[0]?.kg ?? 20, platesKg: plates, addedStepKg: 2.5, weightedBase: row.weighted_percent_base === 'added' ? 'added' : 'total' }
 }
 
-/** The newest recorded 1RM (or estimate) of each exercise asked about, by movement key; absent when none is recorded. */
-export async function loadOneRms(exercises: string[]): Promise<Map<string, number>> {
-  const keys = [...new Set(exercises.map(movementKey))]
+/** The newest recorded 1RM (or estimate) of each exercise asked about (every exercise when none are named, so a swapped-in lift has its own), by movement key; absent when none is recorded. */
+export async function loadOneRms(exercises?: string[]): Promise<Map<string, number>> {
+  const keys = exercises ? [...new Set(exercises.map(movementKey))] : null
   const out = new Map<string, number>()
-  if (keys.length === 0) return out
-  const r = await supabase.from('athlete_maxes').select('exercise_key,kind,value,as_of').in('exercise_key', keys).in('kind', ['1rm', 'e1rm']).order('as_of', { ascending: false })
+  if (keys && keys.length === 0) return out
+  let q = supabase.from('athlete_maxes').select('exercise_key,kind,value,as_of').in('kind', ['1rm', 'e1rm'])
+  if (keys) q = q.in('exercise_key', keys)
+  const r = await q.order('as_of', { ascending: false })
   if (r.error) return out
   for (const m of (r.data ?? []) as { exercise_key: string; value: number }[]) if (!out.has(m.exercise_key)) out.set(m.exercise_key, Number(m.value))
   return out

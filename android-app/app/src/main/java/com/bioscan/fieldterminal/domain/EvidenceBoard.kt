@@ -69,11 +69,14 @@ val CATALOGUE_ORDER = listOf(
     // Morning scores (catalogue 2.2.0): the evening exposures against next-morning RECOVERY and that night's SLEEP score.
     "alcohol_recovery_score", "alcohol_sleep_score", "caffeine_pm_sleep_score", "late_meal_recovery_score", "late_meal_sleep_score",
     "stress_recovery_score", "stress_sleep_score", "evening_training_recovery_score", "evening_training_sleep_score", "training_recovery_score",
+    // Meal timing and the gut (catalogue 2.3.0).
+    "meal_gap_sleep", "meal_gap_hrv", "meal_gap_recovery_score", "kcal_before_bed_sleep_score", "kcal_before_bed_hrv", "carbs_day_sleep",
+    "protein_day_recovery_score", "fiber_gut", "fat_gut", "kcal_before_bed_gut", "alcohol_gut", "stress_gut", "sleep_gut", "training_gut", "travel_gut",
 )
 
 private val GROUPS = listOf(
     "hrv" to "HRV", "rhr" to "RESTING HEART RATE", "sleep" to "SLEEP", "energy" to "ENERGY",
-    "recovery_score" to "RECOVERY SCORE", "sleep_score" to "SLEEP SCORE",
+    "recovery_score" to "RECOVERY SCORE", "sleep_score" to "SLEEP SCORE", "gut" to "DIGESTION",
 )
 
 private fun signed(v: Double, unit: String): String {

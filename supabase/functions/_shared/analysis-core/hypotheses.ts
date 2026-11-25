@@ -16,11 +16,16 @@
 // late caffeine, felt stress and late screens are CHARGE inputs through FUEL and BALANCE, so a link would be partly
 // built in. RECOVERY (HRV, resting HR, night stress, soreness, energy) and SLEEP hold none of these exposures.
 //
+// Meal timing and the gut (catalogue 2.3.0, docs/nutrition/timing-and-gut.md): continuous meal timing (hours from the
+// last meal to sleep, kcal in the 3 h before sleep) instead of only the 21:00 flag, which was on most days; daily carbs
+// and protein; and a new outcome group, GUT, the daily digestion score (mealExposures.ts), against food, stress, sleep,
+// training and travel.
+//
 // Left out on purpose: "supplement started -> outcome". A step exposure against a trending series is confounded by time, so
 // supplements are tested as pre-registered N-of-1 experiments (Phase 5) with their own design, not here.
 import type { Hypothesis } from './relationship.ts'
 
-export const CATALOGUE_VERSION = '2.2.0'
+export const CATALOGUE_VERSION = '2.3.0'
 
 const EXPLICIT_MODEL = 'A day counts as none only when the evening check-in says so (or, before the first check-in, when food was logged that day); other days are left out.'
 const DEVICE_MODEL = 'Sessions come from the watch; days with a watch record and no session count as none.'
@@ -38,6 +43,10 @@ const ENERGY = { target: 'energy', ordinal: true, targetUnit: 'points', noEffect
 // Five points on the 0-150 score scale: about a quarter of the distance from a typical morning (80) to the top of normal.
 const RECOVERY_SCORE = { target: 'recovery_score', targetUnit: 'points', noEffect: 5, outcome: 'recovery_score' as const }
 const SLEEP_SCORE = { target: 'sleep_score', targetUnit: 'points', noEffect: 5, outcome: 'sleep_score' as const }
+// Five points on the 0-100 digestion score: a type 5 instead of a 4, or one gut symptom ticked, moves it 5 to 10.
+const GUT = { target: 'gut_day_score', targetUnit: 'points', noEffect: 5, outcome: 'gut' as const }
+const MEAL_MODEL = 'Only days with meals logged are used (a day before 04:00 belongs to the evening before); timing also needs that night\'s bedtime from the watch. Missing days are left out, never zero.'
+const GUT_NOTE = ' The digestion score needs a stool logged or the evening gut questions answered that day; other days are left out.'
 const SCORE_NOTE = ' Scores come from the app; mornings it could not score are left out.'
 
 function morningScoreQuestions(): Hypothesis[] {
@@ -59,6 +68,73 @@ function morningScoreQuestions(): Hypothesis[] {
       causeText: e.causeText, targetText: 'that night\'s SLEEP score', expectedSign: e.sign, exposureModel: e.model + SCORE_NOTE,
     }] : []),
   ])
+}
+
+function mealAndGutQuestions(): Hypothesis[] {
+  return [
+    {
+      id: 'meal_gap_sleep', label: 'Hours from the last meal to sleep and that night\'s sleep', cause: 'meal_gap_h', lag: 1, exposure: 'continuous', ...SLEEP,
+      causeText: 'Each extra hour between the last meal and falling asleep', targetText: 'that night\'s sleep', expectedSign: 0, exposureModel: MEAL_MODEL,
+    },
+    {
+      id: 'meal_gap_hrv', label: 'Hours from the last meal to sleep and next-morning HRV', cause: 'meal_gap_h', lag: 1, exposure: 'continuous', ...HRV,
+      causeText: 'Each extra hour between the last meal and falling asleep', targetText: 'next-morning HRV', expectedSign: 1, exposureModel: MEAL_MODEL,
+    },
+    {
+      id: 'meal_gap_recovery_score', label: 'Hours from the last meal to sleep and next-morning RECOVERY', cause: 'meal_gap_h', lag: 1, exposure: 'continuous', ...RECOVERY_SCORE,
+      causeText: 'Each extra hour between the last meal and falling asleep', targetText: 'next-morning RECOVERY score', expectedSign: 1, exposureModel: MEAL_MODEL + SCORE_NOTE,
+    },
+    {
+      id: 'kcal_before_bed_sleep_score', label: 'Food in the 3 hours before sleep and that night\'s SLEEP score', cause: 'kcal_before_bed', lag: 1, exposure: 'continuous', causeScale: 250, ...SLEEP_SCORE,
+      causeText: 'Each 250 kcal eaten in the 3 hours before falling asleep', targetText: 'that night\'s SLEEP score', expectedSign: -1, exposureModel: MEAL_MODEL + SCORE_NOTE,
+    },
+    {
+      id: 'kcal_before_bed_hrv', label: 'Food in the 3 hours before sleep and next-morning HRV', cause: 'kcal_before_bed', lag: 1, exposure: 'continuous', causeScale: 250, ...HRV,
+      causeText: 'Each 250 kcal eaten in the 3 hours before falling asleep', targetText: 'next-morning HRV', expectedSign: -1, exposureModel: MEAL_MODEL,
+    },
+    {
+      id: 'carbs_day_sleep', label: 'Carbohydrate eaten and that night\'s sleep', cause: 'carbs_day', lag: 1, exposure: 'continuous', causeScale: 50, ...SLEEP,
+      causeText: 'Each 50 g more carbohydrate in the day', targetText: 'that night\'s sleep', expectedSign: 0, exposureModel: MEAL_MODEL,
+    },
+    {
+      id: 'protein_day_recovery_score', label: 'Protein eaten and next-morning RECOVERY', cause: 'protein_day', lag: 1, exposure: 'continuous', causeScale: 30, ...RECOVERY_SCORE,
+      causeText: 'Each 30 g more protein in the day', targetText: 'next-morning RECOVERY score', expectedSign: 0, exposureModel: MEAL_MODEL + SCORE_NOTE,
+    },
+    // GUT: the next day's digestion for food (transit takes about a day), the same day's for stress, sleep, training and travel.
+    {
+      id: 'fiber_gut', label: 'Fibre eaten and the next day\'s digestion', cause: 'fiber_day', lag: 1, exposure: 'continuous', causeScale: 10, ...GUT,
+      causeText: 'Each 10 g more fibre in the day', targetText: 'the next day\'s digestion score', expectedSign: 1,
+      exposureModel: MEAL_MODEL + ' Fibre counts only on days where most of the energy logged carries a fibre value.' + GUT_NOTE,
+    },
+    {
+      id: 'fat_gut', label: 'Fat eaten and the next day\'s digestion', cause: 'fat_day', lag: 1, exposure: 'continuous', causeScale: 30, ...GUT,
+      causeText: 'Each 30 g more fat in the day', targetText: 'the next day\'s digestion score', expectedSign: -1, exposureModel: MEAL_MODEL + GUT_NOTE,
+    },
+    {
+      id: 'kcal_before_bed_gut', label: 'Food in the 3 hours before sleep and the next day\'s digestion', cause: 'kcal_before_bed', lag: 1, exposure: 'continuous', causeScale: 250, ...GUT,
+      causeText: 'Each 250 kcal eaten in the 3 hours before falling asleep', targetText: 'the next day\'s digestion score', expectedSign: -1, exposureModel: MEAL_MODEL + GUT_NOTE,
+    },
+    {
+      id: 'alcohol_gut', label: 'Alcohol and the next day\'s digestion', cause: 'alcohol_any', lag: 1, exposure: 'binary', ...GUT,
+      causeText: 'A day with alcohol', targetText: 'the next day\'s digestion score', expectedSign: -1, exposureModel: EXPLICIT_MODEL + GUT_NOTE,
+    },
+    {
+      id: 'stress_gut', label: 'A high-stress day and that day\'s digestion', cause: 'stress_high', lag: 0, exposure: 'binary', ...GUT,
+      causeText: 'A high-stress day', targetText: 'that day\'s digestion score', expectedSign: -1, exposureModel: STRESS_MODEL + GUT_NOTE,
+    },
+    {
+      id: 'sleep_gut', label: 'Sleep duration and that day\'s digestion', cause: 'sleep_hours', lag: 0, exposure: 'continuous', ...GUT,
+      causeText: 'Each extra hour of sleep the night before', targetText: 'that day\'s digestion score', expectedSign: 1, exposureModel: VALUE_MODEL + GUT_NOTE,
+    },
+    {
+      id: 'training_gut', label: 'Training minutes and that day\'s digestion', cause: 'training_min', lag: 0, exposure: 'continuous', causeScale: 30, ...GUT,
+      causeText: 'Each 30 more minutes of training', targetText: 'that day\'s digestion score', expectedSign: 0, exposureModel: DEVICE_MODEL + GUT_NOTE,
+    },
+    {
+      id: 'travel_gut', label: 'A travel day and that day\'s digestion', cause: 'travel_day', lag: 0, exposure: 'binary', ...GUT,
+      causeText: 'A travel day', targetText: 'that day\'s digestion score', expectedSign: -1, exposureModel: MOBILITY_MODEL + GUT_NOTE,
+    },
+  ]
 }
 
 export const HYPOTHESES: Hypothesis[] = [
@@ -157,6 +233,7 @@ export const HYPOTHESES: Hypothesis[] = [
     causeText: 'A commute at least a quarter longer than the usual of the last four weeks', targetText: 'that night\'s sleep', expectedSign: 0, exposureModel: COMMUTE_MODEL,
   },
   ...morningScoreQuestions(),
+  ...mealAndGutQuestions(),
 ]
 
 // Analysis review phase E: questions a person registers from a hint (what came before off mornings). Each is tested only

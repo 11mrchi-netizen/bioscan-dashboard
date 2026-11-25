@@ -1,5 +1,5 @@
 // Editing the plan before it starts (follow-up redesign): the rules and the arithmetic, pure. The database enforces the same rules
-// (supabase/migrations/20261125000000_plan_edit.sql); these only say so early and build what is sent.
+// (supabase/migrations/20261124063309_plan_edit.sql); these only say so early and build what is sent.
 //   * a session can be changed while it is still planned, not linked to a recording, dated today or later, in a block that has not ended;
 //   * a move changes the date only (original_date stays), time, length and a note are free; the title is NOT editable: it is the key
 //     the phone maps a session to its program with, and part of its Zepp template's name;

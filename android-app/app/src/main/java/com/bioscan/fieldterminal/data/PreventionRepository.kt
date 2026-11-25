@@ -21,7 +21,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
-// Risk profile R4 (supabase/migrations/20261119160000_home_checklist_preventive.sql): the home and water checklist, the
+// Risk profile R4 (supabase/migrations/20261119105640_home_checklist_preventive.sql): the home and water checklist, the
 // preventive records, and the substance and heat summaries read from what is already logged. Every read is soft.
 
 @Serializable

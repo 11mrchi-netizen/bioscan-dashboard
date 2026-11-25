@@ -1,5 +1,5 @@
 // Reads and writes for editing the plan before it starts. Every write goes through the database functions of
-// supabase/migrations/20261125000000_plan_edit.sql, which hold the rules (a session still planned, unlinked, dated today or later, in a
+// supabase/migrations/20261124063309_plan_edit.sql, which hold the rules (a session still planned, unlinked, dated today or later, in a
 // block that has not ended; a prescription change is a new revision; removing sets a session aside; a block's start moves with its
 // sessions). Before that migration is applied the functions do not exist: `MigrationMissing` says so in words.
 import { supabase } from './supabase'
@@ -7,7 +7,7 @@ import { movementKey } from '../../../supabase/functions/_shared/training-core/m
 import type { ResolveContext } from '../../../supabase/functions/_shared/training-core/index.ts'
 
 export class MigrationMissing extends Error {
-  constructor() { super('Editing the plan needs a one-time database update (supabase/migrations/20261125000000_plan_edit.sql) that has not been applied yet.'); this.name = 'MigrationMissing' }
+  constructor() { super('Editing the plan needs a one-time database update (supabase/migrations/20261124063309_plan_edit.sql) that has not been applied yet.'); this.name = 'MigrationMissing' }
 }
 
 /** A database-function error as words for the person: the function's own message without its table prefix. */

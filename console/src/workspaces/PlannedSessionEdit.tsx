@@ -1,7 +1,7 @@
 // PLAN › SESSIONS › one planned session (#/plan/sessions/planned/<id>): fine-tune it while it is still planned. Its date (the first
 // date it was planned for stays on record), time, length and a note; for a strength session the sets, reps and load of each lift
 // (a new revision: the old one is set aside); or take it out of the plan (kept, never deleted). The title is the program's name for the
-// session and is not edited. The rules are the database's (supabase/migrations/20261125000000_plan_edit.sql); this page says them first.
+// session and is not edited. The rules are the database's (supabase/migrations/20261124063309_plan_edit.sql); this page says them first.
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useLoadEffect } from '../lib/useLoadEffect'

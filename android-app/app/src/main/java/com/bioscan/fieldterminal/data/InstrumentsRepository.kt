@@ -13,7 +13,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.time.LocalDate
 
-// Risk profile R2 (supabase/migrations/20261119120000_instrument_responses.sql): questionnaire answers. Append-only: a
+// Risk profile R2 (supabase/migrations/20261119101435_instrument_responses.sql): questionnaire answers. Append-only: a
 // mistake is deleted and answered again. local_date is the phone's calendar date when it was saved; answered_at (a real
 // instant) is set by the database.
 

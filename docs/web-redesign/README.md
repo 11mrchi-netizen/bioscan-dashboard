@@ -85,7 +85,7 @@ linked to a workout (the phone's `linkPlanned`).
 **Planned sessions** (`#/plan/sessions/planned/<id>`): while a session is still planned, unlinked and dated today or later, in a block that has
 not ended: its date, time, length and a note (the title is the program's key and is not edited); sets, reps and load of each lift; take it
 out of the plan. Blocks that have not begun can be moved (Plan › Overview). The rules are the database's
-(`supabase/migrations/20261125000000_plan_edit.sql`, tested on a real Postgres engine in `supabase/tests/plan_edit.pglite.mjs`):
+(`supabase/migrations/20261124063309_plan_edit.sql`, tested on a real Postgres engine in `supabase/tests/plan_edit.pglite.mjs`):
 
 - `planned_sessions` refuses changes to `prescription`, `original_date`, `sequence_no` and `block_id`. A move changes `scheduled_date` only; a
   prescription change is a **new revision** (the old row is set aside); "delete" **sets a session aside** (`superseded`, never deleted:
@@ -159,7 +159,7 @@ On today's plan each meal also says what was logged against it (by the meal's ow
 (`schedule.ts`: the phone's `FuelBlock`, parity-tested: expansion, totals, per-hour rates, warnings, the plan as blocks). It is kept in `fuel_schedules` under the
 plan item, as the phone keeps it (`fuelScheduleKey.ts`), so the phone shows and debriefs the same schedule. Start from the planner's plan, from a standard, or empty.
 **FILL** adds a rule in one step ("one serving of the gel every 30 minutes from the 30th, none in the last 10"). **Standards** (`standards.ts`, web only, table
-`fuel_standards`: migration `20261126000000_fuel_standards.sql`, apply it before standards can be saved) are reusable rules, applied to a session of any length;
+`fuel_standards`: migration `20261124111137_fuel_standards.sql`, apply it before standards can be saved) are reusable rules, applied to a session of any length;
 SAVE AS A STANDARD takes the shape of the schedule on screen. Not here: the debrief (the phone's), supplements in the product list, the phone's home place for weather.
 
 ## Look

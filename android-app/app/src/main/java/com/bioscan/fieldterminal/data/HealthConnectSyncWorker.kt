@@ -5,13 +5,16 @@ import android.util.Log
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
+import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.bioscan.fieldterminal.healthconnect.HealthConnectSyncStatus
 import java.time.Duration
+import java.util.concurrent.TimeUnit
 
 // Runs HealthConnectSyncCoordinator.syncAll() and HealthConnectWriteBackRepository.writeBackDaily()
 // as real WorkManager background work rather than a plain LaunchedEffect-scoped coroutine.
@@ -56,6 +59,7 @@ class HealthConnectSyncWorker(context: Context, params: WorkerParameters) : Coro
         private const val PREFS = "ft_sync"
         private const val KEY_LAST_SUCCESS = "hc_last_success"
         private const val MIN_INTERVAL_MS = 10 * 60_000L
+        private const val PERIODIC_WORK_NAME = "health_connect_sync_periodic"
 
         fun enqueue(context: Context) {
             val request = OneTimeWorkRequestBuilder<HealthConnectSyncWorker>()
@@ -64,6 +68,21 @@ class HealthConnectSyncWorker(context: Context, params: WorkerParameters) : Coro
                 .build()
             WorkManager.getInstance(context)
                 .enqueueUniqueWork(UNIQUE_WORK_NAME, ExistingWorkPolicy.KEEP, request)
+        }
+
+        /**
+         * The same sync about once an hour while the app is closed, so what the Zepp app hands Health Connect in the
+         * background (HRV, breathing rate, sleep) reaches Supabase without opening Bioscan. Health Connect allows these
+         * reads because PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND is part of the required grant. KEEP leaves a schedule
+         * that already exists alone, so calling this on every app start never resets the hour.
+         */
+        fun schedulePeriodic(context: Context) {
+            val request = PeriodicWorkRequestBuilder<HealthConnectSyncWorker>(1, TimeUnit.HOURS)
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .setBackoffCriteria(BackoffPolicy.LINEAR, Duration.ofSeconds(30))
+                .build()
+            WorkManager.getInstance(context)
+                .enqueueUniquePeriodicWork(PERIODIC_WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, request)
         }
     }
 }

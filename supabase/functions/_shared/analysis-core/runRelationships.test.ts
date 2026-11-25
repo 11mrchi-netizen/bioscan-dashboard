@@ -108,7 +108,7 @@ test('runRelationships publishes one row per hypothesis from raw tables and repl
   assert.equal(row('steps_hrv').state, 'not_yet') // no steps recorded
   assert.equal(row('caffeine_pm_sleep').state, 'not_yet') // no caffeine logged
   const payload = row('alcohol_hrv').payload as Row
-  assert.equal(payload.catalogueVersion, '2.3.0')
+  assert.equal(payload.catalogueVersion, '2.4.0')
   assert.equal(payload.rung, 'associated')
   assert.equal(payload.noEffect, 2)
   assert.ok('capture' in payload)
@@ -182,8 +182,13 @@ test('buildFrame phase B: logged times are local wall-clock digits (not shifted 
       { date: '2026-03-06', drinks: 2, caffeine_after_14: null, late_meal: null, stress: 2 },
     ],
     context: [{ date: '2026-03-01', utc_offset_min: 480 }],
+    mealTags: [{ logged_at: '2026-03-05T09:00:00Z', tags: ['caffeine', 'lactose'] }], // a cappuccino at breakfast
   }
   const f = buildFrame(raw, '2026-03-06', 6)
+  // catalogue 2.4.0: any caffeine on a meal day (items or the food-group tag), unknown without meals
+  assert.deepEqual(f.series.caffeine_any, [1, 0, 0, null, 1, null])
+  // a 60-minute run is not a long session; watch days without one are zero
+  assert.deepEqual(f.series.long_session, [0, 0, 0, 0, 0, 0])
   // 03-01 legacy zero (food log, before check-ins), 03-02 a late-night drink, 03-03 legacy zero, 03-04 answered none,
   // 03-05 unknown (after check-ins began, no answer and no positive log), 03-06 answered two drinks
   assert.deepEqual(f.series.alcohol_any, [0, 1, 0, 0, null, 1])

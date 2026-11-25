@@ -66,6 +66,7 @@ const CATALOGUE = [
   // Meal timing and the gut (catalogue 2.3.0).
   'meal_gap_sleep', 'meal_gap_hrv', 'meal_gap_recovery_score', 'kcal_before_bed_sleep_score', 'kcal_before_bed_hrv', 'carbs_day_sleep',
   'protein_day_recovery_score', 'fiber_gut', 'fat_gut', 'kcal_before_bed_gut', 'alcohol_gut', 'stress_gut', 'sleep_gut', 'training_gut', 'travel_gut',
+  'caffeine_gut', 'long_session_gut', 'long_session_gut_next',
 ]
 const GROUPS: [Payload['outcome'] | 'registered', string][] = [['hrv', 'HRV'], ['rhr', 'RESTING HEART RATE'], ['sleep', 'SLEEP'], ['energy', 'ENERGY'], ['recovery_score', 'RECOVERY SCORE'], ['sleep_score', 'SLEEP SCORE'], ['gut', 'DIGESTION'], ['registered', 'QUESTIONS YOU REGISTERED']]
 

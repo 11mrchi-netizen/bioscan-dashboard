@@ -14,6 +14,9 @@
 //   gut_day_score       0-100, higher is better. The mean of what is known that day:
 //     stools   each stool's form (Bristol 4 = 100, 3 and 5 = 90, 2 = 70, 6 = 60, 1 = 40, 7 = 30), less 3 points per point
 //              of discomfort (0-10) and 10 for a partly or 20 for an incomplete evacuation; averaged over the day's stools;
+//              Then, against your usual over the 28 days before (once 7 days with stools are known there): 10 points off
+//              per stool beyond one more than your usual count, and 5 per hour that the day's first stool is more than 2 h
+//              from your usual time (at most 15);
 //     evening  the check-in's gut comfort (0-4) x 25, less 10 per symptom ticked.
 //   Not the app's FUEL > gut sub-score (that one is relative to your usual timing and frequency); this is a plain daily
 //   reading, so the engine can ask what goes with a better or worse gut day.
@@ -125,13 +128,38 @@ export function eveningGutPoints(c: GutCheckinRow): number | null {
   return Math.max(0, Math.min(100, comfort * 25 - 10 * (c.gut_symptoms?.length ?? 0)))
 }
 
+export const USUAL_DAYS = 28
+export const USUAL_MIN_DAYS = 7
+
+const median = (xs: number[]) => {
+  const v = [...xs].sort((a, b) => a - b)
+  const m = Math.floor(v.length / 2)
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2
+}
+
+/** Points off a day's stool part for frequency and timing away from the usual of the 28 days before. */
+export function rhythmPenalty(day: { count: number; firstHour: number }, before: { count: number; firstHour: number }[]): number {
+  if (before.length < USUAL_MIN_DAYS) return 0
+  const usualCount = median(before.map((b) => b.count))
+  const usualHour = median(before.map((b) => b.firstHour))
+  const extra = Math.max(0, day.count - (usualCount + 1))
+  const off = Math.max(0, Math.abs(day.firstHour - usualHour) - 2)
+  return Math.round(10 * extra + Math.min(15, 5 * off))
+}
+
 /** The daily digestion score on [axis] (stool_log.occurred_at is a logged time: its digits are local). */
 export function gutDayScore(axis: string[], stool: StoolRow[], checkins: GutCheckinRow[]): Num[] {
   const stoolByDay = new Map<string, number[]>()
+  const rhythm = new Map<string, { count: number; firstHour: number }>()
   for (const s of stool) {
+    const t = wallMs(s.occurred_at)
+    if (!Number.isFinite(t)) continue
+    const d = dateOfMs(t)
+    const hour = (t - Date.parse(d + 'T00:00:00Z')) / HOUR
+    const r = rhythm.get(d)
+    rhythm.set(d, r ? { count: r.count + 1, firstHour: Math.min(r.firstHour, hour) } : { count: 1, firstHour: hour })
     const p = stoolPoints(s)
     if (p === null) continue
-    const d = String(s.occurred_at).slice(0, 10)
     stoolByDay.set(d, [...(stoolByDay.get(d) ?? []), p])
   }
   const evening = new Map<string, number>()
@@ -142,7 +170,15 @@ export function gutDayScore(axis: string[], stool: StoolRow[], checkins: GutChec
   return axis.map((d) => {
     const parts: number[] = []
     const st = stoolByDay.get(d)
-    if (st?.length) parts.push(st.reduce((a, b) => a + b, 0) / st.length)
+    if (st?.length) {
+      const before: { count: number; firstHour: number }[] = []
+      for (let i = 1; i <= USUAL_DAYS; i++) {
+        const r = rhythm.get(shift(d, -i))
+        if (r) before.push(r)
+      }
+      const form = st.reduce((a, b) => a + b, 0) / st.length
+      parts.push(Math.max(0, form - rhythmPenalty(rhythm.get(d)!, before)))
+    }
     const ev = evening.get(d)
     if (ev !== undefined) parts.push(ev)
     return parts.length ? Math.round((parts.reduce((a, b) => a + b, 0) / parts.length) * 10) / 10 : null

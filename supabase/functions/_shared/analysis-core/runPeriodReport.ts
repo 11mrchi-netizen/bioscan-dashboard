@@ -7,6 +7,7 @@
 // (Sunday's sleep, a meal logged the next morning) still lands in it. After that a report stays as it was written.
 // One row per period in analysis_results: kind `period_report`, key `week:<monday>` or `month:<yyyy-mm>`, as_of the
 // period's last day.
+import { gutDayScore, type GutCheckinRow } from './mealExposures.ts'
 import { fetchAll } from './paging.ts'
 import {
   adherenceLine, buildReport, convertUnit, type DailySeries, foodStool, historyOf, itemsInPeriod, lastCompleted, type LabLine, type LabMetricRead,
@@ -54,27 +55,42 @@ export async function readDaily(admin: Admin, userId: string, s: SeriesContract,
   return out
 }
 
-/** Stool logs (local wall times) as the share of normal stools (Bristol 3-5) and mean discomfort per day. */
-async function readStool(admin: Admin, userId: string, start: string, end: string): Promise<{ normal: DailySeries; discomfort: DailySeries }> {
-  const { rows, error } = await fetchAll<{ occurred_at: string; bristol_type: number | null; discomfort: number | null }>((a, b) =>
-    admin.from('stool_log').select('id, occurred_at, bristol_type, discomfort').eq('user_id', userId)
+/**
+ * Stool logs (local wall times) per day: the share of normal (Bristol 3-5) and loose (6-7) stools, mean discomfort, and
+ * the daily digestion score (mealExposures.ts, with the evening check-in's gut questions, read softly).
+ */
+async function readStool(admin: Admin, userId: string, start: string, end: string): Promise<{ normal: DailySeries; loose: DailySeries; discomfort: DailySeries; gut: DailySeries }> {
+  const { rows, error } = await fetchAll<{ occurred_at: string; bristol_type: number | null; discomfort: number | null; complete_evacuation: string | null }>((a, b) =>
+    admin.from('stool_log').select('id, occurred_at, bristol_type, discomfort, complete_evacuation').eq('user_id', userId)
       .gte('occurred_at', `${start}T00:00:00`).lte('occurred_at', `${end}T23:59:59.999`).order('occurred_at').order('id').range(a, b))
   if (error) throw new Error(`stool_log: ${error}`)
-  const byDay = new Map<string, { n: number; normal: number; disc: number[] }>()
+  const byDay = new Map<string, { n: number; normal: number; loose: number; disc: number[] }>()
   for (const r of rows) {
     const d = String(r.occurred_at).slice(0, 10)
-    const e = byDay.get(d) ?? { n: 0, normal: 0, disc: [] }
-    if (r.bristol_type !== null && r.bristol_type !== undefined) { e.n++; if (r.bristol_type >= 3 && r.bristol_type <= 5) e.normal++ }
+    const e = byDay.get(d) ?? { n: 0, normal: 0, loose: 0, disc: [] }
+    if (r.bristol_type !== null && r.bristol_type !== undefined) {
+      e.n++
+      if (r.bristol_type >= 3 && r.bristol_type <= 5) e.normal++
+      if (r.bristol_type >= 6) e.loose++
+    }
     if (r.discomfort !== null && r.discomfort !== undefined) e.disc.push(Number(r.discomfort))
     byDay.set(d, e)
   }
   const normal: DailySeries = new Map()
+  const loose: DailySeries = new Map()
   const discomfort: DailySeries = new Map()
   for (const [d, e] of byDay) {
-    if (e.n) normal.set(d, (e.normal / e.n) * 100)
+    if (e.n) { normal.set(d, (e.normal / e.n) * 100); loose.set(d, (e.loose / e.n) * 100) }
     if (e.disc.length) discomfort.set(d, e.disc.reduce((a, b) => a + b, 0) / e.disc.length)
   }
-  return { normal, discomfort }
+  const ck = await fetchAll<GutCheckinRow & { id?: number }>((a, b) =>
+    admin.from('evening_checkins').select('date, gut_comfort, gut_symptoms').eq('user_id', userId).gte('date', start).lte('date', end).order('date').range(a, b))
+  const axis: string[] = []
+  for (let d = start; d <= end; d = addDays(d, 1)) axis.push(d)
+  const scores = gutDayScore(axis, rows, ck.error ? [] : ck.rows)
+  const gut: DailySeries = new Map()
+  axis.forEach((d, i) => { const v = scores[i]; if (v !== null) gut.set(d, v) })
+  return { normal, loose, discomfort, gut }
 }
 
 /** The meal profile of each meal from [start] to [end] (meals.logged_at is the phone's wall clock: its digits are local). */
@@ -224,7 +240,7 @@ export async function buildPeriodReport(admin: Admin, userId: string, file: Seri
   const byId = new Map(file.series.map((s) => [s.id, s]))
 
   const stool = await readStool(admin, userId, from, period.end)
-  const daily = new Map<string, DailySeries>([['stool_normal_pct', stool.normal], ['stool_discomfort', stool.discomfort]])
+  const daily = new Map<string, DailySeries>([['gut_day_score', stool.gut], ['stool_normal_pct', stool.normal], ['stool_loose_pct', stool.loose], ['stool_discomfort', stool.discomfort]])
   const contractSeries = REPORT_METRICS.map((m) => byId.get(m.id)).filter((s): s is SeriesContract => !!s)
   const loaded = await Promise.all(contractSeries.map((s) => readDaily(admin, userId, s, from, period.end, file.defaultUtcOffsetMin)))
   contractSeries.forEach((s, i) => daily.set(s.id, loaded[i]))

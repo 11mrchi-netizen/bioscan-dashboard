@@ -23,7 +23,9 @@ async function loadReports(): Promise<PeriodReport[]> {
 
 const TONE: Record<Exclude<Tone, null>, string> = { ok: 'var(--ok)', warn: 'var(--warn)', bad: 'var(--bad)' }
 const toneStyle = (t: Tone) => (t ? { color: TONE[t] } : undefined)
-const HUE_OF: Record<string, string> = { stool_normal_pct: 'var(--m-stool-healthy)', stool_discomfort: 'var(--m-gut-comfort)' }
+const HUE_OF: Record<string, string> = {
+  gut_day_score: 'var(--m-gut-comfort)', stool_normal_pct: 'var(--m-stool-healthy)', stool_loose_pct: 'var(--m-stool-loose)', stool_discomfort: 'var(--m-gut-comfort)',
+}
 
 export default function Reports() {
   const [params, setParams] = useSearchParams()

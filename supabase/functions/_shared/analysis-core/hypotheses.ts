@@ -25,7 +25,7 @@
 // supplements are tested as pre-registered N-of-1 experiments (Phase 5) with their own design, not here.
 import type { Hypothesis } from './relationship.ts'
 
-export const CATALOGUE_VERSION = '2.3.0'
+export const CATALOGUE_VERSION = '2.4.0'
 
 const EXPLICIT_MODEL = 'A day counts as none only when the evening check-in says so (or, before the first check-in, when food was logged that day); other days are left out.'
 const DEVICE_MODEL = 'Sessions come from the watch; days with a watch record and no session count as none.'
@@ -133,6 +133,20 @@ function mealAndGutQuestions(): Hypothesis[] {
     {
       id: 'travel_gut', label: 'A travel day and that day\'s digestion', cause: 'travel_day', lag: 0, exposure: 'binary', ...GUT,
       causeText: 'A travel day', targetText: 'that day\'s digestion score', expectedSign: -1, exposureModel: MOBILITY_MODEL + GUT_NOTE,
+    },
+    // Catalogue 2.4.0 (a fuller gut picture): caffeine and long sessions.
+    {
+      id: 'caffeine_gut', label: 'Caffeine and that day\'s digestion', cause: 'caffeine_any', lag: 0, exposure: 'binary', ...GUT,
+      causeText: 'A day with caffeine', targetText: 'that day\'s digestion score', expectedSign: 0,
+      exposureModel: EXPLICIT_MODEL + ' Caffeine is a meal item with caffeine or a meal whose foods are tagged caffeine (coffee, tea, cola, energy drinks).' + GUT_NOTE,
+    },
+    {
+      id: 'long_session_gut', label: 'A long session and that day\'s digestion', cause: 'long_session', lag: 0, exposure: 'binary', ...GUT,
+      causeText: 'A day with a session of 90 minutes or more', targetText: 'that day\'s digestion score', expectedSign: -1, exposureModel: DEVICE_MODEL + GUT_NOTE,
+    },
+    {
+      id: 'long_session_gut_next', label: 'A long session and the next day\'s digestion', cause: 'long_session', lag: 1, exposure: 'binary', ...GUT,
+      causeText: 'A day with a session of 90 minutes or more', targetText: 'the next day\'s digestion score', expectedSign: -1, exposureModel: DEVICE_MODEL + GUT_NOTE,
     },
   ]
 }

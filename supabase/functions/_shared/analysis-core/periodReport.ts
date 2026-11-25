@@ -102,13 +102,17 @@ export const REPORT_METRICS: readonly ReportMetricSpec[] = [
   { id: 'meal_fat', section: 'nutrition', better: null, minDays: [3, 10], minChange: 10 },
   { id: 'meal_fiber', section: 'nutrition', better: 'up', minDays: [3, 10], minChange: 4 },
   { id: 'water_intake', section: 'nutrition', better: 'up', minDays: [3, 10], minChange: 250 },
+  { id: 'gut_day_score', section: 'gut', better: 'up', minDays: [3, 8], minChange: 8 },
   { id: 'stool_normal_pct', section: 'gut', better: 'up', minDays: [3, 8], minChange: 15 },
+  { id: 'stool_loose_pct', section: 'gut', better: 'down', minDays: [3, 8], minChange: 15 },
   { id: 'stool_discomfort', section: 'gut', better: 'down', minDays: [3, 8], minChange: 0.5 },
 ]
 
 /** Report-only series, built from stool_log by the reader (one value per local day). */
 export const STOOL_SERIES: Record<string, { label: string; unit: string }> = {
+  gut_day_score: { label: 'Digestion score', unit: '/100' },
   stool_normal_pct: { label: 'Normal stools (Bristol 3–5)', unit: '%' },
+  stool_loose_pct: { label: 'Loose stools (Bristol 6–7)', unit: '%' },
   stool_discomfort: { label: 'Stool discomfort', unit: '/10' },
 }
 
@@ -726,7 +730,9 @@ const WORSE_ADVICE: Record<string, string> = {
   meal_protein: 'Protein went down: add one protein-rich food to the meal that has none.',
   meal_fiber: 'Fibre went down: add legumes, oats or vegetables to one meal a day.',
   water_intake: 'Less water: keep a bottle in sight and drink one glass with every meal.',
+  gut_day_score: 'A worse digestion score: check stress, sleep and long sessions on the bad days as well as the food.',
   stool_normal_pct: 'Fewer normal stools: look at fibre and water, and at what changed in the food.',
+  stool_loose_pct: 'More loose stools: note stress, caffeine, alcohol and long sessions on the days before, as well as the food.',
   stool_discomfort: 'More gut discomfort: note the foods on the day before the uncomfortable ones.',
 }
 

@@ -34,6 +34,10 @@ earlier changes, larger than a fixed smallest change per metric. Metrics with a 
 *worse*; the others (weight, energy intake, carbs, fat, training volume) only *up* or *down*. Too few days in either
 period says *too few days*.
 
+**Gut lines.** Report-only series from `stool_log` (local wall times) and the evening check-in: the daily digestion score
+(`gut_day_score`, mealExposures.ts: form, discomfort, evacuation, rhythm against your usual and the evening answer), the
+share of normal (Bristol 3-5) and of loose (6-7) stools, and mean discomfort.
+
 **Regimen.** Planned doses follow the regimen model (android `domain/Regimen.kt`): dosing days (every-N-days plans one
 in N, weekdays and cycles count their days) times the times of day. Doses logged count at most the planned times on any
 one day. 85% or more is followed, under 70% not followed. As-needed items are counted, not scored.

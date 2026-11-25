@@ -64,3 +64,13 @@ test('the daily digestion score averages the stools and the evening answer, and 
   assert.deepEqual(gutDayScore(axis, stool, checkins), [30, 90, 90])
   assert.deepEqual(gutDayScore(['2026-11-21'], stool, checkins), [null])
 })
+
+test('the digestion score takes points off for more stools than usual and an unusual time', () => {
+  // ten usual days: one stool at 08:00
+  const usual = Array.from({ length: 10 }, (_, i) => ({ occurred_at: `2026-11-${String(10 + i).padStart(2, '0')} 08:00:00+00`, bristol_type: 4 }))
+  // the 20th: three stools (one beyond usual + 1), the first at 13:00 (5 h off, 3 h beyond the 2 h allowed: 15 points)
+  const day = [13, 15, 18].map((h) => ({ occurred_at: `2026-11-20 ${h}:00:00+00`, bristol_type: 4 }))
+  assert.deepEqual(gutDayScore(['2026-11-19', '2026-11-20'], [...usual, ...day], []), [100, 75])
+  // with too few usual days there is no baseline
+  assert.deepEqual(gutDayScore(['2026-11-20'], [...usual.slice(0, 3), ...day], []), [100])
+})

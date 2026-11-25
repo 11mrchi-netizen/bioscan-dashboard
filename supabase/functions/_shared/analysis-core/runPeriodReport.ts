@@ -76,30 +76,47 @@ async function readStool(admin: Admin, userId: string, start: string, end: strin
   return { normal, discomfort }
 }
 
-/** nutrient_intake rows that are food; supplement doses are written there too (source_type `supplement`) and are left out. */
+/** nutrient_intake rows that are food; supplement doses are written there too (source_type `supplement`, source_id the
+ * supplement_log row). */
 export const FOOD_SOURCES = ['meal_item', 'fueling_intake']
 
-/** Food micronutrients per local day (nutrient_intake holds the phone's wall clock), in each reference's unit. */
-async function readMicros(admin: Admin, userId: string, start: string, end: string): Promise<{ daily: Map<string, DailySeries>; foodDays: Set<string> }> {
+export interface MicroReads {
+  food: Map<string, DailySeries>
+  foodDays: Set<string>
+  supps: Map<string, DailySeries>
+  /** Per nutrient, the supplement_log ids of the doses that brought it (named by the caller). */
+  suppLogIds: Map<string, Set<number>>
+}
+
+/** Micronutrients per local day (nutrient_intake holds the phone's wall clock), food and supplements apart, in each reference's unit. */
+async function readMicros(admin: Admin, userId: string, start: string, end: string): Promise<MicroReads> {
   const keys = MICRO_REFERENCES.map((m) => m.key)
-  const { rows, error } = await fetchAll<{ logged_at: string; nutrient: string; amount: number | null; unit: string | null }>((a, b) =>
-    admin.from('nutrient_intake').select('id, logged_at, nutrient, amount, unit').eq('user_id', userId).in('nutrient', [...keys, 'calories']).in('source_type', FOOD_SOURCES)
+  const { rows, error } = await fetchAll<{ logged_at: string; nutrient: string; amount: number | null; unit: string | null; source_type: string | null; source_id: number | null }>((a, b) =>
+    admin.from('nutrient_intake').select('id, logged_at, nutrient, amount, unit, source_type, source_id').eq('user_id', userId).in('nutrient', [...keys, 'calories'])
       .gte('logged_at', `${start}T00:00:00`).lte('logged_at', `${end}T23:59:59.999`).order('logged_at').order('id').range(a, b))
   if (error) throw new Error(`nutrient_intake: ${error}`)
-  const daily = new Map<string, DailySeries>()
-  const foodDays = new Set<string>()
+  const out: MicroReads = { food: new Map(), foodDays: new Set(), supps: new Map(), suppLogIds: new Map() }
   for (const r of rows) {
     const d = String(r.logged_at).slice(0, 10)
-    foodDays.add(d)
+    const isFood = FOOD_SOURCES.includes(String(r.source_type ?? 'meal_item'))
+    const isSupp = r.source_type === 'supplement'
+    if (!isFood && !isSupp) continue
+    if (isFood) out.foodDays.add(d)
     const ref = MICRO_REFERENCES.find((m) => m.key === r.nutrient)
     if (!ref || r.amount === null || !Number.isFinite(Number(r.amount))) continue
     const v = convertUnit(Number(r.amount), r.unit ?? ref.unit, ref.unit)
     if (v === null) continue
-    const s = daily.get(ref.key) ?? new Map()
+    const target = isFood ? out.food : out.supps
+    const s = target.get(ref.key) ?? new Map()
     s.set(d, (s.get(d) ?? 0) + v)
-    daily.set(ref.key, s)
+    target.set(ref.key, s)
+    if (isSupp && r.source_id !== null) {
+      const ids = out.suppLogIds.get(ref.key) ?? new Set<number>()
+      ids.add(Number(r.source_id))
+      out.suppLogIds.set(ref.key, ids)
+    }
   }
-  return { daily, foodDays }
+  return out
 }
 
 interface ResultRow { key: string; state: string; payload: Record<string, unknown>; calculated_at: string }
@@ -179,14 +196,12 @@ export async function buildPeriodReport(admin: Admin, userId: string, file: Seri
     return metricLine(m, info, daily.get(m.id)!, period, history)
   })
 
-  const micros = await readMicros(admin, userId, prev.start, period.end)
-  const micro = microSection(micros.daily, micros.foodDays, period, prev)
 
   const supp = await admin.from('supplements')
     .select('id, name, kind, status, time_of_day, slots, every_n_days, schedule, start_date, end_date').eq('user_id', userId).order('name')
   if (supp.error) throw new Error(`supplements: ${supp.error.message}`)
   const items = itemsInPeriod(((supp.data ?? []) as Parameters<typeof regimenItem>[0][]).map(regimenItem), period)
-  const { rows: log, error: logErr } = await fetchAll<{ supplement_id: number | null; taken_at: string }>((a, b) =>
+  const { rows: log, error: logErr } = await fetchAll<{ id: number; supplement_id: number | null; taken_at: string }>((a, b) =>
     admin.from('supplement_log').select('id, supplement_id, taken_at').eq('user_id', userId)
       .gte('taken_at', `${prev.start}T00:00:00`).lte('taken_at', `${period.end}T23:59:59.999`).order('taken_at').order('id').range(a, b))
   if (logErr) throw new Error(`supplement_log: ${logErr}`)
@@ -199,6 +214,12 @@ export async function buildPeriodReport(admin: Admin, userId: string, file: Seri
     takes.set(r.supplement_id, m)
   }
   const regimen = items.map((it) => adherenceLine(it, takes.get(it.id) ?? new Map(), period, prev))
+  // Micronutrients: food and the doses logged, each dose named by its regimen item (only doses inside this period).
+  const micros = await readMicros(admin, userId, prev.start, period.end)
+  const allNames = new Map(((supp.data ?? []) as { id: number; name: string }[]).map((r) => [r.id, r.name]))
+  const logToName = new Map(log.filter((r) => r.supplement_id !== null && String(r.taken_at).slice(0, 10) >= period.start).map((r) => [Number(r.id), allNames.get(r.supplement_id!) ?? 'a supplement']))
+  const suppNames = new Map([...micros.suppLogIds].map(([k, ids]) => [k, new Set([...ids].map((i) => logToName.get(i)).filter((n): n is string => !!n))]))
+  const micro = microSection(micros.food, micros.foodDays, micros.supps, suppNames, period, prev)
   const lab = await readLab(admin, userId, period, new Map(regimen.map((r) => [r.id, r.rate])))
 
   const fsFoods = [

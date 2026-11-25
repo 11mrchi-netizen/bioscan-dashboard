@@ -69,21 +69,48 @@ test('a metric line: better and worse by the metric direction, steady inside the
   assert.equal(w.status, 'up')
 })
 
-test('micronutrients: a mean over the days with food logged, low under 70%, sodium high over its limit', () => {
+test('micronutrients: food and supplements, low under 70% of the need, high over the safe upper limit', () => {
   const week: ReportPeriod = { grain: 'week', start: '2026-11-16', end: '2026-11-22' }
   const prev = previousOf(week)
   const foodDays = new Set(['2026-11-16', '2026-11-17', '2026-11-18', '2026-11-19'])
-  const mg = fill('2026-11-16', 3, () => 300) // three days at 300, one food day without magnesium: mean 225
-  const na = fill('2026-11-16', 4, () => 3000)
-  const s = microSection(new Map([['magnesium', mg], ['sodium', na]]), foodDays, week, prev)
+  const food = new Map([
+    ['magnesium', fill('2026-11-16', 3, () => 300)], // three days at 300, one food day without: 225 a day
+    ['sodium', fill('2026-11-16', 4, () => 3000)],
+    ['zinc', fill('2026-11-16', 4, () => 12)],
+    ['vitamin_d', fill('2026-11-16', 4, () => 100)],
+    ['iron', fill('2026-11-16', 4, () => 20)],
+  ])
+  const supps = new Map([
+    ['zinc', fill('2026-11-16', 7, () => 50)], // 50 mg every day: 62 a day with food, over the 40 mg limit
+    ['vitamin_d', fill('2026-11-16', 7, (i) => (i < 2 ? 5000 : null))], // two doses: 1,429 a day, over 4,000 on two days
+    ['iron', fill('2026-11-16', 7, (i) => (i === 0 ? 36 : null))],
+  ])
+  const names = new Map([['zinc', new Set(['Zinc Picolinate'])]])
+  const s = microSection(food, foodDays, supps, names, week, prev)
   assert.equal(s.foodDays, 4)
-  const m = s.lines.find((l) => l.key === 'magnesium')!
-  assert.equal(m.value, 225)
-  assert.equal(m.status, 'low')
-  assert.equal(s.lines.find((l) => l.key === 'sodium')!.status, 'high')
-  assert.equal(s.lines.find((l) => l.key === 'zinc')!.status, 'no_data')
+  assert.equal(s.days, 7)
+  const line = (k: string) => s.lines.find((l) => l.key === k)!
+  assert.equal(line('magnesium').food, 225)
+  assert.equal(line('magnesium').status, 'low', '225 of 420 mg is 54% of the need')
+  const zn = line('zinc')
+  assert.equal(zn.food, 12)
+  assert.equal(zn.supplements, 50)
+  assert.equal(zn.value, 62)
+  assert.equal(zn.status, 'high')
+  assert.deepEqual(zn.fromSupplements, ['Zinc Picolinate'])
+  const d = line('vitamin_d')
+  assert.equal(d.value, 1528.57)
+  assert.equal(d.daysOver, 2)
+  assert.equal(d.status, 'high_days', 'under the limit on average, over it on the dose days')
+  assert.equal(line('iron').status, 'high_days', '20 from food + 36 from the dose is over 45 mg on that day')
+  assert.equal(line('sodium').status, 'high', '3,000 mg over the 2,300 mg limit')
+  assert.equal(line('selenium').status, 'no_data', 'a nutrient no logged food carries is unknown, never short')
   assert.equal(convertUnit(420, 'mg', 'g'), 0.42)
   assert.equal(convertUnit(1, 'IU', 'mcg'), null)
+  // Without food logged, a deficiency is not called; an excess from doses alone still is.
+  const none = microSection(new Map(), new Set(), supps, names, week, prev)
+  assert.equal(none.lines.find((l) => l.key === 'zinc')!.status, 'high')
+  assert.equal(none.lines.find((l) => l.key === 'magnesium')!.status, 'no_data')
 })
 
 test('regimen: planned doses by the schedule, adherence capped per day, as-needed not scored', () => {
@@ -146,7 +173,7 @@ const line = (id: string, value: number, prev: number, status: MetricLine['statu
 })
 
 test('suggestions: fixed rules, each naming its number, most pressing first', () => {
-  const micro = { foodDays: 5, lines: [] }
+  const micro = { foodDays: 5, days: 7, lines: [] }
   const s = suggestions({
     metrics: [line('sleep_hours', 6.2, 6.9, 'worse'), line('hrv', 40, 48, 'worse'), line('meal_protein', 90, 95, 'steady'), line('steps', 9000, 8000, 'better')],
     micro, weightKg: 80, lab: [],
@@ -167,7 +194,7 @@ test('a report: summary lists and at most five suggestions; a tested item is not
   const r = buildReport({
     period, today: '2026-11-23',
     metrics: [line('sleep_hours', 6, 7, 'worse'), line('hrv', 40, 48, 'worse'), line('rhr', 50, 50, 'steady'), line('steps', 3000, 3200, 'steady'), line('meal_fiber', 10, 12, 'steady'), line('water_intake', 1000, 1100, 'steady'), line('mood', 8, 6, 'better')],
-    micro: { foodDays: 5, lines: [] },
+    micro: { foodDays: 5, days: 7, lines: [] },
     regimen: [{ id: 4, name: 'Creatine', kind: null, asNeeded: false, planned: 7, taken: 7, rate: 1, prevRate: 1, daysOn: 170, status: 'followed' }],
     lab: [{ source: 'intervention', id: 'i1', name: 'Creatine test', verdict: 'no_effect', detail: 'No change found in HRV.', supplementId: 4, href: '#/lab' }],
     foodStool: [], weightKg: null,

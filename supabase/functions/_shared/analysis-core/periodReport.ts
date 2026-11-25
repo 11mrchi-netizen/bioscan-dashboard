@@ -215,27 +215,36 @@ export function historyOf(p: ReportPeriod): ReportPeriod[] {
 
 // --- Micronutrients ---
 
-/** Daily reference intakes for an adult man (US RDA or AI; sodium is an upper limit). Units match nutrient_intake. */
-export const MICRO_REFERENCES: readonly { key: string; label: string; unit: string; ref: number; limit?: boolean }[] = [
-  { key: 'fiber', label: 'Fibre', unit: 'g', ref: 38 },
-  { key: 'potassium', label: 'Potassium', unit: 'mg', ref: 3400 },
-  { key: 'magnesium', label: 'Magnesium', unit: 'mg', ref: 420 },
-  { key: 'calcium', label: 'Calcium', unit: 'mg', ref: 1000 },
-  { key: 'iron', label: 'Iron', unit: 'mg', ref: 8 },
-  { key: 'zinc', label: 'Zinc', unit: 'mg', ref: 11 },
-  { key: 'selenium', label: 'Selenium', unit: 'mcg', ref: 55 },
-  { key: 'copper', label: 'Copper', unit: 'mg', ref: 0.9 },
-  { key: 'vitamin_a', label: 'Vitamin A', unit: 'IU', ref: 3000 },
-  { key: 'vitamin_c', label: 'Vitamin C', unit: 'mg', ref: 90 },
-  { key: 'vitamin_d', label: 'Vitamin D', unit: 'IU', ref: 600 },
-  { key: 'vitamin_e', label: 'Vitamin E', unit: 'mg', ref: 15 },
-  { key: 'vitamin_k', label: 'Vitamin K', unit: 'mcg', ref: 120 },
-  { key: 'vitamin_b6', label: 'Vitamin B6', unit: 'mg', ref: 1.3 },
-  { key: 'vitamin_b12', label: 'Vitamin B12', unit: 'mcg', ref: 2.4 },
-  { key: 'folate_b9', label: 'Folate', unit: 'mcg', ref: 400 },
-  { key: 'choline', label: 'Choline', unit: 'mg', ref: 550 },
-  { key: 'omega_3', label: 'Omega-3', unit: 'g', ref: 1.6 },
-  { key: 'sodium', label: 'Sodium', unit: 'mg', ref: 2300, limit: true },
+/**
+ * Daily needs and safe upper limits for an adult man, in nutrient_intake's units. `ref`: the US RDA or AI (null where none
+ * exists); `upper`: the tolerable upper intake level (UL), from all sources unless `upperScope` is `supplements` (magnesium:
+ * the UL covers supplements only; folate and vitamin A: the UL is for supplemental folic acid and preformed vitamin A, read
+ * here against the whole intake, so a high food intake may flag where the true UL is not reached). Omega-3 has no UL: 5 g a
+ * day is the amount judged safe from supplements (EFSA, FDA). Sodium's `upper` is the chronic disease risk reduction intake.
+ */
+export interface MicroReference { key: string; label: string; unit: string; ref: number | null; upper: number | null; upperScope?: 'supplements' }
+
+export const MICRO_REFERENCES: readonly MicroReference[] = [
+  { key: 'fiber', label: 'Fibre', unit: 'g', ref: 38, upper: null },
+  { key: 'potassium', label: 'Potassium', unit: 'mg', ref: 3400, upper: null },
+  { key: 'magnesium', label: 'Magnesium', unit: 'mg', ref: 420, upper: 350, upperScope: 'supplements' },
+  { key: 'calcium', label: 'Calcium', unit: 'mg', ref: 1000, upper: 2500 },
+  { key: 'iron', label: 'Iron', unit: 'mg', ref: 8, upper: 45 },
+  { key: 'zinc', label: 'Zinc', unit: 'mg', ref: 11, upper: 40 },
+  { key: 'selenium', label: 'Selenium', unit: 'mcg', ref: 55, upper: 400 },
+  { key: 'copper', label: 'Copper', unit: 'mg', ref: 0.9, upper: 10 },
+  { key: 'boron', label: 'Boron', unit: 'mg', ref: null, upper: 20 },
+  { key: 'vitamin_a', label: 'Vitamin A', unit: 'IU', ref: 3000, upper: 10000 },
+  { key: 'vitamin_c', label: 'Vitamin C', unit: 'mg', ref: 90, upper: 2000 },
+  { key: 'vitamin_d', label: 'Vitamin D', unit: 'IU', ref: 600, upper: 4000 },
+  { key: 'vitamin_e', label: 'Vitamin E', unit: 'mg', ref: 15, upper: 1000 },
+  { key: 'vitamin_k', label: 'Vitamin K', unit: 'mcg', ref: 120, upper: null },
+  { key: 'vitamin_b6', label: 'Vitamin B6', unit: 'mg', ref: 1.3, upper: 100 },
+  { key: 'vitamin_b12', label: 'Vitamin B12', unit: 'mcg', ref: 2.4, upper: null },
+  { key: 'folate_b9', label: 'Folate', unit: 'mcg', ref: 400, upper: 1000 },
+  { key: 'choline', label: 'Choline', unit: 'mg', ref: 550, upper: 3500 },
+  { key: 'omega_3', label: 'Omega-3', unit: 'g', ref: 1.6, upper: 5 },
+  { key: 'sodium', label: 'Sodium', unit: 'mg', ref: 1500, upper: 2300 },
 ]
 
 const UNIT_TO_BASE: Record<string, number> = { g: 1, mg: 1e-3, mcg: 1e-6, µg: 1e-6, ug: 1e-6 }
@@ -252,46 +261,95 @@ export interface MicroLine {
   key: string
   label: string
   unit: string
-  /** Mean a day over the days with food logged. */
+  /** From food: a daily mean over the days with food logged (a day with nothing logged is missing, not zero). */
+  food: number | null
+  /** From supplements: a daily mean over every day of the period (a dose not logged was not taken). */
+  supplements: number
+  /** food + supplements. */
   value: number | null
   prev: number | null
-  reference: number
+  reference: number | null
+  upper: number | null
+  upperScope: 'total' | 'supplements'
   /** value / reference, as a percentage. */
   pct: number | null
-  limit: boolean
-  status: 'low' | 'ok' | 'high' | 'no_data'
+  /** The amount the upper limit is read against (total or supplements) / upper, as a percentage. */
+  upperPct: number | null
+  /** Days with food logged on which food and that day's doses together (or the doses alone) passed the upper limit. */
+  daysOver: number
+  /** The regimen items the supplement share came from. */
+  fromSupplements: string[]
+  /** low: under 70% of the need; high: the daily mean is over the upper limit; high_days: some days were. */
+  status: 'low' | 'ok' | 'high' | 'high_days' | 'no_data'
 }
 
 export interface MicroSection {
-  /** Days with food logged in the period (the denominator). */
+  /** Days with food logged in the period (the denominator of the food share). */
   foodDays: number
+  /** Days in the period (the denominator of the supplement share). */
+  days: number
   lines: MicroLine[]
 }
 
+export const MICRO_LOW_PCT = 70
+
 /**
- * Micronutrients from food, a daily mean over the days with any food logged (a day with nothing logged is missing, not
- * zero). Below 70% of the reference is low; a limit (sodium) above 100% is high. Supplements are not counted.
+ * Each nutrient from food and from supplements, against its daily need and its safe upper limit. A deficiency (under 70%
+ * of the need) is only called with at least three days of food logged; an excess is called from the supplements alone when
+ * no food is logged, since doses are then a floor.
  */
-export function microSection(daily: Map<string, DailySeries>, foodDays: Set<string>, period: ReportPeriod, prev: ReportPeriod): MicroSection {
-  const meanOver = (s: DailySeries | undefined, p: ReportPeriod): number | null => {
-    const days = [...foodDays].filter((d) => d >= p.start && d <= p.end)
-    if (!days.length) return null
-    return days.reduce((a, d) => a + (s?.get(d) ?? 0), 0) / days.length
+export function microSection(
+  food: Map<string, DailySeries>,
+  foodDays: Set<string>,
+  supps: Map<string, DailySeries>,
+  suppNames: Map<string, Set<string>>,
+  period: ReportPeriod,
+  prev: ReportPeriod,
+): MicroSection {
+  const fd = (p: ReportPeriod) => [...foodDays].filter((d) => d >= p.start && d <= p.end)
+  const sumIn = (s: DailySeries | undefined, p: ReportPeriod) => { let t = 0; for (const [d, v] of s ?? []) if (d >= p.start && d <= p.end) t += v; return t }
+  const foodMean = (s: DailySeries | undefined, p: ReportPeriod): number | null => {
+    const days = fd(p)
+    return days.length ? days.reduce((a, d) => a + (s?.get(d) ?? 0), 0) / days.length : null
   }
-  const daysNow = [...foodDays].filter((d) => d >= period.start && d <= period.end).length
+  const suppMean = (s: DailySeries | undefined, p: ReportPeriod) => sumIn(s, p) / daySpan(p.start, p.end)
+  const foodNow = fd(period)
   const lines = MICRO_REFERENCES.map((m): MicroLine => {
-    const s = daily.get(m.key)
-    const has = s !== undefined && [...s.keys()].some((d) => d >= period.start && d <= period.end)
-    const value = has ? meanOver(s, period) : null
-    const prevValue = s ? meanOver(s, prev) : null
-    const pct = value === null ? null : (value / m.ref) * 100
-    const status = pct === null ? 'no_data' : m.limit ? (pct > 100 ? 'high' : 'ok') : pct < 70 ? 'low' : 'ok'
+    const f = food.get(m.key)
+    const sp = supps.get(m.key)
+    const hasFood = f !== undefined && [...f.keys()].some((d) => d >= period.start && d <= period.end)
+    // A nutrient no logged food carries is unknown from food, not zero: the food database may not track it.
+    const foodV = hasFood ? foodMean(f, period) : null
+    const suppV = suppMean(sp, period)
+    const value = foodV === null ? (suppV > 0 ? suppV : null) : foodV + suppV
+    const prevFood = foodMean(f, prev)
+    const prevSupp = suppMean(sp, prev)
+    const prevValue = prevFood === null ? (prevSupp > 0 ? prevSupp : null) : prevFood + prevSupp
+    const scope = m.upperScope === 'supplements' ? 'supplements' : 'total'
+    const upperBase = scope === 'supplements' ? suppV : value
+    const upperPct = m.upper !== null && upperBase !== null ? (upperBase / m.upper) * 100 : null
+    let daysOver = 0
+    if (m.upper !== null) {
+      const days = new Set([...foodNow, ...[...(sp?.keys() ?? [])].filter((d) => d >= period.start && d <= period.end)])
+      for (const d of days) {
+        const amount = (scope === 'supplements' ? 0 : (f?.get(d) ?? 0)) + (sp?.get(d) ?? 0)
+        if (amount > m.upper) daysOver++
+      }
+    }
+    const pct = value !== null && m.ref !== null ? (value / m.ref) * 100 : null
+    const status: MicroLine['status'] = value === null ? 'no_data'
+      : upperPct !== null && upperPct > 100 ? 'high'
+      : daysOver > 0 ? 'high_days'
+      : pct !== null && pct < MICRO_LOW_PCT && hasFood && foodNow.length >= 3 ? 'low' : 'ok'
     return {
-      key: m.key, label: m.label, unit: m.unit, value: value === null ? null : round(value), prev: prevValue === null ? null : round(prevValue),
-      reference: m.ref, pct: pct === null ? null : Math.round(pct), limit: !!m.limit, status,
+      key: m.key, label: m.label, unit: m.unit,
+      food: foodV === null ? null : round(foodV), supplements: round(suppV), value: value === null ? null : round(value),
+      prev: prevValue === null ? null : round(prevValue), reference: m.ref, upper: m.upper, upperScope: scope,
+      pct: pct === null ? null : Math.round(pct), upperPct: upperPct === null ? null : Math.round(upperPct), daysOver,
+      fromSupplements: [...(suppNames.get(m.key) ?? [])].sort(), status,
     }
   })
-  return { foodDays: daysNow, lines }
+  return { foodDays: foodNow.length, days: daySpan(period.start, period.end), lines }
 }
 
 // --- Regimen ---
@@ -586,12 +644,19 @@ export function suggestions(x: SuggestionInputs): Suggestion[] {
   if (steps !== null && steps < TARGETS.steps && !out.some((s) => s.id === 'worse_steps')) {
     out.push({ id: 'steps_low', priority: 3, ref: 'series:steps', text: `Steps averaged ${Math.round(steps).toLocaleString('en-US')} a day: a 20-minute walk adds about 2,000.`, because: `${Math.round(steps)} steps a day` })
   }
-  const lowMicros = x.micro.lines.filter((l) => l.status === 'low' && l.key !== 'fiber').sort((a, b) => (a.pct ?? 0) - (b.pct ?? 0)).slice(0, 2)
-  if (lowMicros.length && x.micro.foodDays >= 3) {
-    out.push({ id: 'micro_low', priority: 3, ref: null, text: `From food, ${lowMicros.map((l) => `${l.label} reached ${l.pct}%`).join(' and ')} of the daily reference. Check whether a supplement already covers ${lowMicros.length > 1 ? 'them' : 'it'}; if not, add a food rich in ${lowMicros.length > 1 ? 'them' : 'it'}.`, because: `${x.micro.foodDays} days of food logged` })
+  for (const l of x.micro.lines.filter((m) => m.status === 'high' || m.status === 'high_days')) {
+    const src = l.fromSupplements.length ? ` ${l.fromSupplements.join(' and ')} ${l.fromSupplements.length > 1 ? 'give' : 'gives'} ${fmtN(l.supplements)} ${l.unit} a day of it.` : ''
+    const limitWords = `the ${fmtN(l.upper!)} ${l.unit} safe upper limit${l.upperScope === 'supplements' ? ' for supplements' : ''}`
+    const what = l.status === 'high'
+      ? `${l.label} averaged ${fmtN(l.upperScope === 'supplements' ? l.supplements : l.value!)} ${l.unit} a day${l.upperScope === 'supplements' ? ' from supplements' : ''}, above ${limitWords}.`
+      : `${l.label} went over ${limitWords} on ${l.daysOver} day${l.daysOver === 1 ? '' : 's'}.`
+    const action = l.fromSupplements.length ? ' Lower the dose or take it less often, unless a clinician set it.' : ' Look at which foods bring it.'
+    out.push({ id: `micro_high_${l.key}`, priority: l.status === 'high' ? 1 : 2, ref: null, text: `${what}${src}${action}`, because: `${l.upperPct}% of the upper limit` })
   }
-  const sodium = x.micro.lines.find((l) => l.key === 'sodium' && l.status === 'high')
-  if (sodium && x.micro.foodDays >= 3) out.push({ id: 'sodium_high', priority: 3, ref: null, text: `Sodium averaged ${Math.round(sodium.value!)} mg a day, above the ${sodium.reference} mg limit.`, because: `${sodium.pct}% of the limit` })
+  const lowMicros = x.micro.lines.filter((l) => l.status === 'low' && l.key !== 'fiber').sort((a, b) => (a.pct ?? 0) - (b.pct ?? 0)).slice(0, 3)
+  if (lowMicros.length) {
+    out.push({ id: 'micro_low', priority: 2, ref: null, text: `Possibly short, food and supplements together: ${lowMicros.map((l) => `${l.label} ${l.pct}% of the daily need`).join(', ')}. Add a food rich in ${lowMicros.length > 1 ? 'them' : 'it'}, or check a blood test before supplementing.`, because: `${x.micro.foodDays} days of food logged` })
+  }
 
   for (const r of x.regimen.filter((a) => a.status === 'not_followed')) {
     out.push({ id: `regimen_${r.id}`, priority: 2, ref: null, text: `${r.name} was taken ${r.taken} of ${r.planned} planned times. Either set it to a time you will keep or take it off the regimen.`, because: `${Math.round((r.rate ?? 0) * 100)}% adherence` })
@@ -630,7 +695,7 @@ export interface PeriodReport {
   lab: LabLine[]
   foodStool: FoodStoolLine[]
   /** Short lists for the top of the report. */
-  summary: { better: string[]; worse: string[]; working: string[]; wasted: string[]; notFollowed: string[] }
+  summary: { better: string[]; worse: string[]; working: string[]; wasted: string[]; notFollowed: string[]; excess: string[]; short: string[] }
   suggestions: Suggestion[]
 }
 
@@ -657,6 +722,8 @@ export function buildReport(x: {
     metrics: x.metrics, micro: x.micro, regimen: x.regimen, lab: x.lab, foodStool: x.foodStool,
     summary: {
       better: x.metrics.filter((l) => l.status === 'better').map((l) => l.label),
+      excess: x.micro.lines.filter((l) => l.status === 'high' || l.status === 'high_days').map((l) => l.label),
+      short: x.micro.lines.filter((l) => l.status === 'low').map((l) => l.label),
       worse: x.metrics.filter((l) => l.status === 'worse').map((l) => l.label),
       working: x.lab.filter((l) => l.verdict === 'working').map((l) => l.name),
       wasted: x.lab.filter((l) => l.verdict === 'no_effect' || l.verdict === 'worse').map((l) => l.name),

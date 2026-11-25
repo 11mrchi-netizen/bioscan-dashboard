@@ -125,7 +125,11 @@ test('a week report from the database: metrics, adherence, Lab and suggestions',
   assert.deepEqual(r.summary.wasted, ['Magnesium before bed'])
   assert.ok(r.summary.notFollowed.includes('Creatine'))
   assert.equal(r.micro.foodDays, 2)
-  assert.equal(r.micro.lines.find((l) => l.key === 'magnesium')!.value, 75, 'a supplement dose is not food')
+  const mg = r.micro.lines.find((l) => l.key === 'magnesium')!
+  assert.equal(mg.food, 75)
+  assert.equal(mg.supplements, 57.14, 'one 400 mg dose over the 7 days')
+  assert.equal(mg.value, 132.14)
+  assert.equal(mg.status, 'high_days', 'the dose day passed the 350 mg limit for supplemental magnesium')
   assert.equal(r.micro.lines.find((l) => l.key === 'omega_3')!.value, 0.2, 'mg are converted to the reference unit')
   assert.equal(r.suggestions[0].id, 'sleep_short')
   assert.ok(r.suggestions.some((s) => s.id === 'regimen_4'))

@@ -2,7 +2,7 @@
 
 After each Monday-to-Sunday week and each calendar month (the owner's local calendar, UTC+8), the nightly analysis run
 writes one report: every key metric against the period before, the regimen's adherence, what the Lab's interventions and
-experiments found, micronutrients from food, a tentative read of food against stool, and a few suggestions.
+experiments found, micronutrients from food and supplements with possible shortfalls and excess, a tentative read of food against stool, and a few suggestions.
 
 Owner decisions (2026-11-25): suggestions come from fixed rules, not an LLM; weeks start on Monday; a phone notification
 announces each report and the newest is reachable all week (web Today card, Lab › Reports, the phone's Lab › N=1 card);
@@ -42,14 +42,23 @@ one day. 85% or more is followed, under 70% not followed. As-needed items are co
 first, then the baseline-against-active read; an experiment's primary outcomes). *Not followed* (adherence under 70%)
 wins over any result; then *working* (a clear change the right way), *making it worse*, *no effect*, *too early*.
 
-**Micronutrients.** A daily mean over the days with food logged, against adult-male daily references (US RDA / AI;
-sodium is an upper limit). Under 70% is low. Supplements are not counted.
+**Micronutrients (food and supplements).** `nutrient_intake` rows from meals and fueling are food: a daily mean over
+the days with food logged. Rows with `source_type = supplement` are doses: their total over the period divided by every
+day of it. The line's value is food + supplements, against adult-male daily needs (US RDA / AI) and safe upper limits
+(US Tolerable Upper Intake Levels; magnesium's 350 mg counts supplements only). A nutrient no logged food carries has
+food *unknown*, never 0, so it is never called short.
+
+- *Possibly short*: food known on at least 3 days and the total under 70% of the need.
+- *Over the upper limit*: the mean is above the limit.
+- *Over on some days*: the mean is under it but one or more days went over (a dose taken every few days, for example).
+
+The supplements responsible are named on the line and in the suggestion.
 
 **Food and stool (tentative).** Over the 90 days to the period's end: the share of normal stools (Bristol 3-5) the day
 after a day above the median of fibre, water, fat or energy, against the day after one below it. Shown only with 8 days
 each side and a gap of 20 points or more. An association, never a cause.
 
 **Suggestions** (at most five, most pressing first): sleep under 7 h; each metric that got worse (its own advice);
-protein under 1.6 g per kg; fibre under 30 g; water under 2.5 L; steps under 7,000; the two lowest micronutrients;
-sodium over its limit; each regimen item not followed; each Lab item with no effect, making it worse or not followed;
+protein under 1.6 g per kg; fibre under 30 g; water under 2.5 L; steps under 7,000; each nutrient over its upper limit or over on some
+days (naming the supplements); the three nutrients most likely short; each regimen item not followed; each Lab item with no effect, making it worse or not followed;
 items taken for 90 days or more with nothing measuring them; wellbeing or food logged too rarely to compare.

@@ -92,6 +92,9 @@ function ReportView({ r, busy, onRebuild }: { r: PeriodReport; busy: string | nu
   const followed = r.regimen.filter((a) => !a.asNeeded)
   const asNeeded = r.regimen.filter((a) => a.asNeeded)
   const microLogged = r.micro.lines.filter((l) => l.status !== 'no_data')
+  // Flags first: over the limit, then over it on some days, then possibly short; the rest in the list's order.
+  const RANK: Record<string, number> = { high: 0, high_days: 1, low: 2, ok: 3 }
+  const microRows = [...microLogged].sort((a, b) => (RANK[a.status] ?? 3) - (RANK[b.status] ?? 3))
   return (
     <>
       <div className="rp-title">
@@ -140,6 +143,8 @@ function ReportView({ r, busy, onRebuild }: { r: PeriodReport; busy: string | nu
             <Glance label="Working" items={r.summary.working} tone="ok" />
             <Glance label="No effect or worse" items={r.summary.wasted} tone="warn" />
             <Glance label="Not followed" items={r.summary.notFollowed} tone="bad" />
+            <Glance label="Nutrients over the upper limit" items={r.summary.excess ?? []} tone="bad" />
+            <Glance label="Nutrients possibly short" items={r.summary.short ?? []} tone="warn" />
           </ul>
         </section>
 
@@ -178,24 +183,27 @@ function ReportView({ r, busy, onRebuild }: { r: PeriodReport; busy: string | nu
         </section>
 
         <section className="ft-card pg-card rp-card">
-          <h3 className="pg-card-title mono"><span>MICRONUTRIENTS FROM FOOD</span><span>{r.micro.foodDays} day{r.micro.foodDays === 1 ? '' : 's'} logged</span></h3>
-          {microLogged.length === 0 ? <p className="rp-dim">No food with nutrient detail was logged this {r.grain}.</p> : (
-            <ul className="pg-rows">{microLogged.map((m) => {
-              const tone: Tone = m.status === 'low' || m.status === 'high' ? 'warn' : null
+          <h3 className="pg-card-title mono"><span>NUTRIENTS · FOOD AND SUPPLEMENTS</span><span>{r.micro.foodDays} of {r.micro.days ?? '–'} days of food logged</span></h3>
+          {microLogged.length === 0 ? <p className="rp-dim">No food or supplement with nutrient detail was logged this {r.grain}.</p> : (
+            <ul className="pg-rows">{microRows.map((m) => {
+              const tone: Tone = m.status === 'high' ? 'bad' : m.status === 'high_days' || m.status === 'low' ? 'warn' : null
+              const flag = m.status === 'high' ? 'over the safe upper limit' : m.status === 'high_days' ? `over the upper limit on ${m.daysOver} day${m.daysOver === 1 ? '' : 's'}` : m.status === 'low' ? 'possibly short' : null
               return (
                 <li key={m.key} className="pg-row">
-                  <span className="pg-row-title">{m.label}</span>
-                  <span className="pg-row-value">{fmt(m.value)} {m.unit} <span style={toneStyle(tone)}>· {m.pct}%</span></span>
+                  <span className="pg-row-title">{m.label}{flag && <span className="pg-tag mono" style={toneStyle(tone)}>{flag.toUpperCase()}</span>}</span>
+                  <span className="pg-row-value">{fmt(m.value)} {m.unit}{m.pct != null && <span className="rp-dim"> · {m.pct}%</span>}</span>
                   <span className="pg-row-sub">
-                    {m.limit ? `limit ${fmt(m.reference)} ${m.unit}` : `reference ${fmt(m.reference)} ${m.unit}`} a day
+                    {m.food != null ? `${fmt(m.food)} from food` : 'not tracked in food'}
+                    {m.supplements > 0 && ` + ${fmt(m.supplements)} from supplements${m.fromSupplements?.length ? ` (${m.fromSupplements.join(', ')})` : ''}`}
+                    {m.reference != null && ` · need ${fmt(m.reference)}`}
+                    {m.upper != null && ` · upper limit ${fmt(m.upper)}${m.upperScope === 'supplements' ? ' from supplements' : ''}`}
                     {m.prev != null && ` · ${fmt(m.prev)} the ${r.grain} before`}
-                    {m.status === 'low' && ' · low'}{m.status === 'high' && ' · over the limit'}
                   </span>
                 </li>
               )
             })}</ul>
           )}
-          <p className="rp-dim rp-foot">A daily mean over the days with food logged; supplements are not counted. References are adult-male daily intakes.</p>
+          <p className="rp-dim rp-foot">Food is a daily mean over the days with food logged; supplements over every day of the {r.grain} (a dose not logged was not taken). Needs are adult-male RDA or AI; upper limits are the safe upper intake levels.</p>
         </section>
 
         <section className="ft-card pg-card rp-card">

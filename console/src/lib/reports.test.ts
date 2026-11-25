@@ -9,8 +9,8 @@ const line = (over: Partial<MetricLine>): MetricLine => ({
 
 const report = (over: Partial<PeriodReport>): PeriodReport => ({
   version: '1', key: 'week:2026-11-16', grain: 'week', label: 'Week of 16 Nov 2026', start: '2026-11-16', end: '2026-11-22',
-  prevStart: '2026-11-09', prevEnd: '2026-11-15', generatedOn: '2026-11-23', metrics: [], micro: { foodDays: 0, lines: [] }, regimen: [],
-  lab: [], foodStool: [], summary: { better: ['HRV'], worse: [], working: [], wasted: [], notFollowed: [] }, suggestions: [], ...over,
+  prevStart: '2026-11-09', prevEnd: '2026-11-15', generatedOn: '2026-11-23', metrics: [], micro: { foodDays: 0, days: 7, lines: [] }, regimen: [],
+  lab: [], foodStool: [], summary: { better: ['HRV'], worse: [], working: [], wasted: [], notFollowed: [], excess: [], short: [] }, suggestions: [], ...over,
 })
 
 test('numbers, signs and arrows', () => {
@@ -35,7 +35,7 @@ test('a line: status words in status colours, the comparison in words', () => {
 
 test('the latest report, its span, address and headline', () => {
   const w = report({})
-  const m = report({ key: 'month:2026-10', grain: 'month', start: '2026-10-01', end: '2026-10-31', summary: { better: [], worse: [], working: [], wasted: [], notFollowed: [] } })
+  const m = report({ key: 'month:2026-10', grain: 'month', start: '2026-10-01', end: '2026-10-31', summary: { better: [], worse: [], working: [], wasted: [], notFollowed: [], excess: [], short: [] } })
   assert.equal(latest([m, w])?.key, 'week:2026-11-16')
   assert.equal(latest([m, w], 'month')?.key, 'month:2026-10')
   assert.equal(latest([]), null)

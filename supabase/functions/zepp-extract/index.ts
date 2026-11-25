@@ -21,6 +21,7 @@ import {
   exerciseTypeForZeppSport, summaryDistanceM, takesDistance, trailTaggedDetails, ZEPP_TRAIL_SPORT, workoutAvgSpeedKmh, zeppDistanceKm,
 } from "./workoutDistance.ts";
 import { afterWindow, HISTORY_METRICS, type HistoryState, windowDates } from "./historyPull.ts";
+import { RECENT_METRICS, recentDates } from "./recentPull.ts";
 import { buildZeppExercises, doneSets, exercisesFingerprint, parseLapSets, planStrengthDetails } from "./strengthImport.ts";
 
 const corsHeaders = {
@@ -1206,6 +1207,51 @@ async function runHistoryPull(secret: string): Promise<Response> {
   return json({ status: "started", users: rows.length }, 202);
 }
 
+// The hourly pull of the last few days (recentPull.ts, migration 20261125060000_zepp_recent_pull.sql), so what the Zepp
+// app uploads in the background reaches Supabase without anyone opening Bioscan. pg_cron sends the history pull's Vault
+// secret in x-zepp-recent (same check as runHistoryPull). The Zepp secrets name one Zepp account, so the data goes to the
+// one person who syncs it: the most recently synced zepp_sync_state row. It answers at once and works on in the
+// background, and records a zepp_sync heartbeat like the app's own sync does.
+async function runRecentPull(secret: string): Promise<Response> {
+  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const { data: ok } = await admin.rpc("zepp_history_secret_ok", { candidate: secret });
+  if (ok !== true) return json({ error: "unauthorized" }, 401);
+  const zepp = zeppConfig();
+  if (!zepp) return json({ error: "not_configured" }, 500);
+
+  const { data: owner, error: ownerError } = await admin.from("zepp_sync_state").select("user_id")
+    .order("last_synced_at", { ascending: false, nullsFirst: false }).limit(1).maybeSingle();
+  if (ownerError) return json({ error: "owner_lookup_failed", message: ownerError.message }, 500);
+  if (!owner) return json({ status: "idle" }, 200);
+  const userId = (owner as { user_id: string }).user_id;
+
+  const { data: context } = await admin.from("daily_context").select("utc_offset_min")
+    .eq("user_id", userId).order("date", { ascending: false }).limit(1).maybeSingle();
+  const offset = context ? Number((context as { utc_offset_min: number }).utc_offset_min) : null;
+  const dates = recentDates(new Date(), offset);
+  const defs = METRIC_DEFS.filter((d) => RECENT_METRICS.includes(d.metric));
+
+  const work = (async () => {
+    try {
+      const outcome = await extract(admin, { id: userId }, dates, defs, zepp, { updateSyncState: true });
+      console.log(`zepp recent pull ${dates[0]}..${dates.at(-1)}: ${JSON.stringify(outcome.summary)}`);
+      if (!outcome.authFailed) {
+        const { error } = await admin.from("collector_heartbeats").upsert(
+          { user_id: userId, stream: "zepp_sync", ts: new Date().toISOString() },
+          { onConflict: "user_id,stream,ts", ignoreDuplicates: true },
+        );
+        if (error) console.warn(`zepp_sync heartbeat not recorded: ${error.message}`);
+      }
+    } catch (e) {
+      console.error(`zepp recent pull failed: ${String(e)}`);
+    }
+  })();
+  const runtime = (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime;
+  if (runtime) runtime.waitUntil(work);
+  else await work;
+  return json({ status: "started", dates }, 202);
+}
+
 // Re-decoding stored workouts with the timed decoder (redecode.ts), from their stored raw detail: nothing is fetched
 // from Zepp. Called from SQL with the history pull's Vault secret in x-zepp-redecode (same check as runHistoryPull).
 // Body: { dryRun?: boolean, limit?: number, afterId?: number }. A dry run reports and writes nothing; a live run writes
@@ -1283,6 +1329,8 @@ Deno.serve(async (req: Request) => {
   try {
     const historySecret = req.headers.get("x-zepp-history");
     if (historySecret) return await runHistoryPull(historySecret);
+    const recentSecret = req.headers.get("x-zepp-recent");
+    if (recentSecret) return await runRecentPull(recentSecret);
     const redecodeSecret = req.headers.get("x-zepp-redecode");
     if (redecodeSecret) return await runRedecode(redecodeSecret, req);
 

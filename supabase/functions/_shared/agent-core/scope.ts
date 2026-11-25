@@ -107,7 +107,7 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
   ...internal(
     'sync_log', 'zepp_raw_extracts', 'zepp_history_pull', 'zepp_sync_state', 'calendar_sync_state', 'notification_log',
     'notification_prefs', 'notification_rules', 'log_agent_runs', 'saved_views', 'benchmark_artifacts',
-    'collector_heartbeats', 'daily_field_provenance', 'ai_estimates', 'nutrition_backfill_review',
+    'collector_heartbeats', 'daily_field_provenance', 'collector_latest', 'provenance_writer_latest', 'ai_estimates', 'nutrition_backfill_review',
     'exercise_session_tombstones', 'experiment_exclusion_snapshots', 'food_match_memory', 'clothing_items', 'laundry_loads',
     'agent_threads', 'agent_turns', 'agent_hints', 'agent_digests', 'agent_settings',
     // device push tokens; the raw inputs behind a meal estimate (typed text, photo paths), read through meals instead

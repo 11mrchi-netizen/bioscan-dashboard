@@ -1,5 +1,5 @@
 // Draws a Me tab's document (meView.ts): sections of tiles, rows, trend charts, rings and notes, as the phone laid them out.
-import { useMemo } from 'react'
+import { useMemo, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { hueVar, type MeBars, type MeChart, type MeItem, type MeRadar, type MeRibbons, type MeRing, type MeRow, type MeSection, type MeTile, type Point } from './meView'
 import { meRef, metricHref } from '../lib/metrics'
 
@@ -53,7 +53,7 @@ function Tile({ t, sinceDay, tab, section }: { t: MeTile; sinceDay: string | nul
       <span className="me-tile-label">{t.label}</span>
       <span className="me-tile-value" style={{ color: t.tone ? TONE[t.tone] : undefined }}>{t.value}{t.unit && <small> {t.unit}</small>}</span>
       {t.sub && <span className="me-tile-sub">{t.sub}</span>}
-      {pts.length > 1 && <Spark points={pts} hue={hueVar(t.hue)} />}
+      {pts.length > 1 && <Spark points={pts} hue={hueVar(t.hue)} unit={t.unit} />}
     </Box>
   )
 }
@@ -69,10 +69,33 @@ function Row({ r }: { r: MeRow }) {
   )
 }
 
-function Spark({ points, hue }: { points: Point[]; hue: string }) {
+function Spark({ points, hue, unit }: { points: Point[]; hue: string; unit?: string }) {
   const d = useMemo(() => path(points, 120, 28, 2), [points])
-  return <svg className="me-spark" viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true"><path d={d} fill="none" stroke={hue} strokeWidth="1.6" vectorEffect="non-scaling-stroke" /></svg>
+  const e = useMemo(() => extent(points), [points])
+  const fx = (p: Point) => (2 + ((dayMs(p[0]) - e.t0) / (e.t1 - e.t0 || 1)) * 116) / 120
+  const hover = useHover(points.length, (f) => {
+    let best = 0
+    points.forEach((p, i) => { if (Math.abs(fx(p) - f) < Math.abs(fx(points[best]) - f)) best = i })
+    return best
+  })
+  const h = hover.at
+  const p = h != null ? points[h] : null
+  const yOf = (v: number) => 28 - 2 - ((v - e.v0) / (e.v1 - e.v0 || 1)) * 24
+  return (
+    <span className="me-plot me-spark-plot">
+      <svg className="me-spark me-hoverable" viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true" {...hover.handlers}>
+        <path d={d} fill="none" stroke={hue} strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
+        {p && <circle cx={2 + ((dayMs(p[0]) - e.t0) / (e.t1 - e.t0 || 1)) * 116} cy={yOf(p[1])} r="2.5" fill={hue} />}
+      </svg>
+      {p && <Readout fx={fx(p)} title={dayLabel(dayMs(p[0]))} lines={[{ hue, value: `${trim(p[1])}${unit ? ` ${unit}` : ''}` }]} />}
+    </span>
+  )
 }
+
+/** A reading as the tile shows it: no more decimals than it needs. */
+const trim = (v: number): string => String(Math.round(v * 100) / 100)
+
+const dayLabel = (t: number) => new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }).toUpperCase()
 
 function extent(points: Point[]) {
   const ts = points.map((p) => Date.parse(`${p[0]}T12:00:00Z`))
@@ -89,29 +112,82 @@ function path(points: Point[], w: number, h: number, pad: number, e = extent(poi
   }).join('')
 }
 
+/** Hover (or arrow keys) over a chart: which of `n` slots the pointer is over, from its x across the drawn width. */
+function useHover(n: number, slotAt: (fx: number) => number) {
+  const [at, setAt] = useState<number | null>(null)
+  const onPointerMove = (e: PointerEvent<SVGSVGElement>) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    if (r.width > 0) setAt(slotAt((e.clientX - r.left) / r.width))
+  }
+  const onKeyDown = (e: KeyboardEvent<SVGSVGElement>) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+    e.preventDefault()
+    setAt((a) => Math.max(0, Math.min(n - 1, a == null ? n - 1 : a + (e.key === 'ArrowLeft' ? -1 : 1))))
+  }
+  const off = () => setAt(null)
+  return { at: at != null && at < n ? at : null, handlers: { onPointerMove, onPointerLeave: off, onBlur: off, onKeyDown, tabIndex: 0 } }
+}
+
+/** The readout over a hovered chart: placed at fx (0-1 across the chart), kept inside it. */
+function Readout({ fx, title, lines }: { fx: number; title: string; lines: { hue?: string; name?: string; value: string }[] }) {
+  const right = fx > 0.6
+  return (
+    <div className="me-readout" role="status" style={right ? { right: `${(1 - fx) * 100}%`, marginRight: 10 } : { left: `${fx * 100}%`, marginLeft: 10 }}>
+      <span className="me-readout-title">{title}</span>
+      {lines.map((l, i) => (
+        <span key={i} className="me-readout-line">
+          {l.name && <span className="me-readout-name">{l.hue && <b style={{ background: l.hue }} />}{l.name}</span>}
+          <span className="me-readout-value" style={{ color: l.hue }}>{l.value}</span>
+        </span>
+      ))}
+    </div>
+  )
+}
+
+const dayMs = (d: string) => Date.parse(`${d}T12:00:00Z`)
+
 function Chart({ c, sinceDay, tab, section }: { c: MeChart; sinceDay: string | null; tab: string; section: string }) {
   const series = c.series.map((s) => ({ ...s, points: s.points.filter((p) => !sinceDay || p[0] >= sinceDay) })).filter((s) => s.points.length > 0)
   const all = series.flatMap((s) => s.points)
+  const W = 600, H = 180
+  const e = all.length ? extent(all) : { t0: 0, t1: 1, v0: 0, v1: 1 }
+  // The days that carry a reading in any series, in order: the hover moves from one to the next.
+  const days = [...new Set(all.map((p) => p[0]))].sort()
+  const xOf = (t: number) => 46 + 8 + ((t - e.t0) / (e.t1 - e.t0 || 1)) * (W - 50 - 16)
+  const dayX = days.map((d) => xOf(dayMs(d)) / W)
+  const hover = useHover(days.length, (fx) => {
+    let best = 0
+    dayX.forEach((x, i) => { if (Math.abs(x - fx) < Math.abs(dayX[best] - fx)) best = i })
+    return best
+  })
   if (all.length < 2) return <p className="me-note muted">{c.caption ?? ''} Not enough readings in this range.</p>
-  const e = extent(all)
   const padV = (e.v1 - e.v0) * 0.1 || 1
   const ext = { ...e, v0: e.v0 - padV, v1: e.v1 + padV }
-  const W = 600, H = 180
   const fmt = (v: number) => (c.format === 'pace' ? pace(v) : v.toFixed(c.decimals))
   const ticks = [ext.v0 + padV, (ext.v0 + ext.v1) / 2, ext.v1 - padV]
   const yOf = (v: number) => H - 8 - ((v - ext.v0) / (ext.v1 - ext.v0)) * (H - 16)
   const day = (t: number) => new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+  const hd = hover.at != null ? days[hover.at] : null
+  const hits = hd ? series.flatMap((s) => { const p = s.points.find((q) => q[0] === hd); return p ? [{ s, v: p[1] }] : [] }) : []
+  const unit = c.unit ? ` ${c.unit}` : ''
   return (
     <figure className="me-chart">
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${c.label}: ${series.map((s) => `${s.name} ${fmt(s.points[s.points.length - 1][1])}`).join(', ')}`}>
-        {ticks.map((t, i) => (
-          <g key={i}><line x1="44" x2={W} y1={yOf(t)} y2={yOf(t)} className="me-grid" /><text x="40" y={yOf(t) + 4} textAnchor="end" className="me-axis">{fmt(t)}</text></g>
-        ))}
-        <g transform="translate(46,0)">
-          {series.map((s) => <path key={s.name} d={path(s.points, W - 50, H, 8, ext)} fill="none" stroke={hueVar(s.hue)} strokeWidth="2" vectorEffect="non-scaling-stroke" />)}
-          {series.map((s) => { const p = s.points[s.points.length - 1]; const x = 8 + ((Date.parse(`${p[0]}T12:00:00Z`) - ext.t0) / (ext.t1 - ext.t0 || 1)) * (W - 50 - 16); return <circle key={s.name} cx={x} cy={yOf(p[1])} r="3.5" fill={hueVar(s.hue)} /> })}
-        </g>
-      </svg>
+      <div className="me-plot">
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" className="me-hoverable" {...hover.handlers} aria-label={`${c.label}: ${series.map((s) => `${s.name} ${fmt(s.points[s.points.length - 1][1])}`).join(', ')}. Use the arrow keys to read each day.`}>
+          {ticks.map((t, i) => (
+            <g key={i}><line x1="44" x2={W} y1={yOf(t)} y2={yOf(t)} className="me-grid" /><text x="40" y={yOf(t) + 4} textAnchor="end" className="me-axis">{fmt(t)}</text></g>
+          ))}
+          {hd && <line className="me-cursor" x1={xOf(dayMs(hd))} x2={xOf(dayMs(hd))} y1="4" y2={H - 4} />}
+          <g transform="translate(46,0)">
+            {series.map((s) => <path key={s.name} d={path(s.points, W - 50, H, 8, ext)} fill="none" stroke={hueVar(s.hue)} strokeWidth="2" vectorEffect="non-scaling-stroke" />)}
+            {!hd && series.map((s) => { const p = s.points[s.points.length - 1]; return <circle key={s.name} cx={xOf(dayMs(p[0])) - 46} cy={yOf(p[1])} r="3.5" fill={hueVar(s.hue)} /> })}
+            {hits.map(({ s, v }) => <circle key={s.name} cx={xOf(dayMs(hd!)) - 46} cy={yOf(v)} r="4.5" fill={hueVar(s.hue)} stroke="var(--ft-bg)" strokeWidth="1.5" />)}
+          </g>
+        </svg>
+        {hd && hits.length > 0 && (
+          <Readout fx={dayX[hover.at!]} title={day(dayMs(hd)).toUpperCase()} lines={hits.map(({ s, v }) => ({ hue: hueVar(s.hue), name: series.length > 1 ? s.name : undefined, value: `${fmt(v)}${unit}` }))} />
+        )}
+      </div>
       <figcaption className="me-chart-cap">
         <span>{day(ext.t0)} – {day(ext.t1)}{c.unit ? ` · ${c.unit}` : ''}</span>
         {series.length > 1 && <span className="me-legend">{series.map((s) => <span key={s.name}><b style={{ background: hueVar(s.hue) }} />{s.name}</span>)}</span>}
@@ -152,27 +228,42 @@ function Bars({ b, sinceDay }: { b: MeBars; sinceDay: string | null }) {
   const W = 600, H = 160, gap = weeks.length > 30 ? 2 : 4
   const bw = (W - 40 - gap * (weeks.length - 1)) / Math.max(1, weeks.length)
   const sum = totals.reduce((a, x) => a + x, 0)
+  const hover = useHover(weeks.length, (fx) => Math.max(0, Math.min(weeks.length - 1, Math.floor((fx * W - 40 + gap / 2) / (bw + gap)))))
+  const h = hover.at
+  const wc = (w: string) => `W/C ${new Date(`${w}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }).toUpperCase()}`
   return (
     <figure className="me-chart">
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${b.label}: ${sum.toFixed(1)} ${b.unit} over ${weeks.length} weeks`}>
-        {[0.5, 1].map((f) => <g key={f}><line x1="36" x2={W} y1={H - 14 - (H - 24) * f} y2={H - 14 - (H - 24) * f} className="me-grid" /><text x="32" y={H - 10 - (H - 24) * f} textAnchor="end" className="me-axis">{(top * f).toFixed(1)}</text></g>)}
-        {weeks.map((w, i) => {
-          let y = H - 14
-          const x = 40 + i * (bw + gap)
-          const partial = b.last_partial && i === weeks.length - 1
-          return (
-            <g key={w} opacity={partial ? 0.5 : 1}>
-              <title>{`w/c ${w}: ${totals[i].toFixed(1)} ${b.unit}`}</title>
-              {series.map((s) => {
-                const h = ((s.values[i] ?? 0) / top) * (H - 24)
-                if (h <= 0) return null
-                y -= h
-                return <rect key={s.name} x={x} y={y} width={bw} height={h} rx={Math.min(2, bw / 3)} fill={hueVar(s.hue)} />
-              })}
-            </g>
-          )
-        })}
-      </svg>
+      <div className="me-plot">
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" className="me-hoverable" {...hover.handlers} aria-label={`${b.label}: ${sum.toFixed(1)} ${b.unit} over ${weeks.length} weeks. Use the arrow keys to read each week.`}>
+          {[0.5, 1].map((f) => <g key={f}><line x1="36" x2={W} y1={H - 14 - (H - 24) * f} y2={H - 14 - (H - 24) * f} className="me-grid" /><text x="32" y={H - 10 - (H - 24) * f} textAnchor="end" className="me-axis">{(top * f).toFixed(1)}</text></g>)}
+          {h != null && <rect className="me-cursor-band" x={40 + h * (bw + gap) - gap / 2} y="4" width={bw + gap} height={H - 14} />}
+          {weeks.map((w, i) => {
+            let y = H - 14
+            const x = 40 + i * (bw + gap)
+            const partial = b.last_partial && i === weeks.length - 1
+            return (
+              <g key={w} opacity={h != null && h !== i ? 0.45 : partial ? 0.5 : 1}>
+                {series.map((s) => {
+                  const bh = ((s.values[i] ?? 0) / top) * (H - 24)
+                  if (bh <= 0) return null
+                  y -= bh
+                  return <rect key={s.name} x={x} y={y} width={bw} height={bh} rx={Math.min(2, bw / 3)} fill={hueVar(s.hue)} />
+                })}
+              </g>
+            )
+          })}
+        </svg>
+        {h != null && (
+          <Readout
+            fx={(40 + h * (bw + gap) + bw / 2) / W}
+            title={`${wc(weeks[h])}${b.last_partial && h === weeks.length - 1 ? ' · SO FAR' : ''}`}
+            lines={[
+              { value: `${totals[h].toFixed(1)} ${b.unit}`, name: 'ALL' },
+              ...series.filter((s) => (s.values[h] ?? 0) > 0).map((s) => ({ hue: hueVar(s.hue), name: s.name, value: `${(s.values[h] ?? 0).toFixed(1)} ${b.unit}` })),
+            ]}
+          />
+        )}
+      </div>
       <figcaption className="me-chart-cap">
         <span>{weeks.length} weeks · {sum.toFixed(1)} {b.unit} in all</span>
         <span className="me-legend">{series.filter((s) => s.values.some((v) => v > 0)).map((s) => <span key={s.name}><b style={{ background: hueVar(s.hue) }} />{s.name}</span>)}</span>

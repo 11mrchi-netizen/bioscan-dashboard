@@ -1,4 +1,4 @@
-// The hourly server pull of the last few days (supabase/migrations/20261125060000_zepp_recent_pull.sql): the Zepp app
+// The hourly server pull of the last few days (supabase/migrations/20261125060126_zepp_recent_pull.sql): the Zepp app
 // uploads to the Zepp cloud in the background, and this keeps Supabase in step without anyone opening Bioscan. It reads
 // the same days and metrics as the app's on-open sync (ZeppRepository.sync), so both paths write the same rows through
 // the same idempotent upserts. Pure functions, no imports, so the same file runs in the edge function and under

@@ -1207,7 +1207,7 @@ async function runHistoryPull(secret: string): Promise<Response> {
   return json({ status: "started", users: rows.length }, 202);
 }
 
-// The hourly pull of the last few days (recentPull.ts, migration 20261125060000_zepp_recent_pull.sql), so what the Zepp
+// The hourly pull of the last few days (recentPull.ts, migration 20261125060126_zepp_recent_pull.sql), so what the Zepp
 // app uploads in the background reaches Supabase without anyone opening Bioscan. pg_cron sends the history pull's Vault
 // secret in x-zepp-recent (same check as runHistoryPull). The Zepp secrets name one Zepp account, so the data goes to the
 // one person who syncs it: the most recently synced zepp_sync_state row. It answers at once and works on in the

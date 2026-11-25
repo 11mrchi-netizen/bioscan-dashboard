@@ -6,15 +6,22 @@
 //   series:hrv, series:sleep_hours, ...            a series     the contract file's tables, the whole history
 //   me:BODY:Weight                                 a Me item    the points the phone sent with the tile or chart
 //   me:BODY:SECTION::Weight                        the same, in the section of that title (labels can repeat within a tab)
+//   lab:Ferritin                                   a blood marker  lab_results, one point per draw, with the lab's range
+//   test:grip:left, test:grip, test:sweat_rate     a phone test    grip_strength_log (best of the day), sweat_tests
 //
 // Refs of the retired History page (#/history?metric=charge|recovery.hrv) stay valid: they are the first two kinds.
-import { seriesById } from './schema.ts'
+import { SERIES, seriesById } from './schema.ts'
 
 export type MetricRef =
   | { kind: 'ring'; key: string }
   | { kind: 'input'; key: string }
   | { kind: 'series'; key: string }
   | { kind: 'me'; tab: string; label: string }
+  | { kind: 'lab'; key: string }
+  | { kind: 'test'; key: string }
+
+/** The tests of Lab › TESTS that have a number to follow: grip, for one hand or the best of either, and the sweat rate. */
+export const isTestKey = (key: string): boolean => key === 'sweat_rate' || /^grip(:[a-z]+)?$/.test(key)
 
 export const RING_KEYS = ['charge', 'recovery', 'sleep', 'load', 'fuel', 'balance'] as const
 
@@ -62,6 +69,8 @@ export const INPUT_HUE: Record<string, string> = {
 export function parseMetricRef(raw: string | null | undefined): MetricRef | null {
   if (!raw) return null
   if (raw.startsWith('series:')) { const key = raw.slice(7); return seriesById(key) ? { kind: 'series', key } : null }
+  if (raw.startsWith('lab:')) { const key = raw.slice(4); return key.trim() ? { kind: 'lab', key } : null }
+  if (raw.startsWith('test:')) { const key = raw.slice(5).toLowerCase(); return isTestKey(key) ? { kind: 'test', key } : null }
   if (raw.startsWith('me:')) {
     const [, tab, ...rest] = raw.split(':')
     const label = rest.join(':')
@@ -87,6 +96,8 @@ export function refString(ref: MetricRef): string {
     case 'ring': case 'input': return ref.key
     case 'series': return `series:${ref.key}`
     case 'me': return `me:${ref.tab}:${ref.label}`
+    case 'lab': return `lab:${ref.key}`
+    case 'test': return `test:${ref.key}`
   }
 }
 
@@ -142,6 +153,7 @@ export function washFor(ref: MetricRef): string {
   if (ref.kind === 'ring') return ref.key === 'charge' ? 'ft-charge-b' : DOMAIN_WASH[ref.key.toUpperCase()] ?? 'ft-domain-balance'
   if (ref.kind === 'input') return DOMAIN_WASH[domainOfInput(ref.key) ?? ''] ?? 'ft-domain-balance'
   if (ref.kind === 'series') return DOMAIN_WASH[SERIES_DOMAIN[ref.key] ?? (ref.key.startsWith('sleep_') ? 'SLEEP' : '')] ?? 'ft-domain-balance'
+  if (ref.kind === 'test') return ref.key === 'sweat_rate' ? DOMAIN_WASH.FUEL : DOMAIN_WASH.LOAD
   return 'ft-domain-balance'
 }
 
@@ -166,4 +178,18 @@ export function compareRefs(withParams: string[], own: MetricRef | null): Metric
     if (out.length === MAX_COMPARE) break
   }
   return out
+}
+
+export type SessionField = 'duration' | 'distance' | 'avg_hr' | 'rpe'
+const SESSION_COLUMN: Record<SessionField, string> = { duration: 'duration_min', distance: 'distance_km', avg_hr: 'avg_hr', rpe: 'rpe' }
+
+/**
+ * The series a number of a recorded session belongs to (run distance, strength duration, RPE...), read from the contract
+ * file's filters so a series added there is linked here too; null when no series follows that number for that type (a ride's
+ * distance), and the number is then shown as plain text.
+ */
+export function sessionSeries(type: string | null, field: SessionField): string | null {
+  const col = SESSION_COLUMN[field]
+  const s = SERIES.find((x) => x.table === 'exercise_sessions' && x.column === col && (!x.filters?.type || (type != null && x.filters.type.includes(type))))
+  return s?.id ?? null
 }

@@ -5,6 +5,7 @@ import {
   TooltipComponent,
   LegendComponent,
   MarkAreaComponent,
+  MarkLineComponent,
   DataZoomComponent,
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -12,7 +13,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 echarts.use([
   LineChart, BarChart, ScatterChart,
   GridComponent, TooltipComponent, LegendComponent,
-  MarkAreaComponent, DataZoomComponent,
+  MarkAreaComponent, MarkLineComponent, DataZoomComponent,
   CanvasRenderer,
 ])
 

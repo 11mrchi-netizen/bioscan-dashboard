@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useLoadEffect } from '../lib/useLoadEffect'
 import { hm, longDate } from '../lib/planReads'
+import { metricHref, sessionSeries, type SessionField } from '../lib/metrics'
 import { linkPlanned, loadPlannedFor, loadSession, saveSession, type PlannedLink, type SessionRow } from '../lib/sessionData'
 import {
   blankExercise, blankSet, exercisesOf, paceOrSpeed, ROUTE_TYPES, RUN_TYPES, sessionPatch, toEditable, toExercise, type EditableExercise,
@@ -77,6 +78,10 @@ function Detail({ row, plan, onChanged, onBack }: { row: SessionRow; plan: { lin
 
   const day = wallDay(row.start_time)
   const speed = paceOrSpeed(row.type, row.duration_min, row.distance_km)
+  const opens = (field: SessionField, v: number | null): string | undefined => {
+    const id = v == null ? null : sessionSeries(row.type, field)
+    return id ? metricHref(`series:${id}`, { day }) : undefined
+  }
   const from = row.source ? row.source.replaceAll('_', ' ') : 'by hand'
   return (
     <div className="pg sd">
@@ -90,10 +95,10 @@ function Detail({ row, plan, onChanged, onBack }: { row: SessionRow; plan: { lin
       </header>
 
       <section className="sd-tiles" aria-label="What was measured">
-        <Tile k="DURATION" v={row.duration_min != null ? hm(row.duration_min) : '–'} />
-        <Tile k="DISTANCE" v={n(row.distance_km, ' km', 2)} />
+        <Tile k="DURATION" v={row.duration_min != null ? hm(row.duration_min) : '–'} href={opens('duration', row.duration_min)} />
+        <Tile k="DISTANCE" v={n(row.distance_km, ' km', 2)} href={opens('distance', row.distance_km)} />
         <Tile k={row.type === 'run' || row.type === 'hike' ? 'PACE' : 'SPEED'} v={speed ?? '–'} />
-        <Tile k="AVG HEART RATE" v={n(row.avg_hr, ' bpm')} />
+        <Tile k="AVG HEART RATE" v={n(row.avg_hr, ' bpm')} href={opens('avg_hr', row.avg_hr)} />
         <Tile k="MAX HEART RATE" v={n(row.max_hr, ' bpm')} />
         <Tile k="CLIMB" v={n(row.elevation_gain_m, ' m')} />
         <Tile k="ENERGY" v={n(row.calories_active ?? row.calories_total, ' kcal')} />
@@ -146,8 +151,10 @@ function Detail({ row, plan, onChanged, onBack }: { row: SessionRow; plan: { lin
   )
 }
 
-function Tile({ k, v }: { k: string; v: string }) {
-  return <div className="sd-tile"><span className="sd-tile-k mono">{k}</span><span className="sd-tile-v">{v}</span></div>
+/** A tile that a series follows opens its history (the metric page) on the session's day; the others open nothing. */
+function Tile({ k, v, href }: { k: string; v: string; href?: string }) {
+  const body = <><span className="sd-tile-k mono">{k}</span><span className="sd-tile-v">{v}</span></>
+  return href ? <a className="sd-tile tappable" href={href}>{body}</a> : <div className="sd-tile">{body}</div>
 }
 
 function Choice({ label, options, value, onChange }: { label: string; options: readonly string[]; value: string; onChange: (v: string) => void }) {

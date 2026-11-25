@@ -13,7 +13,7 @@ export interface DateRange {
 }
 
 export interface EventRef {
-  kind: 'session' | 'meal' | 'sleep' | 'lab_draw' | 'illness' | 'injury' | 'rest_day'
+  kind: 'session' | 'meal' | 'sleep' | 'lab_draw' | 'lab_result' | 'illness' | 'injury' | 'rest_day'
   id: string
 }
 

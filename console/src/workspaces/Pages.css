@@ -25,3 +25,7 @@
 
 /* a sentence that points at another page: a link in the page's accent, not the browser's blue */
 .pg a:not([class]) { color: var(--color-emerald); }
+
+/* a number that opens its metric page: its own ink, a quiet underline that says it can be tapped */
+.pg-num { color: inherit; text-decoration: underline dotted; text-decoration-color: var(--color-text-muted); text-underline-offset: 3px; }
+.pg-num:hover, .pg-num:focus-visible { text-decoration-style: solid; text-decoration-color: currentColor; }

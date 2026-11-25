@@ -368,6 +368,39 @@ export interface RegimenItem {
   cycle: { onDays: number; offDays: number; start: string } | null
   startDate: string | null
   endDate: string | null
+  /**
+   * The schedules the item had over time, oldest first: each applies from `from` (a local date) until the next one.
+   * Absent or empty means the current schedule applies throughout.
+   */
+  versions?: { from: string; item: RegimenItem }[]
+}
+
+/** The schedule in force on day d (a change made on a day applies from the next day). */
+export function specOn(it: RegimenItem, d: string): RegimenItem {
+  if (!it.versions?.length) return it
+  let cur = it.versions[0].item
+  for (const v of it.versions) if (v.from <= d) cur = v.item
+  return cur
+}
+
+type RegimenRow = Parameters<typeof regimenItem>[0]
+/**
+ * Attach the schedule history (`supplement_changes` snapshots, already given as local dates) to an item: the state
+ * before the first change applies before it, and each change's state from the day after it. Dates and identity stay
+ * the current row's.
+ */
+export function withHistory(it: RegimenItem, changes: { date: string; before: Partial<RegimenRow> | null; after: Partial<RegimenRow> }[]): RegimenItem {
+  if (!changes.length) return it
+  const sorted = [...changes].sort((a, b) => a.date.localeCompare(b.date))
+  const as = (r: Partial<RegimenRow>) => ({ ...regimenItem({ ...r, id: it.id, name: it.name, kind: it.kind, status: it.status }), startDate: it.startDate, endDate: it.endDate })
+  const versions: { from: string; item: RegimenItem }[] = []
+  const push = (from: string, item: RegimenItem) => {
+    if (versions.at(-1)?.from === from) versions[versions.length - 1] = { from, item }
+    else versions.push({ from, item })
+  }
+  push('0000-01-01', as(sorted[0].before ?? sorted[0].after))
+  for (const c of sorted) if (c.before || c !== sorted[0]) push(addDays(c.date, 1), as(c.after))
+  return { ...it, versions }
 }
 
 /** A row of `supplements` as the regimen model reads it (android domain/Regimen.kt `regimenSpec`, legacy fallback included). */
@@ -396,6 +429,11 @@ export function regimenItem(row: {
 }
 
 const asNeeded = (it: RegimenItem) => it.type === 'as_needed' || it.slots.length === 0
+/** As-needed for the whole span: every schedule it had in [from, to] was as-needed. */
+function asNeededIn(it: RegimenItem, from: string, to: string): boolean {
+  for (let d = from; d <= to; d = addDays(d, 1)) if (!asNeeded(specOn(it, d))) return false
+  return true
+}
 const isoWeekday = (d: string) => ((new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7) + 1
 
 function calendarDay(it: RegimenItem, d: string): boolean {
@@ -411,11 +449,21 @@ function calendarDay(it: RegimenItem, d: string): boolean {
 
 /** Planned doses in [from, to]: dosing days (every-N-days plans one in N) times the times of day. Regimen.kt `plannedDays`. */
 export function plannedDoses(it: RegimenItem, from: string, to: string): number {
-  if (asNeeded(it)) return 0
+  // Each stretch under one schedule is counted with that schedule's own rule.
+  let total = 0
+  let seg: RegimenItem | null = null
   let days = 0
-  for (let d = from; d <= to; d = addDays(d, 1)) if (calendarDay(it, d)) days++
-  if (it.type === 'every_n_days') days = Math.ceil(days / Math.max(1, it.n ?? 1))
-  return days * it.slots.length
+  const close = () => {
+    if (!seg || asNeeded(seg)) return
+    total += (seg.type === 'every_n_days' ? Math.ceil(days / Math.max(1, seg.n ?? 1)) : days) * seg.slots.length
+  }
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    const spec = specOn(it, d)
+    if (spec !== seg) { close(); seg = spec; days = 0 }
+    if (calendarDay(spec, d)) days++
+  }
+  close()
+  return total
 }
 
 export interface AdherenceLine {
@@ -439,7 +487,11 @@ export const ADHERENCE = { followed: 0.85, notFollowed: 0.7 }
 /** Doses counted towards adherence: per day, at most its planned times of day (two logs of a once-a-day item count once). */
 function takenIn(it: RegimenItem, takes: Map<string, number>, from: string, to: string): number {
   let n = 0
-  for (const [d, c] of takes) if (d >= from && d <= to) n += asNeeded(it) ? c : Math.min(c, it.slots.length)
+  for (const [d, c] of takes) {
+    if (d < from || d > to) continue
+    const spec = specOn(it, d)
+    n += asNeeded(spec) ? (asNeededIn(it, from, to) ? c : 0) : Math.min(c, spec.slots.length)
+  }
   return n
 }
 
@@ -449,9 +501,10 @@ export function adherenceLine(it: RegimenItem, takes: Map<string, number>, perio
   const prevPlanned = plannedDoses(it, prev.start, prev.end)
   const rate = planned > 0 ? Math.min(1, taken / planned) : null
   const prevRate = prevPlanned > 0 ? Math.min(1, takenIn(it, takes, prev.start, prev.end) / prevPlanned) : null
-  const status = asNeeded(it) ? 'as_needed' : rate === null ? 'as_needed' : rate >= ADHERENCE.followed ? 'followed' : rate >= ADHERENCE.notFollowed ? 'partly' : 'not_followed'
+  const an = asNeededIn(it, period.start, period.end)
+  const status = an ? 'as_needed' : rate === null ? 'as_needed' : rate >= ADHERENCE.followed ? 'followed' : rate >= ADHERENCE.notFollowed ? 'partly' : 'not_followed'
   return {
-    id: it.id, name: it.name, kind: it.kind, asNeeded: asNeeded(it), planned, taken,
+    id: it.id, name: it.name, kind: it.kind, asNeeded: an, planned, taken,
     rate: rate === null ? null : round(rate, 3), prevRate: prevRate === null ? null : round(prevRate, 3),
     daysOn: it.startDate ? daySpan(it.startDate, period.end) : null, status,
   }

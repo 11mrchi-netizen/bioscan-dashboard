@@ -11,7 +11,7 @@ import { fetchAll } from './paging.ts'
 import {
   adherenceLine, buildReport, convertUnit, type DailySeries, foodStool, historyOf, itemsInPeriod, lastCompleted, type LabLine, type LabMetricRead,
   labVerdict, metricLine, microSection, MICRO_REFERENCES, type PeriodReport, periodKey, parsePeriodKey, previousOf, REPORT_KIND,
-  REPORT_METRICS, regimenItem, type ReportGrain, type ReportPeriod, type SeriesInfo, STOOL_SERIES,
+  REPORT_METRICS, regimenItem, withHistory, type ReportGrain, type ReportPeriod, type SeriesInfo, STOOL_SERIES,
 } from './periodReport.ts'
 import { localDateAt, type Admin } from './runRelationships.ts'
 import { addDays, aggregateDays, localDateOf, type SeriesContract, type SeriesFile } from './seriesContract.ts'
@@ -200,7 +200,22 @@ export async function buildPeriodReport(admin: Admin, userId: string, file: Seri
   const supp = await admin.from('supplements')
     .select('id, name, kind, status, time_of_day, slots, every_n_days, schedule, start_date, end_date').eq('user_id', userId).order('name')
   if (supp.error) throw new Error(`supplements: ${supp.error.message}`)
+  // Schedule history: each day is judged by the schedule in force then, not today's (supplement_changes, written by a
+  // trigger on every edit; changed_at is a real instant, so it is put on the local calendar).
+  const [chg, ctx] = await Promise.all([
+    admin.from('supplement_changes').select('supplement_id, changed_at, changes, before, after').eq('user_id', userId)
+      .lte('changed_at', `${addDays(period.end, 1)}T23:59:59.999Z`).order('changed_at'),
+    admin.from('daily_context').select('date, utc_offset_min').eq('user_id', userId).order('date', { ascending: false }).limit(60),
+  ])
+  const ctxRows = (ctx.error ? [] : (ctx.data ?? [])) as { date: string; utc_offset_min: number | null }[]
+  const byItem = new Map<number, Parameters<typeof withHistory>[1]>()
+  for (const r of (chg.error ? [] : (chg.data ?? [])) as { supplement_id: number; changed_at: string; before: Record<string, unknown> | null; after: Record<string, unknown> }[]) {
+    const list = byItem.get(r.supplement_id) ?? []
+    list.push({ date: localDateAt(new Date(r.changed_at), ctxRows), before: r.before as never, after: r.after as never })
+    byItem.set(r.supplement_id, list)
+  }
   const items = itemsInPeriod(((supp.data ?? []) as Parameters<typeof regimenItem>[0][]).map(regimenItem), period)
+    .map((it) => withHistory(it, byItem.get(it.id) ?? []))
   const { rows: log, error: logErr } = await fetchAll<{ id: number; supplement_id: number | null; taken_at: string }>((a, b) =>
     admin.from('supplement_log').select('id, supplement_id, taken_at').eq('user_id', userId)
       .gte('taken_at', `${prev.start}T00:00:00`).lte('taken_at', `${period.end}T23:59:59.999`).order('taken_at').order('id').range(a, b))

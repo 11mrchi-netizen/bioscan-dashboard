@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   adherenceLine, buildReport, convertUnit, foodStool, historyOf, labVerdict, lastCompleted, metricLine, microSection, parsePeriodKey,
-  periodKey, periodLabel, periodValue, plannedDoses, previousOf, REPORT_METRICS, regimenItem, suggestions, type DailySeries, type MetricLine,
+  periodKey, periodLabel, periodValue, plannedDoses, previousOf, REPORT_METRICS, regimenItem, specOn, suggestions, withHistory, type DailySeries, type MetricLine,
   type ReportPeriod,
 } from './periodReport.ts'
 import { addDays } from './seriesContract.ts'
@@ -206,4 +206,34 @@ test('a report: summary lists and at most five suggestions; a tested item is not
   assert.deepEqual(r.summary.wasted, ['Creatine test'])
   assert.equal(r.suggestions.length, 5)
   assert.ok(!r.suggestions.some((x) => x.id === 'untested'))
+})
+
+test('adherence follows the schedule in force each day, not today\'s', () => {
+  const week: ReportPeriod = { grain: 'week', start: '2026-11-16', end: '2026-11-22' }
+  const prev = previousOf(week)
+  // Vitamin C once a day until it went to three times a day on Sunday 22 Nov.
+  const now = regimenItem({ id: 2, name: 'Vitamin C', slots: ['morning', 'afternoon', 'night'], schedule: { type: 'daily' }, start_date: '2026-10-01' })
+  const once = { slots: ['morning'], schedule: { type: 'daily' } }
+  const thrice = { slots: ['morning', 'afternoon', 'night'], schedule: { type: 'daily' } }
+  const it = withHistory(now, [
+    { date: '2026-10-01', before: null, after: once },
+    { date: '2026-11-22', before: once, after: thrice },
+  ])
+  assert.equal(specOn(it, '2026-11-22').slots.length, 1, 'the day of the change still runs on the old schedule')
+  assert.equal(specOn(it, '2026-11-23').slots.length, 3)
+  const takes = new Map<string, number>()
+  for (let i = 0; i < 14; i++) takes.set(addDays(prev.start, i), 1)
+  const line = adherenceLine(it, takes, week, prev)
+  assert.equal(line.planned, 7)
+  assert.equal(line.rate, 1)
+  assert.equal(line.status, 'followed')
+  assert.equal(adherenceLine(now, takes, week, prev).rate, 0.333, 'without the history it reads as a third')
+  // The next week is judged three times a day.
+  const next: ReportPeriod = { grain: 'week', start: '2026-11-23', end: '2026-11-29' }
+  assert.equal(plannedDoses(it, next.start, next.end), 21)
+  // A switch from every 3 days to daily mid-week counts each stretch by its own rule.
+  const iron = withHistory(regimenItem({ id: 3, name: 'Iron', slots: ['morning'], schedule: { type: 'daily' } }), [
+    { date: '2026-11-18', before: { slots: ['morning'], every_n_days: 3, schedule: { type: 'every_n_days', n: 3 } }, after: { slots: ['morning'], schedule: { type: 'daily' } } },
+  ])
+  assert.equal(plannedDoses(iron, week.start, week.end), 1 + 4, '16-18 every third day, then 19-22 daily')
 })

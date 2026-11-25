@@ -20,7 +20,7 @@ import java.time.ZonedDateTime
 data class TodaySweat(val mlPerHour: Double, val environmentKnown: Boolean, val tempC: Double?)
 
 @Serializable
-private data class WeightOnlyRow(@SerialName("weight_kg") val weightKg: Double? = null)
+private data class HydrationWeightRow(@SerialName("weight_kg") val weightKg: Double? = null)
 
 private const val FALLBACK_TEMP_C = 18.0
 
@@ -30,7 +30,7 @@ suspend fun todaySweatRate(supabase: SupabaseClient, home: Pair<Double, Double>?
             filter { filterNot("weight_kg", FilterOperator.IS, "null") }
             order("date", Order.DESCENDING)
             limit(1)
-        }.decodeList<WeightOnlyRow>().firstOrNull()?.weightKg
+        }.decodeList<HydrationWeightRow>().firstOrNull()?.weightKg
     } ?: 70.0
     val profile = SweatTestsRepository(supabase).profile(weight)
     val temp = home?.let { (lat, lon) ->

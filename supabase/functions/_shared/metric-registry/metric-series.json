@@ -1,5 +1,5 @@
 {
- "seriesVersion": "1.1.0",
+ "seriesVersion": "1.2.0",
  "note": "Query contracts for the stored series (analysis hub phase A, docs/analysis-console/PLAN.md); shape and rules in analysis-core/seriesContract.ts. One entry per stored series; `metric` names its methodology in metric-registry.json (null where none exists yet). day/period: how rows on one local day and days in a week or month combine (mean | sum | last). plausible: inclusive range outside which a value is invalid. Time kinds: local_date (a calendar date column), local_wall (a timestamp holding local wall time labelled UTC), utc (a true instant; the local day needs an offset). expect: when a value is due (daily: every day once the stream exists; worn: on days the band recorded heart rate; none: manual logs and events, where a day without a row is unknown, not missing). zeroIsSuspect: a 0 is more likely no data than a real reading.",
  "defaultUtcOffsetMin": 480,
  "series": [
@@ -764,6 +764,60 @@
    ],
    "expect": "none",
    "hasSource": true
+  },
+  {
+   "id": "gut_day_score",
+   "metric": null,
+   "label": "Digestion score",
+   "unit": "/100",
+   "table": "derived_daily",
+   "column": "value",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "mean",
+   "period": "mean",
+   "longGrain": "day",
+   "plausible": [
+    0,
+    100
+   ],
+   "expect": "none",
+   "filters": {
+    "metric": [
+     "gut_day_score"
+    ]
+   },
+   "hasSource": false
+  },
+  {
+   "id": "energy_availability",
+   "metric": null,
+   "label": "Energy availability",
+   "unit": "kcal/kg FFM",
+   "table": "derived_daily",
+   "column": "value",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "mean",
+   "period": "mean",
+   "longGrain": "day",
+   "plausible": [
+    -150,
+    150
+   ],
+   "expect": "none",
+   "filters": {
+    "metric": [
+     "energy_availability"
+    ]
+   },
+   "hasSource": false
   }
  ]
 }

@@ -109,9 +109,9 @@ export const REPORT_METRICS: readonly ReportMetricSpec[] = [
   { id: 'stool_discomfort', section: 'gut', better: 'down', minDays: [3, 8], minChange: 0.5 },
 ]
 
-/** Report-only series, built from stool_log by the reader (one value per local day). */
+/** Report-only series, built from stool_log by the reader (one value per local day). The digestion score is a stored
+ * series (derived_daily, runDerived.ts), so its line links to its history. */
 export const STOOL_SERIES: Record<string, { label: string; unit: string }> = {
-  gut_day_score: { label: 'Digestion score', unit: '/100' },
   stool_normal_pct: { label: 'Normal stools (Bristol 3–5)', unit: '%' },
   stool_loose_pct: { label: 'Loose stools (Bristol 6–7)', unit: '%' },
   stool_discomfort: { label: 'Stool discomfort', unit: '/10' },

@@ -3,7 +3,7 @@
 // (lib/logEdit.ts); imported and synced rows (Health Connect, Zepp, Notion, the scale) are read-only. Where the
 // Today's DAY LOG lands. Logged times (meals, supplements, sessions, stool, notes, body check-ins, grip) are the
 // phone's wall clock labelled +00: their digits are local, so a day is matched on those digits and never shifted.
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useLoadEffect } from '../lib/useLoadEffect'
@@ -14,7 +14,13 @@ import './Log.css'
 import { Board } from '../components/layout/Board'
 
 interface Item { description: string | null; calories: number | null; quantity: number | null; quantity_unit: string | null; is_beverage: boolean | null }
-interface Meal { id: number; logged_at: string; description: string | null; meal_slot: string | null; calories: number | null; carbs_g: number | null; protein_g: number | null; fat_g: number | null; source: string | null; meal_items: Item[] }
+/** meal_profiles (docs/nutrition/meal-profile.md): separate indexes, never one combined score (owner's rule). */
+interface MealProfile {
+  meal_id: number; energy_density_kcal_g: number | null; protein_per_100kcal: number | null; carbs_per_100kcal: number | null
+  fiber_per_1000kcal: number | null; glycemic_load_est: number | null; fullness_factor_est: number | null; ultra_processed_pct: number | null
+  food_groups: string[] | null; tags: string[] | null; macro_mismatch: boolean | null
+}
+interface Meal { id: number; logged_at: string; description: string | null; meal_slot: string | null; calories: number | null; carbs_g: number | null; protein_g: number | null; fat_g: number | null; source: string | null; meal_items: Item[]; profile?: MealProfile }
 interface Supp { id: number; taken_at: string; supplement_name: string | null; dose_value: number | null; dose_unit: string | null; serving_count: number | null; source: string | null }
 interface Session { id: number; start_time: string; type: string | null; duration_min: number | null; distance_km: number | null; avg_hr: number | null; rpe: number | null; source: string | null; notes: string | null }
 interface Evening { date: string; drinks: number | null; stress: number | null; caffeine_after_14: boolean | null; late_meal: boolean | null; late_screen: boolean | null; gut_comfort: number | null; gut_symptoms: string[] | null; note: string | null }
@@ -55,7 +61,7 @@ async function loadRange(from: string, to: string): Promise<DayLog> {
   type R<T> = Promise<{ data: T[] | null; error: { message: string } | null }>
   const between = <T,>(table: string, cols: string, col: string) => supabase.from(table).select(cols).gte(col, lo).lt(col, hi).order(col) as unknown as R<T>
   const dated = <T,>(table: string, cols: string) => supabase.from(table).select(cols).gte('date', from).lte('date', to).order('date') as unknown as R<T>
-  const [m, s, x, e, w, st, nt, b, dr, g] = await Promise.all([
+  const [m, s, x, e, w, st, nt, b, dr, g, mp] = await Promise.all([
     between<Meal>('meals', 'id,logged_at,description,meal_slot,calories,carbs_g,protein_g,fat_g,source,meal_items(description,calories,quantity,quantity_unit,is_beverage)', 'logged_at'),
     between<Supp>('supplement_log', 'id,taken_at,supplement_name,dose_value,dose_unit,serving_count,source', 'taken_at'),
     between<Session>('exercise_sessions', 'id,start_time,type,duration_min,distance_km,avg_hr,rpe,source,notes', 'start_time'),
@@ -66,11 +72,13 @@ async function loadRange(from: string, to: string): Promise<DayLog> {
     between<BodyCheck>('body_checkins', 'id,occurred_at,fasted,before_training,notes', 'occurred_at'),
     dated<Drink>('hydration_daily', 'id,date,ml,source'),
     between<Grip>('grip_strength_log', 'id,occurred_at,hand,kg', 'occurred_at'),
+    between<MealProfile>('meal_profiles', 'meal_id,energy_density_kcal_g,protein_g,protein_per_100kcal,carbs_per_100kcal,fiber_per_1000kcal,glycemic_load_est,fullness_factor_est,ultra_processed_pct,food_groups,tags,macro_mismatch', 'logged_at'),
   ])
   for (const [name, r] of [['meals', m], ['supplement_log', s], ['exercise_sessions', x]] as const) if (r.error) throw new Error(`${name}: ${r.error.message}`)
   const ok = <T,>(r: { data: T[] | null; error: unknown }) => (r.error ? [] : r.data ?? [])
+  const profiles = new Map(ok(mp).map((p) => [p.meal_id, p]))
   return {
-    meals: ok(m), supps: ok(s), sessions: ok(x), evening: ok(e), wellbeing: ok(w), stool: ok(st), notes: ok(nt), body: ok(b), drinks: ok(dr), grip: ok(g),
+    meals: ok(m).map((x) => ({ ...x, profile: profiles.get(x.id) })), supps: ok(s), sessions: ok(x), evening: ok(e), wellbeing: ok(w), stool: ok(st), notes: ok(nt), body: ok(b), drinks: ok(dr), grip: ok(g),
   }
 }
 
@@ -223,6 +231,7 @@ function DayGrid({ log, show, onChanged }: { log: DayLog; show: Set<Kind>; onCha
               deleteNote={m.meal_items.length ? `Its ${m.meal_items.length} item${m.meal_items.length === 1 ? '' : 's'} go with it.` : undefined}
               title={`${m.meal_slot ? `${m.meal_slot.replace('_', '-').toLowerCase()}: ` : ''}${m.description ?? (m.meal_items.map((i) => i.description).filter(Boolean).join(', ') || 'meal')}`}
               detail={`${n0(m.calories)} kcal · carbs ${n0(m.carbs_g)} g · protein ${n0(m.protein_g)} g · fat ${n0(m.fat_g)} g`}
+              extra={m.profile && <ProfileLine p={m.profile} />}
               items={m.meal_items.map((i) => `${i.description ?? 'item'}${i.quantity != null ? ` · ${i.quantity}${i.quantity_unit ? ` ${i.quantity_unit}` : ''}` : ''}${i.calories != null ? ` · ${Math.round(i.calories)} kcal` : ''}`)} />
           ))}
           {log.drinks.map((x) => (
@@ -282,8 +291,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return <section className="log-section"><h3 className="log-section-title mono">{title}</h3><ol className="log-rows">{children}</ol></section>
 }
 
-function Row({ time, title, detail, items, source, edit, deleteNote, onChanged, open }: {
-  time: string; title: string; detail?: string; items?: string[]; source?: string | null
+function Row({ time, title, detail, extra, items, source, edit, deleteNote, onChanged, open }: {
+  time: string; title: string; detail?: string; extra?: ReactNode; items?: string[]; source?: string | null
   edit?: EditSpec; deleteNote?: string; onChanged?: (what: string) => void
   /** where the entry's own page is (a recorded workout): its numbers, and the effort and notes to add */
   open?: string
@@ -304,6 +313,7 @@ function Row({ time, title, detail, items, source, edit, deleteNote, onChanged, 
           )}
         </div>
         {detail && <div className="log-detail">{detail}</div>}
+        {extra}
         {items && items.length > 0 && <ul className="log-items">{items.map((i, k) => <li key={k}>{i}</li>)}</ul>}
         {edit && mode === 'edit' && <EditForm spec={edit} onCancel={() => setMode('view')} onSaved={() => { setMode('view'); onChanged?.(`${edit.title} corrected.`) }} />}
         {edit && mode === 'delete' && <DeleteConfirm spec={edit} note={deleteNote} onCancel={() => setMode('view')} onDeleted={() => { setMode('view'); onChanged?.(`${edit.title} deleted.`) }} />}
@@ -374,6 +384,30 @@ function DeleteConfirm({ spec, note, onCancel, onDeleted }: { spec: EditSpec; no
         <button className="pb-primary mono log-danger" disabled={busy} onClick={() => void del()}>{busy ? 'DELETING…' : 'DELETE'}</button>
         <button className="btn-ghost mono" onClick={onCancel}>KEEP IT</button>
       </div>
+    </div>
+  )
+}
+
+/** The meal profile on one line: each index in its own metric hue, then the food groups and the gut tags (as on the phone). */
+function ProfileLine({ p }: { p: MealProfile }) {
+  const one = (v: number) => (Math.round(v * 10) / 10).toString()
+  const parts: [string, string][] = []
+  if (p.energy_density_kcal_g != null) parts.push(['m-energy-density', `${one(p.energy_density_kcal_g)} kcal/g`])
+  if (p.protein_per_100kcal != null) parts.push(['m-protein', `${one(p.protein_per_100kcal)} g protein/100 kcal`])
+  if (p.carbs_per_100kcal != null) parts.push(['m-carbs', `${one(p.carbs_per_100kcal)} g carbs/100 kcal`])
+  if (p.fiber_per_1000kcal != null) parts.push(['m-fiber', `fibre ${one(p.fiber_per_1000kcal)} g/1,000 kcal`])
+  if (p.glycemic_load_est != null) parts.push(['m-glycemic-load', `GL ~${Math.round(p.glycemic_load_est)}`])
+  if (p.fullness_factor_est != null) parts.push(['m-fullness', `fullness ~${one(p.fullness_factor_est)}`])
+  if (p.ultra_processed_pct != null && p.ultra_processed_pct > 0) parts.push(['m-ultra-processed', `${Math.round(p.ultra_processed_pct)}% ultra-processed`])
+  const groups = (p.food_groups ?? []).map((g) => g.replace(/_/g, ' '))
+  const tags = (p.tags ?? []).map((g) => g.replace(/_/g, ' '))
+  if (!parts.length && !groups.length) return null
+  return (
+    <div className="log-detail">
+      {parts.map(([hue, text], i) => <span key={hue}>{i > 0 && ' · '}<span style={{ color: `var(--${hue})` }}>{text}</span></span>)}
+      {groups.length > 0 && <>{parts.length > 0 && ' · '}foods: {groups.join(', ')}</>}
+      {tags.length > 0 && <> · gut: {tags.join(', ')}</>}
+      {p.macro_mismatch && <span style={{ color: 'var(--warn)' }}> · kcal and macros disagree</span>}
     </div>
   )
 }

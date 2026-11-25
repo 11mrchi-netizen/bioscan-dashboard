@@ -231,7 +231,7 @@ function ReportView({ r, busy, onRebuild }: { r: PeriodReport; busy: string | nu
               <ul className="pg-rows">
                 {e.days > 0 && (
                   <li className="pg-row">
-                    <span className="pg-row-title">Energy availability</span>
+                    <span className="pg-row-title"><a className="rp-link" href={metricHref('series:energy_availability', { day: r.end, range })}>Energy availability ›</a></span>
                     <span className="pg-row-value" style={{ color: 'var(--m-energy-availability)' }}>{fmt(e.median)}<small> kcal/kg FFM</small></span>
                     <span className="pg-row-sub">
                       Median of {e.days} days · <span style={toneStyle(e.low > 0 ? 'bad' : null)}>{e.low} low</span> (under 30), {e.reduced} reduced, {e.adequate} adequate (45+)

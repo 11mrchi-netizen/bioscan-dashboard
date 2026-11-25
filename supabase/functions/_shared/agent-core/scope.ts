@@ -55,7 +55,7 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     // labs
     'lab_draws', 'lab_results',
     // analysis and evidence
-    'analysis_results', 'score_snapshots', 'score_history', 'evidence_ledger', 'evidence_records', 'lab_watch_rules', 'registry_reviews', 'registered_questions', 'experiments',
+    'analysis_results', 'derived_daily', 'session_fuel', 'score_snapshots', 'score_history', 'evidence_ledger', 'evidence_records', 'lab_watch_rules', 'registry_reviews', 'registered_questions', 'experiments',
     'interventions', 'intervention_adherence', 'intervention_state_history', 'protocols', 'protocol_interventions',
     'protocol_state_history', 'protocol_templates', 'intervention_events', 'intervention_expectations', 'intervention_draws', 'protocol_adjustment_proposals', 'decisions', 'series_break_decisions',
     'health_vocab', 'grip_strength_norms',

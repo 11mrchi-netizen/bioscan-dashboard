@@ -30,7 +30,9 @@ check-in's gut comfort x 25 less 10 per symptom. Days with neither are unknown.
 Since 2.4.0 the stool part also counts the rhythm against your usual, once the 28 days before hold 7 days with stools:
 10 points off per stool beyond one more than your usual daily count (the median of those days), and 5 per hour that the
 day's first stool is more than 2 h from your usual first time (at most 15). The weekly and monthly reports show the score
-with the share of normal and of loose (Bristol 6-7) stools.
+with the share of normal and of loose (Bristol 6-7) stools. The score is stored per day in `derived_daily` (metric
+`gut_day_score`, written nightly by `runDerived.ts`) and has its own history: `series:gut_day_score` in the console, DIGESTION
+SCORE at the top of the phone's DIGESTION page.
 
 ## Questions
 

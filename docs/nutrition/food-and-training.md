@@ -4,6 +4,16 @@ Step 3 of the nutrition proposal. Code: `supabase/functions/_shared/analysis-cor
 `trainingFuel.test.ts`); read by `runPeriodReport.ts` into the weekly and monthly reports' **Training fuel** section,
 shown on the console's LAB › REPORTS.
 
+## Where it shows
+
+- **Weekly and monthly reports** (console LAB › REPORTS): the Training fuel section.
+- **Each session's page** (console PLAN › SESSIONS › a session, the phone's session screen): a FUEL card from `session_fuel`.
+- **Energy availability over time**: a stored series (`derived_daily`, metric `energy_availability`; `series:energy_availability`
+  in the console, ENERGY AVAILABILITY on the phone's NUTRITION page).
+
+`session_fuel` and `derived_daily` are written by analysis-run's `derived` engine (`runDerived.ts`, group `reports`, nightly)
+over the last 180 days, so today's session shows the next day.
+
 ## Per session
 
 Sessions of 20 minutes or more from `exercise_sessions`; walks and `other` are left out.

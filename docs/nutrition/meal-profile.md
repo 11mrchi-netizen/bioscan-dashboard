@@ -41,3 +41,5 @@ Any index whose inputs are missing is null, never guessed.
 
 gluten, lactose, dairy, high_fodmap, fried, spicy, sweetener, caffeine, alcohol, ultra_processed, high_fat (30 g of fat or
 more). They are keyword estimates for later gut analysis (food groups against stool), not a diagnosis.
+
+The profile also shows on the console's Log, under each meal: each index in its own hue, then the food groups and gut tags.

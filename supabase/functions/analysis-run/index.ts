@@ -47,6 +47,7 @@ import { runHealth } from "../_shared/analysis-core/runHealth.ts";
 import { runIntegrity } from "../_shared/analysis-core/runIntegrity.ts";
 import { runAir } from "../_shared/analysis-core/runAir.ts";
 import { runReports } from "../_shared/analysis-core/runPeriodReport.ts";
+import { runDerived } from "../_shared/analysis-core/runDerived.ts";
 import type { SeriesFile } from "../_shared/analysis-core/seriesContract.ts";
 import seriesFile from "../_shared/metric-registry/metric-series.json" with { type: "json" };
 import { runSeriesBreaks } from "../_shared/analysis-core/runSeriesBreaks.ts";
@@ -203,13 +204,15 @@ Deno.serve(async (req) => {
       const reportOpts = isScheduler && Array.isArray(body.keys) ? { keys: body.keys.filter((k): k is string => typeof k === "string").slice(0, 24) }
         : isScheduler && (body.weeks !== undefined || body.months !== undefined) ? { weeks: Math.max(0, Math.min(12, Math.round(body.weeks ?? 0))), months: Math.max(0, Math.min(6, Math.round(body.months ?? 0))) }
         : {};
+      // Computed daily values and session fuel for the pages (runDerived.ts), before the reports.
+      if (want.has("derived")) out.derived = await run("derived", () => runDerived(admin, id, new Date()));
       if (want.has("reports")) out.reports = await run("reports", () => runReports(admin, id, seriesFile as SeriesFile, new Date(), reportOpts));
       // The frame is read once and shared; one engine failing must not hide the others: each reports its own error.
       // Typicality and the expected bands run in a later group than the series breaks because they restart at confirmed ones.
       if (needsFrame(group)) {
         const loaded = await run("loadFrame", () => loadFrame(admin, id));
         if ("error" in loaded) {
-          for (const name of want) if (!["breaks", "integrity", "air", "reports"].includes(name)) out[name] = loaded;
+          for (const name of want) if (!["breaks", "integrity", "air", "derived", "reports"].includes(name)) out[name] = loaded;
         } else {
           const engines: Record<string, () => Promise<unknown>> = {
             relationships: () => runRelationships(admin, id, new Date(), loaded),

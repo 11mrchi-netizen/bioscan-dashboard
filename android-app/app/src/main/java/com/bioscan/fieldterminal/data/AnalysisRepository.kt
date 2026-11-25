@@ -2,6 +2,8 @@ package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
 import com.bioscan.fieldterminal.data.model.CaseCrossoverResultRow
+import com.bioscan.fieldterminal.data.model.DerivedDailyRow
+import com.bioscan.fieldterminal.data.model.SessionFuelRow
 import com.bioscan.fieldterminal.data.model.EventCurveRow
 import com.bioscan.fieldterminal.data.model.ExerciseSessionRow
 import com.bioscan.fieldterminal.data.model.ExpectedBandRow
@@ -440,6 +442,28 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 
     // Same generous margin as every
     // other read here.
+    /** A computed daily series of derived_daily (the nightly run writes it), oldest first, by local date. */
+    suspend fun loadDerivedDaily(metric: String): Map<LocalDate, Double> =
+        ReadCache.get("analysis.derived.$metric", tables = setOf("derived_daily"), serializer = ListSerializer(DerivedDailyRow.serializer())) {
+            supabase.postgrest.from("derived_daily")
+                .select(columns = Columns.list("date,value")) {
+                    filter { eq("metric", metric) }
+                    order("date", Order.ASCENDING)
+                    limit(2000)
+                }
+                .decodeList<DerivedDailyRow>()
+        }.associate { LocalDate.parse(it.date) to it.value }
+
+    /** The food around one session, or null before the nightly run has seen it (or for a walk or a short session). */
+    suspend fun loadSessionFuel(sessionId: Long): SessionFuelRow? =
+        supabase.postgrest.from("session_fuel")
+            .select(columns = Columns.list("session_id,date,duration_min,long,hours_since_meal,fasted,carbs_before_g,carbs_during_g,protein_after_g,carbs_after_g,protein_dose_g")) {
+                filter { eq("session_id", sessionId) }
+                limit(1)
+            }
+            .decodeList<SessionFuelRow>()
+            .firstOrNull()
+
     suspend fun loadStoolLog(): List<StoolAnalysisRow> = ReadCache.get("analysis.StoolLog", tables = setOf("stool_log"), serializer = ListSerializer(StoolAnalysisRow.serializer())) { fetchStoolLog() }
 
     private suspend fun fetchStoolLog(): List<StoolAnalysisRow> =

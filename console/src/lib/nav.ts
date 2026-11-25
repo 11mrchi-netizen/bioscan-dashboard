@@ -13,14 +13,21 @@ export interface NavTab { id: string; label: string; views?: readonly NavView[];
 export interface NavSection { id: string; label: string; /** Me: the tab is the ?tab= parameter, not part of the path */ tabParam?: 'tab'; tabs?: readonly NavTab[] }
 
 /** The phone's Me tabs, in the phone's order (MeScreen.kt); BODY is the page's default when no tab is given. */
-export const ME_TAB_IDS = ['HEALTHSPAN', 'PERFORMANCE', 'BODY', 'HEALTH', 'BLOODWORK', 'ROUTINE', 'EXPOSURES'] as const
+export const ME_TAB_IDS = ['HEALTHSPAN', 'PERFORMANCE', 'BODY', 'HEALTH', 'BLOODWORK', 'INTIMACY', 'ROUTINE', 'EXPOSURES'] as const
+
+/** Me › INTIMACY's views (workspaces/Intimacy.tsx), the one Me tab the web draws itself rather than from me_views. */
+export const INTIMACY_VIEWS: readonly NavView[] = [
+  { id: 'overview', label: 'Overview', value: null }, { id: 'encounters', label: 'Encounters', value: 'encounters' }, { id: 'mix', label: 'Mix', value: 'mix' },
+  { id: 'solo', label: 'Solo', value: 'solo' }, { id: 'partners', label: 'Partners', value: 'partners' }, { id: 'health', label: 'Health', value: 'health' },
+  { id: 'effects', label: 'Effects', value: 'effects' },
+]
 export const ME_DEFAULT_TAB = 'BODY'
 
 const title = (s: string) => s[0] + s.slice(1).toLowerCase()
 
 export const NAV: readonly NavSection[] = [
   { id: 'today', label: 'Today' },
-  { id: 'me', label: 'Me', tabParam: 'tab', tabs: ME_TAB_IDS.map((t) => ({ id: t, label: title(t) })) },
+  { id: 'me', label: 'Me', tabParam: 'tab', tabs: ME_TAB_IDS.map((t) => ({ id: t, label: title(t), ...(t === 'INTIMACY' ? { views: INTIMACY_VIEWS } : {}) })) },
   { id: 'lab', label: 'Lab', tabs: [
     { id: 'compare', label: 'Compare', views: [{ id: 'days', label: 'Days', value: null }, { id: 'periods', label: 'Periods', value: 'periods' }] },
     { id: 'evidence', label: 'Evidence', views: [
@@ -87,7 +94,13 @@ export function navTo(t: NavTarget, currentPath: string, currentSearch: string):
     const sameSection = currentPath === path
     const next = new URLSearchParams(sameSection ? currentSearch : '')
     const tab = t.tab ?? t.section.tabs?.find((x) => x.id === ME_DEFAULT_TAB)
-    if (tab) next.set(t.section.tabParam, tab.id)
+    if (tab) {
+      // another tab's view (and the person shown on it) does not carry over; a view of the tab is set or, for its default, removed
+      if (next.get(t.section.tabParam) !== tab.id) { next.delete('view'); next.delete('person') }
+      next.set(t.section.tabParam, tab.id)
+      const view = t.view ?? (tab.views ? tab.views[0] : undefined)
+      if (view) { next.delete('person'); if (view.value == null) next.delete('view'); else next.set('view', view.value) }
+    }
     const s = next.toString()
     return s ? `${path}?${s}` : path
   }

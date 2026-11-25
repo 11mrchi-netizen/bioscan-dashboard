@@ -61,5 +61,5 @@ uses them as defaults; the `VITE_SUPABASE_*` variables override them when set.
 - `npm run build && npm run e2e`: the browser walkthrough (`e2e/walkthrough.cjs`) against a mocked Supabase: every route and its
   old address, the Lab, Plan and Setup tabs, the metric page and compare, the Google sign-in return, phone-width fit. Needs
   Playwright with Chromium. Screenshots go to `e2e/out/`. `e2e/planning.cjs` (the block planner and meal prep) and
-  `e2e/risk.mts` (the risk analysis in Me › EXPOSURES) are separate walkthroughs, run the same way; they print `ok` / `FAIL` lines
+  `e2e/risk.mts` (the risk analysis in Me › EXPOSURES) and `e2e/intimacy.mts` (Me › INTIMACY, invented data only) are separate walkthroughs, run the same way; they print `ok` / `FAIL` lines
   and no summary.

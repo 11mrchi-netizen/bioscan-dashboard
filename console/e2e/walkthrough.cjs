@@ -735,7 +735,7 @@ async function waitForServer() {
     await page.goto(`${BASE}#/me?tab=BODY&range=1Y`); await page.waitForSelector('.me', { timeout: 15000 })
     await page.locator('.side-menu [data-nav="me/HEALTH"]').click(); await page.waitForTimeout(400)
     check(page.url().includes('tab=HEALTH') && page.url().includes('range=1Y'), 'a Me tab link keeps the range', page.url().split('#')[1])
-    check((await page.locator('.side-menu [data-nav^="me/"]').count()) === 7, 'Me lists its seven tabs')
+    check((await page.locator('.side-menu [data-nav^="me/"]').count()) === 8, 'Me lists its eight tabs, Intimacy included')
     await page.locator('.side-menu [data-nav="plan"]').click(); await page.waitForTimeout(300)
     check(page.url().endsWith('#/plan/overview'), 'a section opens its first tab, with nothing carried over', page.url().split('#')[1])
     // hide and show on a wide screen: the page takes the room, and the choice is remembered

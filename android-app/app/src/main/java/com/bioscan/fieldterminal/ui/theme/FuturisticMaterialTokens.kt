@@ -129,6 +129,8 @@ object FuturisticMaterialTokens {
         val PhysStress = Color(0xFFFF5D5D)
         val HrDip = Color(0xFF36D07A)
         val MealTiming = Color(0xFFFFB03A)
+        val SexPartnered = Color(0xFFFF7A9C) // ME › INTIMACY: partnered
+        val SexSolo = Color(0xFF8FA8FF) // ME › INTIMACY: solo
 
         // load / training
         val Ctl = Color(0xFF3A8DFF) // fitness

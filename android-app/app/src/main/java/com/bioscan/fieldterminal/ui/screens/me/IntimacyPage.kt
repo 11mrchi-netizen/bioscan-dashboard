@@ -169,7 +169,7 @@ private fun Overview(
             val inWeek = page.activity.filter { r -> runCatching { LocalDate.parse(r.date) }.getOrNull()?.let { !it.isBefore(start) && !it.isAfter(end) } == true }
             shortDate(start) to listOf(inWeek.count { it.activityType == "intercourse" }.toDouble(), inWeek.count { it.activityType == "masturbation" }.toDouble())
         }
-        StackedBars(columns, listOf(FT.Category.Arousal.c500, FT.Category.Wellbeing.c500), listOf("With partner", "Solo"), Fmt.int, "days", lastPartial = true)
+        StackedBars(columns, listOf(FT.Metric.SexPartnered, FT.Metric.SexSolo), listOf("With partner", "Solo"), Fmt.int, "days", lastPartial = true)
     }
 
     Section("CALENDAR · 12 WEEKS", info = "Each square a day; red with a partner, blue solo, darker = more that day.") {

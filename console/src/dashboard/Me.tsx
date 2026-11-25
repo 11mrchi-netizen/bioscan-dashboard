@@ -1,4 +1,4 @@
-// Me: the phone's six tabs in the phone's order, each drawn from what the phone worked out (me_views,
+// Me: the phone's eight tabs in the phone's order, each drawn from what the phone worked out (me_views,
 // meView.ts), with when that was. Body adds the 3D body. Tabs the phone does not send yet say so.
 import { lazy, Suspense, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -13,6 +13,8 @@ const Body3D = lazy(() => import('./Body3D').then((m) => ({ default: m.Body3D })
 // The console's deeper reads, below the phone's own picture of the tab (web redesign, phase 5): the scale's impedance on BODY, exposures and risks on EXPOSURES.
 const BodyAnalysis = lazy(() => import('../workspaces/Body'))
 const RiskAnalysis = lazy(() => import('../workspaces/Risk'))
+// INTIMACY is the one tab the web draws itself, from the tables (the phone sends no me_view for it).
+const IntimacyPage = lazy(() => import('../workspaces/Intimacy'))
 
 /** The tabs the phone sends so far (phase 3 builds them one by one). */
 
@@ -28,6 +30,7 @@ export function Me() {
   const [concerns, setConcerns] = useState<Concern[]>([])
   const status = useLoadEffect(async (isCurrent) => {
     setRow(null)
+    if (tab === 'INTIMACY') return
     const v = await loadMeView(tab)
     if (!isCurrent()) return
     setRow(v)
@@ -40,6 +43,10 @@ export function Me() {
   const rows: MeRow[] = (row?.view.sections ?? []).flatMap((s) => s.items).filter((i): i is MeRow => i.kind === 'row')
   const since = range.days ? localDaysAgo(range.days - 1) : null
   const builtAt = row ? new Date(row.builtAt).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : null
+
+  if (tab === 'INTIMACY') {
+    return <div className="me"><Suspense fallback={<p className="me-note muted">Loading intimacy…</p>}><IntimacyPage /></Suspense></div>
+  }
 
   return (
     <div className="me">

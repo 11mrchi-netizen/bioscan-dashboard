@@ -72,3 +72,15 @@ test('Plan > Sessions has Planned and Recorded, and one recorded session\'s page
   assert.equal(locate('/plan/sessions/planned/68', '').view?.id, 'planned') // a planned session's page belongs to Planned
   assert.equal(locate('/plan/overview/812', '').view, null)
 })
+
+test("Me › INTIMACY sits in the phone's place and its views are links of their own", () => {
+  assert.equal(ME_TAB_IDS.indexOf('INTIMACY'), ME_TAB_IDS.indexOf('BLOODWORK') + 1)
+  const intimacy = tab('me', 'INTIMACY')
+  assert.deepEqual(crumbs(locate('/me', '?tab=INTIMACY&view=partners')), ['Me', 'Intimacy', 'Partners'])
+  assert.equal(locate('/me', '?tab=INTIMACY').view?.id, 'overview')
+  const partners = intimacy.views!.find((v) => v.id === 'partners')!
+  assert.equal(navTo({ section: sec('me'), tab: intimacy, view: partners }, '/me', '?tab=INTIMACY&range=1Y'), '/me?tab=INTIMACY&range=1Y&view=partners')
+  // a person open on one view does not follow to another; leaving the tab drops its view
+  assert.equal(navTo({ section: sec('me'), tab: intimacy, view: intimacy.views![0] }, '/me', '?tab=INTIMACY&view=partners&person=4'), '/me?tab=INTIMACY')
+  assert.equal(navTo({ section: sec('me'), tab: tab('me', 'BODY') }, '/me', '?tab=INTIMACY&view=mix&range=1Y'), '/me?tab=BODY&range=1Y')
+})

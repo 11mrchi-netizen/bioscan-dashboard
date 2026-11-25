@@ -79,6 +79,8 @@
   --m-phys-stress:       #ff5d5d;
   --m-hr-dip:            #36d07a;
   --m-meal-timing:       #ffb03a;
+  --m-sex-partnered:     #ff7a9c;  /* Me › INTIMACY: partnered sex */
+  --m-sex-solo:          #8fa8ff;  /* Me › INTIMACY: solo */
 
   /* load / training */
   --m-ctl:               #3a8dff;  /* fitness */

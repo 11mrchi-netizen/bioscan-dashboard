@@ -2,8 +2,11 @@
 // standards (fuel_standards, web only; the table may not exist until its migration is applied). The planner's plan as a starting schedule is the phone's seedSchedule.
 import { supabase } from './supabase'
 import { productsOf, sweatTestsOf } from './raceFuelPlan'
+import { loadFuelSettings, loadHome } from './fuelSettingsData'
+import { raceSettingsOf } from './fuelSettings'
+import { fetchHourly } from './weather'
 import {
-  atTime, DEFAULT_RACE_SETTINGS, type FuelBlock, type FuelProductOption, instant, NO_WEATHER, planRaceFuel, type PlannedItem, seedBlocks, type Standard, type StandardRule, sweatProfile, zdtString,
+  atTime, type FuelBlock, type FuelProductOption, instant, NO_WEATHER, planRaceFuel, type PlannedItem, seedBlocks, type Standard, type StandardRule, sweatProfile, zdtString,
 } from '../../../supabase/functions/_shared/fuel-core/index.ts'
 
 export interface ScheduleRow { duration_min: number; blocks: FuelBlock[]; seeded_from: string | null; updated_at: string }
@@ -49,18 +52,24 @@ export async function loadCatalog(): Promise<FuelProductOption[]> {
   return productsOf((p.data ?? []) as { id: number; kind: string; name: string; brand: string | null }[], (v.data ?? []) as Record<string, unknown>[])
 }
 
-/** The planner's plan for a long session as blocks to start from (the phone's seedSchedule: no weather unless the web knew a place, the defaults for the settings it cannot read). */
+/** The planner's plan for a long session as blocks to start from (the phone's seedSchedule: the weather at home, the phone's fuel settings). */
 export async function seedScheduleFor(item: PlannedItem, weightKg: number, zone: string): Promise<FuelBlock[]> {
-  const [tests, products] = await Promise.all([
+  const [tests, products, settingsRead, home] = await Promise.all([
     supabase.from('sweat_tests').select('tested_on,session_type,intensity,duration_min,weight_before_kg,weight_after_kg,fluid_in_ml,urine_ml,temp_c,humidity_pct').order('tested_on', { ascending: false }).limit(200),
     loadCatalog(),
+    loadFuelSettings(),
+    loadHome().catch(() => null),
   ])
   const start = item.start ?? zdtString(atTime(new Date().toLocaleDateString('sv-SE'), '09:00:00', zone), zone)
-  void instant
+  const startMs = instant(start)
+  let weather = NO_WEATHER
+  if (home) {
+    try { weather = await fetchHourly(home.lat, home.lon, startMs - 3600000, startMs + (Math.trunc(item.durationMin) + 60) * 60000, zone, Date.now()) } catch { weather = NO_WEATHER }
+  }
   const plan = planRaceFuel({
     title: item.title, type: item.type, intensity: item.intensity, start, durationMin: item.durationMin, durationLowMin: item.durationMin * 0.9, durationHighMin: item.durationMin * 1.1,
-    durationBasis: 'the planned session length', course: [], distanceKm: item.distanceKm, aidStations: [], weather: NO_WEATHER, sweat: sweatProfile(sweatTestsOf((tests.data ?? []) as Record<string, unknown>[]), weightKg),
-    weightKg, settings: DEFAULT_RACE_SETTINGS, products, history: null, loadingDays: false,
+    durationBasis: 'the planned session length', course: [], distanceKm: item.distanceKm, aidStations: [], weather, sweat: sweatProfile(sweatTestsOf((tests.data ?? []) as Record<string, unknown>[]), weightKg),
+    weightKg, settings: raceSettingsOf(settingsRead.settings), products, history: null, loadingDays: false,
   })
   return seedBlocks(plan)
 }

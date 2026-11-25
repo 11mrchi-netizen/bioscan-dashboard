@@ -1,7 +1,7 @@
 // PLAN › FOOD › FUEL PLAN: the day's carbohydrate, protein, fat and energy, and the meals that carry them, worked out here with the phone's own
 // rules (supabase/functions/_shared/fuel-core: ported and checked against the phone's results). The training of each day comes from the
 // plan, the calendar, events and recordings; the energy from the nutrition goal. Read only: the phone's stored plans (fuel_plans) are its own
-// record. Meal times, train-low and the carbohydrate the gut tolerates are phone settings the web cannot read: the defaults are used.
+// record. Meal times, train-low and the carbohydrate the gut tolerates are the phone's fuel settings, read from the account (lib/fuelSettings.ts).
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useLoadEffect } from '../lib/useLoadEffect'
@@ -10,6 +10,7 @@ import { storeDay, type StoreResult } from '../lib/fuelPlansStore'
 import { isLongNonEvent } from '../lib/fuelScheduleKey'
 import { PlannedScheduleEditor } from './ScheduleEditor'
 import type { FuelDays } from '../lib/fuelInputs'
+import { mealTimesText } from '../lib/fuelSettings'
 import { formatGPerKg, type DayFuelPlan, type DayMeal, type PlannedItem, roundToInt } from '../../../supabase/functions/_shared/fuel-core/index.ts'
 import './PlanBlock.css'
 import './Pages.css'
@@ -88,9 +89,17 @@ function Energy({ data, kept }: { data: FuelDays; kept: StoreResult | null }) {
       <h3 className="pg-card-title mono"><span>HOW IT IS WORKED OUT</span><span>{data.weightKg} KG{data.fatFreeMassKg ? ` · ${g(data.fatFreeMassKg)} KG FAT-FREE` : ''}</span></h3>
       <p className="pg-note">{basis}</p>
       {kept && <KeptNote kept={kept} />}
-      <p className="pg-note">Meal times (09:00, 12:30, 16:00, 19:30), training low before easy sessions (off) and the carbohydrate your gut tolerates (60 g an hour) are settings on the phone, which the web cannot read: the defaults are used here.</p>
+      <p className="pg-note">{settingsNote(data)}</p>
     </section>
   )
+}
+
+function settingsNote(data: FuelDays): string {
+  const s = data.settings
+  const what = `Meal times (${mealTimesText(s)}), training low before easy sessions (${s.trainLow ? 'on' : 'off'}) and the carbohydrate your gut tolerates (${g(s.toleratedGPerHour)} g an hour)`
+  return data.settingsFromPhone
+    ? `${what} are your fuel settings from the phone; change them there, with FUEL SETTINGS on the fuel plan.`
+    : `${what} are the defaults: the phone has not sent its fuel settings yet. Open the updated app on the phone once and reload.`
 }
 
 function Day({ data, i }: { data: FuelDays; i: number }) {

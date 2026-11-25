@@ -20,7 +20,9 @@ import {
   compareRefs, INPUT_HUE, MAX_COMPARE, METRIC_RANGES, metricHref, parseMetricRef, rangeFor, refString, seriesBehind, seriesGroup, SERIES_HUE,
   splitMeLabel, washFor, windowStats, RING_KEYS, type MetricRef,
 } from '../lib/metrics'
-import { loadMetric, type MetricData } from '../lib/metricData'
+import { loadMetric, type MetricData, type MetricPoint } from '../lib/metricData'
+import { loadDays } from '../lib/seriesQuery'
+import { useInspect } from '../lib/analysisStore'
 import { cssColor } from '../lib/palette'
 import { usePageTitle } from '../lib/pageTitle'
 import { ASSOCIATION_NOTE, correlate, correlationWords, panelsByUnit } from '../lib/compare'
@@ -59,6 +61,7 @@ export function MetricView({ rawRef: raw, embedded = false, setPrimary }: { rawR
   const [picking, setPicking] = useState(false)
   const [changing, setChanging] = useState(false)
   const setPageTitle = usePageTitle((s) => s.set)
+  const inspect = useInspect()
 
   const status = useLoadEffect(async (isCurrent) => {
     if (!ref) return
@@ -99,6 +102,25 @@ export function MetricView({ rawRef: raw, embedded = false, setPrimary }: { rawR
   const toggle = (r: string) => {
     const cur = extraRefs.map(refString)
     setWith(cur.includes(r) ? cur.filter((x) => x !== r) : cur.length < MAX_COMPARE ? [...cur, r] : cur)
+  }
+
+  // A click on a point marks its day (on the chart and in the table) and opens what is behind it in the Inspector: the day's
+  // records of a series (or of the series behind an input), the one record of a blood result. Scores, the other inputs, Me
+  // items and the phone's tests have no records to show: the day is marked only.
+  const openPoint = (it: Item, p: MetricPoint) => {
+    setParam({ day: p.day })
+    if (p.record) { inspect({ kind: 'event', eventRef: p.record }); return }
+    const id = it.ref.kind === 'series' ? it.ref.key : seriesBehind(it.ref)
+    const s = id ? seriesById(id) : undefined
+    if (!s) return
+    void loadDays(s, { start: p.day, end: p.day }).then((days) => {
+      const d = days.find((x) => x.date === p.day)
+      const v = d?.value ?? null
+      inspect({
+        kind: 'series_point', seriesId: s.id, start: p.day, end: p.day, grain: 'day', method: s.day, value: v,
+        daysObserved: v == null ? 0 : 1, days: 1, samples: d?.n ?? 0, min: v, max: v, sources: d?.sources ?? [], clipped: false,
+      })
+    }).catch(() => { /* the day stays marked; the Inspector is not opened on a failed read */ })
   }
 
   if (!raw || !ref) {
@@ -164,7 +186,7 @@ export function MetricView({ rawRef: raw, embedded = false, setPrimary }: { rawR
                 {panel.items[0].data.unit && <span className="metric-unit">{panel.items[0].data.unit}</span>}
               </div>
             )}
-            <PanelChart items={panel.items.map((it) => it)} from={from} to={to} focus={focus} ring={ref.kind === 'ring' && panel.items.length === 1} />
+            <PanelChart items={panel.items.map((it) => it)} from={from} to={to} focus={focus} ring={ref.kind === 'ring' && panel.items.length === 1} onPoint={openPoint} />
             {pi === 0 && data?.alsoInChart && data.alsoInChart.length > 0 && <p className="metric-sub">The phone's chart also draws {data.alsoInChart.join(', ')}; this page shows the first line.</p>}
           </section>
         ))}
@@ -189,14 +211,14 @@ export function MetricView({ rawRef: raw, embedded = false, setPrimary }: { rawR
           <section className="ft-card metric-days">
             <h3 className="me-section-title">THE DAYS</h3>
             <table className="metric-table">
-              <thead><tr><th>DAY</th><th>{compared ? data.label.toUpperCase() : 'VALUE'}</th>{extras.map((e) => <th key={e.key}>{e.data.label.toUpperCase()}</th>)}{data.usual && !compared && <th>AGAINST USUAL</th>}<th /></tr></thead>
+              <thead><tr><th>DAY</th><th>{compared ? data.label.toUpperCase() : 'VALUE'}</th>{extras.map((e) => <th key={e.key}>{e.data.label.toUpperCase()}</th>)}{(data.usual || data.band) && !compared && <th>{data.usual ? 'AGAINST USUAL' : 'REFERENCE'}</th>}<th /></tr></thead>
               <tbody>
                 {[...withValue].reverse().slice(0, 120).map((p) => (
                   <tr key={p.day} className={p.day === focus ? 'sel' : ''}>
                     <td className="k">{p.day}</td>
                     <td className="v">{withUnit(p.value!)}</td>
                     {extras.map((e) => { const v = e.data.points.find((q) => q.day === p.day)?.value; return <td key={e.key} className="v">{v == null ? '–' : `${e.data.fmt(v)}${e.data.unit ? ` ${e.data.unit}` : ''}`}</td> })}
-                    {data.usual && !compared && <td className="muted">{p.direction ? directionWords(p.direction) : ''}{p.refLine ? ` · ${p.refLine}` : ''}</td>}
+                    {(data.usual || data.band) && !compared && <td className="muted">{[p.direction ? directionWords(p.direction) : '', p.refLine ?? ''].filter(Boolean).join(' · ')}</td>}
                     <td className="metric-links">
                       <Link to={`/log?day=${p.day}`}>DAY LOG</Link>
                       <Link to={`/today?day=${p.day}`}>TODAY</Link>
@@ -220,9 +242,11 @@ function Tile({ label, value, sub }: { label: string; value: string; sub?: strin
 }
 
 /** One panel: every metric of one axis on the same time axis (the same from and to in every panel, so stacked panels line up). */
-function PanelChart({ items, from, to, focus, ring }: { items: Item[]; from: string; to: string; focus: string | null; ring: boolean }) {
+function PanelChart({ items, from, to, focus, ring, onPoint }: { items: Item[]; from: string; to: string; focus: string | null; ring: boolean; onPoint: (it: Item, p: MetricPoint) => void }) {
   const el = useRef<HTMLDivElement>(null)
   const chart = useChart(el)
+  const latest = useRef({ items, onPoint })
+  useEffect(() => { latest.current = { items, onPoint } })
   const option = useMemo<EChartsCoreOption>(() => {
     const muted = cssColor('var(--ft-muted)'), line = cssColor('var(--ft-line)'), fg = cssColor('var(--ft-fg)')
     const mono = 'IBM Plex Mono, monospace'
@@ -236,7 +260,8 @@ function PanelChart({ items, from, to, focus, ring }: { items: Item[]; from: str
       return {
         name: it.data.label, type: 'line', data: it.data.points.map((p) => [p.day, p.value]), connectNulls: false, showSymbol: it.data.points.length < 120, symbolSize: 5,
         itemStyle: { color: c }, lineStyle: { color: c, width: 2, type: dup === 0 ? 'solid' : dup === 1 ? 'dashed' : 'dotted' },
-        markLine: i === 0 && focus ? { symbol: 'none', silent: true, lineStyle: { color: fg, type: 'dashed' }, label: { color: fg, formatter: focus }, data: [{ xAxis: focus }] } : undefined,
+        markLine: i === 0 ? marks(focus, items.length === 1 ? it.data.band : undefined, fg, muted) : undefined,
+        markArea: i === 0 && items.length === 1 && it.data.band ? bandArea(it.data.band, muted) : undefined,
       }
     })
     if (items.length === 1 && first?.usual) series.push({ name: 'Your usual', type: 'line', data: first.points.map((p) => [p.day, p.reference ?? null]), showSymbol: false, lineStyle: { color: muted, width: 1, type: 'dashed' }, itemStyle: { color: muted } })
@@ -254,8 +279,47 @@ function PanelChart({ items, from, to, focus, ring }: { items: Item[]; from: str
     }
   }, [items, from, to, focus, ring])
   useEffect(() => { chart.current?.setOption(option, true) }, [chart, option])
+
+  // A click opens the drawn point nearest the pointer, of whichever metric of the panel, if one is within reach.
+  useEffect(() => {
+    const c = chart.current
+    if (!c) return
+    const zr = c.getZr()
+    const onClick = (e: { offsetX: number; offsetY: number }) => {
+      if (!c.containPixel({ gridIndex: 0 }, [e.offsetX, e.offsetY])) return
+      let best: { it: Item; p: MetricPoint; d: number } | null = null
+      for (const it of latest.current.items) {
+        for (const p of it.data.points) {
+          if (p.value == null) continue
+          const [x, y] = c.convertToPixel({ gridIndex: 0 }, [p.day, p.value]) as number[]
+          const d = Math.hypot(x - e.offsetX, y - e.offsetY)
+          if (!best || d < best.d) best = { it, p, d }
+        }
+      }
+      if (best && best.d <= 24) latest.current.onPoint(best.it, best.p)
+    }
+    zr.on('click', onClick)
+    return () => { zr.off('click', onClick) }
+  }, [chart])
   const hidden = items.every((it) => it.data.points.every((p) => p.value == null))
   return <div ref={el} className="metric-chart" style={hidden ? { display: 'none' } : undefined} />
+}
+
+type Band = NonNullable<MetricData['band']>
+
+/** The reference range behind the line, when the lab gave both bounds. */
+function bandArea(band: Band, muted: string) {
+  if (band.low == null || band.high == null) return undefined
+  return { silent: true, itemStyle: { color: muted, opacity: 0.12 }, label: { show: true, position: 'insideTopLeft', color: muted, fontSize: 10, formatter: band.label }, data: [[{ yAxis: band.low }, { yAxis: band.high }]] }
+}
+
+/** The lines on the first metric: the marked day, and the one bound of a range that has only one (≥ 40, ≤ 5.6). */
+function marks(focus: string | null, band: Band | undefined, fg: string, muted: string) {
+  const data: unknown[] = []
+  if (focus) data.push({ xAxis: focus, lineStyle: { color: fg, type: 'dashed' }, label: { color: fg, formatter: focus } })
+  const one = band && (band.low == null) !== (band.high == null) ? (band.low ?? band.high) : null
+  if (one != null) data.push({ yAxis: one, lineStyle: { color: muted, type: 'dotted' }, label: { color: muted, fontSize: 10, position: 'insideEndTop', formatter: `${band!.low != null ? '≥' : '≤'} ${one}` } })
+  return data.length ? { symbol: 'none', silent: true, data } : undefined
 }
 
 /** The pair: this metric first, the chosen one a number of days later (the phone's Lab › EXPLORE, lib/compare.ts). */

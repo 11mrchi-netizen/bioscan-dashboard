@@ -3,6 +3,7 @@ package com.bioscan.fieldterminal.data
 
 import android.content.Context
 import com.bioscan.fieldterminal.data.model.MealRow
+import com.bioscan.fieldterminal.data.routine.PlacesRepository
 import com.bioscan.fieldterminal.domain.ActivityLevel
 import com.bioscan.fieldterminal.domain.DailyNutrition
 import com.bioscan.fieldterminal.domain.EnergyBalanceKind
@@ -309,7 +310,7 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
 
         // Long sessions in the next three days (events have their own page).
         val sweat = catching { SweatTestsRepository(supabase).profile(kg) }.getOrNull() ?: sweatProfile(emptyList(), kg)
-        val home = MapSettingsStore.getHome(context)
+        val home = PlacesRepository(supabase).home(context)
         val longSessions = days.filter { !it.date.isBefore(today) && it.date.isBefore(today.plusDays(3)) }
             .flatMap { it.items }
             .filter { it.durationMin >= 90 && it.eventId == null && !it.recorded && it.start != null }
@@ -437,7 +438,7 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
         val inputs = catching { NutritionTargetsRepository(supabase).loadMaintenanceInputs() }.getOrDefault(MaintenanceInputs())
         val kg = inputs.weightKg ?: catching { bodyComposition() }.getOrDefault(emptyList()).firstNotNullOfOrNull { it.weightKg } ?: 70.0
         val start = item.start ?: ZonedDateTime.now()
-        val weather = MapSettingsStore.getHome(context)?.let { (lat, lon) ->
+        val weather = PlacesRepository(supabase).home(context)?.let { (lat, lon) ->
             catching { WeatherRepository().fetchHourly(lat, lon, start.minusHours(1), start.plusMinutes(item.durationMin.toLong() + 60)) }.getOrNull()
         } ?: WeatherSeries.NONE
         val sweat = catching { SweatTestsRepository(supabase).profile(kg) }.getOrNull() ?: sweatProfile(emptyList(), kg)
@@ -463,7 +464,7 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
         val runs = if (event.sport == EventSport.RUN || event.sport == EventSport.TRAIL_RUN) catching { recentRuns() }.getOrDefault(emptyList()) else emptyList()
         val estimate = event.distanceKm?.let { estimateRunTime(it, event.ascentM ?: 0.0, runs) }
         val (duration, range, basis) = durationRange(event.targetTimeMin, event.expectedDurationMin, estimate) ?: return@coroutineScope null
-        val place = event.startLat?.let { lat -> event.startLon?.let { lat to it } } ?: MapSettingsStore.getHome(context)
+        val place = event.startLat?.let { lat -> event.startLon?.let { lat to it } } ?: PlacesRepository(supabase).home(context)
         val weather = place?.let { (lat, lon) ->
             catching { WeatherRepository().fetchHourly(lat, lon, start.minusHours(1), start.plusMinutes(duration.toLong() + 60)) }.getOrNull()
         } ?: WeatherSeries.NONE

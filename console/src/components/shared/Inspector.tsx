@@ -20,6 +20,7 @@ const EVENT_TABLE: Record<EventRef['kind'], string> = {
   meal:      'meals',
   sleep:     'sleep_daily',
   lab_draw:  'lab_draws',
+  lab_result: 'lab_results',
   illness:   'illnesses',
   injury:    'injuries',
   rest_day:  'rest_days',

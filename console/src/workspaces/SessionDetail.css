@@ -24,3 +24,6 @@
 .pe-lifts td { vertical-align: middle; padding: 4px 10px 4px 0; }
 .pe-range { white-space: nowrap; }
 .sd-confirm { display: inline-flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
+/* a tile a series follows opens its history */
+a.sd-tile.tappable { text-decoration: none; color: inherit; cursor: pointer; }
+a.sd-tile.tappable:hover, a.sd-tile.tappable:focus-visible { border-color: var(--color-text-muted); }

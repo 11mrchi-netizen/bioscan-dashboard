@@ -42,3 +42,5 @@
 .metric-pair-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .metric-pair-row > .metric-latest-k { min-width: 84px; }
 .metric-scatter { height: 240px; width: 100%; }
+/* a point opens its day: the chart is tappable */
+.metric-chart canvas { cursor: pointer; }

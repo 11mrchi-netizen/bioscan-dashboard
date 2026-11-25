@@ -7,8 +7,14 @@ import { DOMAINS, type Direction, type DomainKey, formatInputValue, type GroupSc
 import { domainOfInput, INPUT_HUE, SERIES_HUE, splitMeLabel, type MetricRef } from './metrics'
 import { loadMeView } from '../dashboard/meView'
 import type { MeChart, MeItem, MeTab, MeTile } from '../dashboard/meView'
+import type { EventRef } from '../types/analysis'
+import { markerHue, rangeLine, sweatRate } from './labTests'
 
-export interface MetricPoint { day: string; value: number | null; reference?: number | null; refLine?: string | null; direction?: Direction }
+export interface MetricPoint {
+  day: string; value: number | null; reference?: number | null; refLine?: string | null; direction?: Direction
+  /** The record behind the point, when it is one record (a blood result): clicking the point opens it in the Inspector. */
+  record?: EventRef
+}
 
 export interface MetricData {
   label: string
@@ -29,6 +35,8 @@ export interface MetricData {
   dating: 'morning' | 'day'
   /** Other series drawn in the same Me chart, named so the page can say they are not shown here. */
   alsoInChart?: string[]
+  /** A fixed range drawn behind the line (a blood marker's reference range, of its newest draw that has one). */
+  band?: { low: number | null; high: number | null; label: string }
 }
 
 /** A value of a series: whole numbers from 100 up, one decimal below, no trailing zero. */
@@ -38,7 +46,7 @@ export function formatSeriesValue(v: number): string {
   return String(Number(v.toFixed(1)))
 }
 
-const ringHue = (key: string): string => (key === 'charge' ? 'var(--ft-charge-b)' : DOMAINS.find((d) => d.key.toLowerCase() === key)?.hue ?? 'var(--ft-platinum)')
+const ringHue = (key: string): string => (key === 'charge' ? 'var(--ft-charge-b)' : DOMAINS.find((d) => d.key.toLowerCase() === key)?.hue ?? 'var(--m-weight-ema)')
 
 export async function loadMetric(ref: MetricRef, from: string, to: string, signal?: AbortSignal): Promise<MetricData> {
   switch (ref.kind) {
@@ -46,6 +54,8 @@ export async function loadMetric(ref: MetricRef, from: string, to: string, signa
     case 'input': return loadInput(ref.key, from, to)
     case 'series': return loadSeries(ref.key, from, to, signal)
     case 'me': return loadMe(ref.tab as MeTab, ref.label, from)
+    case 'lab': return loadLab(ref.key, from, to)
+    case 'test': return ref.key === 'sweat_rate' ? loadSweat(from, to) : loadGrip(ref.key.split(':')[1] ?? null, from, to)
   }
 }
 
@@ -118,3 +128,57 @@ async function loadMe(tab: MeTab, label: string, from: string): Promise<MetricDa
 }
 
 
+
+interface LabRow { id: number; value: number | null; unit: string | null; ref_low: number | null; ref_high: number | null; flag: string | null; lab_draws: { draw_date: string } | { draw_date: string }[] | null }
+
+/** A blood marker: one point per draw (two draws on one day keep the later result), each with its line against the lab's range. */
+async function loadLab(marker: string, from: string, to: string): Promise<MetricData> {
+  const r = await supabase.from('lab_results').select('id,value,unit,ref_low,ref_high,flag,lab_draws!inner(draw_date)')
+    .eq('marker_name', marker).gte('lab_draws.draw_date', from).lte('lab_draws.draw_date', to)
+  if (r.error) throw new Error(`lab_results: ${r.error.message}`)
+  const dateOf = (x: LabRow) => (Array.isArray(x.lab_draws) ? x.lab_draws[0]?.draw_date : x.lab_draws?.draw_date) ?? ''
+  const rows = ((r.data ?? []) as unknown as LabRow[]).filter((x) => dateOf(x)).sort((a, b) => dateOf(a).localeCompare(dateOf(b)) || a.id - b.id)
+  const byDay = new Map<string, LabRow>()
+  for (const x of rows) byDay.set(dateOf(x), x)
+  const kept = [...byDay.values()]
+  const unit = [...kept].reverse().find((x) => x.unit)?.unit ?? ''
+  const ranged = [...kept].reverse().find((x) => x.ref_low != null || x.ref_high != null)
+  return {
+    label: marker, unit, hue: `var(--${markerHue(marker)})`, usual: false, axis: unit || `lab ${marker}`, dating: 'day', fmt: formatSeriesValue,
+    points: kept.map((x) => ({ day: dateOf(x), value: x.value == null ? null : Number(x.value), refLine: rangeLine({ ...x, value: x.value == null ? null : Number(x.value) }), record: { kind: 'lab_result', id: String(x.id) } })),
+    band: ranged ? { low: ranged.ref_low == null ? null : Number(ranged.ref_low), high: ranged.ref_high == null ? null : Number(ranged.ref_high), label: 'Reference range' } : undefined,
+    source: 'One value per blood draw from lab_results, against the range the lab gave. Results written as text are not drawn.',
+  }
+}
+
+/** Grip strength: the best squeeze of the day, of one hand or of either. occurred_at is wall clock: its digits are the local day. */
+async function loadGrip(hand: string | null, from: string, to: string): Promise<MetricData> {
+  let q = supabase.from('grip_strength_log').select('occurred_at,hand,kg').gte('occurred_at', `${from}T00:00:00Z`).lte('occurred_at', `${to}T23:59:59.999Z`)
+  if (hand) q = q.ilike('hand', hand)
+  const r = await q
+  if (r.error) throw new Error(`grip_strength_log: ${r.error.message}`)
+  const best = new Map<string, number>()
+  for (const x of (r.data ?? []) as { occurred_at: string; kg: number | null }[]) {
+    if (x.kg == null || !Number.isFinite(Number(x.kg))) continue
+    const day = x.occurred_at.slice(0, 10)
+    best.set(day, Math.max(best.get(day) ?? -Infinity, Number(x.kg)))
+  }
+  return {
+    label: hand ? `Grip strength, ${hand} hand` : 'Grip strength', unit: 'kg', hue: 'var(--m-grip)', usual: false, axis: 'kg', dating: 'day', fmt: formatSeriesValue,
+    points: [...best.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([day, value]) => ({ day, value })),
+    source: `The best grip of the day${hand ? ` with the ${hand} hand` : ', either hand'}, from the tests taken on the phone (grip_strength_log).`,
+  }
+}
+
+/** Sweat rate of each sweat test, by the phone's rule; a test it cannot read (impossible numbers) is a gap. */
+async function loadSweat(from: string, to: string): Promise<MetricData> {
+  const r = await supabase.from('sweat_tests').select('tested_on,duration_min,weight_before_kg,weight_after_kg,fluid_in_ml,urine_ml').gte('tested_on', from).lte('tested_on', to).order('tested_on')
+  if (r.error) throw new Error(`sweat_tests: ${r.error.message}`)
+  const byDay = new Map<string, number | null>()
+  for (const t of (r.data ?? []) as ({ tested_on: string } & Parameters<typeof sweatRate>[0])[]) byDay.set(t.tested_on, sweatRate(t) ?? byDay.get(t.tested_on) ?? null)
+  return {
+    label: 'Sweat rate', unit: 'ml/h', hue: 'var(--m-sweat-rate)', usual: false, axis: 'ml/h', dating: 'day', fmt: (v) => String(Math.round(v)),
+    points: [...byDay.entries()].map(([day, value]) => ({ day, value })),
+    source: 'Sweat rate of each sweat test (weight lost, plus what was drunk, less urine, per hour), as the phone works it out.',
+  }
+}

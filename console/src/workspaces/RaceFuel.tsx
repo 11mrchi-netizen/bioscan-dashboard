@@ -1,6 +1,6 @@
 // PLAN › RACES › one event's fuel plan: what to take and when (by time and by aid station), what to carry between stations, what to do before and
 // after, worked out with the phone's own rules (supabase/functions/_shared/fuel-core, checked against it). Read only: the phone keeps the saved
-// schedule (fuel_schedules) and its stored plans. Carbohydrate tolerance and caffeine are phone settings the web cannot read (defaults here).
+// schedule (fuel_schedules) and its stored plans. Carbohydrate tolerance, caffeine and salty sweat are the phone's fuel settings, read from the account.
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useLoadEffect } from '../lib/useLoadEffect'
@@ -63,7 +63,8 @@ function Plan({ d, kept }: { d: RaceFuel; kept: StoreResult | null }) {
       <div className="pg-grid">
         <section className="pg-card">
           <h3 className="pg-card-title mono"><span>WEATHER</span><span>{p.weatherSource}{p.heat ? ` · ${p.heat.band.replace('_', ' ')}` : ''}</span></h3>
-          {!p.heat && <p className="pg-note">{d.hasPlace ? 'No forecast or typical weather could be read for this place.' : 'The event has no place, so no weather: a mild 18 °C is assumed. (The phone falls back to your home, which the web cannot read.) Add the start point on the phone.'}</p>}
+          {!p.heat && <p className="pg-note">{d.hasPlace || d.atHome ? `No forecast or typical weather could be read for ${d.hasPlace ? 'this place' : 'your home'}.` : 'The event has no place and the account has no Home place, so no weather: a mild 18 °C is assumed. Add the start point on the phone, or mark a place as Home on the phone (Setup › DATA CAPTURE › PLACES).'}</p>}
+          {p.heat && d.atHome && <p className="pg-note">The event has no start point, so this is the weather at your Home place.</p>}
           {p.heat && <ul className="fp-why">{p.heat.lines.map((l) => <li key={l}>{l}</li>)}</ul>}
         </section>
         {(p.warnings.length > 0) && (
@@ -98,7 +99,7 @@ function Plan({ d, kept }: { d: RaceFuel; kept: StoreResult | null }) {
         <h3 className="pg-card-title mono"><span>WHAT THE PLAN ASSUMES</span><span>{p.assumptions.length}</span></h3>
         <ul className="fp-why">{p.assumptions.map((a) => <li key={a} className="fp-note">{a}</li>)}</ul>
         {kept && <KeptNote kept={kept} what="this event's plan" />}
-        <p className="pg-note">The carbohydrate your gut tolerates (60 g an hour), caffeine (off) and a salty sweat (off) are settings on the phone, which the web cannot read: the defaults are used here.</p>
+        <p className="pg-note">{settingsNote(d)}</p>
       </section>
     </>
   )
@@ -143,4 +144,12 @@ function Prep({ title, items }: { title: string; items: PrepItem[] }) {
       <ul className="pg-rows">{items.map((i) => <li key={i.whenLabel} className="pg-row"><span className="pg-row-title mono">{i.whenLabel}</span><span className="pg-row-sub">{i.text}</span></li>)}</ul>
     </section>
   )
+}
+
+function settingsNote(d: RaceFuel): string {
+  const s = d.settings
+  const what = `The carbohydrate your gut tolerates (${g(s.toleratedGPerHour)} g an hour), caffeine (${s.caffeineOk ? `on, ${s.caffeineMgPerKg} mg/kg` : 'off'}) and a salty sweat (${s.saltySweater ? 'on' : 'off'})`
+  return d.settingsFromPhone
+    ? `${what} are your fuel settings from the phone; change them there, with FUEL SETTINGS on the fuel plan.`
+    : `${what} are the defaults: the phone has not sent its fuel settings yet. Open the updated app on the phone once and reload.`
 }

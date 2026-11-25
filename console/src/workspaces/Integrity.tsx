@@ -23,6 +23,7 @@ import { hrefFor } from '../lib/links'
 import { buildIntegrity } from '../../../supabase/functions/_shared/analysis-core/runIntegrity.ts'
 import type { IntegrityReport, Issue, Severity, StreamStatus } from '../../../supabase/functions/_shared/analysis-core/integrity.ts'
 import type { DataRef } from '../../../supabase/functions/_shared/analysis-core/dataRef.ts'
+import { metricInk } from '../lib/metrics'
 import './Integrity.css'
 
 // --- Series-break review (Analysis Layer 3, R1), carried over from the Data Quality page ---
@@ -248,7 +249,7 @@ export function Integrity() {
                       <td className="mono">
                         {s.coverage === null
                           ? <span className="ig-muted">{s.daysWithValue} d logged</span>
-                          : <span className="ig-cov"><span className="ig-cov-track"><i style={{ width: `${Math.round(s.coverage * 100)}%` }} /></span>{pct(s.coverage)} <span className="ig-muted">{s.daysObserved}/{s.daysDue}</span></span>}
+                          : <span className="ig-cov"><span className="ig-cov-track"><i style={{ width: `${Math.round(s.coverage * 100)}%`, background: metricInk(s.seriesId) }} /></span>{pct(s.coverage)} <span className="ig-muted">{s.daysObserved}/{s.daysDue}</span></span>}
                       </td>
                       <td className="mono">{s.states.missing} · {s.states.invalid} · {s.states.conflict} · <span className="ig-muted">{s.states.unknown}</span></td>
                       <td className="mono ig-muted">{s.sources.join(', ') || '—'}</td>

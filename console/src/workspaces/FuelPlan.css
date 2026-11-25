@@ -2,8 +2,8 @@
 .fp-strip { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
 .fp-day { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; min-width: 92px; text-align: left; background: var(--color-glass); border: 1px solid var(--color-border); border-radius: 8px; padding: 8px 10px; color: var(--color-text-primary); }
 .fp-day:hover { border-color: var(--color-text-muted); }
-.fp-day.on { background: #EEF2F7; border-color: transparent; color: #0A0C0E; }
-.fp-day.on .fp-day-sub, .fp-day.on .fp-day-class, .fp-day.on .fp-day-name { color: #3A4450; }
+.fp-day.on { background: var(--ft-platinum-solid); border-color: transparent; color: var(--ft-platinum-ink); }
+.fp-day.on .fp-day-sub, .fp-day.on .fp-day-class, .fp-day.on .fp-day-name { color: color-mix(in srgb, var(--ft-platinum-ink) 72%, transparent); }
 .fp-day-name, .fp-day-class { font-size: 10px; letter-spacing: .06em; color: var(--color-text-muted); }
 .fp-day-num { font-size: 17px; font-variant-numeric: tabular-nums; }
 .fp-day-sub { font-size: 11px; color: var(--color-text-muted); }

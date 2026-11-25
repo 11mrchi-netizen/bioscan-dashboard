@@ -172,7 +172,7 @@ export function Experiments() {
                 <div key={m.metric} className="conf-metric">
                   <div className="conf-title">{m.label}{m.role === 'primary' ? ' (registered primary)' : ''}</div>
                   <p className="conf-summary">{m.summary}</p>
-                  {m.diff && m.zone ? <IntervalBar effect={m.diff} mde={m.zone} /> : m.diff && m.mde !== null && <IntervalBar effect={m.diff} mde={m.mde} />}
+                  {m.diff && m.zone ? <IntervalBar effect={m.diff} mde={m.zone} metric={m.metric} /> : m.diff && m.mde !== null && <IntervalBar effect={m.diff} mde={m.mde} metric={m.metric} />}
                   {m.diff && (m.zone || m.mde !== null) && (
                     <div className="conf-legend mono">
                       <span>{m.n0} days without · {m.n1} days with</span>

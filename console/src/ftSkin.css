@@ -1,8 +1,9 @@
-/* The Futuristic Material look for the console's pages (web redesign, phase 5). ONE class, `ft-skin`, bridges the console's
+/* The Futuristic Material look for the web app's pages (web redesign, phase 5). ONE class, `ft-skin`, bridges the console's
    variables (tokens.css: --color-*, --font-*) to the Dashboard's tokens (design/tokens): the page is a domain wash, cards are
    neutral glass, ink is the metric's, selection and the primary action are platinum, status is Ok / Warn / Bad. Put the class
-   on a page's root and everything under it takes the look; take it off and the page is as it was. Used on the Lab, on Body and
-   Risk inside Me, and on the shell's chrome (header, rail, Inspector).
+   on a page's root and everything under it takes the look (components/layout/SkinPage.tsx). Used on every page: Lab, Plan, Setup
+   and the Log on the plain ground, Body and Risk inside Me, the sign-in page, and the shell's chrome (header, menu, Inspector).
+   --ft-platinum is a gradient, which only a background can take: ink and borders take --ft-platinum-solid.
    Emerald meant two things in the console: selection (the common case) and "good outcome" (a few). The variable takes the
    first; the few good-outcome rules are mapped to --ok below. */
 .ft-skin {
@@ -16,23 +17,23 @@
   --color-glass: rgba(255, 255, 255, 0.06);
   --color-glass-strong: rgba(255, 255, 255, 0.10);
   /* selection, links, the active state */
-  --color-emerald: var(--ft-platinum);
-  --color-emerald-light: var(--ft-platinum);
-  --color-emerald-dark: color-mix(in srgb, var(--ft-platinum) 60%, transparent);
+  --color-emerald: var(--ft-platinum-solid);
+  --color-emerald-light: var(--ft-platinum-solid);
+  --color-emerald-dark: color-mix(in srgb, var(--ft-platinum-solid) 60%, transparent);
   --color-emerald-wash: rgba(255, 255, 255, 0.08);
   /* status says how something is; the information and analysis hues name no metric, so they are plain ink */
   --color-warning: var(--warn);
   --color-critical: var(--bad);
   --color-info: var(--ft-fg);
-  --color-analysis: var(--ft-platinum);
+  --color-analysis: var(--ft-platinum-solid);
   --font-sans: var(--ft-body);
   --font-mono: var(--ft-mono);
   font-family: var(--ft-body);
   color: var(--ft-fg);
 }
 
-/* glass, as the Dashboard's cards */
-.ft-skin .card {
+/* glass, as the Dashboard's cards: the console's card and the pages' own top-level panels (Plan, the Log, session pages) */
+.ft-skin .card, .ft-skin .pg-card, .ft-skin .pb-section, .ft-skin .pb-pv, .ft-skin .log-section, .ft-skin .sd-tile {
   border-radius: 18px;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.028) 60%);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -51,4 +52,4 @@
 }
 
 /* a link with no class of its own (the pages' sentences point at others) is a link in the selection ink, not the browser's blue */
-:where(.ft-skin) a:not([class]) { color: var(--ft-platinum); }
+:where(.ft-skin) a:not([class]) { color: var(--ft-platinum-solid); }

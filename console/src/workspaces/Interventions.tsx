@@ -198,7 +198,7 @@ export function Interventions() {
                       <span className={`conf-state mono conf-state-${CARD_CLASS[m.verdict]}`}>{VERDICT_LABEL[m.verdict]}</span>
                     </div>
                     <p className="conf-summary">{m.summary}</p>
-                    {m.diff && m.mde !== null && <IntervalBar effect={m.diff} mde={m.mde} />}
+                    {m.diff && m.mde !== null && <IntervalBar effect={m.diff} mde={m.mde} metric={m.metric} />}
                     {m.diff && m.mde !== null && (
                       <div className="conf-legend mono">
                         <span>{m.n0} baseline days · {m.n1} days since starting</span>
@@ -236,7 +236,7 @@ function ItsSection({ read }: { read: ItsRow | undefined }) {
             <span className="conf-state mono">{m.verdict ? ITS_LABEL[m.verdict] : m.state.toUpperCase()}</span>
           </div>
           <p className="conf-summary">{m.summary}</p>
-          {m.gap && <IntervalBar effect={m.gap} mde={m.zone} />}
+          {m.gap && <IntervalBar effect={m.gap} mde={m.zone} metric={m.metric} />}
           {m.gap && (
             <div className="conf-legend mono">
               <span>{m.preDays} days before · {m.activeDays} days since the start</span>

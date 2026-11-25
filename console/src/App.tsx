@@ -5,6 +5,7 @@ import { Shell } from './components/layout/Shell'
 import { Login } from './workspaces/Login'
 import { MePage, TodayPage } from './dashboard/DayPages'
 import { RedirectKeep } from './components/layout/Redirect'
+import { SkinPage } from './components/layout/SkinPage'
 
 // The pages of the web app (docs/web-redesign/README.md): Today and Me (dashboard/DayPages), the Lab, Plan and Setup tab pages,
 // the metric page, the Log.
@@ -19,7 +20,8 @@ const PlannedSessionEdit = lazy(() => import('./workspaces/PlannedSessionEdit'))
 const RaceFuelPage = lazy(() => import('./workspaces/RaceFuel'))
 const Metric       = lazy(() => import('./workspaces/Metric'))
 const HistoryRedirect = lazy(() => import('./workspaces/Metric').then((m) => ({ default: m.HistoryRedirect })))
-// The tab pages: each holds the pages that were separate workspaces before the redesign.
+// The tab pages: each holds the pages that were separate workspaces before the redesign. The Log and Plan's own pages are
+// wrapped in SkinPage here, as the tab pages wrap themselves: all of them in the Futuristic Material look, on the plain ground.
 
 // Routes that moved, with where they went and what the new place needs besides the old query (web redesign, phase 4: the Lab
 // merge). A redirect keeps the query it was given, so #/explore?series=hrv&grain=week, #/evidence?question=... and the
@@ -66,14 +68,14 @@ export default function App() {
         <Route index element={<Navigate to="today" replace />} />
         <Route path="today" element={<TodayPage />} />
         <Route path="me" element={<MePage />} />
-        <Route path="log" element={<Log />} />
+        <Route path="log" element={<SkinPage><Log /></SkinPage>} />
         <Route path="m/:ref" element={<Metric />} />
         <Route path="history" element={<HistoryRedirect />} />
         <Route path="lab" element={<Navigate to="/lab/compare" replace />} />
         <Route path="plan" element={<Navigate to="/plan/overview" replace />} />
-        <Route path="plan/races/:id" element={<RaceFuelPage />} />
-        <Route path="plan/sessions/planned/:id" element={<PlannedSessionEdit />} />
-        <Route path="plan/sessions/:id" element={<SessionDetail />} />
+        <Route path="plan/races/:id" element={<SkinPage><RaceFuelPage /></SkinPage>} />
+        <Route path="plan/sessions/planned/:id" element={<SkinPage><PlannedSessionEdit /></SkinPage>} />
+        <Route path="plan/sessions/:id" element={<SkinPage><SessionDetail /></SkinPage>} />
         <Route path="plan/:tab" element={<Plan />} />
         <Route path="setup" element={<Navigate to="/setup/integrity" replace />} />
         <Route path="setup/:tab" element={<Setup />} />

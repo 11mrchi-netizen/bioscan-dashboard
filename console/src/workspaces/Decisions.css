@@ -31,8 +31,8 @@
 .dec-effect { width: 100%; height: 26px; }
 .dec-zone { fill: rgba(255, 255, 255, 0.07); }
 .dec-zero { stroke: var(--color-text-muted); stroke-width: 0.4; }
-.dec-ci { stroke: var(--color-text-primary); stroke-width: 1.4; }
-.dec-point { fill: var(--color-emerald); }
+.dec-ci { stroke: var(--ink, var(--color-text-primary)); stroke-width: 1.4; }
+.dec-point { fill: var(--ink, var(--color-text-primary)); }
 .dec-summary { margin: 0; font-size: 13px; line-height: 1.5; }
 .dec-limits { margin: 0; font-size: 12px; line-height: 1.5; color: var(--color-text-secondary); border-left: 2px solid var(--color-border); padding-left: var(--sp-3); }
 .dec-links { display: flex; gap: var(--sp-4); font-size: 11px; }

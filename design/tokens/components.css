@@ -7,6 +7,7 @@
   --ft-mono:'IBM Plex Mono',monospace;
   --ft-platinum:     linear-gradient(180deg,#ffffff,#d6dde8);  /* primary action surface */
   --ft-platinum-ink: #0b0f14;
+  --ft-platinum-solid: #eef2f7;  /* platinum as one colour (FT.PlatinumSolid): ink, borders, a fill that takes no gradient */
 }
 
 /* ---------- Gauge (radial tick + internal radar sweep) ----------

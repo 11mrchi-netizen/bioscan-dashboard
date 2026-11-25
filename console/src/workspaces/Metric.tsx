@@ -82,7 +82,7 @@ export function MetricView({ rawRef: raw, embedded = false, setPrimary }: { rawR
   const withValue = useMemo(() => (data?.points ?? []).filter((p) => p.value != null), [data])
   const latest = withValue[withValue.length - 1]
   const stats = useMemo(() => windowStats(data?.points ?? []), [data])
-  const color = data ? cssColor(data.hue) : cssColor('var(--ft-platinum)')
+  const color = data ? cssColor(data.hue) : cssColor('var(--m-weight-ema)')
 
   const setParam = (patch: Record<string, string | null>) => {
     const n = new URLSearchParams(params)
@@ -329,7 +329,7 @@ function Candidates({ own, chosen, full, onPick, what }: { own: MetricRef | null
   return (
     <section className="ft-card metric-picker" aria-label="Compare with">
       <p className="metric-sub">{what ?? `Pick up to ${MAX_COMPARE} to draw on the same days. ${full ? 'Remove one first.' : ''}`}</p>
-      <div className="metric-pick-group"><span className="metric-latest-k">SCORES</span>{RING_KEYS.map((k) => chip(k, k.toUpperCase(), k === 'charge' ? 'ft-charge-b' : DOMAINS.find((d) => d.key.toLowerCase() === k)?.hue.slice(6, -1) ?? 'ft-platinum'))}</div>
+      <div className="metric-pick-group"><span className="metric-latest-k">SCORES</span>{RING_KEYS.map((k) => chip(k, k.toUpperCase(), k === 'charge' ? 'ft-charge-b' : DOMAINS.find((d) => d.key.toLowerCase() === k)?.hue.slice(6, -1) ?? 'm-weight-ema'))}</div>
       {DOMAINS.map((d) => {
         const ins = inputs.filter((i) => i.domain === d.key)
         const ser = SERIES.filter((s) => seriesGroup(s.id) === d.key)
@@ -338,7 +338,7 @@ function Candidates({ own, chosen, full, onPick, what }: { own: MetricRef | null
           <div key={d.key} className="metric-pick-group">
             <span className="metric-latest-k">{d.label}</span>
             {ins.map((i) => chip(i.key, clash.has(i.label) ? `${i.label} · SCORE INPUT` : i.label, INPUT_HUE[i.key] ?? 'm-weight-ema'))}
-            {ser.map((s) => chip(`series:${s.id}`, clash.has(s.label) ? `${s.label} · SERIES` : s.label, SERIES_HUE[s.id] ?? 'ft-platinum'))}
+            {ser.map((s) => chip(`series:${s.id}`, clash.has(s.label) ? `${s.label} · SERIES` : s.label, SERIES_HUE[s.id] ?? 'm-weight-ema'))}
           </div>
         )
       })}

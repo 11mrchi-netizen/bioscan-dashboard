@@ -47,7 +47,7 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     'training_definitions', 'training_settings', 'v_training_block_metrics', 'training_plans', 'training_thresholds',
     'planned_session_deviations', 'session_plan_links', 'run_best_efforts', 'v_personal_records',
     // nutrition, supplements, fuel
-    'meals', 'meal_items', 'nutrient_intake', 'foods', 'food_nutrients', 'food_servings', 'food_sources',
+    'meals', 'meal_items', 'meal_profiles', 'food_group_rules', 'nutrient_intake', 'foods', 'food_nutrients', 'food_servings', 'food_sources',
     'breakfast_templates', 'meal_prep_weeks', 'fuel_plans', 'fuel_plan_reviews', 'fuel_schedules', 'fuel_standards', 'fueling_intake_log',
     'fueling_products', 'fueling_recipe_ingredients', 'fueling_recipe_versions', 'supplements', 'supplement_changes', 'regimen_references', 'regimen_vials', 'supplement_log',
     'supplement_products', 'supplement_ingredients', 'supplement_product_ingredients', 'supplement_nutrients',

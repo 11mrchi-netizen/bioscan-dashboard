@@ -34,6 +34,10 @@ earlier changes, larger than a fixed smallest change per metric. Metrics with a 
 *worse*; the others (weight, energy intake, carbs, fat, training volume) only *up* or *down*. Too few days in either
 period says *too few days*.
 
+**Gut lines.** Report-only series from `stool_log` (local wall times) and the evening check-in: the daily digestion score
+(`gut_day_score`, mealExposures.ts: form, discomfort, evacuation, rhythm against your usual and the evening answer), the
+share of normal (Bristol 3-5) and of loose (6-7) stools, and mean discomfort.
+
 **Regimen.** Planned doses follow the regimen model (android `domain/Regimen.kt`): dosing days (every-N-days plans one
 in N, weekdays and cycles count their days) times the times of day. Doses logged count at most the planned times on any
 one day. 85% or more is followed, under 70% not followed. As-needed items are counted, not scored.
@@ -56,6 +60,24 @@ food *unknown*, never 0, so it is never called short.
 - *Over on some days*: the mean is under it but one or more days went over (a dose taken every few days, for example).
 
 The supplements responsible are named on the line and in the suggestion.
+
+**Meal quality.** From the meal profile of every meal (`meal_profiles`, docs/nutrition/meal-profile.md), each index on
+its own line against the period before, never combined: the share of main meals (250 kcal or more) with a full protein
+dose (0.3 g/kg, 25 g without a weight), the median energy density of the meals with grams, the glycemic load a day
+(estimated; days with meals only), fibre per 1,000 kcal (meals with a fibre value, from 500 kcal) and the share of energy
+from ultra-processed food. Reports written before the profile existed have no such section.
+
+**Training fuel.** Food against training (docs/nutrition/food-and-training.md): for each session of 20 minutes or more
+(walks left out), the hours since the last meal, whether it started fasted, carbs in the 4 h before and logged during,
+and protein and carbs in the 2 h after; and for each day with food logged, the energy availability (food minus the
+watch's training kcal, per kg of fat-free mass). Three fixed-rule suggestions: low energy availability (2 days a week, 6 a
+month), long sessions started fasted with no fuel, and fewer than half the sessions followed by a protein dose. Reports
+written before it existed have no such section.
+
+**Food triggers (screen).** docs/nutrition/food-triggers.md: each food group and gut tag of the meal profiles in the
+6-48 h before each stool day over 180 days, loose days with it against without. A food shows as *worth testing* only past
+strict gates (20 days each side, 15 points, p < 0.05, Benjamini-Hochberg q <= 0.10), with a suggestion to test it for two
+weeks with an experiment. Reports written before it existed have no such section.
 
 **Food and stool (tentative).** Over the 90 days to the period's end: the share of normal stools (Bristol 3-5) the day
 after a day above the median of fibre, water, fat or energy, against the day after one below it. Shown only with 8 days

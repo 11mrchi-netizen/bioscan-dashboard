@@ -195,3 +195,27 @@ data class SupplementScheduleRow(
     val slots: List<String> = emptyList(),
     val schedule: ScheduleJson? = null,
 )
+
+// One row of the `meal_profiles` view (migrations/*_meal_profiles.sql): the meal's separate indexes, computed on read.
+@Serializable
+data class MealProfileRow(
+    @SerialName("meal_id") val mealId: Long,
+    val calories: Double? = null,
+    @SerialName("protein_g") val proteinG: Double? = null,
+    @SerialName("food_grams") val foodGrams: Double? = null,
+    @SerialName("energy_density_kcal_g") val energyDensityKcalG: Double? = null,
+    @SerialName("protein_per_100kcal") val proteinPer100Kcal: Double? = null,
+    @SerialName("carbs_per_100kcal") val carbsPer100Kcal: Double? = null,
+    @SerialName("fiber_per_1000kcal") val fiberPer1000Kcal: Double? = null,
+    @SerialName("glycemic_load_est") val glycemicLoadEst: Double? = null,
+    @SerialName("fullness_factor_est") val fullnessFactorEst: Double? = null,
+    @SerialName("ultra_processed_pct") val ultraProcessedPct: Double? = null,
+    @SerialName("food_groups") val foodGroups: List<String>? = null,
+    val tags: List<String>? = null,
+    @SerialName("macro_mismatch") val macroMismatch: Boolean? = null,
+) {
+    fun toDomain() = com.bioscan.fieldterminal.domain.fuel.MealProfile(
+        mealId, calories, proteinG, foodGrams, energyDensityKcalG, proteinPer100Kcal, carbsPer100Kcal, fiberPer1000Kcal,
+        glycemicLoadEst, fullnessFactorEst, ultraProcessedPct, foodGroups.orEmpty(), tags.orEmpty(), macroMismatch == true,
+    )
+}

@@ -403,7 +403,7 @@ async function waitForServer() {
     await page.goto(`${BASE}#/setup/integrity`)
     await page.waitForSelector('.ig-tiles', { timeout: 20000 }); await page.waitForTimeout(300)
     check((await page.locator('.ig-tile').count()) === 4, 'Integrity shows the four overview tiles')
-    check((await page.locator('.ig-row').count()) === 32, 'the source matrix has a row per series')
+    check((await page.locator('.ig-row').count()) === require('../../supabase/functions/_shared/metric-registry/metric-series.json').series.length, 'the source matrix has a row per series')
     await page.goto(`${BASE}#/setup/integrity?series=sleep_hours`); await page.waitForTimeout(400)
     await page.click('.ig-sev-toggle.sev-info input'); await page.waitForTimeout(200)
     const sleepIssues = (await page.locator('.ig-issue').allTextContents()).join(' | ')

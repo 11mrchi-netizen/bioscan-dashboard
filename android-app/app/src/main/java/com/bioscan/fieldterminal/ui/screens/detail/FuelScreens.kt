@@ -145,6 +145,19 @@ fun NutritionScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit) {
             }
         }
 
+        Section("ENERGY AVAILABILITY", info = EA_INFO) {
+            if (page.energyAvailability.isEmpty()) EmptyLine("Needs food logged and a weigh-in with body fat; the nightly run fills it in.") else {
+                val latest = page.energyAvailability.maxByOrNull { it.key }
+                MetricRow(
+                    "Energy availability", page.energyAvailability, "kcal/kg", Fmt.int, info = EA_INFO,
+                    color = FT.Metric.EnergyAvailability, betterHigher = true,
+                    flag = latest?.takeIf { it.value < 30 }?.let { "Low on ${shortDate(it.key)}: under 30 is the RED-S line" },
+                    note = "Under 30 low · 30–45 reduced · 45+ adequate",
+                    today = today,
+                )
+            }
+        }
+
         Section("MACROS", info = "Grams of protein, carbs and fat each day (weekly averages beyond two months). Tap a column to read it.") {
             StackedBars(
                 dayColumns(daily, today, days) { listOf(it.proteinG, it.carbsG, it.fatG) },
@@ -322,6 +335,10 @@ fun DigestionScreen(onBack: () -> Unit) {
         val days = LocalRangeDays.current
         val pattern = remember(rows, days) { stoolPattern(rows, today.minusDays((days - 1).toLong()), today, zone) }
         val timing = remember(rows, days) { bowelTiming(rows, today, days, zone) }
+        Section("DIGESTION SCORE", info = GUT_SCORE_INFO) {
+            if (page.score.isEmpty()) EmptyLine("Builds from stool logs and the evening gut question; the nightly run fills it in.")
+            else MetricRow("Digestion score", page.score, "/100", Fmt.int, info = GUT_SCORE_INFO, color = FT.Metric.GutComfort, betterHigher = true, today = today)
+        }
         Section("BY FORM", info = "Every logged bowel movement, placed by its form: liquid on top, then loose, healthy and hard at the bottom, joined in time like a hypnogram. One reading means little; the pattern is the signal. Descriptive only, not a diagnosis.") {
             Text(stoolPatternHeadline(pattern), style = FTType.RowTitle, color = FT.TextPrimary)
             StoolHypnogram(pattern, zone)
@@ -367,3 +384,11 @@ private fun DemandRangeChart(days: List<DayHydration>) {
         Text("${days.first().date}  →  ${days.last().date}   ·   band = needed range · dot = intake (green within, amber outside) · grey dot = training day", style = FTType.Micro, color = FT.TextMuted)
     }
 }
+
+private const val EA_INFO = "Food minus the watch's training kcal, per kg of fat-free mass (latest weight and body fat). " +
+    "Under 30 is low, the line where hormones and recovery start to suffer (RED-S); 30–45 reduced; 45 or more adequate. " +
+    "Watches tend to overstate kcal, so read it as an estimate. Walks are left out."
+
+private const val GUT_SCORE_INFO = "A plain daily reading, 0–100, higher is better: each stool's form (Bristol 4 best), less points " +
+    "for discomfort, incomplete evacuation, more stools than usual or an unusual time, averaged with the evening gut comfort " +
+    "and symptoms. Not the FUEL ring's gut part, which scores against your usual timing only."

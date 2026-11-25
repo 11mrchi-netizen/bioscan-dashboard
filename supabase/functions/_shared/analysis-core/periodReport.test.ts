@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   adherenceLine, buildReport, convertUnit, foodStool, historyOf, labVerdict, lastCompleted, metricLine, microSection, parsePeriodKey,
-  periodKey, periodLabel, periodValue, plannedDoses, previousOf, REPORT_METRICS, regimenItem, specOn, suggestions, withHistory, type DailySeries, type MetricLine,
+  mealQuality, type MealProfileRead, periodKey, periodLabel, periodValue, plannedDoses, previousOf, REPORT_METRICS, regimenItem, specOn, suggestions, withHistory, type DailySeries, type MetricLine,
   type ReportPeriod,
 } from './periodReport.ts'
 import { addDays } from './seriesContract.ts'
@@ -237,3 +237,33 @@ test('adherence follows the schedule in force each day, not today\'s', () => {
   ])
   assert.equal(plannedDoses(iron, week.start, week.end), 1 + 4, '16-18 every third day, then 19-22 daily')
 })
+
+test('meal quality: each index of the meal profile on its own line, against the week before', () => {
+  const week: ReportPeriod = { grain: 'week', start: '2026-11-16', end: '2026-11-22' }
+  const meal = (date: string, o: Partial<MealProfileRead>): MealProfileRead =>
+    ({ date, calories: 500, proteinG: 30, fiberG: 5, energyDensity: 1.5, glycemicLoad: 20, ultraProcessedPct: 0, ...o })
+  const meals = [
+    meal('2026-11-16', { proteinG: 40, energyDensity: 1.2 }), meal('2026-11-16', { proteinG: 10, energyDensity: 3.0, ultraProcessedPct: 100 }),
+    meal('2026-11-17', { proteinG: 25, energyDensity: null }), meal('2026-11-17', { calories: 150, proteinG: 2, glycemicLoad: 10 }),
+    // the week before: one meal
+    meal('2026-11-10', { proteinG: 10 }),
+  ]
+  const q = mealQuality(meals, week, 80)
+  const by = Object.fromEntries(q.lines.map((l) => [l.key, l]))
+  assert.equal(q.meals, 4)
+  assert.deepEqual(q.lines.map((l) => l.key), ['protein_dose', 'energy_density', 'glycemic_load', 'fiber_density', 'ultra_processed'])
+  // dose 24 g at 80 kg: 40 and 25 reach it, 10 does not; the 150 kcal snack is not a main meal
+  assert.equal(by.protein_dose.value, 67)
+  assert.equal(by.protein_dose.basis, '2 of 3 meals')
+  assert.equal(by.protein_dose.prev, 0)
+  assert.equal(by.energy_density.value, 1.5)
+  assert.equal(by.glycemic_load.value, 35) // (40 + 30) over 2 days
+  assert.equal(by.fiber_density.value, round1((1000 * 20) / 1650))
+  assert.equal(by.ultra_processed.value, Math.round((100 * 500) / 1650))
+  // nothing logged: every line says so
+  const empty = mealQuality([], week, null)
+  assert.ok(empty.lines.every((l) => l.value === null && l.basis === 'not enough logged'))
+  assert.match(empty.lines[0].label, /25 g/)
+})
+
+const round1 = (v: number) => Math.round(v * 10) / 10

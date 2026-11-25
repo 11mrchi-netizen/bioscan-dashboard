@@ -9,6 +9,8 @@
 // so months of different lengths compare.
 
 import { addDays, combine, daySpan, periodEnd, periodStart } from './seriesContract.ts'
+import { foodTriggerSuggestions, type FoodTriggerSection } from './foodTriggers.ts'
+import { trainingFuelSuggestions, type TrainingFuelSection } from './trainingFuel.ts'
 
 export const REPORT_VERSION = '1.0.0'
 export const REPORT_KIND = 'period_report'
@@ -101,13 +103,17 @@ export const REPORT_METRICS: readonly ReportMetricSpec[] = [
   { id: 'meal_fat', section: 'nutrition', better: null, minDays: [3, 10], minChange: 10 },
   { id: 'meal_fiber', section: 'nutrition', better: 'up', minDays: [3, 10], minChange: 4 },
   { id: 'water_intake', section: 'nutrition', better: 'up', minDays: [3, 10], minChange: 250 },
+  { id: 'gut_day_score', section: 'gut', better: 'up', minDays: [3, 8], minChange: 8 },
   { id: 'stool_normal_pct', section: 'gut', better: 'up', minDays: [3, 8], minChange: 15 },
+  { id: 'stool_loose_pct', section: 'gut', better: 'down', minDays: [3, 8], minChange: 15 },
   { id: 'stool_discomfort', section: 'gut', better: 'down', minDays: [3, 8], minChange: 0.5 },
 ]
 
-/** Report-only series, built from stool_log by the reader (one value per local day). */
+/** Report-only series, built from stool_log by the reader (one value per local day). The digestion score is a stored
+ * series (derived_daily, runDerived.ts), so its line links to its history. */
 export const STOOL_SERIES: Record<string, { label: string; unit: string }> = {
   stool_normal_pct: { label: 'Normal stools (Bristol 3–5)', unit: '%' },
+  stool_loose_pct: { label: 'Loose stools (Bristol 6–7)', unit: '%' },
   stool_discomfort: { label: 'Stool discomfort', unit: '/10' },
 }
 
@@ -615,6 +621,82 @@ export function foodStool(
   return out
 }
 
+// --- Meal quality (the meal profile, migrations/*_meal_profiles.sql) ---
+
+/** One meal of the `meal_profiles` view, with its local day. */
+export interface MealProfileRead {
+  date: string
+  calories: number | null
+  proteinG: number | null
+  fiberG: number | null
+  energyDensity: number | null
+  glycemicLoad: number | null
+  ultraProcessedPct: number | null
+}
+
+export interface MealQualityLine {
+  key: 'protein_dose' | 'energy_density' | 'glycemic_load' | 'fiber_density' | 'ultra_processed'
+  label: string
+  unit: string
+  value: number | null
+  prev: number | null
+  /** What the value is made of ("31 of 44 meals", "6 days"). */
+  basis: string
+}
+
+export interface MealQuality {
+  meals: number
+  lines: MealQualityLine[]
+}
+
+/** Meals under this are snacks and drinks for the protein dose share. */
+export const MEAL_QUALITY = { mainMealKcal: 250, proteinPerKgDose: 0.3, defaultDoseG: 25 }
+
+/**
+ * Each index of the meal profile summed up over the period, every one on its own (no combined score, the owner's choice):
+ * the share of main meals (250 kcal or more) with a full protein dose (0.3 g/kg, 25 g without a weight), the median
+ * energy density of meals with grams, the daily glycemic load (estimated), fibre per 1,000 kcal and the ultra-processed
+ * share of the energy. Days without meals logged are left out, never counted as zero.
+ */
+export function mealQuality(meals: MealProfileRead[], period: ReportPeriod, weightKg: number | null): MealQuality {
+  const prev = previousOf(period)
+  const dose = weightKg !== null && weightKg >= 30 && weightKg <= 250 ? MEAL_QUALITY.proteinPerKgDose * weightKg : MEAL_QUALITY.defaultDoseG
+  const inP = (p: ReportPeriod) => meals.filter((m) => m.date >= p.start && m.date <= p.end)
+  const now = inP(period), before = inP(prev)
+  const calc = (ms: MealProfileRead[]) => {
+    const main = ms.filter((m) => (m.calories ?? 0) >= MEAL_QUALITY.mainMealKcal && m.proteinG !== null)
+    const dosed = main.filter((m) => (m.proteinG ?? 0) >= dose).length
+    const eds = ms.map((m) => m.energyDensity).filter((v): v is number => v !== null).sort((a, b) => a - b)
+    const glByDay = new Map<string, number>()
+    for (const m of ms) if (m.glycemicLoad !== null) glByDay.set(m.date, (glByDay.get(m.date) ?? 0) + m.glycemicLoad)
+    const withFiber = ms.filter((m) => m.fiberG !== null && (m.calories ?? 0) > 0)
+    const kcalF = withFiber.reduce((a, m) => a + (m.calories ?? 0), 0)
+    const kcal = ms.reduce((a, m) => a + (m.calories ?? 0), 0)
+    const upf = ms.reduce((a, m) => a + ((m.ultraProcessedPct ?? 0) / 100) * (m.calories ?? 0), 0)
+    const median = eds.length ? (eds.length % 2 ? eds[(eds.length - 1) / 2] : (eds[eds.length / 2 - 1] + eds[eds.length / 2]) / 2) : null
+    return {
+      dose: main.length ? { v: round((100 * dosed) / main.length, 0), basis: `${dosed} of ${main.length} meals` } : null,
+      ed: median !== null ? { v: round(median, 2), basis: `${eds.length} meals with grams` } : null,
+      gl: glByDay.size ? { v: round([...glByDay.values()].reduce((a, b) => a + b, 0) / glByDay.size, 0), basis: `${glByDay.size} days` } : null,
+      fiber: kcalF >= 500 ? { v: round((1000 * withFiber.reduce((a, m) => a + (m.fiberG ?? 0), 0)) / kcalF, 1), basis: `${withFiber.length} meals with fibre` } : null,
+      upf: kcal >= 500 ? { v: round((100 * upf) / kcal, 0), basis: `${ms.length} meals` } : null,
+    }
+  }
+  const a = calc(now), b = calc(before)
+  const line = (key: MealQualityLine['key'], label: string, unit: string, x: { v: number; basis: string } | null, y: { v: number } | null): MealQualityLine =>
+    ({ key, label, unit, value: x?.v ?? null, prev: y?.v ?? null, basis: x?.basis ?? 'not enough logged' })
+  return {
+    meals: now.length,
+    lines: [
+      line('protein_dose', `Main meals with a full protein dose (${round(dose, 0)} g)`, '%', a.dose, b.dose),
+      line('energy_density', 'Energy density, median meal', 'kcal/g', a.ed, b.ed),
+      line('glycemic_load', 'Glycemic load a day (estimated)', '', a.gl, b.gl),
+      line('fiber_density', 'Fibre per 1,000 kcal', 'g', a.fiber, b.fiber),
+      line('ultra_processed', 'Energy from ultra-processed food', '%', a.upf, b.upf),
+    ],
+  }
+}
+
 // --- Suggestions ---
 
 export interface Suggestion {
@@ -649,7 +731,9 @@ const WORSE_ADVICE: Record<string, string> = {
   meal_protein: 'Protein went down: add one protein-rich food to the meal that has none.',
   meal_fiber: 'Fibre went down: add legumes, oats or vegetables to one meal a day.',
   water_intake: 'Less water: keep a bottle in sight and drink one glass with every meal.',
+  gut_day_score: 'A worse digestion score: check stress, sleep and long sessions on the bad days as well as the food.',
   stool_normal_pct: 'Fewer normal stools: look at fibre and water, and at what changed in the food.',
+  stool_loose_pct: 'More loose stools: note stress, caffeine, alcohol and long sessions on the days before, as well as the food.',
   stool_discomfort: 'More gut discomfort: note the foods on the day before the uncomfortable ones.',
 }
 
@@ -662,6 +746,11 @@ export interface SuggestionInputs {
   weightKg: number | null
   /** Regimen items with no intervention or experiment measuring them. */
   untested: AdherenceLine[]
+  /** Food against training, for its fixed-rule suggestions. */
+  trainingFuel?: TrainingFuelSection
+  grain?: ReportGrain
+  /** The food trigger screen, for its "worth testing" suggestion. */
+  foodTriggers?: FoodTriggerSection
 }
 
 /** Every rule that fires, most pressing first; the report shows the first five. */
@@ -725,6 +814,8 @@ export function suggestions(x: SuggestionInputs): Suggestion[] {
     out.push({ id: 'untested', priority: 3, ref: null, text: `${names.join(', ')}${longUntested.length > 3 ? ` and ${longUntested.length - 3} more` : ''} ${longUntested.length > 1 ? 'have' : 'has'} been taken for months with nothing measuring ${longUntested.length > 1 ? 'them' : 'it'}. Start an intervention in Lab for the one you are least sure of.`, because: `${longUntested.length} items without a test` })
   }
   const thin = x.metrics.filter((l) => l.status === 'thin' && ['energy', 'mood', 'stress', 'meal_energy', 'water_intake'].includes(l.id))
+  if (x.trainingFuel) for (const t of trainingFuelSuggestions(x.trainingFuel, x.grain ?? 'week')) out.push({ ...t, ref: null })
+  if (x.foodTriggers) for (const t of foodTriggerSuggestions(x.foodTriggers)) out.push({ ...t, ref: null })
   if (thin.length >= 2) out.push({ id: 'log_more', priority: 3, ref: null, text: `Too few days logged for ${thin.map((l) => l.label.toLowerCase()).join(', ')} to compare: a daily check-in makes next report's verdicts possible.`, because: `${thin.length} metrics thin` })
 
   return out.sort((a, b) => a.priority - b.priority)
@@ -747,6 +838,12 @@ export interface PeriodReport {
   regimen: AdherenceLine[]
   lab: LabLine[]
   foodStool: FoodStoolLine[]
+  /** The meal profile summed up; absent on reports written before it existed. */
+  mealQuality?: MealQuality
+  /** Food against training (trainingFuel.ts); absent on reports written before it existed. */
+  trainingFuel?: TrainingFuelSection
+  /** The food trigger screen (foodTriggers.ts); absent on reports written before it existed. */
+  foodTriggers?: FoodTriggerSection
   /** Short lists for the top of the report. */
   summary: { better: string[]; worse: string[]; working: string[]; wasted: string[]; notFollowed: string[]; excess: string[]; short: string[] }
   suggestions: Suggestion[]
@@ -762,17 +859,20 @@ export function buildReport(x: {
   regimen: AdherenceLine[]
   lab: LabLine[]
   foodStool: FoodStoolLine[]
+  mealQuality?: MealQuality
+  trainingFuel?: TrainingFuelSection
+  foodTriggers?: FoodTriggerSection
   weightKg: number | null
 }): PeriodReport {
   const prev = previousOf(x.period)
   const tested = new Set(x.lab.map((l) => l.supplementId).filter((v): v is number => v !== null))
   const untested = x.regimen.filter((r) => !tested.has(r.id))
-  const all = suggestions({ metrics: x.metrics, micro: x.micro, regimen: x.regimen, lab: x.lab, weightKg: x.weightKg, untested })
+  const all = suggestions({ metrics: x.metrics, micro: x.micro, regimen: x.regimen, lab: x.lab, weightKg: x.weightKg, untested, trainingFuel: x.trainingFuel, grain: x.period.grain, foodTriggers: x.foodTriggers })
   const notFollowed = [...x.regimen.filter((r) => r.status === 'not_followed').map((r) => r.name), ...x.lab.filter((l) => l.verdict === 'not_followed').map((l) => l.name)]
   return {
     version: REPORT_VERSION, key: periodKey(x.period), grain: x.period.grain, label: periodLabel(x.period),
     start: x.period.start, end: x.period.end, prevStart: prev.start, prevEnd: prev.end, generatedOn: x.today,
-    metrics: x.metrics, micro: x.micro, regimen: x.regimen, lab: x.lab, foodStool: x.foodStool,
+    metrics: x.metrics, micro: x.micro, regimen: x.regimen, lab: x.lab, foodStool: x.foodStool, ...(x.mealQuality ? { mealQuality: x.mealQuality } : {}), ...(x.trainingFuel ? { trainingFuel: x.trainingFuel } : {}), ...(x.foodTriggers ? { foodTriggers: x.foodTriggers } : {}),
     summary: {
       better: x.metrics.filter((l) => l.status === 'better').map((l) => l.label),
       excess: x.micro.lines.filter((l) => l.status === 'high' || l.status === 'high_days').map((l) => l.label),

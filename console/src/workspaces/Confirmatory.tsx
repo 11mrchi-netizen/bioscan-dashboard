@@ -18,7 +18,7 @@ interface Effect { value: number; lo: number; hi: number; unit: string }
 interface Payload {
   id: string
   label: string
-  outcome: 'hrv' | 'rhr' | 'sleep' | 'energy' | 'recovery_score' | 'sleep_score' | ''
+  outcome: 'hrv' | 'rhr' | 'sleep' | 'energy' | 'recovery_score' | 'sleep_score' | 'gut' | ''
   rung: string
   summary: string
   reason: string | null
@@ -60,8 +60,15 @@ const CATALOGUE = [
   // Routine intelligence R4 (catalogue 2.1.0).
   'screen_bed_sleep', 'screen_bed_hrv', 'night_phone_energy', 'screen_pm_social_sleep', 'outdoor_daylight_sleep',
   'home_day_energy', 'travel_day_hrv', 'travel_day_rhr', 'active_commute_hrv', 'commute_long_sleep',
+  // Morning scores (catalogue 2.2.0).
+  'alcohol_recovery_score', 'alcohol_sleep_score', 'caffeine_pm_sleep_score', 'late_meal_recovery_score', 'late_meal_sleep_score',
+  'stress_recovery_score', 'stress_sleep_score', 'evening_training_recovery_score', 'evening_training_sleep_score', 'training_recovery_score',
+  // Meal timing and the gut (catalogue 2.3.0).
+  'meal_gap_sleep', 'meal_gap_hrv', 'meal_gap_recovery_score', 'kcal_before_bed_sleep_score', 'kcal_before_bed_hrv', 'carbs_day_sleep',
+  'protein_day_recovery_score', 'fiber_gut', 'fat_gut', 'kcal_before_bed_gut', 'alcohol_gut', 'stress_gut', 'sleep_gut', 'training_gut', 'travel_gut',
+  'caffeine_gut', 'long_session_gut', 'long_session_gut_next',
 ]
-const GROUPS: [Payload['outcome'] | 'registered', string][] = [['hrv', 'HRV'], ['rhr', 'RESTING HEART RATE'], ['sleep', 'SLEEP'], ['energy', 'ENERGY'], ['recovery_score', 'RECOVERY SCORE'], ['sleep_score', 'SLEEP SCORE'], ['registered', 'QUESTIONS YOU REGISTERED']]
+const GROUPS: [Payload['outcome'] | 'registered', string][] = [['hrv', 'HRV'], ['rhr', 'RESTING HEART RATE'], ['sleep', 'SLEEP'], ['energy', 'ENERGY'], ['recovery_score', 'RECOVERY SCORE'], ['sleep_score', 'SLEEP SCORE'], ['gut', 'DIGESTION'], ['registered', 'QUESTIONS YOU REGISTERED']]
 
 // "CLEAR since 2026-10-13 (2 nights) · UNCLEAR 2026-10-10 to 2026-10-12 (3 nights)" from the ledger, newest first.
 function historyLine(entries: LedgerRow[]): string | null {

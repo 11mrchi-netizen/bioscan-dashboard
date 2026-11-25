@@ -15,6 +15,8 @@ import type { ResultRow } from './publish.ts'
 import { baselineExclusionSpans, loadHealthInputs } from './healthLoad.ts'
 import { LATE_SCREEN_CATEGORIES, routineSeries } from './routineExposures.ts'
 import type { RoutineInputs } from './routineExposures.ts'
+import { gutDayScore, mealSeries } from './mealExposures.ts'
+import type { GutCheckinRow, StoolRow } from './mealExposures.ts'
 
 export const RELATIONSHIP_LOOKBACK_DAYS = 365
 // A day counts as having "afternoon caffeine" from this local hour on.
@@ -29,13 +31,24 @@ export interface CheckinRow {
   caffeine_after_14: boolean | null
   late_meal: boolean | null
   stress: number | null
+  /** The evening check-in's gut questions (2 Nov 2026); absent on older rows and tests. */
+  gut_comfort?: number | null
+  gut_symptoms?: string[] | null
 }
 
 export interface RawInputs {
   wearable: { date: string; hrv: number | null; rhr: number | null; steps: number | null }[]
-  sleep: { date: string; hours: number | null; deep_min?: number | null; rem_min?: number | null; respiratory_rate?: number | null }[]
+  sleep: { date: string; hours: number | null; deep_min?: number | null; rem_min?: number | null; respiratory_rate?: number | null; bedtime?: string | null }[]
   wellbeing: { date: string; energy: number | null; mood: number | null; stress: number | null; soreness: number | null }[]
-  meals: { logged_at: string; meal_items: { alcohol_g: number | null; caffeine_mg: number | null }[] | null }[]
+  meals: {
+    logged_at: string
+    calories?: number | null
+    protein_g?: number | null
+    carbs_g?: number | null
+    fat_g?: number | null
+    fiber_g?: number | null
+    meal_items: { alcohol_g: number | null; caffeine_mg: number | null }[] | null
+  }[]
   sessions: { start_time: string; duration_min: number | null; type?: string | null; rpe?: number | null; avg_hr?: number | null; max_hr?: number | null }[]
   recovery: { date: string }[]
   illnesses: { start_date: string; end_date: string | null }[]
@@ -47,10 +60,16 @@ export interface RawInputs {
   routine?: RoutineInputs
   /** The app's scored mornings (score_history): next-morning RECOVERY and SLEEP as outcomes (catalogue 2.2.0). */
   scores?: { day: string; recovery: number | null; sleep: number | null; charge?: number | null }[]
+  /** Stool log (catalogue 2.3.0): the daily digestion score with the evening check-in's gut questions. */
+  stool?: StoolRow[]
+  /** Meal profile tags (catalogue 2.4.0): a meal tagged caffeine by its food groups counts as caffeine. */
+  mealTags?: { logged_at: string; tags: string[] | null }[]
 }
 
 // Until 04:00 the small hours belong to the evening before: a drink or a late meal logged at 00:40 is part of that night.
 export const EVENING_ROLLOVER_HOUR = 4
+// A session of this many minutes or more is a long one (catalogue 2.4.0, as in trainingFuel.ts).
+export const LONG_SESSION_MIN = 90
 // A meal from this local hour on counts as a late meal (on the evening's date).
 export const LATE_MEAL_HOUR = 21
 // A session ending at or after this local hour counts as evening training.
@@ -65,6 +84,17 @@ export const HIGH_STRESS = 4
  * and a 07:30 breakfast landed on the day before.
  */
 export function localClock(context: { date: string; utc_offset_min: number }[]): (stamp: string) => { date: string; hour: number } {
+  const local = localMsOf(context)
+  return (stamp: string) => {
+    const t = local(stamp)
+    if (t === null) return { date: day(stamp), hour: hourOf(stamp) }
+    const iso = new Date(t).toISOString()
+    return { date: iso.slice(0, 10), hour: Number(iso.slice(11, 13)) }
+  }
+}
+
+/** A real instant as milliseconds of local time (read as UTC), with the phone's offset for that day (see localClock). */
+export function localMsOf(context: { date: string; utc_offset_min: number }[]): (stamp: string) => number | null {
   const sorted = [...context].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
   const offsetFor = (utcDate: string): number => {
     if (sorted.length === 0) return 0
@@ -79,9 +109,8 @@ export function localClock(context: { date: string; utc_offset_min: number }[]):
   }
   return (stamp: string) => {
     const t = Date.parse(stamp)
-    if (!Number.isFinite(t)) return { date: day(stamp), hour: hourOf(stamp) }
-    const local = new Date(t + offsetFor(new Date(t).toISOString().slice(0, 10)) * 60000).toISOString()
-    return { date: local.slice(0, 10), hour: Number(local.slice(11, 13)) }
+    if (!Number.isFinite(t)) return null
+    return t + offsetFor(new Date(t).toISOString().slice(0, 10)) * 60000
   }
 }
 
@@ -178,6 +207,12 @@ export function buildFrame(raw: RawInputs, today: string, lookbackDays = RELATIO
     if (grams > 0) return Math.round((grams / 14) * 10) / 10
     return series.alcohol_any[i] === 0 ? 0 : null
   })
+  // Catalogue 2.4.0: any caffeine in the eating day, from the items' caffeine or a meal tagged caffeine by its food groups;
+  // a day with meals logged and none of either is a zero, a day with no meals unknown.
+  const caffeineDays = new Set<string>()
+  for (const m of raw.meals) if ((m.meal_items ?? []).some((it) => (num(it.caffeine_mg) ?? 0) > 0)) caffeineDays.add(eveningOf(clock(m.logged_at)))
+  for (const m of raw.mealTags ?? []) if (m.tags?.includes('caffeine')) caffeineDays.add(eveningOf(clock(m.logged_at)))
+  series.caffeine_any = axis.map((d) => (caffeineDays.has(d) ? 1 : mealDays.has(d) ? 0 : null))
   series.caffeine_pm_any = axis.map((d) => exposure(d, (caffeinePmByDay.get(d) ?? 0) > 0, checkins.get(d)?.caffeine_after_14))
   series.late_meal = axis.map((d) => exposure(d, lateMealDays.has(d), checkins.get(d)?.late_meal))
   // Stress is a rating, so only an answered check-in says anything about it.
@@ -206,6 +241,9 @@ export function buildFrame(raw: RawInputs, today: string, lookbackDays = RELATIO
     minutesByDay.set(d, (minutesByDay.get(d) ?? 0) + (num(s.duration_min) ?? 0))
   }
   series.training_min = axis.map((d) => (minutesByDay.has(d) ? (minutesByDay.get(d) as number) : watchDays.has(d) ? 0 : null))
+  // Catalogue 2.4.0: a day with a session of 90 minutes or more (zero on other watch days).
+  const longDays = new Set(training.filter((s) => (num(s.duration_min) ?? 0) >= LONG_SESSION_MIN).map((s) => clock(s.start_time).date))
+  series.long_session = axis.map((d) => (longDays.has(d) ? 1 : watchDays.has(d) ? 0 : null))
   // Analysis review phase G: the apps' session load (session RPE x minutes, else TRIMP against the person's maximum and
   // resting heart rate as of the session's date, as on Android and in the console), summed per local day, for the personal
   // fitness-fatigue fit; zero on watch days without a session.
@@ -237,6 +275,10 @@ export function buildFrame(raw: RawInputs, today: string, lookbackDays = RELATIO
   const scores = raw.scores ?? []
   series.recovery_score = alignToAxis(axis, scores.map((r) => ({ date: day(r.day), value: num(r.recovery) })))
   series.sleep_score = alignToAxis(axis, scores.map((r) => ({ date: day(r.day), value: num(r.sleep) })))
+
+  // Catalogue 2.3.0 (mealExposures.ts): meal timing and composition per eating day, and the daily digestion score.
+  Object.assign(series, mealSeries(axis, raw.meals, raw.sleep, localMsOf(raw.context ?? [])))
+  series.gut_day_score = gutDayScore(axis, raw.stool ?? [], (raw.checkins ?? []) as GutCheckinRow[])
 
   // Routine intelligence R4: phone use, places and commutes, each known only on days its source covers.
   Object.assign(series, routineSeries(axis, raw.routine ?? {}, instantClock))
@@ -295,11 +337,11 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
   const q = (table: string, cols: string, col: string, from: string) => (a: number, b: number) =>
     admin.from(table).select(cols).eq('user_id', userId).gte(col, from).order(col).range(a, b)
 
-  const [wearable, sleep, wellbeing, meals, sessions, recovery, ill, checkins, context, health, phone, phoneApps, mobility, commutes, scoreRows] = await Promise.all([
+  const [wearable, sleep, wellbeing, meals, sessions, recovery, ill, checkins, context, health, phone, phoneApps, mobility, commutes, scoreRows, stool, gutCheckins, mealTags] = await Promise.all([
     fetchAll<RawInputs['wearable'][number]>(q('wearable_daily', 'date, hrv, rhr, steps', 'date', since)),
-    fetchAll<RawInputs['sleep'][number]>(q('sleep_daily', 'date, hours, deep_min, rem_min, respiratory_rate', 'date', since)),
+    fetchAll<RawInputs['sleep'][number]>(q('sleep_daily', 'date, hours, deep_min, rem_min, respiratory_rate, bedtime', 'date', since)),
     fetchAll<RawInputs['wellbeing'][number]>(q('wellbeing_daily', 'date, energy, mood, stress, soreness', 'date', since)),
-    fetchAll<RawInputs['meals'][number]>(q('meals', 'logged_at, meal_items(alcohol_g, caffeine_mg)', 'logged_at', sinceStamp)),
+    fetchAll<RawInputs['meals'][number]>(q('meals', 'logged_at, calories, protein_g, carbs_g, fat_g, fiber_g, meal_items(alcohol_g, caffeine_mg)', 'logged_at', sinceStamp)),
     fetchAll<RawInputs['sessions'][number]>(q('exercise_sessions', 'start_time, duration_min, type, rpe, avg_hr, max_hr', 'start_time', sinceStamp)),
     fetchAll<RawInputs['recovery'][number]>(q('recovery_sessions', 'date', 'date', since)),
     admin.from('illnesses').select('start_date, end_date').eq('user_id', userId),
@@ -318,6 +360,11 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
       admin.from('trips').select('start_at, end_at, active_min').eq('user_id', userId).eq('is_commute', true).gte('start_at', sinceStamp).order('start_at').range(a, b)),
     // The app's scored mornings: read softly (the table may not exist yet, or the app may not have written it).
     fetchAll<NonNullable<RawInputs['scores']>[number]>(q('score_history', 'day, recovery, sleep, charge', 'day', since)),
+    // Catalogue 2.3.0: the stool log and the check-in's gut questions, read softly like the phase B tables.
+    fetchAll<StoolRow>(q('stool_log', 'occurred_at, bristol_type, discomfort, complete_evacuation', 'occurred_at', sinceStamp)),
+    fetchAll<{ date: string; gut_comfort: number | null; gut_symptoms: string[] | null }>(q('evening_checkins', 'date, gut_comfort, gut_symptoms', 'date', since)),
+    // Catalogue 2.4.0: meal profile tags (a view), read softly.
+    fetchAll<NonNullable<RawInputs['mealTags']>[number]>(q('meal_profiles', 'logged_at, tags', 'logged_at', sinceStamp)),
   ])
   const failed = [wearable, sleep, wellbeing, meals, sessions, recovery].find((r) => r.error)
   if (failed) return { userId, error: failed.error as string }
@@ -328,7 +375,9 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
       wearable: wearable.rows, sleep: sleep.rows, wellbeing: wellbeing.rows, meals: meals.rows, sessions: sessions.rows,
       recovery: recovery.rows,
       illnesses: [...((ill.data ?? []) as RawInputs['illnesses']), ...(health.error ? [] : baselineExclusionSpans(health, today))],
-      checkins: checkins.error ? [] : checkins.rows,
+      checkins: checkins.error ? [] : mergeGut(checkins.rows, gutCheckins.error ? [] : gutCheckins.rows),
+      stool: stool.error ? [] : stool.rows,
+      mealTags: mealTags.error ? [] : mealTags.rows,
       context: context.error ? [] : context.rows,
       routine: {
         phone: phone.error ? [] : phone.rows,
@@ -341,6 +390,15 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
     today,
   )
   return { userId, today, localToday: localDateAt(now, context.error ? [] : context.rows), frame }
+}
+
+/** The check-ins with their gut answers, read apart so an older database without those columns still loads. */
+function mergeGut(rows: CheckinRow[], gut: { date: string; gut_comfort: number | null; gut_symptoms: string[] | null }[]): CheckinRow[] {
+  const byDate = new Map(gut.map((g) => [g.date, g]))
+  const out = rows.map((r) => ({ ...r, gut_comfort: byDate.get(r.date)?.gut_comfort ?? null, gut_symptoms: byDate.get(r.date)?.gut_symptoms ?? null }))
+  const have = new Set(rows.map((r) => r.date))
+  for (const g of gut) if (!have.has(g.date)) out.push({ date: g.date, drinks: null, caffeine_after_14: null, late_meal: null, stress: null, gut_comfort: g.gut_comfort, gut_symptoms: g.gut_symptoms })
+  return out
 }
 
 /** The person's calendar date at [now] from the newest UTC offset logged (dates up to the day after the UTC date). */

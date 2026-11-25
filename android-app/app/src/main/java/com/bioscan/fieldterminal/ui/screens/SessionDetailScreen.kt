@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.contracts.ExerciseRouteRequestContract
+import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.ExerciseLibraryRepository
 import com.bioscan.fieldterminal.data.MapSettingsStore
 import com.bioscan.fieldterminal.data.PlannedMatch
@@ -37,6 +38,7 @@ import com.bioscan.fieldterminal.data.ZoneAnchorsRepository
 import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.ExerciseLibraryRow
 import com.bioscan.fieldterminal.data.model.ExerciseSessionDetailRow
+import com.bioscan.fieldterminal.data.model.SessionFuelRow
 import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.data.toRoutePoints
 import com.bioscan.fieldterminal.domain.DisplayValue
@@ -62,6 +64,7 @@ import com.bioscan.fieldterminal.ui.components.SkeletonSections
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.screens.session.RunDynamicsCard
+import com.bioscan.fieldterminal.ui.screens.session.SessionFuelCard
 import com.bioscan.fieldterminal.ui.screens.session.RunSplitsCard
 import com.bioscan.fieldterminal.ui.screens.session.RunSummaryCard
 import com.bioscan.fieldterminal.ui.screens.session.RunTrailCard
@@ -111,6 +114,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit, onOpenShoe: (Long) 
     var planned by remember { mutableStateOf<PlannedMatch?>(null) }
     var linkError by remember { mutableStateOf(false) }
     var runMarks by remember { mutableStateOf<RunDynamicsMarks?>(null) }
+    var fuel by remember { mutableStateOf<SessionFuelRow?>(null) }
     val sessionScope = rememberCoroutineScope()
 
     var exerciseLibrary by remember { mutableStateOf<List<ExerciseLibraryRow>>(emptyList()) }
@@ -144,6 +148,8 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit, onOpenShoe: (Long) 
         }
         header = row
         loadingHeader = false
+        // The food around the session (nightly, docs/nutrition/food-and-training.md); extra, so read softly.
+        fuel = softLoad { AnalysisRepository(SupabaseClientProvider.client).loadSessionFuel(sessionId) }
         // Heart-rate zones: the anchor series (maximum, resting, threshold) and the person's default method, loaded once
         // per screen open; the anchors are taken as of this session's date below.
         zoneSeries = softLoad { ZoneAnchorsRepository(SupabaseClientProvider.client).load() }
@@ -386,6 +392,8 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit, onOpenShoe: (Long) 
                     // same convention RunDynamicsCard/TrailCard's own stats already use.
                     if (isRun) d?.let { RunSplitsCard(computeKmSplits(it.distanceKm, it.heartRate, it.pauses)) }
                     else if (!isStrength) d?.let { SplitsCard(computeKmSplits(it.distanceKm, it.heartRate, it.pauses)) }
+
+                    fuel?.let { SessionFuelCard(it) }
 
                     // Live check: the route map was consistently the slowest
                     // thing to resolve on this screen (map tiles + a real

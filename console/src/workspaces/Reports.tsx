@@ -23,7 +23,9 @@ async function loadReports(): Promise<PeriodReport[]> {
 
 const TONE: Record<Exclude<Tone, null>, string> = { ok: 'var(--ok)', warn: 'var(--warn)', bad: 'var(--bad)' }
 const toneStyle = (t: Tone) => (t ? { color: TONE[t] } : undefined)
-const HUE_OF: Record<string, string> = { stool_normal_pct: 'var(--m-stool-healthy)', stool_discomfort: 'var(--m-gut-comfort)' }
+const HUE_OF: Record<string, string> = {
+  gut_day_score: 'var(--m-gut-comfort)', stool_normal_pct: 'var(--m-stool-healthy)', stool_loose_pct: 'var(--m-stool-loose)', stool_discomfort: 'var(--m-gut-comfort)',
+}
 
 export default function Reports() {
   const [params, setParams] = useSearchParams()
@@ -206,6 +208,101 @@ function ReportView({ r, busy, onRebuild }: { r: PeriodReport; busy: string | nu
           <p className="rp-dim rp-foot">Food is a daily mean over the days with food logged; supplements over every day of the {r.grain} (a dose not logged was not taken). Needs are adult-male RDA or AI; upper limits are the safe upper intake levels.</p>
         </section>
 
+        {r.mealQuality && (
+          <section className="ft-card pg-card rp-card">
+            <h3 className="pg-card-title mono"><span>MEAL QUALITY</span><span>{r.mealQuality.meals} meals</span></h3>
+            <ul className="pg-rows">{r.mealQuality.lines.map((l) => (
+              <li key={l.key} className="pg-row">
+                <span className="pg-row-title">{l.label}</span>
+                <span className="pg-row-value" style={{ color: `var(--${MEAL_QUALITY_HUE[l.key]})` }}>{fmt(l.value)}{l.unit && <small> {l.unit}</small>}</span>
+                <span className="pg-row-sub">{l.basis}{l.prev != null && ` · ${fmt(l.prev)} the ${r.grain} before`}</span>
+              </li>
+            ))}</ul>
+            <p className="rp-dim rp-foot">Each index on its own, from the profile of every meal (open a meal in the phone's Log to see it). Glycemic load and the food groups are estimated from typical values of the foods.</p>
+          </section>
+        )}
+
+        {r.trainingFuel && r.trainingFuel.counts.sessions + r.trainingFuel.energy.days > 0 && (() => {
+          const t = r.trainingFuel
+          const e = t.energy
+          return (
+            <section className="ft-card pg-card rp-card">
+              <h3 className="pg-card-title mono"><span>TRAINING FUEL</span><span>{t.counts.sessions} sessions</span></h3>
+              <ul className="pg-rows">
+                {e.days > 0 && (
+                  <li className="pg-row">
+                    <span className="pg-row-title"><a className="rp-link" href={metricHref('series:energy_availability', { day: r.end, range })}>Energy availability ›</a></span>
+                    <span className="pg-row-value" style={{ color: 'var(--m-energy-availability)' }}>{fmt(e.median)}<small> kcal/kg FFM</small></span>
+                    <span className="pg-row-sub">
+                      Median of {e.days} days · <span style={toneStyle(e.low > 0 ? 'bad' : null)}>{e.low} low</span> (under 30), {e.reduced} reduced, {e.adequate} adequate (45+)
+                      {e.lowest.length > 0 && ` · lowest ${e.lowest.map((d) => `${d.date.slice(5)} (${fmt(d.ea)})`).join(', ')}`}
+                    </span>
+                  </li>
+                )}
+                {t.counts.sessions > 0 && (
+                  <>
+                    <li className="pg-row">
+                      <span className="pg-row-title">Started fasted</span>
+                      <span className="pg-row-value">{t.counts.fasted}<small> of {t.counts.sessions}</small></span>
+                      <span className="pg-row-sub">No meal in the 4 h before and none for 8 h · {t.counts.long} long (90 min or more), {t.counts.longFastedNoFuel} of them fasted with no fuel logged during</span>
+                    </li>
+                    <li className="pg-row">
+                      <span className="pg-row-title">Protein after</span>
+                      <span className="pg-row-value" style={{ color: 'var(--m-protein)' }}>{t.counts.proteinAfterOk}<small> of {t.counts.sessions}</small></span>
+                      <span className="pg-row-sub">Sessions with {t.proteinDoseG} g of protein or more in the 2 h after</span>
+                    </li>
+                  </>
+                )}
+              </ul>
+              {t.sessions.length > 0 && (
+                <ul className="pg-rows">{t.sessions.map((s) => (
+                  <li key={s.id} className="pg-row">
+                    <span className="pg-row-title">{s.date.slice(5)} {s.type} · {s.durationMin} min</span>
+                    <span className="pg-row-value" style={{ color: 'var(--m-carbs)' }}>{s.carbsBefore}<small> g before</small></span>
+                    <span className="pg-row-sub">
+                      {s.hoursSinceMeal === null ? 'no meal in 18 h' : `${fmt(s.hoursSinceMeal)} h since a meal`}{s.fasted && ' (fasted)'}
+                      {s.carbsDuring !== null && ` · ${s.carbsDuring} g during`}
+                      {` · ${s.proteinAfter} g protein and ${s.carbsAfter} g carbs after`}
+                    </span>
+                  </li>
+                ))}</ul>
+              )}
+              <p className="rp-dim rp-foot">Energy availability is food minus the watch's training kcal, per kg of fat-free mass (latest weight and body fat). Watches tend to overstate kcal, so it is an estimate. Walks are left out.</p>
+            </section>
+          )
+        })()}
+
+        {r.foodTriggers && (() => {
+          const ft = r.foodTriggers
+          const shown = ft.lines.filter((l) => l.state === 'candidate')
+          const tested = ft.lines.filter((l) => l.state === 'no_signal')
+          const waiting = ft.lines.filter((l) => l.state === 'not_enough')
+          const side = (l: (typeof ft.lines)[number]) => (l.mode === 'high' ? `more than ${l.split} meals of it` : 'with it')
+          return (
+            <section className="ft-card pg-card rp-card">
+              <h3 className="pg-card-title mono"><span>FOOD TRIGGERS</span><span>SCREEN</span></h3>
+              <p className="rp-dim">
+                {ft.stoolDays} days with a stool since {ft.from}, {ft.looseDays} of them loose (Bristol 6–7). Each food group is looked for in the 6–48 h before the day's first stool.
+                {!ft.ready && ' Too few loose days yet for any food to speak (12 needed).'}
+              </p>
+              {shown.length > 0 && (
+                <ul className="pg-rows">{shown.map((l) => (
+                  <li key={`${l.kind}:${l.key}`} className="pg-row">
+                    <span className="pg-row-title">{l.label}</span>
+                    <span className="pg-row-value" style={toneStyle('warn')}>{fmt(l.withLoosePct)}% vs {fmt(l.withoutLoosePct)}%</span>
+                    <span className="pg-row-sub">Worth testing: loose days {side(l)} ({l.withDays}) against without ({l.withoutDays}) · p {fmt(l.p)}, after the correction for {tested.length + shown.length} foods {fmt(l.q)}. Leave it out for two weeks with a Lab experiment.</span>
+                  </li>
+                ))}</ul>
+              )}
+              {shown.length === 0 && tested.length > 0 && (
+                <p className="rp-dim">No food stands out yet among the {tested.length} with enough days each side. Closest: {tested.slice(0, 3).map((l) => `${l.label.toLowerCase()} ${fmt(l.withLoosePct)}% vs ${fmt(l.withoutLoosePct)}%`).join(', ')}.</p>
+              )}
+              {waiting.length > 0 && <p className="rp-dim rp-foot">Not enough days on both sides yet (20 each): {waiting.map((l) => l.label.toLowerCase()).join(', ')}.</p>}
+              <p className="rp-dim rp-foot">A screen, not a diagnosis: a food only shows here when its loose share is 15 points higher, p is under 0.05 and it survives the false-alarm correction across every food tested.</p>
+            </section>
+          )
+        })()}
+
         <section className="ft-card pg-card rp-card">
           <h3 className="pg-card-title mono"><span>FOOD AND STOOL</span><span>TENTATIVE</span></h3>
           {r.foodStool.length === 0 ? (
@@ -224,6 +321,11 @@ function ReportView({ r, busy, onRebuild }: { r: PeriodReport; busy: string | nu
       <p className="rp-dim rp-missing">Written {r.generatedOn}. Rules: docs/reports/README.md.</p>
     </>
   )
+}
+
+/** The hue of each meal-quality index (design/tokens), the same as on the phone's meal profile. */
+const MEAL_QUALITY_HUE: Record<string, string> = {
+  protein_dose: 'm-protein', energy_density: 'm-energy-density', glycemic_load: 'm-glycemic-load', fiber_density: 'm-fiber', ultra_processed: 'm-ultra-processed',
 }
 
 function Glance({ label, items, tone }: { label: string; items: string[]; tone: Tone }) {

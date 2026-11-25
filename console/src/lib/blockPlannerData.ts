@@ -8,7 +8,7 @@ import {
   prescriptionJson, type RecordedMax, resolveMaxes, type Accessory, accessoriesFrom, accessoriesJson, type GenEquipment, type MaxEntry, DEFAULT_EQUIPMENT,
 } from '../../../supabase/functions/_shared/training-core/index.ts'
 import { type AccessorySession, accessoryRevisions } from './accessoryRevisions'
-import { type MaxRevision, type Regenerable, regenerable, type StoredBlock, type StoredSession } from './blockMaxes'
+import { choicesWithSwap, type MaxRevision, type Regenerable, regenerable, type StoredBlock, type StoredSession } from './blockMaxes'
 import {
   choicesJson, componentsJson, DEFAULT_SETTINGS, definitionsUsed, type PlannerCatalog, type PlannerDraft, type PlannerEvent, templateOf, type TrainingSettings,
 } from './blockPlanner'
@@ -236,7 +236,7 @@ export async function updateBlockAccessories(b: BlockForEnding, accessories: Rec
 
 // ---- changing the maxes of a planned block (lib/blockMaxes.ts) ----
 
-export interface BlockMaxesData { name: string; weightedBase: string | null; block: StoredBlock; sessions: StoredSession[]; regen: Regenerable | string }
+export interface BlockMaxesData { name: string; weightedBase: string | null; block: StoredBlock; sessions: StoredSession[]; regen: Regenerable | string; fallback: { equipment: GenEquipment; bodyweightKg: number | null } }
 
 export async function loadBlockMaxes(id: number, cat: PlannerCatalog): Promise<BlockMaxesData> {
   const b = await supabase.from('training_blocks').select('name,start_date,template_key,components,choices,definition_snapshot').eq('id', id).single()
@@ -248,7 +248,7 @@ export async function loadBlockMaxes(id: number, cat: PlannerCatalog): Promise<B
     equipment: { ...DEFAULT_EQUIPMENT, platesKg: cat.settings.plates_kg.length > 0 ? cat.settings.plates_kg : DEFAULT_EQUIPMENT.platesKg, weightedBase: cat.settings.weighted_percent_base === 'total' ? 'total' as const : 'added' as const },
     bodyweightKg: cat.bodyweightKg,
   }
-  return { name: row.name, weightedBase: (row.choices?.weighted_percent_base as string | undefined) ?? cat.settings.weighted_percent_base, block: row, sessions: (s.data ?? []) as StoredSession[], regen: regenerable(row, fallback) }
+  return { name: row.name, weightedBase: (row.choices?.weighted_percent_base as string | undefined) ?? cat.settings.weighted_percent_base, block: row, sessions: (s.data ?? []) as StoredSession[], regen: regenerable(row, fallback), fallback }
 }
 
 export interface MaxEdit { name: string; oneRmKg?: number | null; maxReps?: number | null }
@@ -269,14 +269,33 @@ export async function applyBlockMaxes(blockId: number, edits: Record<string, Max
       if (res.error) throw new Error(`athlete_maxes: ${res.error.message}`)
     }
   }
+  return reviseAll(revisions, today, 'The maxes are recorded and ')
+}
+
+async function reviseAll(revisions: MaxRevision[], today: string, before: string): Promise<number> {
   let done = 0
   for (const rev of revisions) {
     const u = await supabase.rpc('revise_planned_session', { p_id: rev.id, p_today: today, p_prescription: rev.after })
     if (u.error) {
       if (u.error.code === 'PGRST202') throw new Error('Changing a session needs the one-time plan-edit database update (revise_planned_session)')
-      throw new Error(`The maxes are recorded and ${done} of ${revisions.length} sessions are updated; ${rev.title} on ${rev.date} failed (${u.error.message}). Open MAXES again to finish.`)
+      throw new Error(`${before}${done} of ${revisions.length} sessions are updated; ${rev.title} on ${rev.date} failed (${u.error.message}). Do it again to finish.`)
     }
     done++
   }
+  return done
+}
+
+/**
+ * Swaps the exercise of one slot for the rest of the block: the sessions still to come first (each a new revision), then the
+ * block's choices, read again just before (so a change made meanwhile, such as accessory work, is kept), so the block is
+ * regenerated with the new exercise from then on. Same rows the phone reads.
+ */
+export async function applyBlockSwap(blockId: number, moduleKey: string, slotId: string, exercise: string, revisions: MaxRevision[], today: string): Promise<number> {
+  const done = await reviseAll(revisions, today, '')
+  const r = await supabase.from('training_blocks').select('choices').eq('id', blockId).single()
+  if (r.error) throw new Error(`training_blocks: ${r.error.message}`)
+  const choices = choicesWithSwap((r.data as { choices: Record<string, unknown> | null }).choices, moduleKey, slotId, exercise)
+  const t = await supabase.from('training_blocks').update({ choices, updated_at: new Date().toISOString() }).eq('id', blockId)
+  if (t.error) throw new Error(`The sessions are updated, but the block could not record the new exercise (${t.error.message}). Do the swap again to finish.`)
   return done
 }

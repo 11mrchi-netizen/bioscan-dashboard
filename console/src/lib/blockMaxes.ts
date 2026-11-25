@@ -176,3 +176,68 @@ export function storedLoadText(l: Json): string {
     default: return String(l.kind ?? '')
   }
 }
+
+// ---- swapping an exercise for the rest of the block ----
+
+export interface SwapSlot { moduleKey: string; moduleTitle: string; slotId: string; role: string; current: string; alternates: string[] }
+
+/** The single-exercise slots of the block's strength programs, with the exercise each holds now and the program's alternates. */
+export function swapSlots(b: StoredBlock): SwapSlot[] {
+  const clusters = (b.choices?.clusters ?? {}) as Record<string, Record<string, unknown>>
+  const out: SwapSlot[] = []
+  for (const raw of Object.values(b.definition_snapshot?.definitions ?? {})) {
+    let m
+    try { m = parseDefinition(raw) } catch { continue }
+    if (m.kind !== 'strength_module') continue
+    const used = new Set([...m.sessions.flatMap((s) => s.slots), ...m.variants.flatMap((v) => v.weeks.flatMap((w) => w.sessions.flatMap((s) => s.items.map((i) => i.slot))))])
+    for (const slot of m.slots) {
+      if (!used.has(slot.id) || slot.pick != null || m.domain === 'strength_endurance') continue // clusters hold several exercises: not swapped here
+      const chosen = clusters[m.key]?.[slot.id]
+      const current = Array.isArray(chosen) && chosen.length > 0 ? String(chosen[0]) : slot.standard
+      out.push({ moduleKey: m.key, moduleTitle: m.title, slotId: slot.id, role: slot.role, current, alternates: [slot.standard, ...slot.alternates].filter((n, i, a) => a.indexOf(n) === i && n !== current) })
+    }
+  }
+  return out
+}
+
+/** The block's choices with one slot's exercise replaced (what is saved, and what the block is regenerated from). */
+export function choicesWithSwap(choices: Json | null, moduleKey: string, slotId: string, exercise: string): Json {
+  const c = { ...(choices ?? {}) }
+  const clusters = { ...((c.clusters ?? {}) as Record<string, Json>) }
+  clusters[moduleKey] = { ...(clusters[moduleKey] ?? {}), [slotId]: [exercise] }
+  return { ...c, clusters }
+}
+
+/**
+ * The sessions still to come where the slot's exercise becomes the new one, regenerated as `gen` (already built with the swap):
+ * the lift's name, and its load worked out from the new exercise's max. Sets, reps and notes stay; a load set by hand stays too.
+ * Only lifts of the slot that still hold the old exercise are changed (a session where it was swapped by hand is left as it is).
+ */
+export function swapRevisions(rows: StoredSession[], gen: GeneratedBlock, today: string, slotId: string, from: string): MaxRevisionPlan {
+  const bySeq = new Map(gen.sessions.map((s) => [s.sequenceNo, s]))
+  const revisions: MaxRevision[] = []
+  const skipped: MaxRevisionPlan['skipped'] = []
+  const fromKey = movementKey(from)
+  for (const row of rows) {
+    if (row.status !== 'planned' || row.exercise_session_id != null || row.scheduled_date < today) continue
+    const hits = lifts(row.prescription).filter((e) => String(e.slot) === slotId && movementKey(String(e.exercise ?? '')) === fromKey)
+    if (hits.length === 0) continue
+    const g = bySeq.get(row.sequence_no)
+    if (!g || g.title !== row.title) { skipped.push({ date: row.scheduled_date, title: row.title, why: 'it no longer matches the program it was planned from' }); continue }
+    const pool = g.items.filter((i) => i.slot === slotId)
+    const changes: MaxRevision['changes'] = []
+    const after = (row.prescription as Json[]).map((e) => {
+      if (e?.type !== 'lift' || String(e.slot) !== slotId || movementKey(String(e.exercise ?? '')) !== fromKey) return e
+      const match = pool.shift()
+      if (!match) return e
+      const now = (e.load ?? {}) as Json
+      const next = BY_HAND.has(String(now.kind)) ? now : loadJson(match.load)
+      changes.push({ exercise: match.exercise, before: now, after: next })
+      const out: Json = { ...e, exercise: match.exercise, load: next }
+      if (match.projected && !BY_HAND.has(String(now.kind))) out.projected = true; else delete out.projected
+      return out
+    })
+    if (changes.length > 0) revisions.push({ id: row.id, date: row.scheduled_date, title: row.title, after, changes })
+  }
+  return { revisions, skipped }
+}

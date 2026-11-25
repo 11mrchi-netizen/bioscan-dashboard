@@ -11,8 +11,8 @@ import {
   missingMaxes, newDraft, startAfterBlocks, pickProtocol, pickRoute, pickStrength, pickTemplate, type PlannerCatalog, type PlannerDraft, protocolOf, setDay, setWeek,
   strengthModules, strengthOf, templateOf, updateChoice, weekdayFor, weekStats, weekWarnings, withLayoutReset, withTimelineReset,
 } from '../lib/blockPlanner'
-import { exercisesFromMaxes, maxRevisions, storedLoadText } from '../lib/blockMaxes'
-import { applyBlockMaxes, type BlockMaxesData, loadBlockMaxes, type BlockForEnding, createBlock, endBlockEarly, type ExistingBlock, loadBlockForEnding, loadExistingBlocks, loadPlannerCatalog, saveSettingsAsDefault, updateBlockAccessories } from '../lib/blockPlannerData'
+import { choicesWithSwap, exercisesFromMaxes, maxRevisions, regenerable, storedLoadText, swapRevisions, swapSlots } from '../lib/blockMaxes'
+import { applyBlockMaxes, applyBlockSwap, type BlockMaxesData, loadBlockMaxes, type BlockForEnding, createBlock, endBlockEarly, type ExistingBlock, loadBlockForEnding, loadExistingBlocks, loadPlannerCatalog, saveSettingsAsDefault, updateBlockAccessories } from '../lib/blockPlannerData'
 import {
   type ConditioningProtocolDef, type ConditioningSessionDef, countedWeeks, type DayPlan, type GeneratedBlock, type GeneratedSession, isCluster,
   isMainProtocol, itemText, loadText, localToday, type NumRange, plusDays, plusWeekday, rangeText, slotsToChoose, STRENGTH_GROUPS, type StrengthModuleDef,
@@ -1030,11 +1030,11 @@ function SessionDetail({ s, onClose }: { s: GeneratedSession; onClose: () => voi
 export function RunningBlocks({ blocks, cat, onEnded, onMaxes }: { blocks: ExistingBlock[]; cat: PlannerCatalog; onEnded: (nextStart: string) => void; onMaxes?: () => void }) {
   const today = localToday()
   const running = blocks.filter((b) => (b.status === 'scheduled' || b.status === 'active') && b.end_date > today)
-  const [open, setOpen] = useState<{ id: number; what: 'end' | 'accessories' | 'maxes' } | null>(null)
+  const [open, setOpen] = useState<{ id: number; what: 'end' | 'accessories' | 'maxes' | 'swap' } | null>(null)
   const [done, setDone] = useState<string | null>(null)
   if (running.length === 0) return null
   return (
-    <Section title="BLOCKS UNDER WAY" info="The block you are training now. A new block starts the day after the latest one ends. To change course (more training now, the peak nearer the race), end the current block early: its later sessions are set aside, not deleted. MAXES changes a 1RM or a max-reps number and works out again the loads of the sessions still ahead. ACCESSORIES adds extra work to them.">
+    <Section title="BLOCKS UNDER WAY" info="The block you are training now. A new block starts the day after the latest one ends. To change course (more training now, the peak nearer the race), end the current block early: its later sessions are set aside, not deleted. MAXES changes a 1RM or a max-reps number and works out again the loads of the sessions still ahead; SWAP AN EXERCISE puts another lift in a slot (a front squat for the squat) from today on. ACCESSORIES adds extra work to them.">
       {running.map((b) => (
         <div key={b.id} className="pb-detail">
           <div className="pb-row tight" style={{ justifyContent: 'space-between' }}>
@@ -1042,6 +1042,7 @@ export function RunningBlocks({ blocks, cat, onEnded, onMaxes }: { blocks: Exist
             {open?.id !== b.id && (
               <span className="pb-row tight">
                 {b.origin === 'generated' && <button className="btn-ghost mono" onClick={() => { setDone(null); setOpen({ id: b.id, what: 'maxes' }) }}>MAXES</button>}
+                {b.origin === 'generated' && <button className="btn-ghost mono" onClick={() => { setDone(null); setOpen({ id: b.id, what: 'swap' }) }}>SWAP AN EXERCISE</button>}
                 {b.origin === 'generated' && <button className="btn-ghost mono" onClick={() => { setDone(null); setOpen({ id: b.id, what: 'accessories' }) }}>ACCESSORIES</button>}
                 <a className="btn-ghost mono" href="#/plan/sessions">EDIT ONE SESSION</a>
                 <button className="btn-ghost mono" onClick={() => { setDone(null); setOpen({ id: b.id, what: 'end' }) }}>END EARLY</button>
@@ -1050,6 +1051,7 @@ export function RunningBlocks({ blocks, cat, onEnded, onMaxes }: { blocks: Exist
           </div>
           {open?.id === b.id && open.what === 'end' && <EndEarly id={b.id} cat={cat} onCancel={() => setOpen(null)} onEnded={(last) => { setOpen(null); onEnded(plusDays(last, 1)) }} />}
           {open?.id === b.id && open.what === 'maxes' && <BlockMaxes id={b.id} cat={cat} onCancel={() => setOpen(null)} onDone={(n, names) => { setOpen(null); setDone(`${b.name}: new max${names.length === 1 ? '' : 'es'} for ${names.join(', ')} recorded; ${n} session${n === 1 ? '' : 's'} from today updated.`); onMaxes?.() }} />}
+          {open?.id === b.id && open.what === 'swap' && <BlockSwap id={b.id} cat={cat} onCancel={() => setOpen(null)} onDone={(n, from, to) => { setOpen(null); setDone(`${b.name}: ${from} is now ${to}; ${n} session${n === 1 ? '' : 's'} from today updated.`); onMaxes?.() }} />}
           {open?.id === b.id && open.what === 'accessories' && <BlockAccessories id={b.id} cat={cat} onCancel={() => setOpen(null)} onDone={(n) => { setOpen(null); setDone(`${b.name}: accessory work applied to ${n} session${n === 1 ? '' : 's'} from today.`) }} />}
         </div>
       ))}
@@ -1136,6 +1138,68 @@ function BlockMaxes({ id, cat, onCancel, onDone }: { id: number; cat: PlannerCat
             onDone(await applyBlockMaxes(id, payload, plan.revisions, today), names)
           } catch (e) { setErr(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
         }}>{busy ? 'SAVING…' : revs.length > 0 ? `SAVE AND UPDATE ${revs.length} SESSION${revs.length === 1 ? '' : 'S'}` : 'SAVE THE MAXES'}</button>
+        <button className="btn-ghost mono" onClick={onCancel}>CANCEL</button>
+      </div>
+    </div>
+  )
+}
+
+function BlockSwap({ id, cat, onCancel, onDone }: { id: number; cat: PlannerCatalog; onCancel: () => void; onDone: (sessions: number, from: string, to: string) => void }) {
+  const [d, setD] = useState<BlockMaxesData | null>(null)
+  const [pick, setPick] = useState<number>(0)
+  const [to, setTo] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  useEffect(() => {
+    let live = true
+    loadBlockMaxes(id, cat).then((x) => { if (live) setD(x) }).catch((e) => setErr(e instanceof Error ? e.message : String(e)))
+    return () => { live = false }
+  }, [id, cat])
+  const today = localToday()
+  const slots = useMemo(() => (d ? swapSlots(d.block) : []), [d])
+  const slot = slots[pick] ?? null
+  const target = to.trim()
+  const plan = useMemo(() => {
+    if (!d || !slot || target === '' || movementKey(target) === movementKey(slot.current)) return null
+    const r = regenerable({ ...d.block, choices: choicesWithSwap(d.block.choices, slot.moduleKey, slot.slotId, target) }, d.fallback)
+    if (typeof r === 'string') return r
+    try { return swapRevisions(d.sessions, r.run((n) => cat.maxes[movementKey(n)]?.entry ?? null), today, slot.slotId, slot.current) } catch (e) { return e instanceof Error ? e.message : String(e) }
+  }, [d, slot, target, today, cat])
+  if (!d) return <p className="pb-hint">{err ?? 'Loading the block…'}</p>
+  if (typeof d.regen === 'string') return <div className="pb-detail"><p className="pb-warn">This block cannot be worked out again here: {d.regen}. Swap a lift one session at a time in PLAN › SESSIONS.</p><button className="btn-ghost mono" onClick={onCancel}>CLOSE</button></div>
+  if (slots.length === 0) return <div className="pb-detail"><p className="pb-info">This block has no strength program with a lift to swap.</p><button className="btn-ghost mono" onClick={onCancel}>CLOSE</button></div>
+  const max = target ? cat.maxes[movementKey(target)] : undefined
+  const revs = plan && typeof plan !== 'string' ? plan.revisions : []
+  const first = revs[0]?.changes[0]
+  return (
+    <div className="pb-detail">
+      <p className="pb-info">Put another exercise in one of the program's slots for every session still planned from today. Its loads are worked out from its own max (MAXES, once swapped, if it has none); sets, reps, notes and any load you set by hand stay. Each changed session is kept as a new version, and the phone gets it the next time it syncs.</p>
+      <div className="pb-row">
+        <Field label="SLOT">
+          <select className="pb-input" value={pick} onChange={(e) => { setPick(Number(e.target.value)); setTo('') }}>
+            {slots.map((x, i) => <option key={`${x.moduleKey}:${x.slotId}`} value={i}>{x.current} ({x.role}{slots.some((y) => y.moduleKey !== x.moduleKey) ? `, ${x.moduleTitle}` : ''})</option>)}
+          </select>
+        </Field>
+        <Field label="NEW EXERCISE" hint="One of the program's alternates, or type any name.">
+          <input className="pb-input" list={`swap-alts-${id}`} value={to} placeholder={slot?.alternates[0] ?? 'Exercise'} onChange={(e) => setTo(e.target.value)} style={{ width: 220 }} />
+          <datalist id={`swap-alts-${id}`}>{slot?.alternates.map((n) => <option key={n} value={n} />)}</datalist>
+        </Field>
+      </div>
+      {slot && slot.alternates.length > 0 && <div className="pb-chips">{slot.alternates.map((n) => <button key={n} className={`pb-chip ${target === n ? 'on' : ''}`} onClick={() => setTo(n)}>{n}</button>)}</div>}
+      {target !== '' && slot && movementKey(target) === movementKey(slot.current) && <p className="pb-hint">That is the exercise the slot holds now.</p>}
+      {target !== '' && slot && movementKey(target) !== movementKey(slot.current) && <p className="pb-hint">{max?.entry.oneRmKg != null ? `${target}: 1RM ${fmt(Math.round(max.entry.oneRmKg * 10) / 10)} kg (${max.basedOn}).` : `${target} has no max yet: its loads will say "needs a max" until you set one in MAXES.`}</p>}
+      {typeof plan === 'string' && <p className="pb-warn">{plan}</p>}
+      {plan && typeof plan !== 'string' && (<>
+        <p className="pb-info">{revs.length === 0 ? `No session still to come holds ${slot?.current}.` : `${revs.length} session${revs.length === 1 ? '' : 's'} from today change${revs.length === 1 ? 's' : ''}${first ? `, the first on ${dateShort(revs[0].date)}: ${slot?.current} ${storedLoadText(first.before)} → ${first.exercise} ${storedLoadText(first.after)}` : ''}.`}</p>
+        {plan.skipped.length > 0 && <p className="pb-warn">Left as they are: {plan.skipped.map((x) => `${x.title} on ${dateShort(x.date)} (${x.why})`).join('; ')}.</p>}
+      </>)}
+      {err && <p className="pb-warn">{err}</p>}
+      <div className="pb-row">
+        <button className="pb-primary mono" disabled={busy || !slot || !plan || typeof plan === 'string'} onClick={async () => {
+          if (!slot || !plan || typeof plan === 'string') return
+          setBusy(true); setErr(null)
+          try { onDone(await applyBlockSwap(id, slot.moduleKey, slot.slotId, target, plan.revisions, today), slot.current, target) } catch (e) { setErr(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
+        }}>{busy ? 'SAVING…' : `SWAP${revs.length > 0 ? ` IN ${revs.length} SESSION${revs.length === 1 ? '' : 'S'}` : ''}`}</button>
         <button className="btn-ghost mono" onClick={onCancel}>CANCEL</button>
       </div>
     </div>

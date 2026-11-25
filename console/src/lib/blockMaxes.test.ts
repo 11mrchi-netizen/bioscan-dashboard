@@ -141,3 +141,26 @@ test('a block without its program or layout says why it cannot be worked out aga
   assert.equal(typeof regenerable({ ...block, definition_snapshot: null }, fallback), 'string')
   assert.equal(typeof regenerable({ ...block, choices: { ...block.choices, layout: undefined } }, fallback), 'string')
 })
+
+test('swapping the squat for the front squat renames the squat lifts ahead and works out their loads from its own max', async () => {
+  const { choicesWithSwap, swapRevisions, swapSlots } = await import('./blockMaxes.ts')
+  const slots = swapSlots(block)
+  assert.deepEqual(slots.map((s) => `${s.slotId}:${s.current}`), ['BP:Bench Press', 'SQ:Squat', 'DL:Trapbar Deadlift', 'WP:Weighted Pullup'])
+  const swapped = { ...block, choices: choicesWithSwap(block.choices, 'tb3.op_ulf', 'SQ', 'Front Squat') }
+  const r = regenerable(swapped, fallback)
+  if (typeof r === 'string') assert.fail(r)
+  const gen = r.run((n) => (movementKey(n) === movementKey('Front Squat') ? { oneRmKg: 100 } : pullupOnly(n)))
+  const rows = [
+    stored(1, [sq({ kind: 'unresolved', missing: 'OneRm' }, { sets: 4 }), wp({ kind: 'added', pct: 75, added_kg: 20, total_kg: 92 })]),
+    stored(7, [sq({ kind: 'rpe', rpe: 7 }), wp({ kind: 'added', pct: 80, added_kg: 21.25 })]),
+  ]
+  const plan = swapRevisions(rows, gen, '2026-11-25', 'SQ', 'Squat')
+  assert.equal(plan.revisions.length, 2)
+  const [a, b] = plan.revisions
+  assert.equal(a.after[0].exercise, 'Front Squat')
+  assert.equal(a.after[0].sets, 4)
+  assert.equal((a.after[0].load as { loadable_kg: number }).loadable_kg, 75)
+  assert.equal(a.after[1].exercise, 'Weighted Pullup')
+  assert.deepEqual(b.after[0].load, { kind: 'rpe', rpe: 7 }) // set by hand: stays
+  assert.equal(b.after[0].exercise, 'Front Squat')
+})

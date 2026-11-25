@@ -22,6 +22,7 @@ import {
 } from "./workoutDistance.ts";
 import { afterWindow, HISTORY_METRICS, type HistoryState, windowDates } from "./historyPull.ts";
 import { RECENT_METRICS, recentDates } from "./recentPull.ts";
+import { isSettled, orphanWindow, type StoredDetail } from "./syncScope.ts";
 import { buildZeppExercises, doneSets, exercisesFingerprint, parseLapSets, planStrengthDetails } from "./strengthImport.ts";
 
 const corsHeaders = {
@@ -567,7 +568,7 @@ interface ExtractOutcome {
   summary: { total: number; succeeded: number; failed: number };
   found: { workouts: number; bandDays: number };
   authFailed: boolean;
-  results: Array<{ metric: string; date: string; status: number; stored: boolean; error?: string }>;
+  results: Array<{ metric: string; date: string; status: number; stored: boolean; error?: string; skipped?: boolean }>;
 }
 
 async function extract(
@@ -590,6 +591,7 @@ async function extract(
     status: number;
     stored: boolean;
     error?: string;
+    skipped?: boolean;
   }> = [];
 
   // track_id defaults to '' (not null) for every non-detail metric -- a nullable
@@ -694,8 +696,8 @@ async function extract(
   async function reconcileWorkout(
     ref: WorkoutRef,
     detailRawBody: unknown,
-  ): Promise<void> {
-    if (!ref.startTimeIso || !ref.endTimeIso) return; // no reliable time to reconcile with
+  ): Promise<boolean> {
+    if (!ref.startTimeIso || !ref.endTimeIso) return false; // no reliable time to reconcile with
 
     const startMs = new Date(ref.startTimeIso).getTime();
     const zeppSpan = { startMs, endMs: new Date(ref.endTimeIso).getTime() };
@@ -859,8 +861,36 @@ async function extract(
       );
     }
 
-    const n = Number(ref.trackId);
+    noteTrackId(ref.trackId);
+    return true;
+  }
+
+  function noteTrackId(trackId: string): void {
+    const n = Number(trackId);
     if (Number.isFinite(n) && n > maxTrackIdSeen) maxTrackIdSeen = n;
+  }
+
+  // The workouts of a day whose stored detail is settled (syncScope.ts): not fetched or rewritten again. A failed read
+  // returns none, so everything is fetched as before.
+  async function settledTrackIds(refs: WorkoutRef[]): Promise<Set<string>> {
+    if (refs.length === 0) return new Set();
+    const { data, error } = await supabase
+      .from("zepp_workout_detail")
+      .select("zepp_track_id,exercise_session_id,end_time,fetched_at,decoder_version:decoded->>decoderVersion")
+      .eq("user_id", user.id)
+      .in("zepp_track_id", refs.map((r) => r.trackId));
+    if (error) return new Set();
+    return new Set(((data ?? []) as StoredDetail[]).filter((r) => isSettled(r, DECODER_VERSION)).map((r) => String(r.zepp_track_id)));
+  }
+
+  // Once the detail is kept in zepp_workout_detail.raw, the copy in zepp_raw_extracts is replaced by a marker: the body
+  // was stored twice (13 MB of the table). A workout that could not be reconciled keeps its body here.
+  async function dropDuplicateDetailBody(date: string, trackId: string): Promise<void> {
+    const { error } = await supabase
+      .from("zepp_raw_extracts")
+      .update({ raw_body: { _kept_in: "zepp_workout_detail.raw" } })
+      .eq("user_id", user.id).eq("metric", WORKOUT_DETAIL_METRIC).eq("query_date", date).eq("track_id", trackId);
+    if (error) console.warn(`zepp_raw_extracts detail body not trimmed: ${error.message}`);
   }
 
   async function reconcileStrengthData(
@@ -948,12 +978,18 @@ async function extract(
   const MERGE_COLUMNS =
     "id,type,source,start_time,end_time,duration_min,distance_km,avg_hr,max_hr,calories_active,elevation_gain_m,avg_speed_kmh,rpe,notes,details";
 
+  // Only the Zepp-only sessions around the synced days (syncScope.ts): the ones further back were checked by the syncs
+  // of their own days, and re-checking all of them on every sync was most of the function's database reads.
   async function mergeOrphanedZeppSessions(): Promise<number> {
+    const scope = orphanWindow(dates);
+    if (!scope) return 0;
     const { data: orphanRows, error: orphanErr } = await supabase
       .from("exercise_sessions")
       .select(`${MERGE_COLUMNS},zepp_workout_detail(zepp_track_id)`)
       .eq("user_id", user.id)
-      .eq("source", "zepp");
+      .eq("source", "zepp")
+      .gte("start_time", scope.fromIso)
+      .lt("start_time", scope.toIso);
     if (orphanErr) throw new Error(`orphan read failed: ${orphanErr.message}`);
     const orphans = (orphanRows ?? []) as SessionRow[];
     if (orphans.length === 0) return 0;
@@ -1084,7 +1120,13 @@ async function extract(
           });
         }
 
+        const settled = await settledTrackIds(refs);
         for (const ref of refs) {
+          if (settled.has(String(ref.trackId))) {
+            noteTrackId(ref.trackId);
+            results.push({ metric: WORKOUT_DETAIL_METRIC, date, status: 200, stored: true, skipped: true });
+            continue;
+          }
           const detailEndpoint =
             `/v1/sport/run/detail.json?trackid=${encodeURIComponent(ref.trackId)}` +
             `&source=${encodeURIComponent(ref.source)}`;
@@ -1099,7 +1141,7 @@ async function extract(
 
           if (detail.stored && detail.statusCode >= 200 && detail.statusCode < 300) {
             try {
-              await reconcileWorkout(ref, detail.rawBody);
+              if (await reconcileWorkout(ref, detail.rawBody)) await dropDuplicateDetailBody(date, ref.trackId);
             } catch (e) {
               results.push({
                 metric: "zepp_reconcile",

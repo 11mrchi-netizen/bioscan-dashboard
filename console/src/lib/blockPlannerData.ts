@@ -5,9 +5,10 @@ import { supabase } from './supabase'
 import {
   endEarlyPreview, type MaxStep, type ModuleChoice, type PlannedLite, type StrengthModuleDef, topPct,
   type DatedSet, type Definition, DefinitionIndex, deriveBlockDomains, type GeneratedBlock, localToday, movementKey, parseDefinition, plusDays,
-  prescriptionJson, type RecordedMax, resolveMaxes, type Accessory, accessoriesFrom, accessoriesJson, type GenEquipment, type MaxEntry,
+  prescriptionJson, type RecordedMax, resolveMaxes, type Accessory, accessoriesFrom, accessoriesJson, type GenEquipment, type MaxEntry, DEFAULT_EQUIPMENT,
 } from '../../../supabase/functions/_shared/training-core/index.ts'
 import { type AccessorySession, accessoryRevisions } from './accessoryRevisions'
+import { type MaxRevision, type Regenerable, regenerable, type StoredBlock, type StoredSession } from './blockMaxes'
 import {
   choicesJson, componentsJson, DEFAULT_SETTINGS, definitionsUsed, type PlannerCatalog, type PlannerDraft, type PlannerEvent, templateOf, type TrainingSettings,
 } from './blockPlanner'
@@ -231,4 +232,51 @@ export async function updateBlockAccessories(b: BlockForEnding, accessories: Rec
     }
   }
   return revisions.length
+}
+
+// ---- changing the maxes of a planned block (lib/blockMaxes.ts) ----
+
+export interface BlockMaxesData { name: string; weightedBase: string | null; block: StoredBlock; sessions: StoredSession[]; regen: Regenerable | string }
+
+export async function loadBlockMaxes(id: number, cat: PlannerCatalog): Promise<BlockMaxesData> {
+  const b = await supabase.from('training_blocks').select('name,start_date,template_key,components,choices,definition_snapshot').eq('id', id).single()
+  if (b.error) throw new Error(`training_blocks: ${b.error.message}`)
+  const s = await supabase.from('planned_sessions').select('id,sequence_no,title,status,scheduled_date,exercise_session_id,prescription').eq('block_id', id).neq('status', 'superseded').order('sequence_no')
+  if (s.error) throw new Error(`planned_sessions: ${s.error.message}`)
+  const row = b.data as StoredBlock & { name: string }
+  const fallback = {
+    equipment: { ...DEFAULT_EQUIPMENT, platesKg: cat.settings.plates_kg.length > 0 ? cat.settings.plates_kg : DEFAULT_EQUIPMENT.platesKg, weightedBase: cat.settings.weighted_percent_base === 'total' ? 'total' as const : 'added' as const },
+    bodyweightKg: cat.bodyweightKg,
+  }
+  return { name: row.name, weightedBase: (row.choices?.weighted_percent_base as string | undefined) ?? cat.settings.weighted_percent_base, block: row, sessions: (s.data ?? []) as StoredSession[], regen: regenerable(row, fallback) }
+}
+
+export interface MaxEdit { name: string; oneRmKg?: number | null; maxReps?: number | null }
+
+/**
+ * Records the new maxes (athlete_maxes, source manual, tied to the block) and puts the reworked loads into the block's sessions
+ * still to come, each as a new revision. A failure part-way leaves the maxes recorded and the sessions done so far revised:
+ * opening MAXES again and applying finishes the rest (the plan is worked out from what is stored).
+ */
+export async function applyBlockMaxes(blockId: number, edits: Record<string, MaxEdit>, revisions: MaxRevision[], today: string): Promise<number> {
+  for (const [key, e] of Object.entries(edits)) {
+    const rows = [
+      ...(e.oneRmKg != null ? [{ kind: '1rm', value: e.oneRmKg, unit: 'kg' }] : []),
+      ...(e.maxReps != null ? [{ kind: 'max_reps', value: e.maxReps, unit: 'reps' }] : []),
+    ]
+    for (const r of rows) {
+      const res = await supabase.from('athlete_maxes').insert({ exercise_key: key, exercise_name: e.name, ...r, as_of: today, source: 'manual', derivation: { entered_in: 'block maxes (web)' }, block_id: blockId })
+      if (res.error) throw new Error(`athlete_maxes: ${res.error.message}`)
+    }
+  }
+  let done = 0
+  for (const rev of revisions) {
+    const u = await supabase.rpc('revise_planned_session', { p_id: rev.id, p_today: today, p_prescription: rev.after })
+    if (u.error) {
+      if (u.error.code === 'PGRST202') throw new Error('Changing a session needs the one-time plan-edit database update (revise_planned_session)')
+      throw new Error(`The maxes are recorded and ${done} of ${revisions.length} sessions are updated; ${rev.title} on ${rev.date} failed (${u.error.message}). Open MAXES again to finish.`)
+    }
+    done++
+  }
+  return done
 }

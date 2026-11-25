@@ -46,7 +46,7 @@ export default function PlanOverview() {
       {cat && (
         <>
           {running.length === 0 && <p className="pg-note">No block under way.{next.length ? ` Next: ${next[0].name}, from ${longDate(next[0].start_date)}.` : ''} <a href="#/plan/training">Plan one</a>.</p>}
-          <RunningBlocks blocks={blocks} cat={cat} onEnded={() => setRev((r) => r + 1)} />
+          <RunningBlocks blocks={blocks} cat={cat} onEnded={() => setRev((r) => r + 1)} onMaxes={() => setRev((r) => r + 1)} />
           <ShiftBlocks blocks={blocks} onMoved={() => setRev((r) => r + 1)} />
           <div className="pg-grid">
             <section className="pg-card">

@@ -132,7 +132,7 @@ function Editor({ d, onReload }: { d: Loaded; onReload: () => void }) {
               ))}
             </tbody>
           </table>
-          <p className="pg-note">Changing sets, reps or a load makes a new version of this session and sets the old one aside (nothing is deleted). Accessory lines are changed the same way. A percentage needs a recorded 1RM.</p>
+          <p className="pg-note">Changing sets, reps or a load makes a new version of this session and sets the old one aside (nothing is deleted). Accessory lines are changed the same way. A percentage needs a recorded 1RM. To change a max for every session of the block at once, use MAXES on <a href="#/plan">PLAN</a>.</p>
         </section>
       )}
 

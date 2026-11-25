@@ -11,12 +11,13 @@ import {
   missingMaxes, newDraft, startAfterBlocks, pickProtocol, pickRoute, pickStrength, pickTemplate, type PlannerCatalog, type PlannerDraft, protocolOf, setDay, setWeek,
   strengthModules, strengthOf, templateOf, updateChoice, weekdayFor, weekStats, weekWarnings, withLayoutReset, withTimelineReset,
 } from '../lib/blockPlanner'
-import { type BlockForEnding, createBlock, endBlockEarly, type ExistingBlock, loadBlockForEnding, loadExistingBlocks, loadPlannerCatalog, saveSettingsAsDefault, updateBlockAccessories } from '../lib/blockPlannerData'
+import { exercisesFromMaxes, maxRevisions, storedLoadText } from '../lib/blockMaxes'
+import { applyBlockMaxes, type BlockMaxesData, loadBlockMaxes, type BlockForEnding, createBlock, endBlockEarly, type ExistingBlock, loadBlockForEnding, loadExistingBlocks, loadPlannerCatalog, saveSettingsAsDefault, updateBlockAccessories } from '../lib/blockPlannerData'
 import {
   type ConditioningProtocolDef, type ConditioningSessionDef, countedWeeks, type DayPlan, type GeneratedBlock, type GeneratedSession, isCluster,
   isMainProtocol, itemText, loadText, localToday, type NumRange, plusDays, plusWeekday, rangeText, slotsToChoose, STRENGTH_GROUPS, type StrengthModuleDef,
   type TemplateDef, templateVariables, versionsOf, WEEK_KINDS, type WeekKind, weekdayOf, weekdayShort, type Weekday, progressionIncrementKg, loadStepKg,
-  fmt, kgToLb, endEarlyPreview, stepUpMaxes, movementKey, type Accessory, DEFAULT_EQUIPMENT,
+  fmt, kgToLb, endEarlyPreview, stepUpMaxes, movementKey, type Accessory, DEFAULT_EQUIPMENT, type MaxEntry,
 } from '../../../supabase/functions/_shared/training-core/index.ts'
 import { AccessoryTables } from './AccessoryWork'
 import { accessorySummary, cleanAccessories } from '../lib/accessoryWork'
@@ -1026,31 +1027,118 @@ function SessionDetail({ s, onClose }: { s: GeneratedSession; onClose: () => voi
 
 // ---------------- blocks under way: end one early ----------------
 
-export function RunningBlocks({ blocks, cat, onEnded }: { blocks: ExistingBlock[]; cat: PlannerCatalog; onEnded: (nextStart: string) => void }) {
+export function RunningBlocks({ blocks, cat, onEnded, onMaxes }: { blocks: ExistingBlock[]; cat: PlannerCatalog; onEnded: (nextStart: string) => void; onMaxes?: () => void }) {
   const today = localToday()
   const running = blocks.filter((b) => (b.status === 'scheduled' || b.status === 'active') && b.end_date > today)
-  const [open, setOpen] = useState<{ id: number; what: 'end' | 'accessories' } | null>(null)
+  const [open, setOpen] = useState<{ id: number; what: 'end' | 'accessories' | 'maxes' } | null>(null)
   const [done, setDone] = useState<string | null>(null)
   if (running.length === 0) return null
   return (
-    <Section title="BLOCKS UNDER WAY" info="The block you are training now. A new block starts the day after the latest one ends. To change course (more training now, the peak nearer the race), end the current block early: its later sessions are set aside, not deleted. ACCESSORIES adds extra work to the sessions still ahead.">
+    <Section title="BLOCKS UNDER WAY" info="The block you are training now. A new block starts the day after the latest one ends. To change course (more training now, the peak nearer the race), end the current block early: its later sessions are set aside, not deleted. MAXES changes a 1RM or a max-reps number and works out again the loads of the sessions still ahead. ACCESSORIES adds extra work to them.">
       {running.map((b) => (
         <div key={b.id} className="pb-detail">
           <div className="pb-row tight" style={{ justifyContent: 'space-between' }}>
             <span><b>{b.name}</b> <span className="pb-muted mono">{dateShort(b.start_date)} → {dateShort(b.end_date)} · {b.status.toUpperCase()}{b.origin && b.origin !== 'generated' ? ' · RECORDED' : ''}</span></span>
             {open?.id !== b.id && (
               <span className="pb-row tight">
+                {b.origin === 'generated' && <button className="btn-ghost mono" onClick={() => { setDone(null); setOpen({ id: b.id, what: 'maxes' }) }}>MAXES</button>}
                 {b.origin === 'generated' && <button className="btn-ghost mono" onClick={() => { setDone(null); setOpen({ id: b.id, what: 'accessories' }) }}>ACCESSORIES</button>}
+                <a className="btn-ghost mono" href="#/plan/sessions">EDIT ONE SESSION</a>
                 <button className="btn-ghost mono" onClick={() => { setDone(null); setOpen({ id: b.id, what: 'end' }) }}>END EARLY</button>
               </span>
             )}
           </div>
           {open?.id === b.id && open.what === 'end' && <EndEarly id={b.id} cat={cat} onCancel={() => setOpen(null)} onEnded={(last) => { setOpen(null); onEnded(plusDays(last, 1)) }} />}
+          {open?.id === b.id && open.what === 'maxes' && <BlockMaxes id={b.id} cat={cat} onCancel={() => setOpen(null)} onDone={(n, names) => { setOpen(null); setDone(`${b.name}: new max${names.length === 1 ? '' : 'es'} for ${names.join(', ')} recorded; ${n} session${n === 1 ? '' : 's'} from today updated.`); onMaxes?.() }} />}
           {open?.id === b.id && open.what === 'accessories' && <BlockAccessories id={b.id} cat={cat} onCancel={() => setOpen(null)} onDone={(n) => { setOpen(null); setDone(`${b.name}: accessory work applied to ${n} session${n === 1 ? '' : 's'} from today.`) }} />}
         </div>
       ))}
       {done && <p className="pb-ok">{done}</p>}
     </Section>
+  )
+}
+
+function BlockMaxes({ id, cat, onCancel, onDone }: { id: number; cat: PlannerCatalog; onCancel: () => void; onDone: (sessions: number, names: string[]) => void }) {
+  const [d, setD] = useState<BlockMaxesData | null>(null)
+  const [edits, setEdits] = useState<Record<string, { oneRmKg?: number | null; maxReps?: number | null }>>({})
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  useEffect(() => {
+    let live = true
+    loadBlockMaxes(id, cat).then((x) => { if (live) setD(x) }).catch((e) => setErr(e instanceof Error ? e.message : String(e)))
+    return () => { live = false }
+  }, [id, cat])
+  const today = localToday()
+  const regen = d && typeof d.regen !== 'string' ? d.regen : null
+  const current = (name: string) => cat.maxes[movementKey(name)]
+  const lookup = (name: string): MaxEntry | null => {
+    const base = current(name)?.entry ?? null
+    const e = edits[movementKey(name)]
+    if (!e) return base
+    return { ...(base ?? {}), ...(e.oneRmKg != null ? { oneRmKg: e.oneRmKg } : {}), ...(e.maxReps != null ? { maxReps: e.maxReps } : {}) }
+  }
+  const exercises = useMemo(() => (regen ? exercisesFromMaxes(regen.run((n) => current(n)?.entry ?? null)) : []), [regen]) // eslint-disable-line react-hooks/exhaustive-deps
+  const changed = Object.entries(edits).filter(([, e]) => e.oneRmKg != null || e.maxReps != null)
+  const plan = useMemo(() => {
+    if (!regen || !d || changed.length === 0) return null
+    try { return maxRevisions(d.sessions, regen.run(lookup), today, new Set(changed.map(([k]) => k))) } catch (e) { return e instanceof Error ? e.message : String(e) }
+  }, [regen, d, edits, today]) // eslint-disable-line react-hooks/exhaustive-deps
+  if (!d) return <p className="pb-hint">{err ?? 'Loading the block…'}</p>
+  if (typeof d.regen === 'string') return <div className="pb-detail"><p className="pb-warn">The loads of this block cannot be worked out again here: {d.regen}. Change a session's loads one at a time in PLAN › SESSIONS.</p><button className="btn-ghost mono" onClick={onCancel}>CLOSE</button></div>
+  if (exercises.length === 0) return <div className="pb-detail"><p className="pb-info">No load in this block comes from a max (no strength program, or loads by RPE and fixed weights only).</p><button className="btn-ghost mono" onClick={onCancel}>CLOSE</button></div>
+  const set = (key: string, patch: { oneRmKg?: number | null; maxReps?: number | null }) => setEdits((x) => ({ ...x, [key]: { ...x[key], ...patch } }))
+  const names = exercises.filter((n) => changed.some(([k]) => k === movementKey(n)))
+  const revs = plan && typeof plan !== 'string' ? plan.revisions : []
+  const byExercise = new Map<string, { n: number; first: { date: string; before: Record<string, unknown>; after: Record<string, unknown> } }>()
+  for (const r of revs) for (const c of r.changes) {
+    const k = movementKey(c.exercise)
+    const cur = byExercise.get(k)
+    if (cur) cur.n++; else byExercise.set(k, { n: 1, first: { date: r.date, before: c.before, after: c.after } })
+  }
+  return (
+    <div className="pb-detail">
+      <p className="pb-info">The max each lift's loads are worked out from. Type a new 1RM (or max reps for a bodyweight lift) and the sessions still planned from today take the new loads; sets, reps, notes, dates and any load you set by hand on a session stay as they are. Each changed session is kept as a new version (nothing is deleted), and the phone gets it the next time it syncs.{d.weightedBase === 'added' ? ' Weighted pull-ups and dips count the added weight only: their 1RM is the most you can hang on the belt for one rep.' : ''}</p>
+      <table className="pb-table">
+        <thead><tr><th>EXERCISE</th><th>1RM NOW</th><th>FROM</th><th>NEW 1RM</th><th>MAX REPS</th><th>NEW MAX REPS</th></tr></thead>
+        <tbody>
+          {exercises.map((name) => {
+            const key = movementKey(name)
+            const r = current(name)
+            const e = edits[key] ?? {}
+            return (
+              <tr key={key} className={r?.entry.oneRmKg == null ? 'pb-missing' : ''}>
+                <td>{name}</td>
+                <td className="mono">{r?.entry.oneRmKg != null ? `${fmt(Math.round(r.entry.oneRmKg * 10) / 10)} kg` : 'none'}</td>
+                <td className="pb-muted">{r?.basedOn ?? 'no data'}</td>
+                <td><Num value={e.oneRmKg ?? null} step={0.5} min={0} width={80} placeholder="kg" onChange={(v) => set(key, { oneRmKg: v != null && v > 0 ? v : null })} /></td>
+                <td className="mono">{r?.entry.maxReps != null ? r.entry.maxReps : '–'}</td>
+                <td><Num value={e.maxReps ?? null} step={1} min={0} width={64} placeholder="reps" onChange={(v) => set(key, { maxReps: v != null && v > 0 ? Math.trunc(v) : null })} /></td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      {typeof plan === 'string' && <p className="pb-warn">{plan}</p>}
+      {plan && typeof plan !== 'string' && (<>
+        <p className="pb-info">{revs.length === 0 ? 'No session still to come changes with these maxes.' : `${revs.length} session${revs.length === 1 ? '' : 's'} from today change${revs.length === 1 ? 's' : ''}:`}</p>
+        {byExercise.size > 0 && <ul className="pb-hint mono">{[...byExercise.entries()].map(([k, v]) => (
+          <li key={k}>{exercises.find((n) => movementKey(n) === k) ?? k}: {v.n} lift{v.n === 1 ? '' : 's'}, first {dateShort(v.first.date)} {storedLoadText(v.first.before)} → {storedLoadText(v.first.after)}</li>
+        ))}</ul>}
+        {plan.skipped.length > 0 && <p className="pb-warn">Left as they are: {plan.skipped.map((s) => `${s.title} on ${dateShort(s.date)} (${s.why})`).join('; ')}.</p>}
+      </>)}
+      {err && <p className="pb-warn">{err}</p>}
+      <div className="pb-row">
+        <button className="pb-primary mono" disabled={busy || changed.length === 0 || typeof plan === 'string'} onClick={async () => {
+          if (!plan || typeof plan === 'string') return
+          setBusy(true); setErr(null)
+          try {
+            const payload = Object.fromEntries(changed.map(([k, e]) => [k, { name: exercises.find((n) => movementKey(n) === k) ?? k, ...e }]))
+            onDone(await applyBlockMaxes(id, payload, plan.revisions, today), names)
+          } catch (e) { setErr(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
+        }}>{busy ? 'SAVING…' : revs.length > 0 ? `SAVE AND UPDATE ${revs.length} SESSION${revs.length === 1 ? '' : 'S'}` : 'SAVE THE MAXES'}</button>
+        <button className="btn-ghost mono" onClick={onCancel}>CANCEL</button>
+      </div>
+    </div>
   )
 }
 

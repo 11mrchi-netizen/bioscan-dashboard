@@ -11,7 +11,7 @@ const plusDays = (d: string, n: number) => new Date(Date.UTC(Number(d.slice(0, 4
 async function paged<T>(table: string, cols: string, order: string, where: (q: any) => any): Promise<T[]> { // eslint-disable-line @typescript-eslint/no-explicit-any
   const out: T[] = []
   for (let start = 0; start < 100 * PAGE; start += PAGE) {
-    const r = await where(supabase.from(table).select(cols)).order(order, { ascending: true }).range(start, start + PAGE - 1)
+    const r = await where(supabase.from(table).select(cols)).order(order, { ascending: true }).order('id', { ascending: true }).range(start, start + PAGE - 1)
     if (r.error) throw new Error(`${table}: ${r.error.message}`)
     const rows = (r.data ?? []) as T[]
     out.push(...rows)
@@ -50,7 +50,7 @@ export async function loadFuelRows(today: string, zone: string): Promise<FuelRow
     must(supabase.from('body_metrics').select('date,weight_kg,lean_mass_kg,body_fat_pct').order('date', { ascending: false }).limit(30), 'body_metrics'),
     supabase.from('body_metrics').select('height_cm').not('height_cm', 'is', null).order('date', { ascending: false }).limit(1).then((r) => (r.data?.[0] as { height_cm: number } | undefined)?.height_cm ?? null),
     must(supabase.from('exercise_sessions').select('duration_min').gte('start_time', plusDays(today, -28)).gt('duration_min', 0).neq('type', 'walk'), 'exercise_sessions'),
-    must(supabase.from('meals').select('logged_at,calories,protein_g,fat_g,carbs_g,meal_slot').order('logged_at', { ascending: false }).limit(5000), 'meals'),
+    paged<FuelRows['meals'][number]>('meals', 'logged_at,calories,protein_g,fat_g,carbs_g,meal_slot', 'logged_at', (q) => q.gte('logged_at', `${threeYears}T00:00:00Z`)),
   ])
   return {
     events: events as FuelRows['events'], planned: planned as FuelRows['planned'], calendar: calendar as FuelRows['calendar'], recorded,

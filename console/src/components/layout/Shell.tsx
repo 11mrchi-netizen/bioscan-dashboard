@@ -34,8 +34,11 @@ export function Shell() {
 
   // Perf pass: the 600 kB charting chunk used to start downloading only after the first workspace had loaded. Fetch it as
   // soon as the browser is idle after sign-in, so the first chart does not wait for it (an import of an already-loaded
-  // module is free).
+  // module is free). Not on a slow or data-saving connection (205 kB gzipped, and Today has no charts): there the chart
+  // pages load it when they are opened, as every page still does on its own.
   useEffect(() => {
+    const conn = (navigator as { connection?: { saveData?: boolean; effectiveType?: string } }).connection
+    if (conn?.saveData || /(^|-)(2g|3g)$/.test(conn?.effectiveType ?? '')) return
     const idle = (globalThis as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback
     const t = idle ? idle(() => { void import('../../lib/echarts') }) : window.setTimeout(() => { void import('../../lib/echarts') }, 1500)
     return () => { if (!idle) window.clearTimeout(t) }

@@ -1,0 +1,63 @@
+name: Web app checks
+
+# The deploy job built the app only after a merge to main, so a type error was found after merging and stopped the
+# deploy; lint and the browser walkthrough ran nowhere. These run on every pull request and branch push that touches
+# the app or what it imports.
+on:
+  pull_request:
+    paths:
+      - 'console/**'
+      - 'design/tokens/**'
+      - 'supabase/functions/_shared/**'
+      - '.github/workflows/console-checks.yml'
+  push:
+    branches-ignore: [main]
+    paths:
+      - 'console/**'
+      - 'design/tokens/**'
+      - 'supabase/functions/_shared/**'
+      - '.github/workflows/console-checks.yml'
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: console
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: console/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (errors fail, warnings are listed)
+        run: npm run lint
+
+      - name: Type check and build
+        env:
+          VITE_SUPABASE_URL: https://ugfrglbcoivkprjqvjzz.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_GyandyvuVbF0RxZLnugz4A_GlNIstPc
+        run: npm run build
+
+      # The walkthrough runs the built app against a mocked Supabase (no network, no real data).
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+
+      - name: Browser walkthrough
+        run: node e2e/walkthrough.cjs e2e/out
+
+      - name: Keep the walkthrough screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: walkthrough
+          path: console/e2e/out
+          if-no-files-found: ignore

@@ -117,16 +117,18 @@ planned sessions, the calendar and recordings), `weekEnergy.ts` (goal, observed 
 meals). `console/src/lib/fuelInputs.ts` builds the engine's inputs from table rows; `fuelDay.ts` reads them. Read only: `fuel_plans`
 stays the phone's record.
 
-Differences from the phone to know about: the phone's fuel settings (meal times, train low, the carbohydrate the gut tolerates) live
-only on the phone, so the web uses the defaults; the phone's answers to "what is this?" for calendar entries are read
+The phone's fuel settings (meal times, train low, the carbohydrate the gut tolerates, caffeine, salty sweat) are kept with the account
+(`user_profile.fuel_settings`, synced by the phone's `FuelSettingsStore` on every open and on save) and read here by `lib/fuelSettings.ts`;
+until the phone has sent them the defaults are used and the page says so. A difference from the phone to know about: the phone's answers to "what is this?" for calendar entries are read
 (`calendar_event_overrides`) but cannot be given here. To regenerate the fixtures after a deliberate rule change:
 `FT_PARITY_WRITE=1 ./gradlew :app:testDebugUnitTest --tests '*ParityTest*'` in `android-app`.
 
 **Races** (Plan › Races › FUEL PLAN on an event): the plan for a race or long session, by time and by aid station: carbohydrate, fluid and sodium per hour and in all,
 the steps down the course, what to carry between stations, before and after, the weather (Open-Meteo: the forecast within 16 days, else the typical weather of those
 dates over ten years), what it assumes and what to watch for. Engine: `heat.ts`, `sweat.ts`, `course.ts`, `raceFuel.ts`; reads: `raceFuelData.ts`, `weather.ts`.
-The phone's home place (the weather of an event with no start point) and its carbohydrate tolerance, caffeine and salty-sweat settings are phone-only: no place means
-no weather, and the defaults are used.
+An event with no start point takes the weather at the account's Home place (`places`, category home, not stopped, the oldest; the phone's
+`PlacesRepository.home` reads the same, then falls back to Setup's home location on the phone); no place at all means no weather. Long-session
+schedules are seeded with the weather at home too, and all three use the phone's fuel settings.
 
 **The record (`fuel_plans`)**: opening the fuel plan keeps today's plan, and opening an event's plan keeps that event's, as the phone does when it shows them: one
 append-only row (`kind`, `ref_key`, `engine_version` 4, `inputs_hash`, `plan`). `fuel-core/snapshot.ts` makes the snapshot and the hash the phone makes (Java's

@@ -130,8 +130,9 @@ sets the week's energy and protein, the plan shapes each day.
 
 - `data/FuelPlanRepository.kt` puts it together: 17 planned days from three days back, the goal (or the maintenance
   estimate) and whether it is a deficit, weight and fat-free mass, the days before from the Log's daily totals, the
-  sweat profile, the home or course weather, the person's products, `FuelSettingsStore` (meal times, training low,
-  tolerated g/h, caffeine, salty sweater). `loadToday` codes today and tomorrow, places logged meals in their slots,
+  sweat profile, the course weather or else the home weather (the account's Home place, then Setup's home location:
+  `PlacesRepository.home`), the person's products, `FuelSettingsStore` (meal times, training low, tolerated g/h,
+  caffeine, salty sweater; kept with the account in `user_profile.fuel_settings` so the web plans with the same ones). `loadToday` codes today and tomorrow, places logged meals in their slots,
   plans long sessions (90 min or more) of the next three days; `loadEvent` builds the event's plan with its duration
   range (target ±5 %, expected ±10 %, or the run estimate) and, the day before or the day itself, the days-before check.
 - `supabase/migrations/20261026_fuel_plans.sql`: a compact copy (`domain/fuel/FuelSnapshot.kt`) is written only when a

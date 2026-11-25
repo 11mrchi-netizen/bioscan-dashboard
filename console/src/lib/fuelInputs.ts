@@ -80,9 +80,13 @@ export interface FuelDays {
   snapshot: DaySnapshot
   /** today's logged carbohydrate per coded meal (by the meal's own slot label, else by time), against the meal's range */
   logged: Record<string, { carbG: number | null; status: MealAdherence }>
+  /** the settings the meals were coded under */
+  settings: FuelSettings
+  /** whether they are the phone's (set by fuelDay.ts; false or absent: the phone has not sent them, these are the defaults) */
+  settingsFromPhone?: boolean
 }
 
-/** The phone keeps these on the phone only (FuelSettingsStore); the web uses the same defaults until it has its own. */
+/** The phone's fuel settings the day plan uses (its FuelSettingsStore, kept with the account: fuelSettings.ts reads them); the defaults until the phone has sent them. */
 export interface FuelSettings { meals: MealTimes; trainLow: boolean; toleratedGPerHour: number }
 export const DEFAULT_FUEL_SETTINGS: FuelSettings = { meals: DEFAULT_MEAL_TIMES, trainLow: false, toleratedGPerHour: DEFAULT_TOLERATED_G_PER_H }
 
@@ -164,7 +168,7 @@ export function buildFuelDays(rows: FuelRows, today: string, nowIso: string, zon
   }
   const logged2: FuelDays['logged'] = {}
   for (const c of meals[todayIdx].meals) logged2[c.kind] = { carbG: bySlot[c.kind] ?? null, status: adherence(c, bySlot[c.kind] ?? null) }
-  return { today, todayIdx, days, plans, energy, weightKg, fatFreeMassKg: ffm, meals, history: intakeHistory, snapshot, logged: logged2 }
+  return { today, todayIdx, days, plans, energy, weightKg, fatFreeMassKg: ffm, meals, history: intakeHistory, snapshot, logged: logged2, settings }
 }
 
 const localDay = (zdt: string) => zdt.slice(0, 10)

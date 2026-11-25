@@ -1,7 +1,7 @@
 // The pure part of an event's fuel plan: an event row and what was read about the person in, the plan out (tests need no database). raceFuelData.ts reads.
 import {
   type AidStation, atTime, DEFAULT_RACE_SETTINGS, durationRange, estimateRunTime, type FuelProductOption, instant, type Intensity, planRaceFuel, type RaceFuelPlan,
-  type RecentRun, sweatProfile, type SweatTest, type WeatherSeries, zdtString, type CoursePoint, type IntakeHistoryResult,
+  type RaceFuelSettings, type RecentRun, sweatProfile, type SweatTest, type WeatherSeries, zdtString, type CoursePoint, type IntakeHistoryResult,
 } from '../../../supabase/functions/_shared/fuel-core/index.ts'
 
 export interface EventRow {
@@ -9,7 +9,13 @@ export interface EventRow {
   target_time_min: number | null; expected_duration_min: number | null; distance_km: number | null; ascent_m: number | null; start_lat: number | null; start_lon: number | null
   course_profile: (number | null)[][] | null; aid_stations: unknown
 }
-export interface RaceFuel { event: EventRow; plan: RaceFuelPlan; start: string; hasPlace: boolean; history: IntakeHistoryResult | null }
+export interface RaceFuel {
+  event: EventRow; plan: RaceFuelPlan; start: string; hasPlace: boolean; history: IntakeHistoryResult | null
+  /** the weather was read at the Home place, the event having no start point of its own */
+  atHome: boolean
+  /** the phone's settings were used (false: it has not sent them, the defaults were) */
+  settingsFromPhone: boolean; settings: RaceFuelSettings
+}
 
 const SPORT_TYPE: Record<string, string> = { run: 'run', trail_run: 'run', ride: 'ride', hike: 'hike', swim: 'swim', triathlon: 'run', team_sport: 'other' }
 const SESSION_TYPES: Record<string, string[]> = { run: ['run'], trail_run: ['run', 'hike'] }
@@ -26,6 +32,8 @@ export function intensityOf(kind: string, priority: string | null, duration: num
 export interface RaceRows {
   event: EventRow; weightKg: number | null; sweatTests: SweatTest[]; products: FuelProductOption[]; runs: RecentRun[]; weather: WeatherSeries; zone: string
   history: IntakeHistoryResult | null
+  /** the phone's settings (fuelSettings.ts); the defaults when not given */
+  settings?: RaceFuelSettings
 }
 
 /** The plan from what was read (pure, for tests). */
@@ -41,7 +49,7 @@ export function buildRaceFuel(r: RaceRows): { plan: RaceFuelPlan; start: string;
   const plan = planRaceFuel({
     title: e.name, type: (SESSION_TYPES[e.sport ?? ''] ?? [SPORT_TYPE[e.sport ?? ''] ?? 'other'])[0], intensity, start, durationMin: d.base, durationLowMin: d.low, durationHighMin: d.high, durationBasis: d.basis,
     course: courseOf(e.course_profile), distanceKm: e.distance_km, aidStations: aidStationsOf(e.aid_stations), weather: r.weather, sweat: sweatProfile(r.sweatTests, kg), weightKg: kg,
-    settings: DEFAULT_RACE_SETTINGS, products: r.products, history: r.history, loadingDays: intensity === 'RACE' && d.base > 90,
+    settings: r.settings ?? DEFAULT_RACE_SETTINGS, products: r.products, history: r.history, loadingDays: intensity === 'RACE' && d.base > 90,
   })
   return { plan, start, hasPlace: e.start_lat != null && e.start_lon != null }
 }

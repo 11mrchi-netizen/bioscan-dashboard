@@ -10,7 +10,7 @@ test('every engine belongs to exactly one group and `all` is their union in orde
 })
 
 test('every engine the run publishes is placed in a group', () => {
-  const published = ['breaks', 'integrity', 'relationships', 'typicality', 'expectedBands', 'evidence', 'experiments', 'interventionResponses', 'interventionIts', 'eventEvidence', 'fitnessFatigue', 'health', 'air']
+  const published = ['breaks', 'integrity', 'relationships', 'typicality', 'expectedBands', 'evidence', 'experiments', 'interventionResponses', 'interventionIts', 'eventEvidence', 'fitnessFatigue', 'health', 'air', 'reports']
   assert.deepEqual([...enginesFor('all')].sort(), [...published].sort())
 })
 

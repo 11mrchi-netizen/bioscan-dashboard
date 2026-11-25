@@ -1,0 +1,182 @@
+import assert from 'node:assert/strict'
+import { test } from 'node:test'
+import {
+  adherenceLine, buildReport, convertUnit, foodStool, historyOf, labVerdict, lastCompleted, metricLine, microSection, parsePeriodKey,
+  periodKey, periodLabel, periodValue, plannedDoses, previousOf, REPORT_METRICS, regimenItem, suggestions, type DailySeries, type MetricLine,
+  type ReportPeriod,
+} from './periodReport.ts'
+import { addDays } from './seriesContract.ts'
+
+const spec = (id: string) => REPORT_METRICS.find((m) => m.id === id)!
+const fill = (start: string, days: number, f: (i: number) => number | null): DailySeries => {
+  const m: DailySeries = new Map()
+  for (let i = 0; i < days; i++) { const v = f(i); if (v !== null) m.set(addDays(start, i), v) }
+  return m
+}
+
+test('periods: Monday-to-Sunday weeks and calendar months, keyed and labelled', () => {
+  // 2026-11-25 is a Wednesday.
+  assert.deepEqual(lastCompleted('2026-11-25', 'week'), { grain: 'week', start: '2026-11-16', end: '2026-11-22' })
+  assert.deepEqual(lastCompleted('2026-11-23', 'week'), { grain: 'week', start: '2026-11-16', end: '2026-11-22' })
+  assert.deepEqual(lastCompleted('2026-12-01', 'month'), { grain: 'month', start: '2026-11-01', end: '2026-11-30' })
+  assert.deepEqual(lastCompleted('2026-03-15', 'month'), { grain: 'month', start: '2026-02-01', end: '2026-02-28' })
+  const w = lastCompleted('2026-11-25', 'week')
+  assert.equal(periodKey(w), 'week:2026-11-16')
+  assert.deepEqual(parsePeriodKey('week:2026-11-16'), w)
+  assert.equal(parsePeriodKey('week:2026-11-17'), null, 'a week key is a Monday')
+  assert.deepEqual(parsePeriodKey('month:2026-02'), { grain: 'month', start: '2026-02-01', end: '2026-02-28' })
+  assert.deepEqual(previousOf(w), { grain: 'week', start: '2026-11-09', end: '2026-11-15' })
+  assert.equal(periodLabel(w), 'Week of 16 Nov 2026')
+  assert.equal(periodLabel({ grain: 'month', start: '2026-11-01', end: '2026-11-30' }), 'November 2026')
+  const h = historyOf(w)
+  assert.equal(h.length, 8)
+  assert.deepEqual(h.at(-1), previousOf(w))
+  assert.equal(h[0].start, '2026-09-21')
+})
+
+test('a period value follows the contract: a mean of the days, a total per week for a month', () => {
+  const week: ReportPeriod = { grain: 'week', start: '2026-11-16', end: '2026-11-22' }
+  const s = fill('2026-11-16', 7, (i) => (i < 3 ? 10 : null))
+  assert.deepEqual(periodValue(s, week, { period: 'mean' }), { value: 10, days: 3 })
+  assert.deepEqual(periodValue(s, week, { period: 'sum' }), { value: 30, days: 3 })
+  const month: ReportPeriod = { grain: 'month', start: '2026-11-01', end: '2026-11-30' }
+  const runs = fill('2026-11-01', 30, (i) => (i % 3 === 0 ? 6 : null)) // 10 runs of 6 km = 60 km in 30 days
+  assert.equal(periodValue(runs, month, { period: 'sum' }).value, 14)
+  assert.equal(periodValue(new Map(), week, { period: 'sum' }).value, 0, 'no session is a total of zero, not missing')
+})
+
+test('a metric line: better and worse by the metric direction, steady inside the usual swing, thin with too few days', () => {
+  const week: ReportPeriod = { grain: 'week', start: '2026-11-16', end: '2026-11-22' }
+  const hist = historyOf(week)
+  // HRV: 50 every earlier week, 60 this week.
+  const hrv = fill(hist[0].start, 63, (i) => (i < 56 ? 50 + (Math.floor(i / 7) % 2) : 60))
+  const up = metricLine(spec('hrv'), { label: 'HRV', unit: 'ms', period: 'mean' }, hrv, week, hist)
+  assert.equal(up.status, 'better')
+  assert.equal(up.ref, 'series:hrv')
+  assert.equal(up.days, 7)
+  assert.ok(up.usualSwing !== null && up.usualSwing < 2)
+  const rhr = metricLine(spec('rhr'), { label: 'RHR', unit: 'bpm', period: 'mean' }, hrv, week, hist)
+  assert.equal(rhr.status, 'worse', 'up is worse for resting heart rate')
+  // A wild series: swings of ±15 each week, so +10 is inside the usual swing.
+  const wild = fill(hist[0].start, 63, (i) => (i < 56 ? (Math.floor(i / 7) % 2 ? 65 : 35) : 60))
+  const steady = metricLine(spec('hrv'), { label: 'HRV', unit: 'ms', period: 'mean' }, wild, week, hist)
+  assert.equal(steady.status, 'steady')
+  const sparse = fill('2026-11-16', 7, (i) => (i < 2 ? 60 : null))
+  assert.equal(metricLine(spec('hrv'), { label: 'HRV', unit: 'ms', period: 'mean' }, sparse, week, hist).status, 'thin')
+  assert.equal(metricLine(spec('hrv'), { label: 'HRV', unit: 'ms', period: 'mean' }, new Map(), week, hist).status, 'no_data')
+  // No direction: up or down, never better or worse.
+  const w = metricLine(spec('body_weight'), { label: 'Weight', unit: 'kg', period: 'mean' }, fill(hist[0].start, 63, (i) => (i < 56 ? 80 : 81)), week, hist)
+  assert.equal(w.status, 'up')
+})
+
+test('micronutrients: a mean over the days with food logged, low under 70%, sodium high over its limit', () => {
+  const week: ReportPeriod = { grain: 'week', start: '2026-11-16', end: '2026-11-22' }
+  const prev = previousOf(week)
+  const foodDays = new Set(['2026-11-16', '2026-11-17', '2026-11-18', '2026-11-19'])
+  const mg = fill('2026-11-16', 3, () => 300) // three days at 300, one food day without magnesium: mean 225
+  const na = fill('2026-11-16', 4, () => 3000)
+  const s = microSection(new Map([['magnesium', mg], ['sodium', na]]), foodDays, week, prev)
+  assert.equal(s.foodDays, 4)
+  const m = s.lines.find((l) => l.key === 'magnesium')!
+  assert.equal(m.value, 225)
+  assert.equal(m.status, 'low')
+  assert.equal(s.lines.find((l) => l.key === 'sodium')!.status, 'high')
+  assert.equal(s.lines.find((l) => l.key === 'zinc')!.status, 'no_data')
+  assert.equal(convertUnit(420, 'mg', 'g'), 0.42)
+  assert.equal(convertUnit(1, 'IU', 'mcg'), null)
+})
+
+test('regimen: planned doses by the schedule, adherence capped per day, as-needed not scored', () => {
+  const week: ReportPeriod = { grain: 'week', start: '2026-11-16', end: '2026-11-22' }
+  const prev = previousOf(week)
+  const daily = regimenItem({ id: 1, name: 'Creatine', time_of_day: 'morning', slots: ['morning'], schedule: { type: 'daily' }, start_date: '2026-06-01' })
+  const thrice = regimenItem({ id: 2, name: 'Vitamin C', slots: ['night', 'morning', 'afternoon'], schedule: { type: 'daily' } })
+  const everyThree = regimenItem({ id: 3, name: 'Iron', slots: ['morning'], every_n_days: 3, schedule: { type: 'every_n_days', n: 3 } })
+  const weekdays = regimenItem({ id: 4, name: 'X', slots: ['morning'], schedule: { type: 'weekdays', days: [1, 3, 5] } })
+  const cycle = regimenItem({ id: 5, name: 'Y', slots: ['morning'], schedule: { type: 'daily', cycle: { on_days: 5, off_days: 2, start: '2026-11-16' } } })
+  const legacy = regimenItem({ id: 6, name: 'Z', time_of_day: 'as-needed', slots: [] })
+  assert.deepEqual(thrice.slots, ['morning', 'afternoon', 'night'])
+  assert.equal(plannedDoses(daily, week.start, week.end), 7)
+  assert.equal(plannedDoses(thrice, week.start, week.end), 21)
+  assert.equal(plannedDoses(everyThree, week.start, week.end), 3)
+  assert.equal(plannedDoses(weekdays, week.start, week.end), 3)
+  assert.equal(plannedDoses(cycle, week.start, week.end), 5)
+  assert.equal(plannedDoses(legacy, week.start, week.end), 0)
+  // Taken on 4 days, twice on one of them: 4 of 7.
+  const takes = new Map([['2026-11-16', 2], ['2026-11-17', 1], ['2026-11-19', 1], ['2026-11-21', 1], ['2026-11-10', 1]])
+  const a = adherenceLine(daily, takes, week, prev)
+  assert.equal(a.taken, 4)
+  assert.equal(a.rate, 0.571)
+  assert.equal(a.status, 'not_followed')
+  assert.equal(a.prevRate, 0.143)
+  assert.equal(a.daysOn, 175)
+  assert.equal(adherenceLine(legacy, takes, week, prev).status, 'as_needed')
+})
+
+test('lab verdicts: not followed wins, then working, worse, no effect and too early', () => {
+  const r = (outcome: 'change' | 'none' | 'undecided', diff: number | null, metric = 'hrv') => ({ metric, label: metric.toUpperCase(), outcome, diff, unit: 'ms' })
+  assert.equal(labVerdict([r('change', 5)], 0.5).verdict, 'not_followed')
+  assert.equal(labVerdict([r('change', 5)], 0.9).verdict, 'working')
+  assert.equal(labVerdict([r('change', -5)], null).verdict, 'worse')
+  assert.equal(labVerdict([r('change', 3, 'rhr')], null).verdict, 'worse', 'a higher resting heart rate is worse')
+  assert.equal(labVerdict([r('none', 0.5)], 0.95).verdict, 'no_effect')
+  assert.equal(labVerdict([r('undecided', null)], 0.95).verdict, 'too_early')
+  assert.equal(labVerdict([], null).verdict, 'too_early')
+})
+
+test('food and stool: shown only with eight days each side and a gap of 20 points', () => {
+  const end = '2026-11-22'
+  const start = addDays(end, -39)
+  const fiber = fill(start, 40, (i) => (i % 2 ? 40 : 10))
+  // The day after a high-fibre day is normal, after a low one not.
+  const normal = fill(addDays(start, 1), 40, (i) => (i % 2 ? 100 : 0))
+  const lines = foodStool([{ key: 'meal_fiber', label: 'Fibre', unit: 'g', series: fiber }], normal, end)
+  assert.equal(lines.length, 1)
+  assert.equal(lines[0].highPct, 100)
+  assert.equal(lines[0].lowPct, 0)
+  const flat = fill(addDays(start, 1), 40, () => 100)
+  assert.equal(foodStool([{ key: 'meal_fiber', label: 'Fibre', unit: 'g', series: fiber }], flat, end).length, 0)
+  const few = fill(start, 10, () => 30)
+  assert.equal(foodStool([{ key: 'meal_fiber', label: 'Fibre', unit: 'g', series: few }], normal, end).length, 0)
+})
+
+const line = (id: string, value: number, prev: number, status: MetricLine['status']): MetricLine => ({
+  id, ref: `series:${id}`, label: id, unit: '', section: 'sleep', better: 'up', value, prev, delta: value - prev, usualSwing: null,
+  days: 7, prevDays: 7, status, perWeek: false,
+})
+
+test('suggestions: fixed rules, each naming its number, most pressing first', () => {
+  const micro = { foodDays: 5, lines: [] }
+  const s = suggestions({
+    metrics: [line('sleep_hours', 6.2, 6.9, 'worse'), line('hrv', 40, 48, 'worse'), line('meal_protein', 90, 95, 'steady'), line('steps', 9000, 8000, 'better')],
+    micro, weightKg: 80, lab: [],
+    regimen: [{ id: 3, name: 'Zinc', kind: null, asNeeded: false, planned: 7, taken: 3, rate: 0.43, prevRate: 1, daysOn: 100, status: 'not_followed' }],
+    untested: [],
+  })
+  const ids = s.map((x) => x.id)
+  assert.deepEqual(ids.slice(0, 2), ['sleep_short', 'worse_hrv'])
+  assert.ok(!ids.includes('worse_sleep_hours'), 'short sleep is said once')
+  assert.ok(ids.includes('protein_low'), '90 g is under 1.6 g/kg of 80 kg')
+  assert.ok(ids.includes('regimen_3'))
+  assert.ok(!ids.includes('steps_low'))
+  assert.match(s[0].text, /6\.2 h/)
+})
+
+test('a report: summary lists and at most five suggestions; a tested item is not called untested', () => {
+  const period: ReportPeriod = { grain: 'week', start: '2026-11-16', end: '2026-11-22' }
+  const r = buildReport({
+    period, today: '2026-11-23',
+    metrics: [line('sleep_hours', 6, 7, 'worse'), line('hrv', 40, 48, 'worse'), line('rhr', 50, 50, 'steady'), line('steps', 3000, 3200, 'steady'), line('meal_fiber', 10, 12, 'steady'), line('water_intake', 1000, 1100, 'steady'), line('mood', 8, 6, 'better')],
+    micro: { foodDays: 5, lines: [] },
+    regimen: [{ id: 4, name: 'Creatine', kind: null, asNeeded: false, planned: 7, taken: 7, rate: 1, prevRate: 1, daysOn: 170, status: 'followed' }],
+    lab: [{ source: 'intervention', id: 'i1', name: 'Creatine test', verdict: 'no_effect', detail: 'No change found in HRV.', supplementId: 4, href: '#/lab' }],
+    foodStool: [], weightKg: null,
+  })
+  assert.equal(r.key, 'week:2026-11-16')
+  assert.equal(r.prevStart, '2026-11-09')
+  assert.deepEqual(r.summary.better, ['mood'])
+  assert.deepEqual(r.summary.worse, ['sleep_hours', 'hrv'])
+  assert.deepEqual(r.summary.wasted, ['Creatine test'])
+  assert.equal(r.suggestions.length, 5)
+  assert.ok(!r.suggestions.some((x) => x.id === 'untested'))
+})

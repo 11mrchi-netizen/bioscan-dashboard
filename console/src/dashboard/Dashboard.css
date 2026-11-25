@@ -214,3 +214,9 @@ a.me-tile.tappable:hover { border-color: var(--ft-muted); }
 .me-spark-plot { display: block; }
 .me-spark-plot .me-readout { top: calc(100% - 4px); min-width: 0; padding: 5px 8px; }
 .me-tile { position: relative; }
+
+/* Today › REPORTS: the newest weekly and monthly report, each opening Lab › Reports on it. */
+.today-report .rp-link { color: var(--ft-platinum); text-decoration: none; }
+.today-report-row { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--ft-line); text-decoration: none; color: inherit; }
+.today-report-row:hover { border-color: var(--ft-muted); }
+.today-report-title { font: 500 11px var(--ft-mono); letter-spacing: .1em; color: var(--ft-fg); }

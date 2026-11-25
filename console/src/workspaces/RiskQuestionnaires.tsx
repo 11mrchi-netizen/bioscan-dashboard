@@ -9,6 +9,7 @@ import { cssColor, PALETTE } from '../lib/palette'
 import type { EChartsCoreOption } from '../lib/echarts'
 import './PlanBlock.css'
 import { DEFS, dueOn, type Instrument, INSTRUMENTS, localToday, optionsOf, score } from '../lib/instruments'
+import { Board } from '../components/layout/Board'
 
 export interface Response { id: number; instrument: string; local_date: string; score: number; band: string | null; flags: string[]; source: string }
 
@@ -106,7 +107,7 @@ export function RiskQuestionnaires({ responses, missing, onChanged }: { response
     <>
       {inst && <Form inst={inst} onSaved={onChanged} onCancel={() => setTaking(null)} />}
       {missing && <p className="pg-note">Not on this database yet: instrument_responses.</p>}
-      <div className="pg-grid">
+      <Board className="pg-grid">
         {DOMAINS.map(([domain, title]) => {
           const list = INSTRUMENTS.filter((i) => i.domain === domain)
           const series = list.filter((i) => (byInst.get(i.id) ?? []).length > 0)
@@ -145,7 +146,7 @@ export function RiskQuestionnaires({ responses, missing, onChanged }: { response
             </section>
           )
         })}
-      </div>
+      </Board>
     </>
   )
 }

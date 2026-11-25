@@ -11,6 +11,7 @@ import { ShiftBlocks } from './ShiftBlocks'
 import { PlanSessionRows } from './PlanSessionRows'
 import './PlanBlock.css'
 import './Pages.css'
+import { Board } from '../components/layout/Board'
 
 const plus = (d: string, n: number) => { const x = new Date(`${d}T12:00:00`); x.setDate(x.getDate() + n); return x.toLocaleDateString('sv-SE') }
 
@@ -48,7 +49,7 @@ export default function PlanOverview() {
           {running.length === 0 && <p className="pg-note">No block under way.{next.length ? ` Next: ${next[0].name}, from ${longDate(next[0].start_date)}.` : ''} <a href="#/plan/training">Plan one</a>.</p>}
           <RunningBlocks blocks={blocks} cat={cat} onEnded={() => setRev((r) => r + 1)} onMaxes={() => setRev((r) => r + 1)} />
           <ShiftBlocks blocks={blocks} onMoved={() => setRev((r) => r + 1)} />
-          <div className="pg-grid">
+          <Board className="pg-grid">
             <section className="pg-card">
               <h3 className="pg-card-title mono"><span>NEXT TWO WEEKS</span><a href="#/plan/sessions">ALL SESSIONS →</a></h3>
               {sessions.sessions.length === 0 ? <p className="pg-note">Nothing planned in the next two weeks.</p>
@@ -66,7 +67,7 @@ export default function PlanOverview() {
                 ))}</ul>
               )}
             </section>
-          </div>
+          </Board>
         </>
       )}
     </div>

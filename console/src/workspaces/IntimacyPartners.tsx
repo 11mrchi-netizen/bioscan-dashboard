@@ -10,6 +10,7 @@ import {
 import { type PersonPatch, updatePerson } from '../lib/intimacyData'
 import { AXES, Card, catAxis, Chart, f1, fullDate, HUE, Note, plural, Rows, ShareBars, Tiles, timeAxis, useDiscreet, useName, valueAxis, ago } from './IntimacyKit'
 import type { ViewProps } from './Intimacy'
+import { Board } from '../components/layout/Board'
 
 const SORTS: [PartnerSort, string][] = [['recent', 'RECENT'], ['most', 'MOST'], ['score', 'SCORE'], ['rating', 'RATING'], ['first', 'FIRST MET'], ['name', 'NAME']]
 const FACETS: [keyof Person, string][] = [['relationship', 'RELATIONSHIP'], ['where_met', 'WHERE MET'], ['country', 'COUNTRY'], ['age_range', 'AGE RANGE'], ['body_type', 'BODY TYPE'], ['gender', 'GENDER'], ['period', 'PERIOD']]
@@ -52,7 +53,7 @@ function PartnerList({ all, data, from, to, params, set }: ViewProps & { all: Pa
           { label: 'Time to a second', value: rep.medianDaysToSecond != null ? `${f1(rep.medianDaysToSecond)} d` : '–', sub: 'median, first to second time' },
         ]} />
       </Card>
-      <div className="it-grid">
+      <Board className="it-grid">
         <Card title="NEW PARTNERS BY MONTH" info="The month of each partner's first sexual encounter on record. The record starts in September 2026; first-met dates from the profiles are in the table.">
           {newByMonth.length ? <Chart option={monthOption} height={180} label="New partners per month" /> : <p className="it-empty">None on record yet.</p>}
         </Card>
@@ -60,7 +61,7 @@ function PartnerList({ all, data, from, to, params, set }: ViewProps & { all: Pa
           <ShareBars rows={breakdown(data.people, (p) => p[facet[0]] as string | null).slice(0, 12)} total={data.people.length} onPick={(l) => setOnlyFacet(onlyFacet === l ? null : l)} />
           {onlyFacet && <button className="it-link mono" onClick={() => setOnlyFacet(null)}>SHOWING {onlyFacet.toUpperCase()} · CLEAR</button>}
         </Card>
-      </div>
+      </Board>
       {lanes.length > 0 && (
         <Card title="TIMELINE" wide aside={`${lanes.length} IN RANGE`} info="One row per partner seen in the range, a dot per encounter (a hollow one without sex).">
           <div className="it-lanes">
@@ -146,7 +147,7 @@ function PartnerPage({ p, data, to, back, onChanged, open }: ViewProps & { p: Pa
     <div className="it-views-body">
       <div className="it-back"><button className="it-link mono" onClick={back}>‹ PARTNERS</button><h2 className="it-title">{name(person.id)}</h2><button className="ft-chip" onClick={() => setEditing(!editing)}>{editing ? 'CLOSE' : 'EDIT PROFILE'}</button></div>
       {editing && <ProfileForm person={person} onDone={() => { setEditing(false); onChanged() }} />}
-      <div className="it-grid">
+      <Board className="it-grid">
         <Card title="PROFILE">
           {profile.some((r) => r[1]) ? <Rows rows={profile.filter((r): r is [string, string] => !!r[1]).map(([label, value]) => ({ label, value }))} /> : <p className="it-empty">Nothing on file yet.</p>}
           {person.activities?.length ? <><div className="me-label">ACTIVITIES ON THE PROFILE</div><p className="me-note">{person.activities.join(', ')}</p></> : null}
@@ -164,9 +165,9 @@ function PartnerPage({ p, data, to, back, onChanged, open }: ViewProps & { p: Pa
             { label: 'With a barrier', value: p.barrierKnown ? `${p.withBarrier} of ${p.barrierKnown}` : '–', sub: sexual.length - p.barrierKnown ? `${sexual.length - p.barrierKnown} not recorded` : undefined },
           ]} /> : <p className="it-empty">No encounter logged with {name(person.id)}.</p>}
         </Card>
-      </div>
+      </Board>
       {sexual.length > 0 && (
-        <div className="it-grid">
+        <Board className="it-grid">
           <Card title="WHAT YOU DO TOGETHER" info={`Share of tagged encounters with ${name(person.id)} (${taggedMine}) against all your tagged encounters (${taggedAll}).`}>
             {mine.length ? (
               <ul className="it-bars">{mine.slice(0, 10).map(([tag, n]) => {
@@ -182,7 +183,7 @@ function PartnerPage({ p, data, to, back, onChanged, open }: ViewProps & { p: Pa
           <Card title="OVER TIME" info="Your rating and the strongest orgasm of each encounter (dashed).">
             <Chart option={trend} height={200} label="Rating and intensity over time" />
           </Card>
-        </div>
+        </Board>
       )}
       {windows.length > 0 && <Card title="STI TEST WINDOWS" info="Tests with this partner among the sexual encounters of the 90 days before (the phone's rule: a starting list, not a clinical look-back)."><p className="me-note">{windows.map(fullDate).join(' · ')}</p></Card>}
       <Card title="HISTORY" wide aside={plural(p.encounters.length, 'ENCOUNTER')}>

@@ -10,6 +10,7 @@ import { supabase } from '../lib/supabase'
 import { warnOnError } from '../lib/schema'
 import './Confirmatory.css'
 import './Interventions.css'
+import { Board } from '../components/layout/Board'
 
 type Ladder = 'anecdote' | 'early_signal' | 'emerging' | 'ready'
 
@@ -93,7 +94,7 @@ export function Repeatable() {
         </p>
       </div>
       {ivs.length === 0 && <div className="state-empty mono">NO REPEATABLE INTERVENTIONS YET</div>}
-      <div className="conf-grid">
+      <Board className="conf-grid">
         {ivs.map((iv) => {
           const ev = evidence.get(iv.id)
           const mine = events.filter((e) => e.intervention_id === iv.id)
@@ -147,7 +148,7 @@ export function Repeatable() {
             </div>
           )
         })}
-      </div>
+      </Board>
     </div>
   )
 }

@@ -12,6 +12,7 @@ import { eventSnapshot, fmtMin, roundToInt, seedBlocks, type FuelStep, type Carr
 import './PlanBlock.css'
 import './Pages.css'
 import './FuelPlan.css'
+import { Board } from '../components/layout/Board'
 
 const g = (x: number) => String(roundToInt(x))
 const when = (zdt: string) => new Date(zdt.replace(/\[.*\]$/, '')).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: zdt.slice(-1) === ']' ? zdt.slice(zdt.indexOf('[') + 1, -1) : undefined })
@@ -60,7 +61,7 @@ function Plan({ d, kept }: { d: RaceFuel; kept: StoreResult | null }) {
         {p.totalCaffeineMg > 0 && <p className="pg-note">Caffeine {g(p.totalCaffeineMg)} mg.</p>}
       </section>
 
-      <div className="pg-grid">
+      <Board className="pg-grid">
         <section className="pg-card">
           <h3 className="pg-card-title mono"><span>WEATHER</span><span>{p.weatherSource}{p.heat ? ` · ${p.heat.band.replace('_', ' ')}` : ''}</span></h3>
           {!p.heat && <p className="pg-note">{d.hasPlace || d.atHome ? `No forecast or typical weather could be read for ${d.hasPlace ? 'this place' : 'your home'}.` : 'The event has no place and the account has no Home place, so no weather: a mild 18 °C is assumed. Add the start point on the phone, or mark a place as Home on the phone (Setup › DATA CAPTURE › PLACES).'}</p>}
@@ -73,7 +74,7 @@ function Plan({ d, kept }: { d: RaceFuel; kept: StoreResult | null }) {
             <ul className="fp-why">{p.warnings.map((w) => <li key={w} className="pg-warn">{w}</li>)}</ul>
           </section>
         )}
-      </div>
+      </Board>
 
       <section className="pg-card wide">
         <h3 className="pg-card-title mono"><span>ON THE COURSE</span><span>{p.steps.length} STEPS</span></h3>
@@ -90,10 +91,10 @@ function Plan({ d, kept }: { d: RaceFuel; kept: StoreResult | null }) {
         </section>
       ) : null}
 
-      <div className="pg-grid">
+      <Board className="pg-grid">
         <Prep title="BEFORE" items={p.before} />
         <Prep title="AFTER" items={p.after} />
-      </div>
+      </Board>
 
       <section className="pg-card wide fp-foot">
         <h3 className="pg-card-title mono"><span>WHAT THE PLAN ASSUMES</span><span>{p.assumptions.length}</span></h3>

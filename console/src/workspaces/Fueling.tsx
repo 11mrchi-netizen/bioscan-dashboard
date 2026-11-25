@@ -13,6 +13,7 @@ import { summariseFueling } from '../../../supabase/functions/_shared/analysis-c
 import type { FuelingEvent, FuelingEventStatus, IntakeGap } from '../../../supabase/functions/_shared/analysis-core/fuelingSummary.ts'
 import './Confirmatory.css'
 import './Fueling.css'
+import { Board } from '../components/layout/Board'
 
 interface ProductRow {
   id: number
@@ -153,7 +154,7 @@ export function Fueling() {
       {products.length === 0 ? (
         <div className="state-empty mono">NO FUELING PRODUCTS YET</div>
       ) : (
-        <div className="conf-grid">
+        <Board className="conf-grid">
           {products.map((p) => {
             const v = latestVersions.get(p.id)
             return (
@@ -177,7 +178,7 @@ export function Fueling() {
               </div>
             )
           })}
-        </div>
+        </Board>
       )}
 
       <h3 className="iv-section-title mono">ACTIVITY INTAKE</h3>

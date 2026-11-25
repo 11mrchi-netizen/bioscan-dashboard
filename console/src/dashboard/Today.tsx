@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { useLoadEffect } from '../lib/useLoadEffect'
 import { localDateString, localToday } from '../lib/dates'
 import { metricHref } from '../lib/metrics'
+import { Board } from '../components/layout/Board'
 import {
   bandWord, chargeRankLine, directionGlyph, directionWords, DOMAINS, domainSentence, driverSummary, formatJudgedValue, referenceLine,
   type DayScores, type DomainKey,
@@ -43,48 +44,51 @@ export function Today({ day, onDay }: { day: string; onDay: (d: string) => void 
 
   return (
     <div className="today">
-      <section className="ft-card today-hero" aria-label="CHARGE">
-        <div className="today-day">{longDate(day)}</div>
-        {status.loading && !data ? <div className="today-empty">Loading the day…</div>
-          : status.error ? <div className="today-empty">Could not load the scores: {status.error} <button className="dash-link" onClick={status.retry}>RETRY</button></div>
-          : !hasDay ? <div className="today-empty">No scores were saved for this day. The phone saves them each day it is opened.</div>
-          : (
-            <>
-              <div className="today-scores">
-                <Ring value={charge} size={168} stroke="url(#charge-spectrum)" label="CHARGE" big onOpen={details ? () => setOverlay('CHARGE') : undefined} />
-                <div className="today-rings">
-                  {DOMAINS.map((r) => (
-                    <Ring key={r.key} value={round(shownScore(data!, day, r.key))} size={92} stroke={r.hue} label={r.label}
-                      onOpen={details?.domains[r.key] ? () => setOverlay(r.key) : undefined} />
-                  ))}
+      {/* Layout (Nov 2026): the scores and the 28 days on the left, the day's plan beside them, packed so neither leaves a hole. */}
+      <Board className="today-board">
+        <section className="ft-card today-hero" aria-label="CHARGE">
+          <div className="today-day">{longDate(day)}</div>
+          {status.loading && !data ? <div className="today-empty">Loading the day…</div>
+            : status.error ? <div className="today-empty">Could not load the scores: {status.error} <button className="dash-link" onClick={status.retry}>RETRY</button></div>
+            : !hasDay ? <div className="today-empty">No scores were saved for this day. The phone saves them each day it is opened.</div>
+            : (
+              <>
+                <div className="today-scores">
+                  <Ring value={charge} size={168} stroke="url(#charge-spectrum)" label="CHARGE" big onOpen={details ? () => setOverlay('CHARGE') : undefined} />
+                  <div className="today-rings">
+                    {DOMAINS.map((r) => (
+                      <Ring key={r.key} value={round(shownScore(data!, day, r.key))} size={92} stroke={r.hue} label={r.label}
+                        onOpen={details?.domains[r.key] ? () => setOverlay(r.key) : undefined} />
+                    ))}
+                  </div>
                 </div>
-              </div>
-              {details ? <p className="today-hint">{chargeRankLine(details.charge) ?? ''} Tap a ring for what moved it.</p>
-                : <p className="today-hint">The scores of this day were saved without their detail (kept from 6 Oct 2026 on): the rings do not open.</p>}
-            </>
-          )}
-        <div className="today-links">
-          <a className="dash-link" href={`#/log?day=${day}`}>DAY LOG →</a>
-          <a className="dash-link" href={historyHref('charge', day)}>CHARGE HISTORY →</a>
-        </div>
-      </section>
+                {details ? <p className="today-hint">{chargeRankLine(details.charge) ?? ''} Tap a ring for what moved it.</p>
+                  : <p className="today-hint">The scores of this day were saved without their detail (kept from 6 Oct 2026 on): the rings do not open.</p>}
+              </>
+            )}
+          <div className="today-links">
+            <a className="dash-link" href={`#/log?day=${day}`}>DAY LOG →</a>
+            <a className="dash-link" href={historyHref('charge', day)}>CHARGE HISTORY →</a>
+          </div>
+        </section>
 
-      {data && <PlanCard plan={data.plan} day={day} />}
+        {data && <PlanCard plan={data.plan} day={day} />}
 
-      <section className="ft-card today-strip" aria-label={`CHARGE, the ${STRIP_DAYS} days to ${day}`}>
-        <div className="today-strip-head"><span>CHARGE · {STRIP_DAYS} DAYS</span><span>tap a day</span></div>
-        <div className="today-bars">
-          {strip.map((d) => {
-            const v = data ? round(stripCharge(data, d)) : null
-            return (
-              <button key={d} className={`today-bar ${d === day ? 'on' : ''}`} onClick={() => onDay(d)} title={`${d}: ${v ?? 'no score'}`} aria-label={`${d}, CHARGE ${v ?? 'none'}`}>
-                <span className="today-bar-fill" style={{ height: `${v == null ? 0 : Math.max(4, Math.min(100, v))}%` }} />
-                <span className="today-bar-day">{Number(d.slice(8))}</span>
-              </button>
-            )
-          })}
-        </div>
-      </section>
+        <section className="ft-card today-strip" aria-label={`CHARGE, the ${STRIP_DAYS} days to ${day}`}>
+          <div className="today-strip-head"><span>CHARGE · {STRIP_DAYS} DAYS</span><span>tap a day</span></div>
+          <div className="today-bars">
+            {strip.map((d) => {
+              const v = data ? round(stripCharge(data, d)) : null
+              return (
+                <button key={d} className={`today-bar ${d === day ? 'on' : ''}`} onClick={() => onDay(d)} title={`${d}: ${v ?? 'no score'}`} aria-label={`${d}, CHARGE ${v ?? 'none'}`}>
+                  <span className="today-bar-fill" style={{ height: `${v == null ? 0 : Math.max(4, Math.min(100, v))}%` }} />
+                  <span className="today-bar-day">{Number(d.slice(8))}</span>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      </Board>
 
       {overlay && details && <ScoreOverlay scores={details} which={overlay} day={day} onPick={setOverlay} onClose={() => setOverlay(null)} />}
 

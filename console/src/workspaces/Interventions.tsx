@@ -14,6 +14,7 @@ import { warnOnError } from '../lib/schema'
 import { IntervalBar } from './Confirmatory'
 import './Confirmatory.css'
 import './Interventions.css'
+import { Board } from '../components/layout/Board'
 
 type LifecycleState = 'proposed' | 'baseline' | 'active' | 'evaluating' | 'validated' | 'maintained' | 'modified' | 'stopped'
 type ResponseVerdict = 'signal_observed' | 'no_signal' | 'insufficient'
@@ -142,7 +143,7 @@ export function Interventions() {
       {protocols.length > 0 && (
         <>
           <h3 className="iv-section-title mono">PROTOCOLS</h3>
-          <div className="conf-grid">
+          <Board className="conf-grid">
             {protocols.map((p) => {
               const audit = audits.get(p.id)
               return (
@@ -170,12 +171,12 @@ export function Interventions() {
                 </div>
               )
             })}
-          </div>
+          </Board>
         </>
       )}
 
       <h3 className="iv-section-title mono">INTERVENTIONS</h3>
-      <div className="conf-grid">
+      <Board className="conf-grid">
         {interventions.map((iv) => {
           const response = responses.get(iv.id)
           const cardState = response ? CARD_CLASS[response.state as ResponseVerdict] : null
@@ -215,7 +216,7 @@ export function Interventions() {
             </div>
           )
         })}
-      </div>
+      </Board>
     </div>
   )
 }

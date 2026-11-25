@@ -14,6 +14,7 @@ import { RiskQuestionnaires, type Response } from './RiskQuestionnaires'
 import { RiskFromPhone } from './RiskFromPhone'
 import { localToday } from '../lib/instruments'
 import './Pages.css'
+import { Board } from '../components/layout/Board'
 
 // Metric hues for canvas charts: the values of design/tokens (--m-pm25, --m-no2, --m-ozone, --m-co2, --m-uv-index,
 // --m-blood-pressure). Charts need the colour itself, not the variable.
@@ -214,7 +215,7 @@ export default function Risk({ embedded = false }: { embedded?: boolean }) {
 
       {!embedded && <RiskFromPhone />}
 
-      <div className="pg-grid">
+      <Board className="pg-grid">
         <section className="pg-card">
           <h3 className="pg-card-title mono"><span>AIR · LAST 30 DAYS</span><span>{summary?.asOf ?? ''}</span></h3>
           {!s || s.days_with_data === 0 ? <p className="pg-note">No air days yet. They need location history (phone: Setup › Data capture › Locations); the run fills in the outdoor air itself.</p> : (
@@ -251,7 +252,7 @@ export default function Risk({ embedded = false }: { embedded?: boolean }) {
             ))}</ul>
           )}
         </section>
-      </div>
+      </Board>
 
       {days.length > 0 && (
         <>
@@ -269,10 +270,10 @@ export default function Risk({ embedded = false }: { embedded?: boolean }) {
               ))}</ul>}
             </section>
           )}
-          <div className="pg-grid">
+          <Board className="pg-grid">
             <section className="pg-card"><h3 className="pg-card-title mono"><span>NO₂ AND OZONE</span><span>OUTDOOR, WHERE YOU WERE</span></h3><Chart option={gasOption} /></section>
             <section className="pg-card"><h3 className="pg-card-title mono"><span>CO₂ AT NIGHT</span><span>1,000 VENTILATE · 1,400 POOR (CONVENTIONS)</span></h3><Chart option={co2Option} /></section>
-          </div>
+          </Board>
         </>
       )}
 

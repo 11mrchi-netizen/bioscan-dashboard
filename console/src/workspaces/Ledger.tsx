@@ -9,6 +9,7 @@ import { warnOnError } from '../lib/schema'
 import { LoadBanner } from '../components/shared/LoadBanner'
 import { HYPOTHESES } from '../../../supabase/functions/_shared/analysis-core/hypotheses.ts'
 import './Confirmatory.css'
+import { Board } from '../components/layout/Board'
 
 interface LedgerRow {
   question_id: string
@@ -121,7 +122,7 @@ export function Ledger() {
           </select>
         </label>
       </div>
-      <div className="conf-grid">
+      <Board className="conf-grid">
         {questions.filter((q) => question === 'all' || q === question).map((q) => {
           const list = byQuestion.get(q) ?? []
           const last = list[list.length - 1]
@@ -143,7 +144,7 @@ export function Ledger() {
             </div>
           )
         })}
-      </div>
+      </Board>
       <h3 className="iv-section-title mono">CHANGES OF VERDICT</h3>
       {changes.length === 0 && <div className="state-empty mono">NO VERDICT HAS CHANGED YET</div>}
       {changes.slice(0, 200).map((c, i) => (

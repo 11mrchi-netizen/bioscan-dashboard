@@ -15,6 +15,7 @@ import { formatGPerKg, type DayFuelPlan, type DayMeal, type PlannedItem, roundTo
 import './PlanBlock.css'
 import './Pages.css'
 import './FuelPlan.css'
+import { Board } from '../components/layout/Board'
 
 const dayName = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
 const longDay = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -124,7 +125,7 @@ function Day({ data, i }: { data: FuelDays; i: number }) {
         {plan.energyAvailability != null && <p className="pg-note">Energy left after training: {g(plan.energyAvailability)} kcal per kg of fat-free mass.</p>}
       </section>
 
-      <div className="pg-grid">
+      <Board className="pg-grid">
         <section className="pg-card">
           <h3 className="pg-card-title mono"><span>TRAINING</span><span>{day.items.length ? hm(day.items.reduce((a, s) => a + s.durationMin, 0)) : 'REST'}</span></h3>
           {day.items.length === 0 && <p className="pg-note">Nothing planned or recorded: a rest day.</p>}
@@ -143,7 +144,7 @@ function Day({ data, i }: { data: FuelDays; i: number }) {
           </ul>
           <p className="pg-note">Carbohydrate in a meal is a range of ±15 %. What is planned during sessions comes off the day's total first.</p>
         </section>
-      </div>
+      </Board>
       <LongSessions data={data} i={i} />
     </div>
   )

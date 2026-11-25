@@ -8,6 +8,7 @@ import { localToday } from '../lib/dates'
 import { type AthleteEvent, daysUntil, hm, loadAthleteEvents, longDate } from '../lib/planReads'
 import './PlanBlock.css'
 import './Pages.css'
+import { Board } from '../components/layout/Board'
 
 interface FuelSchedule { kind: string; ref_key: string; duration_min: number | null; blocks: unknown; updated_at: string }
 interface Aid { name?: string; km?: number; distance_km?: number }
@@ -43,7 +44,7 @@ export default function Races() {
       {st.error && <p className="pb-warn">Could not load: {st.error}</p>}
       {st.loading && events.length === 0 && <p className="state-loading">LOADING…</p>}
       {!st.loading && shown.length === 0 && !st.error && <p className="state-empty">{past ? 'NO PAST EVENTS.' : 'NO EVENTS AHEAD.'}</p>}
-      <div className="pg-grid">
+      <Board className="pg-grid">
         {shown.map((e) => {
           const f = fuelFor(e)
           const aid = aidList(e.aid_stations)
@@ -69,7 +70,7 @@ export default function Races() {
             </section>
           )
         })}
-      </div>
+      </Board>
     </div>
   )
 }

@@ -10,6 +10,7 @@ import { supabase } from '../lib/supabase'
 import { warnOnError } from '../lib/schema'
 import { IntervalBar } from './Confirmatory'
 import './Confirmatory.css'
+import { Board } from '../components/layout/Board'
 
 type FourWord = 'clear_benefit' | 'clear_harm' | 'negligible' | 'unclear'
 type Verdict = 'effect_detected' | 'no_detectable_effect' | 'insufficient' | 'running' | FourWord
@@ -158,7 +159,7 @@ export function Experiments() {
       {message && <div className="conf-message mono">{message}</div>}
       {rows.length === 0 && <div className="state-empty mono">NO EXPERIMENTS YET · START ONE FROM A SUPPLEMENT IN THE APP</div>}
 
-      <div className="conf-grid">
+      <Board className="conf-grid">
         {rows.map(r => {
           const p = r.payload
           return (
@@ -196,7 +197,7 @@ export function Experiments() {
             </div>
           )
         })}
-      </div>
+      </Board>
     </div>
   )
 }

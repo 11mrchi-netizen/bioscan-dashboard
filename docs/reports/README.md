@@ -37,6 +37,9 @@ period says *too few days*.
 **Regimen.** Planned doses follow the regimen model (android `domain/Regimen.kt`): dosing days (every-N-days plans one
 in N, weekdays and cycles count their days) times the times of day. Doses logged count at most the planned times on any
 one day. 85% or more is followed, under 70% not followed. As-needed items are counted, not scored.
+Each day is judged by the schedule in force on it, from `supplement_changes` (the trigger's before/after snapshots of
+every edit): a change applies from the day after it is made, and each stretch under one schedule is counted by its own
+rule. Changes made before the trigger existed (2026-11-03) are not known, so earlier days use the oldest snapshot.
 
 **Lab.** Every intervention and experiment that ran in the period, with its latest engine read (interrupted time series
 first, then the baseline-against-active read; an experiment's primary outcomes). *Not followed* (adherence under 70%)

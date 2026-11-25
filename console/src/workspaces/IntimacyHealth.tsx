@@ -9,6 +9,7 @@ import { addDays, eventStudy, inRange, MIN_EVENT_N, partnersBefore, pearson, STI
 import { addStiTests, deleteStiTest, loadOutcomes, type Outcome, setStiTreated } from '../lib/intimacyData'
 import { AXES, Card, Chart, f1, fullDate, Rows, signed, Tiles, timeAxis, tok, useName, valueAxis, ago } from './IntimacyKit'
 import type { ViewProps } from './Intimacy'
+import { Board } from '../components/layout/Board'
 
 const RESULT_TONE: Record<string, 'ok' | 'warn' | 'bad'> = { negative: 'ok', positive: 'bad', inconclusive: 'warn', pending: 'warn' }
 
@@ -158,7 +159,7 @@ function MorningSigns({ data }: { data: ViewProps['data'] }) {
   }), [erection, arousal])
   const le = last(erection), la = last(arousal)
   return (
-    <div className="it-grid">
+    <Board className="it-grid">
       <Card title="MORNING SIGNS" info="Self-rated, 1 to 10. Morning erection quality tends to follow sleep and recovery. Each opens its page with the whole history and Compare.">
         <Tiles tiles={[
           { label: 'Morning erection', value: le ? f1(le[1]) : '–', sub: le ? `${fullDate(le[0])} · 30-day average ${f1(avg30(erection))}` : 'not rated yet', hue: 'm-arousal', href: metricHref('recovery.morning_erection') },
@@ -173,7 +174,7 @@ function MorningSigns({ data }: { data: ViewProps['data'] }) {
           sub: r.c ? `95% interval ${f1(r.c.lo)} to ${f1(r.c.hi)} · ${r.c.n} days · ${r.note}${r.c.clear ? '' : ' · includes zero'}` : 'Not enough paired days yet (10 needed).',
         }))} />
       </Card>
-    </div>
+    </Board>
   )
 }
 

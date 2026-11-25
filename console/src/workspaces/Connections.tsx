@@ -10,6 +10,7 @@ import { useLoadEffect } from '../lib/useLoadEffect'
 import { RETURN_KEY } from '../components/layout/Shell'
 import './PlanBlock.css'
 import './Pages.css'
+import { Board } from '../components/layout/Board'
 
 interface Status {
   google: string | null
@@ -100,7 +101,7 @@ export default function Connections() {
       </header>
       {load.error && <p className="pb-warn">Could not load the status: {load.error}</p>}
 
-      <div className="pg-grid">
+      <Board className="pg-grid">
         <section className="pg-card">
           <h3 className="pg-card-title mono">GOOGLE CALENDAR AND DRIVE</h3>
           <ul className="pg-rows">
@@ -143,7 +144,7 @@ export default function Connections() {
           </ul>
           <p className="pg-note">These run on the phone: reconnect one in Setup › CONNECTED SERVICES there. Amber means nothing arrived for over a day (two for Zepp and the calendar).</p>
         </section>
-      </div>
+      </Board>
     </div>
   )
 }

@@ -23,6 +23,7 @@ import {
 import { IntimacyPartners } from './IntimacyPartners'
 import { IntimacyEffects, IntimacyHealth } from './IntimacyHealth'
 import './Intimacy.css'
+import { Board } from '../components/layout/Board'
 
 const RANGES = [{ id: '28D', days: 28 }, { id: '90D', days: 90 }, { id: '1Y', days: 365 }, { id: 'ALL', days: 0 }]
 const DISCREET_KEY = 'bioscan.intimacy.discreet'
@@ -137,7 +138,7 @@ function Overview({ data, from, to, rangeId, open }: ViewProps) {
         ]} />
       </Card>
 
-      <div className="it-grid">
+      <Board className="it-grid">
         <Card title="BY WEEK" aside="ACTIVE DAYS" info="Days with any partnered sex and days with solo, per Monday-to-Sunday week. This week is still filling in.">
           {weeks.length ? <Chart option={weekOption} label="Active days per week" /> : <p className="it-empty">Nothing in this range.</p>}
         </Card>
@@ -150,7 +151,7 @@ function Overview({ data, from, to, rangeId, open }: ViewProps) {
           ]} />
           {gaps.gaps.length > 1 && <Chart option={gapOption} height={150} label="How long the gaps were" />}
         </Card>
-      </div>
+      </Board>
 
       <Card title="CALENDAR" wide aside={<span className="it-chips">{(['all', 'partnered', 'solo', 'meetups'] as CalFilter[]).map((c) => <button key={c} className="ft-chip" aria-current={cal === c} onClick={() => setCal(c)}>{c.toUpperCase()}</button>)}</span>}
         info="A year of days ending this week. A darker square is more that day; a split square had both. Choose a day to read it.">
@@ -332,7 +333,7 @@ function Mix({ data, from, to, params, set }: ViewProps) {
     <div className="it-views-body">
       <div className="it-chips">{TAG_FIELDS.map((f) => <button key={f.key} className="ft-chip" aria-current={f.key === field.key} onClick={() => set('field', f.key)}>{f.label}</button>)}</div>
       <p className="it-info">{tagged.length} of {plural(sexual.length, 'encounter')} with sex in this range carry {field.label.toLowerCase()}. Everything below reads those.</p>
-      <div className="it-grid">
+      <Board className="it-grid">
         <Card title={`HOW OFTEN · ${field.label}`} aside={`${tagged.length} TAGGED`}>
           <ShareBars rows={counts.slice(0, 15)} hue="m-sex-partnered" total={tagged.length} />
         </Card>
@@ -344,7 +345,7 @@ function Mix({ data, from, to, params, set }: ViewProps) {
             </table></div>
           ) : <p className="it-empty">Nothing tagged yet.</p>}
         </Card>
-      </div>
+      </Board>
       <Card title="WHAT GOES TOGETHER" wide info="Encounters on which both were logged. The diagonal is how often each was logged at all.">
         {co.labels.length > 1 ? (
           <div className="it-table-wrap"><table className="it-heat it-co">
@@ -353,10 +354,10 @@ function Mix({ data, from, to, params, set }: ViewProps) {
           </table></div>
         ) : <p className="it-empty">Needs at least two different values tagged.</p>}
       </Card>
-      <div className="it-grid">
+      <Board className="it-grid">
         <OutcomeCard title="AND YOUR RATING" unit="/ 5" rows={byRating} />
         <OutcomeCard title="AND ORGASM INTENSITY" unit="/ 10" rows={byIntensity} />
-      </div>
+      </Board>
     </div>
   )
 }
@@ -427,7 +428,7 @@ function Solo({ data, from, to }: ViewProps) {
           { label: 'With porn', value: pornKnown.length ? `${withPorn.length} of ${pornKnown.length}` : '–', sub: pornKnown.length ? `${Math.round((withPorn.length / pornKnown.length) * 100)}%` : null },
         ]} />
       </Card>
-      <div className="it-grid">
+      <Board className="it-grid">
         <Card title="OVER TIME" info="Each session's orgasm intensity (dots) and load size (diamonds).">
           {pts.length ? <Chart option={overTime} label="Solo intensity and load over time" /> : <p className="it-empty">No solo session in this range.</p>}
         </Card>
@@ -445,7 +446,7 @@ function Solo({ data, from, to }: ViewProps) {
             { label: 'Load size', value: pl.d ? signed(pl.d.diff) : '–', sub: pl.d ? `${f1(avg(pl.a))} with (${pl.a.length}) · ${f1(avg(pl.b))} without (${pl.b.length}) · interval ${signed(pl.d.lo)} to ${signed(pl.d.hi)}` : `Needs 3 sessions on each side (${pl.a.length} with, ${pl.b.length} without).` },
           ]} />
         </Card>
-      </div>
+      </Board>
     </div>
   )
 }

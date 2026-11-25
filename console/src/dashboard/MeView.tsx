@@ -2,17 +2,31 @@
 import { useMemo, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { hueVar, type MeBars, type MeChart, type MeItem, type MeRadar, type MeRibbons, type MeRing, type MeRow, type MeSection, type MeTile, type Point } from './meView'
 import { meRef, metricHref } from '../lib/metrics'
+import { Board } from '../components/layout/Board'
 
 export function MeSections({ sections, sinceDay, tab }: { sections: MeSection[]; sinceDay: string | null; tab: string }) {
+  // Layout (Nov 2026): every single reading of the tab goes up front in one band of tiles, each opening its history; the
+  // charts, lists and notes stay in their sections on a packed board below. A section left with nothing but its tiles goes.
+  const tiles = sections.flatMap((s) => s.items.filter((i): i is MeTile => i.kind === 'tile').map((t) => ({ t, section: s.title })))
+  const rest = sections.map((s) => ({ ...s, items: s.items.filter((i) => i.kind !== 'tile') })).filter((s) => s.items.length > 0)
   return (
-    <div className="me-sections">
-      {sections.map((s) => (
-        <section key={s.title} className="ft-card me-section">
-          <h3 className="me-section-title">{s.title}</h3>
-          <Items items={s.items} sinceDay={sinceDay} tab={tab} section={s.title} />
-        </section>
-      ))}
-    </div>
+    <>
+      {tiles.length > 0 && (
+        <div className="ft-band me-band" aria-label="Readings">
+          {tiles.map(({ t, section }, j) => <Tile key={`${section}:${t.label}:${j}`} t={t} sinceDay={sinceDay} tab={tab} section={section} />)}
+        </div>
+      )}
+      {rest.length > 0 && (
+        <Board className="me-sections">
+          {rest.map((s) => (
+            <section key={s.title} className="ft-card me-section">
+              <h3 className="me-section-title">{s.title}</h3>
+              <Items items={s.items} sinceDay={sinceDay} tab={tab} section={s.title} />
+            </section>
+          ))}
+        </Board>
+      )}
+    </>
   )
 }
 
@@ -49,7 +63,7 @@ function Tile({ t, sinceDay, tab, section }: { t: MeTile; sinceDay: string | nul
   const opens = (t.series?.length ?? 0) > 1
   const Box = opens ? 'a' : 'div'
   return (
-    <Box className={`me-tile${opens ? ' tappable' : ''}`} title={t.info} {...(opens ? { href: metricHref(meRef(tab, section, t.label)) } : {})}>
+    <Box className={`me-tile${opens ? ' tappable' : ''}`} title={[section, t.info].filter(Boolean).join(' · ')} {...(opens ? { href: metricHref(meRef(tab, section, t.label)) } : {})}>
       <span className="me-tile-label">{t.label}</span>
       <span className="me-tile-value" style={{ color: t.tone ? TONE[t.tone] : undefined }}>{t.value}{t.unit && <small> {t.unit}</small>}</span>
       {t.sub && <span className="me-tile-sub">{t.sub}</span>}

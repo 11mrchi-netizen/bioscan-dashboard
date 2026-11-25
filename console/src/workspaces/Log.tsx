@@ -11,6 +11,7 @@ import { localDateString, localToday } from '../lib/dates'
 import { buildPatch, type EditSpec, isManual, MEAL_SLOTS, shown } from '../lib/logEdit'
 import './PlanBlock.css'
 import './Log.css'
+import { Board } from '../components/layout/Board'
 
 interface Item { description: string | null; calories: number | null; quantity: number | null; quantity_unit: string | null; is_beverage: boolean | null }
 interface Meal { id: number; logged_at: string; description: string | null; meal_slot: string | null; calories: number | null; carbs_g: number | null; protein_g: number | null; fat_g: number | null; source: string | null; meal_items: Item[] }
@@ -214,7 +215,7 @@ export default function Log() {
 function DayGrid({ log, show, onChanged }: { log: DayLog; show: Set<Kind>; onChanged: (what: string) => void }) {
   const kcal = log.meals.reduce((a, m) => a + (m.calories ?? 0), 0)
   return (
-    <div className="log-grid">
+    <Board className="log-grid">
       {show.has('food') && (log.meals.length > 0 || log.drinks.length > 0) && (
         <Section title={`FOOD AND DRINK · ${Math.round(kcal)} KCAL`}>
           {log.meals.map((m) => (
@@ -273,7 +274,7 @@ function DayGrid({ log, show, onChanged }: { log: DayLog; show: Set<Kind>; onCha
           {log.notes.map((x) => <Row key={x.id} time={wall(x.occurred_at)} title={x.text ?? ''} edit={noteEdit(x)} onChanged={onChanged} />)}
         </Section>
       )}
-    </div>
+    </Board>
   )
 }
 

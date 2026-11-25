@@ -18,6 +18,7 @@ import {
 } from '../lib/bodyCompositionSeries'
 import { healthyWeightRangeKg, weightChangeSplit } from '../../../supabase/functions/_shared/body-composition/bodyComposition.ts'
 import './Body.css'
+import { Board } from '../components/layout/Board'
 
 interface MetricRow {
   date: string
@@ -148,7 +149,7 @@ export function Body() {
         <p className="body-empty">No usable weigh-in yet. Height, date of birth and sex must be in the profile (Setup › Profile in the app).</p>
       )}
 
-      <div className="body-grid">
+      <Board className="body-grid">
         <Panel title="BODY FAT: SCALE VS HEALTH CONNECT" empty={charts.counts.scaleFat.length < 2}
           note="Two methods, a few points apart for one person: compare the direction, not the gap." option={charts.compare} />
         <Panel title="FAT-FREE MASS" empty={charts.counts.ffm.length < 2}
@@ -161,7 +162,7 @@ export function Body() {
           note="Heavier readings normally sit at lower impedance. Points far off the cloud are contact or posture glitches." option={charts.scatter} />
         <Panel title="TIME OF DAY" empty={charts.counts.tod.length < 2}
           note="Mean impedance index by 3-hour bucket. Large differences mean the same body reads differently across the day: weigh at one time." option={charts.byHour} />
-      </div>
+      </Board>
 
       <section className="body-panel">
         <h3 className="body-panel-title mono">WEIGHT CHANGE: FAT OR LEAN</h3>

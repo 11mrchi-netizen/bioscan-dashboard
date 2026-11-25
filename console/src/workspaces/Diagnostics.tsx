@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { LoadBanner } from '../components/shared/LoadBanner'
 import { newest } from './Confirmatory'
 import './Confirmatory.css'
+import { Board } from '../components/layout/Board'
 
 interface BandPoint { date: string; value: number | null; flag: 'extreme' | 'run' | null; side: 'low' | 'high' | null }
 interface BandPayload {
@@ -90,7 +91,7 @@ export function Diagnostics() {
 
       <h3 className="iv-section-title mono">EXPECTED BANDS</h3>
       {bands.length === 0 && <div className="state-empty mono">NOT PUBLISHED YET · THE NIGHTLY ANALYSIS WRITES THESE</div>}
-      <div className="conf-grid">
+      <Board className="conf-grid">
         {bands.map(({ key, payload: p }) => {
           const flags = p.recent.filter((d) => d.flag)
           return (
@@ -115,11 +116,11 @@ export function Diagnostics() {
             </div>
           )
         })}
-      </div>
+      </Board>
 
       <h3 className="iv-section-title mono">SERIES BREAKS</h3>
       {breaks.length === 0 && <div className="state-empty mono">NO SERIES-BREAK RESULTS YET</div>}
-      <div className="conf-grid">
+      <Board className="conf-grid">
         {breaks.map(({ key, payload: p }) => (
           <div key={key} className="card conf-card">
             <div className="conf-card-head">
@@ -131,7 +132,7 @@ export function Diagnostics() {
               : (p.breaks ?? []).map((b) => <p key={b.date} className="conf-footnote mono">{b.date} · {b.status ?? 'candidate'}{b.direction ? ` · ${b.direction}` : ''}</p>)}
           </div>
         ))}
-      </div>
+      </Board>
 
       <h3 className="iv-section-title mono">IS TODAY TYPICAL? (EXPERIMENTAL)</h3>
       {!typicality ? <div className="state-empty mono">NOT PUBLISHED YET</div> : (

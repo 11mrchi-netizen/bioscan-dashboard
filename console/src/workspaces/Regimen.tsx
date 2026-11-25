@@ -9,6 +9,7 @@ import { localToday } from '../lib/dates'
 import { remainingByProduct, type StockEvent } from '../lib/pantry'
 import './PlanBlock.css'
 import './Pages.css'
+import { Board } from '../components/layout/Board'
 
 interface Supp {
   id: number; name: string; kind: string | null; status: string | null; dose: string | null; dose_amount: number | null; dose_unit: string | null
@@ -75,7 +76,7 @@ export default function Regimen() {
       {st.error && <p className="pb-warn">Could not load: {st.error}</p>}
       {st.loading && !d && <p className="state-loading">LOADING…</p>}
       {d && (
-        <div className="pg-grid">
+        <Board className="pg-grid">
           {groups.map(([kind, title]) => {
             const rows = list.filter((s) => (s.kind ?? 'supplement') === kind)
             if (rows.length === 0) return null
@@ -117,7 +118,7 @@ export default function Regimen() {
               })}</ul>
             </section>
           )}
-        </div>
+        </Board>
       )}
     </div>
   )

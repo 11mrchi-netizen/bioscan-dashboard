@@ -1,7 +1,10 @@
 package com.bioscan.fieldterminal.data
 
 import android.Manifest
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.content.pm.PackageManager
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
@@ -35,6 +38,11 @@ import com.bioscan.fieldterminal.domain.notifications.followUpsDue
 import com.bioscan.fieldterminal.domain.notifications.fuelPrompts
 import com.bioscan.fieldterminal.domain.notifications.interventionsToDraw
 import com.bioscan.fieldterminal.domain.notifications.nextFireTime
+import com.bioscan.fieldterminal.domain.notifications.reportBody
+import com.bioscan.fieldterminal.domain.notifications.reportDedupeKey
+import com.bioscan.fieldterminal.domain.notifications.reportTitle
+import com.bioscan.fieldterminal.domain.notifications.reportToAnnounce
+import com.bioscan.fieldterminal.domain.notifications.reportWebUrl
 import com.bioscan.fieldterminal.domain.notifications.supplementsDueForBucket
 import com.bioscan.fieldterminal.domain.notifications.unratedEvents
 import com.bioscan.fieldterminal.domain.notifications.wellbeingCheckinNeeded
@@ -254,6 +262,36 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                     nm.notify(p.key.hashCode(), n)
                     catching { repo.appendLog(p.kind, NotificationOutcome.SHOWN, dedupeKey = p.key) }
                     shown += ShownEntry(p.kind, now)
+                }
+            }
+        }
+
+        // Weekly and monthly reports (docs/reports): each new one once, in the day's window, opening it on the web. It follows the
+        // master switch (and a rule row, if one is ever saved off); a failed read just waits for the next run.
+        val reportRule = rules.firstOrNull { it.kind == NotificationKind.PERIOD_REPORT }
+        if (prefs.masterEnabled && reportRule?.enabled != false) {
+            catching {
+                val reports = ReportsRepository(supabase).latest()
+                val shownKeys = repo.loadShownSince(dayStart.minusSeconds(14 * 86_400L)).mapNotNull { it.dedupeKey }.toSet()
+                val r = reportToAnnounce(reports, shownKeys, today, now.toLocalTime())
+                if (r != null) {
+                    val open = PendingIntent.getActivity(
+                        applicationContext, r.key.hashCode(),
+                        Intent(Intent.ACTION_VIEW, Uri.parse(reportWebUrl(r.key))).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                    )
+                    val body = reportBody(r)
+                    val n = NotificationCompat.Builder(applicationContext, NotificationKind.PERIOD_REPORT)
+                        .setSmallIcon(android.R.drawable.ic_dialog_info)
+                        .setContentTitle(reportTitle(r))
+                        .setContentText(body)
+                        .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                        .setAutoCancel(true)
+                        .setContentIntent(open)
+                        .build()
+                    nm.notify(reportDedupeKey(r.key).hashCode(), n)
+                    repo.appendLog(NotificationKind.PERIOD_REPORT, NotificationOutcome.SHOWN, dedupeKey = reportDedupeKey(r.key))
                 }
             }
         }

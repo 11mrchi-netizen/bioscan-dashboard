@@ -6,6 +6,8 @@ import { useLoadEffect } from '../lib/useLoadEffect'
 import { localDateString, localToday } from '../lib/dates'
 import { metricHref } from '../lib/metrics'
 import { Board } from '../components/layout/Board'
+import { supabase } from '../lib/supabase'
+import { headline, latest, type PeriodReport, reportHref, spanText } from '../lib/reports'
 import {
   bandWord, chargeRankLine, directionGlyph, directionWords, DOMAINS, domainSentence, driverSummary, formatJudgedValue, referenceLine,
   type DayScores, type DomainKey,
@@ -88,6 +90,8 @@ export function Today({ day, onDay }: { day: string; onDay: (d: string) => void 
             })}
           </div>
         </section>
+
+        <ReportCard />
       </Board>
 
       {overlay && details && <ScoreOverlay scores={details} which={overlay} day={day} onPick={setOverlay} onClose={() => setOverlay(null)} />}
@@ -121,6 +125,31 @@ function Ring({ value, size, stroke, label, big, onOpen }: { value: number | nul
   return onOpen
     ? <button type="button" className={`ring ring-btn ${big ? 'big' : ''}`} style={{ width: size }} onClick={onOpen}>{body}</button>
     : <figure className={`ring ${big ? 'big' : ''}`} style={{ width: size }}>{body}</figure>
+}
+
+// ---------------- the latest weekly and monthly report ----------------
+
+/** The newest weekly and monthly report (Lab › Reports), so a report is one tap away all week, not only on Monday. */
+function ReportCard() {
+  const [reports, setReports] = useState<PeriodReport[] | null>(null)
+  useLoadEffect(async (cur) => {
+    const { data, error } = await supabase.from('analysis_results').select('payload').eq('kind', 'period_report').order('as_of', { ascending: false }).limit(6)
+    if (error) throw new Error(error.message)
+    if (cur()) setReports(((data ?? []) as { payload: PeriodReport }[]).map((r) => r.payload).filter((p) => p && typeof p.key === 'string'))
+  }, [])
+  if (!reports) return null
+  const shown = [latest(reports, 'week'), latest(reports, 'month')].filter((r): r is PeriodReport => r !== null)
+  return (
+    <section className="ft-card today-plan today-report" aria-label="Reports">
+      <div className="today-strip-head"><span>REPORTS</span><a className="rp-link" href="#/lab/reports">ALL ›</a></div>
+      {shown.length === 0 ? <p className="today-hint">The first weekly report is written on Monday morning, for the week before.</p> : shown.map((r) => (
+        <a key={r.key} className="today-report-row" href={reportHref(r.key)}>
+          <span className="today-report-title mono">{r.grain === 'week' ? 'WEEK' : 'MONTH'} · {spanText(r)}</span>
+          <span className="today-hint">{headline(r)}{r.suggestions[0] ? ` ${r.suggestions[0].text}` : ''}</span>
+        </a>
+      ))}
+    </section>
+  )
 }
 
 // ---------------- the day's plan and eaten so far ----------------

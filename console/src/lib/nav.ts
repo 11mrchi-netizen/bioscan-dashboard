@@ -39,6 +39,7 @@ export const NAV: readonly NavSection[] = [
       { id: 'repeatable', label: 'Repeatable', value: 'repeatable' }, { id: 'fueling', label: 'Fuelling', value: 'fueling' },
     ] },
     { id: 'regimen', label: 'Regimen' }, { id: 'tests', label: 'Tests' }, { id: 'routine', label: 'Routine' },
+    { id: 'reports', label: 'Reports' },
   ] },
   { id: 'plan', label: 'Plan', tabs: [
     { id: 'overview', label: 'Overview' }, { id: 'training', label: 'Training' }, { id: 'food', label: 'Food', views: [{ id: 'plan', label: 'Fuel plan', value: null }, { id: 'prep', label: 'Meal prep', value: 'prep' }] },

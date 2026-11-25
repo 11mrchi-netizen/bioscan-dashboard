@@ -8,7 +8,7 @@ const tab = (s: string, t: string) => sec(s).tabs!.find((x) => x.id === t)!
 test('the tree has the phone\'s five tabs in order and the Setup gear', () => {
   assert.deepEqual(NAV.map((s) => s.id), ['today', 'me', 'lab', 'plan', 'log', 'setup'])
   assert.deepEqual(sec('me').tabs!.map((t) => t.id), [...ME_TAB_IDS])
-  assert.deepEqual(sec('lab').tabs!.map((t) => t.id), ['compare', 'evidence', 'experiments', 'regimen', 'tests', 'routine'])
+  assert.deepEqual(sec('lab').tabs!.map((t) => t.id), ['compare', 'evidence', 'experiments', 'regimen', 'tests', 'routine', 'reports'])
 })
 
 test('an address with no tab or view is on the page\'s own default, so the menu marks something', () => {
@@ -60,7 +60,7 @@ test('going to another page starts clean; a section opens its first tab and a ta
 })
 
 test('every tab and view the tree names is a real page route', () => {
-  const routes = new Set(['lab/compare', 'lab/evidence', 'lab/experiments', 'lab/regimen', 'lab/tests', 'lab/routine', 'plan/overview', 'plan/training', 'plan/food', 'plan/sessions', 'plan/races', 'setup/integrity', 'setup/data', 'setup/connections'])
+  const routes = new Set(['lab/compare', 'lab/evidence', 'lab/experiments', 'lab/regimen', 'lab/tests', 'lab/routine', 'lab/reports', 'plan/overview', 'plan/training', 'plan/food', 'plan/sessions', 'plan/races', 'setup/integrity', 'setup/data', 'setup/connections'])
   for (const s of NAV) for (const t of s.tabs ?? []) if (!s.tabParam) assert.ok(routes.has(`${s.id}/${t.id}`), `${s.id}/${t.id}`)
 })
 

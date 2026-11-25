@@ -14,14 +14,16 @@ export const ENGINE_GROUPS = {
   health: ['health'],
   // Risk profile R1: air exposure reads its own rows and the outdoor feed (runAir.ts); last, at 20:45 UTC.
   exposures: ['air'],
+  // Weekly and monthly reports (runPeriodReport.ts): they read the other engines' Lab results, so they run last, at 20:48 UTC.
+  reports: ['reports'],
 } as const
 
 export type Group = keyof typeof ENGINE_GROUPS
 export type GroupOrAll = Group | 'all'
 
 export const GROUP_ORDER = Object.keys(ENGINE_GROUPS) as Group[]
-/** Engines that read the shared daily frame (everything except the two that read their own rows). */
-export const OWN_READ_ENGINES: readonly string[] = ['breaks', 'integrity', 'air']
+/** Engines that read the shared daily frame (everything except those that read their own rows). */
+export const OWN_READ_ENGINES: readonly string[] = ['breaks', 'integrity', 'air', 'reports']
 
 /** A request's group, or null when it names something that does not exist. A missing group means `all`. */
 export function parseGroup(value: unknown): GroupOrAll | null {

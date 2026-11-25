@@ -7,6 +7,7 @@
 //   REGIMEN      what is taken, and what is left of it
 //   TESTS        the tests the phone runs, and every blood draw
 //   ROUTINE      practices and what was logged against them
+//   REPORTS      the weekly and monthly reports: metrics against the period before, regimen, Lab, suggestions
 import { lazy } from 'react'
 import { TabbedPage, type TabDef } from '../components/layout/TabbedPage'
 
@@ -17,6 +18,7 @@ const TABS: readonly TabDef[] = [
   { id: 'regimen', label: 'REGIMEN', View: lazy(() => import('./Regimen')) },
   { id: 'tests', label: 'TESTS', View: lazy(() => import('./Tests')) },
   { id: 'routine', label: 'ROUTINE', View: lazy(() => import('./Routine')) },
+  { id: 'reports', label: 'REPORTS', View: lazy(() => import('./Reports')) },
 ]
 
 export default function Lab() {

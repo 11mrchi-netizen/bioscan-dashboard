@@ -82,6 +82,8 @@ fun N1Tab() {
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
+        // Weekly and monthly reports (docs/reports): the newest of each, opening on the web.
+        ReportsCard()
         EvidenceBoardCard(evidenceBoard(page.relationships, page.registeredResults), page.evidence, onTest = { testing = it })
         CaseCrossoverCard(
             page.evidence.crossover,

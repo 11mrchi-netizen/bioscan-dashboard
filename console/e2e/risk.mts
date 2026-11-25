@@ -77,7 +77,8 @@ const T: Record<string, Record<string, unknown>[]> = {
   ] } }],
   interventions: [],
   // R2: one WHO-5 from a month ago, so it is due, and nothing else yet
-  instrument_responses: [{ id: 1, instrument: 'who5', local_date: '2026-10-15', answered_at: '2026-10-15T02:00:00Z', score: 64, band: 'Good', flags: [], source: 'phone' }],
+  instrument_responses: [{ id: 1, instrument: 'who5', local_date: '2026-10-15', answered_at: '2026-10-15T02:00:00Z', score: 64, band: 'Good', flags: [], source: 'phone' },
+    { id: 2, instrument: 'work_hours', local_date: '2026-11-18', answered_at: '2026-11-18T02:00:00Z', score: 60, band: '55 h or more', flags: [], source: 'phone' }],
 }
 let id = 1
 for (let d = 0; d < 7; d++) for (const t of ['07:05', '07:06', '19:30', '19:31']) {
@@ -141,6 +142,22 @@ try {
   check(text.includes('HOME MEAN · 2026-11-12') && text.includes('CLINIC · 2026-04-25'), 'blood pressure home mean and clinic reading show', text.slice(text.indexOf('BLOOD PRESSURE'), text.indexOf('BLOOD PRESSURE') + 300))
   check((await page.locator('canvas').count()) >= 4, 'charts render', String(await page.locator('canvas').count()))
   check(text.includes('MIND') && text.includes('WELLBEING · WHO-5') && text.includes('due now'), 'questionnaires show, with WHO-5 due')
+
+  // A long value (WORKING HOURS: score, band, date, next date and a button) must not squeeze its title into one letter per
+  // line: at every width each questionnaire row's title keeps room for a word, and nothing runs off its card.
+  for (const width of [1440, 1100, 820, 600, 390]) {
+    await page.setViewportSize({ width, height: 2700 }); await page.waitForTimeout(300)
+    const rows = await page.locator('li.pg-row', { hasText: ' · ' }).evaluateAll((els) => els.filter((e) => /WORKING HOURS|WELLBEING|BURNOUT/.test(e.textContent ?? '')).map((e) => {
+      const t = e.querySelector('.pg-row-title')!.getBoundingClientRect(); const card = e.closest('.pg-card')!.getBoundingClientRect()
+      const right = Math.max(...[...e.querySelectorAll('*')].map((c) => c.getBoundingClientRect().right))
+      return { title: e.querySelector('.pg-row-title')!.textContent, w: Math.round(t.width), over: Math.round(right - card.right) }
+    }))
+    const bad = rows.filter((r) => r.w < 90 || r.over > 0)
+    check(rows.length >= 3 && bad.length === 0, `questionnaire rows lay out at ${width} px`, JSON.stringify(bad))
+    if (width === 390) await page.locator('.pg-card', { hasText: 'WORKING HOURS' }).first().screenshot({ path: path.join(OUT, 'risk-work-390.png') })
+    if (width === 1440) await page.locator('.pg-card', { hasText: 'WORKING HOURS' }).first().screenshot({ path: path.join(OUT, 'risk-work-1440.png') })
+  }
+  await page.setViewportSize({ width: 1440, height: 2700 })
 
   // R2: answer a PHQ-9 here: every item "several days" except item 9 "several days" too, so 9 / 27 Mild and the flag shows.
   await page.locator('li.pg-row', { hasText: 'LOW MOOD · PHQ-9' }).getByRole('button', { name: 'TAKE' }).click()

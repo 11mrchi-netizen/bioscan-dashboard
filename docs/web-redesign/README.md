@@ -27,7 +27,7 @@ One app, one shell, one router (`console/src/App.tsx`). Five tabs in the phone's
 | Tab | Route | What |
 |---|---|---|
 | **Today** | `#/today?day=` | The phone's TODAY for any day: CHARGE and the five rings, the overlays behind them, the day's plan. A ring opens its inputs; an input opens its metric page. |
-| **Me** | `#/me?tab=` | The phone's seven tabs, drawn from what the phone worked out (`me_views`). BODY carries the scale analysis below it; EXPOSURES carries the risk analysis. |
+| **Me** | `#/me?tab=` | The phone's eight tabs, drawn from what the phone worked out (`me_views`). BODY carries the scale analysis below it; EXPOSURES carries the risk analysis. INTIMACY is drawn by the web itself from the tables (see below). |
 | **Lab** | `#/lab/<tab>` | Ask, compare, test, decide. COMPARE, EVIDENCE, EXPERIMENTS, REGIMEN, TESTS, ROUTINE. |
 | **Plan** | `#/plan/<tab>` | OVERVIEW, TRAINING (block planner), FOOD (meal prep), SESSIONS, RACES. The phone's tab names. |
 | **Log** | `#/log?day=` | The day's log, and the fixes (editing is secondary). |
@@ -90,6 +90,23 @@ out of the plan. Blocks that have not begun can be moved (Plan › Overview). Th
 - The `note` is web-only: the phone shows no note on a planned session.
 - Found on the way: the phone's and the web's accessory update (`updateBlockAccessories`) write `prescription` directly, which the trigger
   refuses (the database logs show it). It needs the revision path; the Android side is not changed here.
+
+## Me › Intimacy
+
+`#/me?tab=INTIMACY&view=` (`workspaces/Intimacy.tsx`, rules in `lib/intimacy.ts`, reads and writes in `lib/intimacyData.ts`): the phone's
+ME › INTIMACY in more depth, read straight from `encounters`, `people`, `sexual_activity_daily` (solo), `sti_tests` and the daily series.
+Seven views, each a link (`INTIMACY_VIEWS` in `lib/nav.ts`): OVERVIEW (tiles, active days by week, gaps and streaks, a year calendar, weekday
+by hour), ENCOUNTERS (every encounter, filters, a completeness strip; a row opens a panel where an untagged encounter's tags and rating can be
+filled in), MIX (how often, month by month, what goes together, each tag against your rating and orgasm intensity with an interval), SOLO,
+PARTNERS (every profile, breakdowns, repeat rate, a timeline; `&person=<id>` is one partner, with the profile editable), HEALTH (STI tests as
+the phone keeps them: log a panel, mark treated, delete; morning erection and arousal with the phone's correlations) and EFFECTS (each daily
+measure on the days around partnered sex, solo or any, against quiet days, with an interval).
+
+- **Discreet mode** is on unless turned off on that browser: partners by their initials, notes folded, search by name off.
+- Writes touch only the columns the page edits: an encounter's tag lists and `my_rating`; a person's profile fields (not the activities and
+  interests lists); `sti_tests` rows. The vocabularies are the phone's, checked against the Kotlin by `intimacy.test.ts`.
+- Partnered and solo have their own metric hues, `--m-sex-partnered` and `--m-sex-solo` (`FT.Metric.SexPartnered` / `SexSolo` on the phone).
+- `e2e/intimacy.mts` walks every view against invented people and encounters (never real ones).
 
 ## Old routes
 

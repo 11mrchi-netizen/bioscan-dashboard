@@ -17,6 +17,7 @@ import {
 import { localDateAt, type Admin } from './runRelationships.ts'
 import { addDays, aggregateDays, localDateOf, type SeriesContract, type SeriesFile } from './seriesContract.ts'
 import { CORE_VERSION } from './version.ts'
+import { foodTriggers, TRIGGERS, type FoodTriggerSection } from './foodTriggers.ts'
 import { energyAvailability, sessionFuel, trainingFuelSection, type TfBody, type TfFuel, type TfMeal, type TfSession, type TrainingFuelSection } from './trainingFuel.ts'
 
 /** Days after a period's end during which its report is rewritten each night. */
@@ -91,6 +92,22 @@ async function readStool(admin: Admin, userId: string, start: string, end: strin
   const gut: DailySeries = new Map()
   axis.forEach((d, i) => { const v = scores[i]; if (v !== null) gut.set(d, v) })
   return { normal, loose, discomfort, gut }
+}
+
+/** The food trigger screen over the 180 days to [end]: meal profiles' groups and tags against the stool days. */
+async function readFoodTriggers(admin: Admin, userId: string, end: string): Promise<FoodTriggerSection> {
+  const from = addDays(end, -(TRIGGERS.lookbackDays - 1))
+  const [meals, stool] = await Promise.all([
+    fetchAll<Record<string, unknown>>((a, b) => admin.from('meal_profiles').select('meal_id, logged_at, food_groups, tags').eq('user_id', userId)
+      .gte('logged_at', `${addDays(from, -2)}T00:00:00`).lte('logged_at', `${end}T23:59:59.999`).order('logged_at').order('meal_id').range(a, b)),
+    fetchAll<Record<string, unknown>>((a, b) => admin.from('stool_log').select('id, occurred_at, bristol_type').eq('user_id', userId)
+      .gte('occurred_at', `${from}T00:00:00`).lte('occurred_at', `${end}T23:59:59.999`).order('occurred_at').order('id').range(a, b)),
+  ])
+  for (const r of [meals, stool]) if (r.error) throw new Error(`food triggers: ${r.error}`)
+  return foodTriggers(
+    meals.rows.map((r) => ({ at: String(r.logged_at), groups: (r.food_groups as string[] | null) ?? null, tags: (r.tags as string[] | null) ?? null })),
+    stool.rows.map((r) => ({ at: String(r.occurred_at), bristol: r.bristol_type === null || r.bristol_type === undefined ? null : Number(r.bristol_type) })),
+    from, end)
 }
 
 /** The meal profile of each meal from [start] to [end] (meals.logged_at is the phone's wall clock: its digits are local). */
@@ -307,8 +324,10 @@ export async function buildPeriodReport(admin: Admin, userId: string, file: Seri
   const mq = meals ? mealQuality(meals, period, lastWeight) : undefined
   let tf: TrainingFuelSection | undefined
   try { tf = await readTrainingFuel(admin, userId, period.start, period.end, lastWeight) } catch { tf = undefined }
+  let ft: FoodTriggerSection | undefined
+  try { ft = await readFoodTriggers(admin, userId, period.end) } catch { ft = undefined }
 
-  return buildReport({ period, today, metrics, micro, regimen, lab, foodStool: fs, mealQuality: mq, trainingFuel: tf, weightKg: lastWeight })
+  return buildReport({ period, today, metrics, micro, regimen, lab, foodStool: fs, mealQuality: mq, trainingFuel: tf, foodTriggers: ft, weightKg: lastWeight })
 }
 
 async function storedKeys(admin: Admin, userId: string): Promise<Set<string>> {

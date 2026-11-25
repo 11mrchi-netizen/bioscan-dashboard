@@ -9,6 +9,7 @@
 // so months of different lengths compare.
 
 import { addDays, combine, daySpan, periodEnd, periodStart } from './seriesContract.ts'
+import { foodTriggerSuggestions, type FoodTriggerSection } from './foodTriggers.ts'
 import { trainingFuelSuggestions, type TrainingFuelSection } from './trainingFuel.ts'
 
 export const REPORT_VERSION = '1.0.0'
@@ -748,6 +749,8 @@ export interface SuggestionInputs {
   /** Food against training, for its fixed-rule suggestions. */
   trainingFuel?: TrainingFuelSection
   grain?: ReportGrain
+  /** The food trigger screen, for its "worth testing" suggestion. */
+  foodTriggers?: FoodTriggerSection
 }
 
 /** Every rule that fires, most pressing first; the report shows the first five. */
@@ -812,6 +815,7 @@ export function suggestions(x: SuggestionInputs): Suggestion[] {
   }
   const thin = x.metrics.filter((l) => l.status === 'thin' && ['energy', 'mood', 'stress', 'meal_energy', 'water_intake'].includes(l.id))
   if (x.trainingFuel) for (const t of trainingFuelSuggestions(x.trainingFuel, x.grain ?? 'week')) out.push({ ...t, ref: null })
+  if (x.foodTriggers) for (const t of foodTriggerSuggestions(x.foodTriggers)) out.push({ ...t, ref: null })
   if (thin.length >= 2) out.push({ id: 'log_more', priority: 3, ref: null, text: `Too few days logged for ${thin.map((l) => l.label.toLowerCase()).join(', ')} to compare: a daily check-in makes next report's verdicts possible.`, because: `${thin.length} metrics thin` })
 
   return out.sort((a, b) => a.priority - b.priority)
@@ -838,6 +842,8 @@ export interface PeriodReport {
   mealQuality?: MealQuality
   /** Food against training (trainingFuel.ts); absent on reports written before it existed. */
   trainingFuel?: TrainingFuelSection
+  /** The food trigger screen (foodTriggers.ts); absent on reports written before it existed. */
+  foodTriggers?: FoodTriggerSection
   /** Short lists for the top of the report. */
   summary: { better: string[]; worse: string[]; working: string[]; wasted: string[]; notFollowed: string[]; excess: string[]; short: string[] }
   suggestions: Suggestion[]
@@ -855,17 +861,18 @@ export function buildReport(x: {
   foodStool: FoodStoolLine[]
   mealQuality?: MealQuality
   trainingFuel?: TrainingFuelSection
+  foodTriggers?: FoodTriggerSection
   weightKg: number | null
 }): PeriodReport {
   const prev = previousOf(x.period)
   const tested = new Set(x.lab.map((l) => l.supplementId).filter((v): v is number => v !== null))
   const untested = x.regimen.filter((r) => !tested.has(r.id))
-  const all = suggestions({ metrics: x.metrics, micro: x.micro, regimen: x.regimen, lab: x.lab, weightKg: x.weightKg, untested, trainingFuel: x.trainingFuel, grain: x.period.grain })
+  const all = suggestions({ metrics: x.metrics, micro: x.micro, regimen: x.regimen, lab: x.lab, weightKg: x.weightKg, untested, trainingFuel: x.trainingFuel, grain: x.period.grain, foodTriggers: x.foodTriggers })
   const notFollowed = [...x.regimen.filter((r) => r.status === 'not_followed').map((r) => r.name), ...x.lab.filter((l) => l.verdict === 'not_followed').map((l) => l.name)]
   return {
     version: REPORT_VERSION, key: periodKey(x.period), grain: x.period.grain, label: periodLabel(x.period),
     start: x.period.start, end: x.period.end, prevStart: prev.start, prevEnd: prev.end, generatedOn: x.today,
-    metrics: x.metrics, micro: x.micro, regimen: x.regimen, lab: x.lab, foodStool: x.foodStool, ...(x.mealQuality ? { mealQuality: x.mealQuality } : {}), ...(x.trainingFuel ? { trainingFuel: x.trainingFuel } : {}),
+    metrics: x.metrics, micro: x.micro, regimen: x.regimen, lab: x.lab, foodStool: x.foodStool, ...(x.mealQuality ? { mealQuality: x.mealQuality } : {}), ...(x.trainingFuel ? { trainingFuel: x.trainingFuel } : {}), ...(x.foodTriggers ? { foodTriggers: x.foodTriggers } : {}),
     summary: {
       better: x.metrics.filter((l) => l.status === 'better').map((l) => l.label),
       excess: x.micro.lines.filter((l) => l.status === 'high' || l.status === 'high_days').map((l) => l.label),

@@ -74,6 +74,11 @@ watch's training kcal, per kg of fat-free mass). Three fixed-rule suggestions: l
 month), long sessions started fasted with no fuel, and fewer than half the sessions followed by a protein dose. Reports
 written before it existed have no such section.
 
+**Food triggers (screen).** docs/nutrition/food-triggers.md: each food group and gut tag of the meal profiles in the
+6-48 h before each stool day over 180 days, loose days with it against without. A food shows as *worth testing* only past
+strict gates (20 days each side, 15 points, p < 0.05, Benjamini-Hochberg q <= 0.10), with a suggestion to test it for two
+weeks with an experiment. Reports written before it existed have no such section.
+
 **Food and stool (tentative).** Over the 90 days to the period's end: the share of normal stools (Bristol 3-5) the day
 after a day above the median of fibre, water, fat or energy, against the day after one below it. Shown only with 8 days
 each side and a gap of 20 points or more. An association, never a cause.

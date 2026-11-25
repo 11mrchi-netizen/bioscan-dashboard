@@ -44,4 +44,4 @@ caffeine by its food groups), `long_session_gut` and `long_session_gut_next` (a 
 the next).
 
 Food-group triggers (gluten, lactose, high FODMAP and so on from the meal profile) are not asked yet: there are too few
-days with ingredients and a stool the next day (idea 5 of the proposal, from about February 2027).
+days with ingredients and a stool the next day; the reports' food trigger screen covers them instead (docs/nutrition/food-triggers.md).

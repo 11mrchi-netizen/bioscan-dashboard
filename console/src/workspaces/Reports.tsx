@@ -272,6 +272,37 @@ function ReportView({ r, busy, onRebuild }: { r: PeriodReport; busy: string | nu
           )
         })()}
 
+        {r.foodTriggers && (() => {
+          const ft = r.foodTriggers
+          const shown = ft.lines.filter((l) => l.state === 'candidate')
+          const tested = ft.lines.filter((l) => l.state === 'no_signal')
+          const waiting = ft.lines.filter((l) => l.state === 'not_enough')
+          const side = (l: (typeof ft.lines)[number]) => (l.mode === 'high' ? `more than ${l.split} meals of it` : 'with it')
+          return (
+            <section className="ft-card pg-card rp-card">
+              <h3 className="pg-card-title mono"><span>FOOD TRIGGERS</span><span>SCREEN</span></h3>
+              <p className="rp-dim">
+                {ft.stoolDays} days with a stool since {ft.from}, {ft.looseDays} of them loose (Bristol 6–7). Each food group is looked for in the 6–48 h before the day's first stool.
+                {!ft.ready && ' Too few loose days yet for any food to speak (12 needed).'}
+              </p>
+              {shown.length > 0 && (
+                <ul className="pg-rows">{shown.map((l) => (
+                  <li key={`${l.kind}:${l.key}`} className="pg-row">
+                    <span className="pg-row-title">{l.label}</span>
+                    <span className="pg-row-value" style={toneStyle('warn')}>{fmt(l.withLoosePct)}% vs {fmt(l.withoutLoosePct)}%</span>
+                    <span className="pg-row-sub">Worth testing: loose days {side(l)} ({l.withDays}) against without ({l.withoutDays}) · p {fmt(l.p)}, after the correction for {tested.length + shown.length} foods {fmt(l.q)}. Leave it out for two weeks with a Lab experiment.</span>
+                  </li>
+                ))}</ul>
+              )}
+              {shown.length === 0 && tested.length > 0 && (
+                <p className="rp-dim">No food stands out yet among the {tested.length} with enough days each side. Closest: {tested.slice(0, 3).map((l) => `${l.label.toLowerCase()} ${fmt(l.withLoosePct)}% vs ${fmt(l.withoutLoosePct)}%`).join(', ')}.</p>
+              )}
+              {waiting.length > 0 && <p className="rp-dim rp-foot">Not enough days on both sides yet (20 each): {waiting.map((l) => l.label.toLowerCase()).join(', ')}.</p>}
+              <p className="rp-dim rp-foot">A screen, not a diagnosis: a food only shows here when its loose share is 15 points higher, p is under 0.05 and it survives the false-alarm correction across every food tested.</p>
+            </section>
+          )
+        })()}
+
         <section className="ft-card pg-card rp-card">
           <h3 className="pg-card-title mono"><span>FOOD AND STOOL</span><span>TENTATIVE</span></h3>
           {r.foodStool.length === 0 ? (

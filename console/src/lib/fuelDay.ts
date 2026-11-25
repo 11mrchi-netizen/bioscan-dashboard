@@ -3,6 +3,7 @@
 import { supabase } from './supabase'
 import { localToday } from './dates'
 import { buildFuelDays, DAYS_AHEAD, DAYS_BACK, type BodyRow, type FuelDays, type FuelRows, type SessionRow } from './fuelInputs'
+import { loadFuelSettings } from './fuelSettingsData'
 
 const PAGE = 1000
 const plusDays = (d: string, n: number) => new Date(Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)) - 1, Number(d.slice(8, 10)) + n)).toISOString().slice(0, 10)
@@ -68,9 +69,11 @@ function offsetAt(date: string, zone: string): number {
   return Math.round((Date.UTC(Number(o.year), Number(o.month) - 1, Number(o.day), Number(o.hour) % 24, Number(o.minute), Number(o.second)) - t) / 60000)
 }
 
-/** Today's fuel plan and the days around it; null while no weight is on record. */
+/** Today's fuel plan and the days around it, under the phone's fuel settings; null while no weight is on record. */
 export async function loadFuelDays(now: Date = new Date()): Promise<FuelDays | null> {
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone
   const today = localToday(now)
-  return buildFuelDays(await loadFuelRows(today, zone), today, now.toISOString(), zone)
+  const [rows, settingsRead] = await Promise.all([loadFuelRows(today, zone), loadFuelSettings()])
+  const days = buildFuelDays(rows, today, now.toISOString(), zone, settingsRead.settings)
+  return days ? { ...days, settingsFromPhone: settingsRead.fromPhone } : null
 }

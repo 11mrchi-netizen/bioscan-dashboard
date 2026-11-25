@@ -142,6 +142,8 @@ private fun AuthGate(pendingNotificationKind: String?, onNotificationHandled: ()
             LocationCollector.registerAll(context)
             // Daily targets live with the account too (FUEL scores intake against them).
             catching { NutritionGoalsStore.sync(context, SupabaseClientProvider.client) }
+            // So do the fuel settings, which the web console's fuel and race plans read.
+            catching { com.bioscan.fieldterminal.data.FuelSettingsStore.sync(context, SupabaseClientProvider.client) }
         }
     }
 

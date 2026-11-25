@@ -5,6 +5,7 @@ import com.bioscan.fieldterminal.data.GeocodingRepository
 import com.bioscan.fieldterminal.data.MapSettingsStore
 import com.bioscan.fieldterminal.data.ReadCache
 import com.bioscan.fieldterminal.data.WeatherRepository
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.keysetPagesDescending
 import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.domain.routine.DayVisit
@@ -220,6 +221,14 @@ class PlacesRepository(private val supabase: SupabaseClient) {
         supabase.postgrest.from("places")
             .select(columns = Columns.list("id,lat,lon,radius_m,label,category,source,osm_name,osm_category,created_at,stop_since"))
             .decodeList<PlaceRow>()
+
+    /**
+     * Where home is for the weather of a plan with no place of its own: the Home place kept with the account (oldest first,
+     * stopped places left out), the one the web console reads too (console/src/lib/homePlace.ts), else Setup's home
+     * location on this phone.
+     */
+    suspend fun home(context: Context): Pair<Double, Double>? =
+        catching { loadPlaces() }.getOrNull()?.let(::homeOf) ?: MapSettingsStore.getHome(context)
 
     // Each stay's place, creating places for stays no known place holds. Setup's home location becomes the Home place the
     // first time, so home never has to be learned or named.
@@ -617,3 +626,8 @@ internal fun Trip.toRow(isCommute: Boolean) = TripInsertRow(
     activeMin = activeMinutes,
     isCommute = isCommute,
 )
+
+/** The account's Home place: category home, not stopped, the oldest first. */
+internal fun homeOf(places: List<PlaceRow>): Pair<Double, Double>? =
+    places.filter { it.category == PlaceCategory.HOME.key && it.stopSince == null }
+        .minByOrNull { it.createdAt ?: "" }?.let { it.lat to it.lon }

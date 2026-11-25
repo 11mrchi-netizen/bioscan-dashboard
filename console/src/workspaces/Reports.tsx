@@ -206,6 +206,20 @@ function ReportView({ r, busy, onRebuild }: { r: PeriodReport; busy: string | nu
           <p className="rp-dim rp-foot">Food is a daily mean over the days with food logged; supplements over every day of the {r.grain} (a dose not logged was not taken). Needs are adult-male RDA or AI; upper limits are the safe upper intake levels.</p>
         </section>
 
+        {r.mealQuality && (
+          <section className="ft-card pg-card rp-card">
+            <h3 className="pg-card-title mono"><span>MEAL QUALITY</span><span>{r.mealQuality.meals} meals</span></h3>
+            <ul className="pg-rows">{r.mealQuality.lines.map((l) => (
+              <li key={l.key} className="pg-row">
+                <span className="pg-row-title">{l.label}</span>
+                <span className="pg-row-value" style={{ color: `var(--${MEAL_QUALITY_HUE[l.key]})` }}>{fmt(l.value)}{l.unit && <small> {l.unit}</small>}</span>
+                <span className="pg-row-sub">{l.basis}{l.prev != null && ` · ${fmt(l.prev)} the ${r.grain} before`}</span>
+              </li>
+            ))}</ul>
+            <p className="rp-dim rp-foot">Each index on its own, from the profile of every meal (open a meal in the phone's Log to see it). Glycemic load and the food groups are estimated from typical values of the foods.</p>
+          </section>
+        )}
+
         <section className="ft-card pg-card rp-card">
           <h3 className="pg-card-title mono"><span>FOOD AND STOOL</span><span>TENTATIVE</span></h3>
           {r.foodStool.length === 0 ? (
@@ -224,6 +238,11 @@ function ReportView({ r, busy, onRebuild }: { r: PeriodReport; busy: string | nu
       <p className="rp-dim rp-missing">Written {r.generatedOn}. Rules: docs/reports/README.md.</p>
     </>
   )
+}
+
+/** The hue of each meal-quality index (design/tokens), the same as on the phone's meal profile. */
+const MEAL_QUALITY_HUE: Record<string, string> = {
+  protein_dose: 'm-protein', energy_density: 'm-energy-density', glycemic_load: 'm-glycemic-load', fiber_density: 'm-fiber', ultra_processed: 'm-ultra-processed',
 }
 
 function Glance({ label, items, tone }: { label: string; items: string[]; tone: Tone }) {

@@ -615,6 +615,82 @@ export function foodStool(
   return out
 }
 
+// --- Meal quality (the meal profile, migrations/*_meal_profiles.sql) ---
+
+/** One meal of the `meal_profiles` view, with its local day. */
+export interface MealProfileRead {
+  date: string
+  calories: number | null
+  proteinG: number | null
+  fiberG: number | null
+  energyDensity: number | null
+  glycemicLoad: number | null
+  ultraProcessedPct: number | null
+}
+
+export interface MealQualityLine {
+  key: 'protein_dose' | 'energy_density' | 'glycemic_load' | 'fiber_density' | 'ultra_processed'
+  label: string
+  unit: string
+  value: number | null
+  prev: number | null
+  /** What the value is made of ("31 of 44 meals", "6 days"). */
+  basis: string
+}
+
+export interface MealQuality {
+  meals: number
+  lines: MealQualityLine[]
+}
+
+/** Meals under this are snacks and drinks for the protein dose share. */
+export const MEAL_QUALITY = { mainMealKcal: 250, proteinPerKgDose: 0.3, defaultDoseG: 25 }
+
+/**
+ * Each index of the meal profile summed up over the period, every one on its own (no combined score, the owner's choice):
+ * the share of main meals (250 kcal or more) with a full protein dose (0.3 g/kg, 25 g without a weight), the median
+ * energy density of meals with grams, the daily glycemic load (estimated), fibre per 1,000 kcal and the ultra-processed
+ * share of the energy. Days without meals logged are left out, never counted as zero.
+ */
+export function mealQuality(meals: MealProfileRead[], period: ReportPeriod, weightKg: number | null): MealQuality {
+  const prev = previousOf(period)
+  const dose = weightKg !== null && weightKg >= 30 && weightKg <= 250 ? MEAL_QUALITY.proteinPerKgDose * weightKg : MEAL_QUALITY.defaultDoseG
+  const inP = (p: ReportPeriod) => meals.filter((m) => m.date >= p.start && m.date <= p.end)
+  const now = inP(period), before = inP(prev)
+  const calc = (ms: MealProfileRead[]) => {
+    const main = ms.filter((m) => (m.calories ?? 0) >= MEAL_QUALITY.mainMealKcal && m.proteinG !== null)
+    const dosed = main.filter((m) => (m.proteinG ?? 0) >= dose).length
+    const eds = ms.map((m) => m.energyDensity).filter((v): v is number => v !== null).sort((a, b) => a - b)
+    const glByDay = new Map<string, number>()
+    for (const m of ms) if (m.glycemicLoad !== null) glByDay.set(m.date, (glByDay.get(m.date) ?? 0) + m.glycemicLoad)
+    const withFiber = ms.filter((m) => m.fiberG !== null && (m.calories ?? 0) > 0)
+    const kcalF = withFiber.reduce((a, m) => a + (m.calories ?? 0), 0)
+    const kcal = ms.reduce((a, m) => a + (m.calories ?? 0), 0)
+    const upf = ms.reduce((a, m) => a + ((m.ultraProcessedPct ?? 0) / 100) * (m.calories ?? 0), 0)
+    const median = eds.length ? (eds.length % 2 ? eds[(eds.length - 1) / 2] : (eds[eds.length / 2 - 1] + eds[eds.length / 2]) / 2) : null
+    return {
+      dose: main.length ? { v: round((100 * dosed) / main.length, 0), basis: `${dosed} of ${main.length} meals` } : null,
+      ed: median !== null ? { v: round(median, 2), basis: `${eds.length} meals with grams` } : null,
+      gl: glByDay.size ? { v: round([...glByDay.values()].reduce((a, b) => a + b, 0) / glByDay.size, 0), basis: `${glByDay.size} days` } : null,
+      fiber: kcalF >= 500 ? { v: round((1000 * withFiber.reduce((a, m) => a + (m.fiberG ?? 0), 0)) / kcalF, 1), basis: `${withFiber.length} meals with fibre` } : null,
+      upf: kcal >= 500 ? { v: round((100 * upf) / kcal, 0), basis: `${ms.length} meals` } : null,
+    }
+  }
+  const a = calc(now), b = calc(before)
+  const line = (key: MealQualityLine['key'], label: string, unit: string, x: { v: number; basis: string } | null, y: { v: number } | null): MealQualityLine =>
+    ({ key, label, unit, value: x?.v ?? null, prev: y?.v ?? null, basis: x?.basis ?? 'not enough logged' })
+  return {
+    meals: now.length,
+    lines: [
+      line('protein_dose', `Main meals with a full protein dose (${round(dose, 0)} g)`, '%', a.dose, b.dose),
+      line('energy_density', 'Energy density, median meal', 'kcal/g', a.ed, b.ed),
+      line('glycemic_load', 'Glycemic load a day (estimated)', '', a.gl, b.gl),
+      line('fiber_density', 'Fibre per 1,000 kcal', 'g', a.fiber, b.fiber),
+      line('ultra_processed', 'Energy from ultra-processed food', '%', a.upf, b.upf),
+    ],
+  }
+}
+
 // --- Suggestions ---
 
 export interface Suggestion {
@@ -747,6 +823,8 @@ export interface PeriodReport {
   regimen: AdherenceLine[]
   lab: LabLine[]
   foodStool: FoodStoolLine[]
+  /** The meal profile summed up; absent on reports written before it existed. */
+  mealQuality?: MealQuality
   /** Short lists for the top of the report. */
   summary: { better: string[]; worse: string[]; working: string[]; wasted: string[]; notFollowed: string[]; excess: string[]; short: string[] }
   suggestions: Suggestion[]
@@ -762,6 +840,7 @@ export function buildReport(x: {
   regimen: AdherenceLine[]
   lab: LabLine[]
   foodStool: FoodStoolLine[]
+  mealQuality?: MealQuality
   weightKg: number | null
 }): PeriodReport {
   const prev = previousOf(x.period)
@@ -772,7 +851,7 @@ export function buildReport(x: {
   return {
     version: REPORT_VERSION, key: periodKey(x.period), grain: x.period.grain, label: periodLabel(x.period),
     start: x.period.start, end: x.period.end, prevStart: prev.start, prevEnd: prev.end, generatedOn: x.today,
-    metrics: x.metrics, micro: x.micro, regimen: x.regimen, lab: x.lab, foodStool: x.foodStool,
+    metrics: x.metrics, micro: x.micro, regimen: x.regimen, lab: x.lab, foodStool: x.foodStool, ...(x.mealQuality ? { mealQuality: x.mealQuality } : {}),
     summary: {
       better: x.metrics.filter((l) => l.status === 'better').map((l) => l.label),
       excess: x.micro.lines.filter((l) => l.status === 'high' || l.status === 'high_days').map((l) => l.label),

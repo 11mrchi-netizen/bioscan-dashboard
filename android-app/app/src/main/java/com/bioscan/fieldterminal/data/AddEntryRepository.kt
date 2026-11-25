@@ -10,6 +10,7 @@ import com.bioscan.fieldterminal.data.model.LogEncounterRow
 import com.bioscan.fieldterminal.data.model.LogGripRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
+import com.bioscan.fieldterminal.data.model.MealProfileRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
 import com.bioscan.fieldterminal.data.model.LogOstrcRow
 import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
@@ -39,6 +40,8 @@ import com.bioscan.fieldterminal.domain.nutrientContribution
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
+import io.github.jan.supabase.postgrest.query.Order
+import io.github.jan.supabase.postgrest.query.filter.FilterOperator
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -505,6 +508,22 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         id,
     )
 
+    // The meal profile (domain/fuel/MealProfile.kt) for the Log's entry sheet, with the latest weight for the protein dose.
+    suspend fun fetchMealProfile(mealId: Long): MealProfileRow? =
+        supabase.postgrest.from("meal_profiles")
+            .select(columns = Columns.list(MEAL_PROFILE_COLUMNS)) { filter { eq("meal_id", mealId) } }
+            .decodeList<MealProfileRow>()
+            .firstOrNull()
+
+    suspend fun latestWeightKg(): Double? =
+        supabase.postgrest.from("body_metrics")
+            .select(Columns.list("weight_kg")) {
+                filter { filterNot("weight_kg", FilterOperator.IS, "null") }
+                order("date", Order.DESCENDING)
+                limit(1)
+            }
+            .decodeList<WeightOnlyRow>().firstOrNull()?.weightKg
+
     private suspend inline fun <reified T : Any> fetchById(table: String, columns: String, id: Long): T? =
         supabase.postgrest.from(table)
             .select(columns = Columns.list(columns)) { filter { eq("id", id) } }
@@ -593,3 +612,9 @@ private fun inferNutrientFromName(name: String): String? {
 
 @kotlinx.serialization.Serializable
 private data class MealSlotRow(val id: Long, @SerialName("meal_slot") val mealSlot: String? = null)
+
+private const val MEAL_PROFILE_COLUMNS = "meal_id,calories,protein_g,food_grams,energy_density_kcal_g,protein_per_100kcal," +
+    "carbs_per_100kcal,fiber_per_1000kcal,glycemic_load_est,fullness_factor_est,ultra_processed_pct,food_groups,tags,macro_mismatch"
+
+@kotlinx.serialization.Serializable
+private data class WeightOnlyRow(@SerialName("weight_kg") val weightKg: Double? = null)

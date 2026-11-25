@@ -158,6 +158,11 @@ object FuturisticMaterialTokens {
         val Sodium = Weight
         val Hydration = Color(0xFF3AA8FF)
         val Caffeine = Color(0xFFB98A4D)
+        // meal profile (MealProfileBlock): one hue per index
+        val EnergyDensity = Color(0xFFB6E35A)
+        val GlycemicLoad = Color(0xFFFF7D5C)
+        val Fullness = Color(0xFF6FD6B4)
+        val UltraProcessed = Color(0xFFC48CFF)
         val SweatRate = Color(0xFF35C7E0)
 
         // digestion: stool consistency

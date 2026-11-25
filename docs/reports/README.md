@@ -57,6 +57,12 @@ food *unknown*, never 0, so it is never called short.
 
 The supplements responsible are named on the line and in the suggestion.
 
+**Meal quality.** From the meal profile of every meal (`meal_profiles`, docs/nutrition/meal-profile.md), each index on
+its own line against the period before, never combined: the share of main meals (250 kcal or more) with a full protein
+dose (0.3 g/kg, 25 g without a weight), the median energy density of the meals with grams, the glycemic load a day
+(estimated; days with meals only), fibre per 1,000 kcal (meals with a fibre value, from 500 kcal) and the share of energy
+from ultra-processed food. Reports written before the profile existed have no such section.
+
 **Food and stool (tentative).** Over the 90 days to the period's end: the share of normal stools (Bristol 3-5) the day
 after a day above the median of fibre, water, fat or energy, against the day after one below it. Shown only with 8 days
 each side and a gap of 20 points or more. An association, never a cause.

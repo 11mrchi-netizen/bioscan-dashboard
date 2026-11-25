@@ -10,7 +10,7 @@
 import { fetchAll } from './paging.ts'
 import {
   adherenceLine, buildReport, convertUnit, type DailySeries, foodStool, historyOf, itemsInPeriod, lastCompleted, type LabLine, type LabMetricRead,
-  labVerdict, metricLine, microSection, MICRO_REFERENCES, type PeriodReport, periodKey, parsePeriodKey, previousOf, REPORT_KIND,
+  labVerdict, type MealProfileRead, mealQuality, metricLine, microSection, MICRO_REFERENCES, type PeriodReport, periodKey, parsePeriodKey, previousOf, REPORT_KIND,
   REPORT_METRICS, regimenItem, withHistory, type ReportGrain, type ReportPeriod, type SeriesInfo, STOOL_SERIES,
 } from './periodReport.ts'
 import { localDateAt, type Admin } from './runRelationships.ts'
@@ -74,6 +74,19 @@ async function readStool(admin: Admin, userId: string, start: string, end: strin
     if (e.disc.length) discomfort.set(d, e.disc.reduce((a, b) => a + b, 0) / e.disc.length)
   }
   return { normal, discomfort }
+}
+
+/** The meal profile of each meal from [start] to [end] (meals.logged_at is the phone's wall clock: its digits are local). */
+async function readMealProfiles(admin: Admin, userId: string, start: string, end: string): Promise<MealProfileRead[]> {
+  const { rows, error } = await fetchAll<Record<string, unknown>>((a, b) =>
+    admin.from('meal_profiles').select('meal_id, logged_at, calories, protein_g, fiber_g, energy_density_kcal_g, glycemic_load_est, ultra_processed_pct')
+      .eq('user_id', userId).gte('logged_at', `${start}T00:00:00`).lte('logged_at', `${end}T23:59:59.999`).order('logged_at').order('meal_id').range(a, b))
+  if (error) throw new Error(`meal_profiles: ${error}`)
+  const n = (v: unknown) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v))
+  return rows.map((r) => ({
+    date: String(r.logged_at).slice(0, 10), calories: n(r.calories), proteinG: n(r.protein_g), fiberG: n(r.fiber_g),
+    energyDensity: n(r.energy_density_kcal_g), glycemicLoad: n(r.glycemic_load_est), ultraProcessedPct: n(r.ultra_processed_pct),
+  }))
 }
 
 /** nutrient_intake rows that are food; supplement doses are written there too (source_type `supplement`, source_id the
@@ -246,7 +259,12 @@ export async function buildPeriodReport(admin: Admin, userId: string, file: Seri
   const weights = daily.get('body_weight')
   const lastWeight = weights ? [...weights.entries()].filter(([d]) => d <= period.end).sort(([a], [b]) => a.localeCompare(b)).at(-1)?.[1] ?? null : null
 
-  return buildReport({ period, today, metrics, micro, regimen, lab, foodStool: fs, weightKg: lastWeight })
+  // The meal profile view may be missing on a database that has not had its migration yet: the report goes on without it.
+  let meals: MealProfileRead[] | null = null
+  try { meals = await readMealProfiles(admin, userId, prev.start, period.end) } catch { meals = null }
+  const mq = meals ? mealQuality(meals, period, lastWeight) : undefined
+
+  return buildReport({ period, today, metrics, micro, regimen, lab, foodStool: fs, mealQuality: mq, weightKg: lastWeight })
 }
 
 async function storedKeys(admin: Admin, userId: string): Promise<Set<string>> {

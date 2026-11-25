@@ -98,7 +98,7 @@ export default function ScheduleEditor({ title, kind, refKey, durationMin, seed,
     if (!add.length) return setNote({ text: 'Nothing fits: the first one would come after the finish.', bad: true })
     setBlocks((bs) => byStart([...bs, ...add]))
   }
-  const useStandard = (mode: 'replace' | 'add') => {
+  const takeStandard = (mode: 'replace' | 'add') => {
     if (!std) return
     const add = applyStandard(std, duration, `s${newId()}`)
     if (!add.length) return setNote({ text: 'That standard gives nothing for a session this short.', bad: true })
@@ -166,8 +166,8 @@ export default function ScheduleEditor({ title, kind, refKey, durationMin, seed,
             ) : (
               <>
                 <select aria-label="standard" value={pickedStd} onChange={(e) => setPickedStd(e.target.value)}><option value="">{stds.standards.length ? 'pick a standard…' : 'none saved yet'}</option>{stds.standards.map((s) => <option key={s.id} value={String(s.id)}>{s.name}</option>)}</select>
-                <button className="pb-chip" disabled={!std} onClick={() => useStandard('replace')}>USE FOR THIS SESSION</button>
-                <button className="pb-chip" disabled={!std} onClick={() => useStandard('add')}>ADD ITS RULES</button>
+                <button className="pb-chip" disabled={!std} onClick={() => takeStandard('replace')}>USE FOR THIS SESSION</button>
+                <button className="pb-chip" disabled={!std} onClick={() => takeStandard('add')}>ADD ITS RULES</button>
                 <button className="pb-chip" disabled={!std?.id || busy} onClick={() => run(async () => { await deleteStandard(std?.id as number); setStds(await loadStandards()); setPickedStd('') })}>DELETE</button>
                 <input aria-label="standard name" placeholder="name this schedule as a standard" value={stdName} onChange={(e) => setStdName(e.target.value)} />
                 <button className="pb-chip" disabled={busy || !stdName.trim() || blocks.length === 0} onClick={() => run(async () => { await saveStandard(standardFromBlocks(stdName, blocks, duration)); setStds(await loadStandards()); setNote({ text: `Saved as the standard “${stdName.trim()}”: its rules fit any length.`, bad: false }); setStdName('') })}>SAVE AS A STANDARD</button>

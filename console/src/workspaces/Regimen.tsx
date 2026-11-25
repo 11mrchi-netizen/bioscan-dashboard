@@ -4,6 +4,7 @@
 // the servings the log says were taken since the first purchase; with no purchase recorded there is no stock number.
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { readAll } from '../lib/readAll'
 import { useLoadEffect } from '../lib/useLoadEffect'
 import { localToday } from '../lib/dates'
 import { remainingByProduct, type StockEvent } from '../lib/pantry'
@@ -35,8 +36,8 @@ async function load(): Promise<Data> {
   const firstPurchase = events.filter((x) => x.kind === 'purchase').map((x) => x.occurred_at).sort()[0]
   let taken: Taken[] = []
   if (firstPurchase) {
-    const t = await supabase.from('supplement_log').select('supplement_id,product_id,taken_at,serving_count').gte('taken_at', firstPurchase).limit(5000)
-    taken = (t.data ?? []) as Taken[]
+    // Every dose since the first purchase: past the 1,000-row cap, and an error shows instead of a wrong count.
+    taken = await readAll<Taken>(() => supabase.from('supplement_log').select('supplement_id,product_id,taken_at,serving_count').gte('taken_at', firstPurchase).order('taken_at').order('id'), 'supplement_log')
   }
   const productOf = new Map(supps.filter((x) => x.product_id != null).map((x) => [x.id, x.product_id!]))
   const takenRows = taken.flatMap((t) => {

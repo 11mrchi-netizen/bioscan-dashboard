@@ -112,19 +112,18 @@ export function Integrity() {
       buildIntegrity(supabase, user.id, SERIES_FILE, new Date(), range),
       loadBreaks(),
       Promise.all([
-        supabase.from('collector_heartbeats').select('stream, ts').order('ts', { ascending: false }).limit(500),
-        supabase.from('daily_field_provenance').select('writer, origin, written_at').order('written_at', { ascending: false }).limit(500),
+        // One row per stream and per writer (views in migration 20261125063525_integrity_latest.sql): the newest 500 rows
+        // dropped a source that had gone quiet, the one this list is there to show.
+        supabase.from('collector_latest').select('stream, ts').order('ts', { ascending: false }),
+        supabase.from('provenance_writer_latest').select('writer, origin, written_at').order('written_at', { ascending: false }),
       ]),
     ])
       .then(([r, , [hb, prov]]) => {
         if (!current) return
-        const latest = <T,>(rows: T[], key: (x: T) => string) => [...new Map(rows.map((x) => [key(x), x] as const)).values()]
-        // rows come newest first, so the first per key is the newest: keep it
-        const firstPer = <T,>(rows: T[], key: (x: T) => string) => latest([...rows].reverse(), key)
         setReport(r)
         setCollectors({
-          heartbeats: firstPer((hb.data ?? []) as Collectors['heartbeats'], (x) => x.stream),
-          writers: firstPer((prov.data ?? []) as Collectors['writers'], (x) => `${x.writer}|${x.origin}`),
+          heartbeats: (hb.data ?? []) as Collectors['heartbeats'],
+          writers: (prov.data ?? []) as Collectors['writers'],
         })
         setMs(Math.round(performance.now() - t0))
         setError(null)

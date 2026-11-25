@@ -17,14 +17,24 @@ const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/calendar.readonly https:/
 
 /**
  * Google returns a refresh token only right after a consented sign-in, and Supabase does not keep it: store it for the
- * refresh-google-token Edge Function (user_google_tokens), as the old dashboard did on load. A no-op on every other load.
+ * refresh-google-token Edge Function (user_google_tokens), as the old dashboard did on load. The stored session keeps
+ * the token, so without the check below the same token was written again on every load and every token refresh: it is
+ * written once per token (the browser remembers which one it saved; a cleared browser only writes it once more).
  */
+const SAVED_TOKEN_KEY = 'bioscan.googleRefreshTokenSaved'
+const tokenTag = (userId: string, token: string) => `${userId}:${token.length}:${token.slice(-12)}`
+
 function keepGoogleToken(s: Session | null): void {
   const token = s?.provider_refresh_token
   if (!s || !token) return
+  const tag = tokenTag(s.user.id, token)
+  try { if (localStorage.getItem(SAVED_TOKEN_KEY) === tag) return } catch { /* storage off: write it */ }
   void supabase.from('user_google_tokens')
     .upsert({ user_id: s.user.id, refresh_token: token, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
-    .then(({ error }) => { if (error) console.warn('Could not store the Google refresh token:', error.message) })
+    .then(({ error }) => {
+      if (error) { console.warn('Could not store the Google refresh token:', error.message); return }
+      try { localStorage.setItem(SAVED_TOKEN_KEY, tag) } catch { /* storage off */ }
+    })
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

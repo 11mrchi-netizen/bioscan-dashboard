@@ -13,7 +13,7 @@ export function cssColor(v: string): string {
 
 export const PALETTE = {
   /** Selection and the neutral series colour: platinum. Status and metric hues come from their own tokens, not from here. */
-  get emerald() { return css('--ft-platinum', '#e6eaf0') },
+  get emerald() { return css('--ft-platinum-solid', '#eef2f7') },
   get amber() { return css('--warn', '#ffc24b') },
   get critical() { return css('--bad', '#ff5d6c') },
   get text() { return css('--ft-fg', '#eaf0f2') },

@@ -15,7 +15,7 @@
 .conf-bar { position: relative; height: 18px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 4px; }
 .conf-bar-mde { position: absolute; top: 0; bottom: 0; background: var(--color-border); opacity: 0.55; }
 .conf-bar-zero { position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: var(--color-text-muted); }
-.conf-bar-ci { position: absolute; top: 6px; height: 6px; background: var(--color-emerald); opacity: 0.8; border-radius: 3px; }
+.conf-bar-ci { position: absolute; top: 6px; height: 6px; background: var(--ink, var(--color-analysis)); opacity: 0.8; border-radius: 3px; }
 .conf-bar-est { position: absolute; top: 2px; bottom: 2px; width: 3px; margin-left: -1px; background: var(--color-text-primary); }
 .conf-legend { display: flex; flex-direction: column; gap: 2px; font-size: 10px; color: var(--color-text-muted); }
 .conf-stats { display: flex; flex-wrap: wrap; gap: var(--sp-3); font-size: 11px; color: var(--color-text-muted); }
@@ -44,8 +44,8 @@
 .ev-zone { fill: var(--color-text-secondary); opacity: 0.18; }
 .ev-zero { stroke: var(--color-text-muted); stroke-width: 0.4; vector-effect: non-scaling-stroke; }
 .ev-mde { stroke: var(--color-text-muted); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
-.ev-ci { stroke: var(--color-text-primary); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
-.ev-est { fill: var(--color-text-primary); stroke: var(--color-surface); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.ev-ci { stroke: var(--ink, var(--color-text-primary)); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+.ev-est { fill: var(--ink, var(--color-text-primary)); stroke: var(--ft-bg); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .ev-size { font-size: 11px; color: var(--color-text-secondary); }
 .ev-detail { display: flex; flex-direction: column; gap: var(--sp-2); padding: 0 0 var(--sp-3) var(--sp-3); border-left: 2px solid var(--color-border); }
 .ev-chart { display: flex; flex-direction: column; gap: 4px; max-width: 520px; }
@@ -55,9 +55,9 @@
 .ev-zero-line { stroke: var(--color-text-muted); stroke-dasharray: 4 3; }
 .ev-marker { stroke: var(--color-text-secondary); stroke-dasharray: 3 3; }
 .ev-chance { fill: var(--color-text-secondary); opacity: 0.16; }
-.ev-ci-band { fill: var(--color-analysis); opacity: 0.18; }
-.ev-line { fill: none; stroke: var(--color-analysis); stroke-width: 2; }
-.ev-dot { fill: var(--color-analysis); stroke: var(--color-surface); stroke-width: 1.5; }
+.ev-ci-band { fill: var(--ink, var(--color-analysis)); opacity: 0.18; }
+.ev-line { fill: none; stroke: var(--ink, var(--color-analysis)); stroke-width: 2; }
+.ev-dot { fill: var(--ink, var(--color-analysis)); stroke: var(--ft-bg); stroke-width: 1.5; }
 .ev-tick { fill: var(--color-text-muted); font-size: 9px; font-family: var(--font-mono, monospace); }
 .ev-cc { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--color-border); padding-top: var(--sp-2); }
 .ev-cc-row { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(140px, auto) minmax(150px, auto); gap: var(--sp-3); font-size: 11px; color: var(--color-text-secondary); }

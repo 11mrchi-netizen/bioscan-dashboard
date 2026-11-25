@@ -20,5 +20,5 @@ const TABS: readonly TabDef[] = [
 ]
 
 export default function Lab() {
-  return <TabbedPage base="lab" tabs={TABS} skin wash="ft-charge-b" />
+  return <TabbedPage base="lab" tabs={TABS} />
 }

@@ -9,8 +9,8 @@
 .mp-food { display: flex; flex-direction: column; gap: 2px; text-align: left; background: var(--color-glass); border: 1px solid var(--color-border); border-radius: 6px; padding: 6px 8px; color: var(--color-text-primary); font-size: 12px; }
 .mp-food span:last-child { font-size: 10px; }
 .mp-food:hover:not(:disabled) { border-color: var(--color-text-muted); }
-.mp-food.on { background: #EEF2F7; color: #0A0C0E; border-color: transparent; }
-.mp-food.on .pb-muted { color: #3A4450; }
+.mp-food.on { background: var(--ft-platinum-solid); color: var(--ft-platinum-ink); border-color: transparent; }
+.mp-food.on .pb-muted { color: color-mix(in srgb, var(--ft-platinum-ink) 72%, transparent); }
 .mp-food:disabled { opacity: 0.45; cursor: default; }
 .mp-recipes { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--sp-3); }
 .mp-recipe-line { font-size: 12px; color: var(--color-text-secondary); }

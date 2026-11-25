@@ -105,6 +105,7 @@ export function EventExplorer() {
               unit={result.unit}
               label={(k) => (k === 0 ? 'EVENT' : k > 0 ? `+${k}` : `${k}`)}
               marker={0}
+              metric={outcome}
             />
           )}
           <p className="conf-summary">{result.summary}</p>

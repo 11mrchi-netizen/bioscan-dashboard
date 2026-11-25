@@ -34,7 +34,7 @@ import './Explore.css'
 
 const DEFAULT_SERIES = ['hrv', 'rhr', 'sleep_hours', 'steps']
 /** One fixed hue per metric (design/tokens `--m-*`), the same on every page and on the phone. */
-const hueOf = (id: string): string => `var(--${SERIES_HUE[id] ?? 'ft-platinum'})`
+const hueOf = (id: string): string => `var(--${SERIES_HUE[id] ?? 'm-weight-ema'})`
 type GrainChoice = 'auto' | Grain
 
 interface Loaded {

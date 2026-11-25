@@ -50,6 +50,23 @@ export const SERIES_HUE: Record<string, string> = {
 }
 
 /**
+ * The ink of an outcome in the Lab's charts (the evidence board, the decision queue, experiments, discovery): the hue of the
+ * metric it measures. The keys are the outcome ids of the catalogue (hypotheses.ts: hrv, rhr, sleep, energy, sleep_score,
+ * recovery_score) and the metric ids of the experiments (experiment.ts METRIC_INFO). Recovery score is a domain score, so it
+ * takes the Recovery domain's hue, as a domain does in CHARGE's list.
+ */
+export const OUTCOME_HUE: Record<string, string> = {
+  hrv: 'm-hrv', rhr: 'm-resting-hr', sleep: 'm-sleep-duration', sleep_hours: 'm-sleep-duration', deep_rem_min: 'm-stage-deep',
+  energy: 'm-energy', mood: 'm-mood', stress: 'm-stress', soreness: 'm-soreness', resp_rate: 'm-respiratory',
+  fueling_carb_rate: 'm-carbs', screen_bed_min: 'm-night-screen', screen_pm_social: 'm-time-phone', outdoor_daylight_min: 'm-daylight',
+  sleep_score: 'm-sleep-score', recovery_score: 'ft-domain-cardio',
+}
+
+/** `var(--token)` of an outcome or a series; a chart that names no known metric draws in the neutral weight-trend hue (contract). */
+export const metricInk = (key: string | null | undefined): string =>
+  `var(--${(key && (OUTCOME_HUE[key] ?? SERIES_HUE[key])) || 'm-weight-ema'})`
+
+/**
  * The metric hue (design/tokens `--m-*`) of each score input: a copy of android ui/theme/MetricInk.kt, so a metric has the
  * same colour on the phone and here. Direction is never told by colour. inputs.test.ts checks every key of ScoreDomains.kt is here.
  */

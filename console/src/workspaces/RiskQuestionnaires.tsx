@@ -15,7 +15,7 @@ export interface Response { id: number; instrument: string; local_date: string; 
 // Each questionnaire's hue: the values of design/tokens (--m-phq9 ... --m-work-hours), for canvas charts.
 // The metric hue of each instrument (design/tokens --m-*), resolved when read.
 const HUE_TOKEN: Record<string, string> = { phq9: 'm-phq9', gad7: 'm-gad7', who5: 'm-who5', ucla3: 'm-loneliness', cbi_work: 'm-burnout', work_hours: 'm-work-hours' }
-const hueOf = (id: string): string => cssColor(`var(--${HUE_TOKEN[id] ?? 'ft-platinum'})`)
+const hueOf = (id: string): string => cssColor(`var(--${HUE_TOKEN[id] ?? 'm-weight-ema'})`)
 const STATE: Record<string, string> = { ok: 'var(--ft-ok, #10B981)', warn: 'var(--ft-warn, #F59E0B)', bad: 'var(--ft-bad, #EF4444)' }
 const DOMAINS: [string, string][] = [['mind', 'MIND'], ['connection', 'CONNECTION'], ['work', 'WORK']]
 

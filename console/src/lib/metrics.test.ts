@@ -1,9 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { compareRefs, sessionSeries, seriesGroup, washFor, rangeFor, INPUT_HUE, INPUT_SERIES, meRef, splitMeLabel, metricHref, parseMetricRef, refString, SERIES_HUE, seriesBehind, windowStats } from './metrics.ts'
+import { compareRefs, sessionSeries, seriesGroup, washFor, rangeFor, INPUT_HUE, INPUT_SERIES, OUTCOME_HUE, metricInk, meRef, splitMeLabel, metricHref, parseMetricRef, refString, SERIES_HUE, seriesBehind, windowStats } from './metrics.ts'
 import { SERIES } from './schema.ts'
 import { viewPath } from './savedViews.ts'
+import { METRIC_INFO } from '../../../supabase/functions/_shared/analysis-core/experiment.ts'
+import { DISCOVERY_OUTCOMES } from '../../../supabase/functions/_shared/analysis-core/discovery.ts'
 
 test('old History refs still parse: a ring and an input', () => {
   assert.deepEqual(parseMetricRef('charge'), { kind: 'ring', key: 'charge' })
@@ -103,6 +105,18 @@ test('saved views: a Lab or Setup tab keeps its tab and query; the old route nam
   assert.equal(viewPath('/lab', ''), null)
   assert.equal(viewPath('/setup/data', '?table=meals'), '/setup/data?table=meals')
   for (const old of ['/explore', '/evidence', '/models', '/data', '/integrity']) assert.equal(viewPath(old, '?x=1'), null) // the old names: no view was ever saved under them
+})
+
+test('every outcome of the Lab\'s charts has its metric\'s ink, and every ink is a token', () => {
+  const css = readFileSync(new URL('../../../design/tokens/tokens.css', import.meta.url), 'utf8')
+  // the catalogue's outcomes (hypotheses.ts), the experiments' metrics, the discovery screen's outcomes
+  const keys = ['hrv', 'rhr', 'sleep', 'energy', 'recovery_score', 'sleep_score', ...Object.keys(METRIC_INFO), ...DISCOVERY_OUTCOMES]
+  for (const k of keys) assert.ok(OUTCOME_HUE[k], `no ink for outcome ${k}`)
+  for (const t of new Set(Object.values(OUTCOME_HUE))) assert.ok(css.includes(`--${t}:`), `token --${t} is not in tokens.css`)
+  assert.equal(metricInk('rhr'), 'var(--m-resting-hr)')
+  assert.equal(metricInk('steps'), 'var(--m-steps)') // a series id falls back to its series hue
+  assert.equal(metricInk('nonsense'), 'var(--m-weight-ema)') // a chart that names no known metric is neutral
+  assert.equal(metricInk(undefined), 'var(--m-weight-ema)')
 })
 
 test('blood markers and phone tests have refs of their own, and survive the address', () => {

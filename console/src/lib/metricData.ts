@@ -46,7 +46,7 @@ export function formatSeriesValue(v: number): string {
   return String(Number(v.toFixed(1)))
 }
 
-const ringHue = (key: string): string => (key === 'charge' ? 'var(--ft-charge-b)' : DOMAINS.find((d) => d.key.toLowerCase() === key)?.hue ?? 'var(--ft-platinum)')
+const ringHue = (key: string): string => (key === 'charge' ? 'var(--ft-charge-b)' : DOMAINS.find((d) => d.key.toLowerCase() === key)?.hue ?? 'var(--m-weight-ema)')
 
 export async function loadMetric(ref: MetricRef, from: string, to: string, signal?: AbortSignal): Promise<MetricData> {
   switch (ref.kind) {
@@ -93,7 +93,7 @@ async function loadSeries(id: string, from: string, to: string, signal?: AbortSi
   if (!s) throw new Error(`Unknown series "${id}"`)
   const days = await loadDays(s, { start: from, end: to }, signal)
   return {
-    label: s.label, unit: s.unit, hue: `var(--${SERIES_HUE[id] ?? 'ft-platinum'})`, usual: false, axis: s.unit, dating: 'day', fmt: formatSeriesValue,
+    label: s.label, unit: s.unit, hue: `var(--${SERIES_HUE[id] ?? 'm-weight-ema'})`, usual: false, axis: s.unit, dating: 'day', fmt: formatSeriesValue,
     points: days.map((d) => ({ day: d.date, value: d.value })),
     source: `One value per day from ${s.table}, the whole history.`,
     info: (s as { note?: string; description?: string }).description ?? (s as { note?: string }).note,

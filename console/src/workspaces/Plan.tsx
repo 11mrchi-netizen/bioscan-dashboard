@@ -1,6 +1,6 @@
 // PLAN (web redesign, phase 5): what is planned and what was done, in the phone's tab names where a page maps to one
 // (Plan › Training, Food, Race, Sessions): OVERVIEW, TRAINING (the block planner), FOOD (the fuel plan, and the meal prep), SESSIONS, RACES.
-// The pages themselves are unchanged. #/plan/<tab>
+// #/plan/<tab>
 import { lazy } from 'react'
 import { TabbedPage, type TabDef } from '../components/layout/TabbedPage'
 

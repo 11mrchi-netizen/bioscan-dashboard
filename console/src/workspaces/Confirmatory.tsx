@@ -9,6 +9,7 @@ import { LoadBanner } from '../components/shared/LoadBanner'
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { warnOnError } from '../lib/schema'
+import { metricInk } from '../lib/metrics'
 import './Confirmatory.css'
 
 type Verdict = 'clear' | 'negligible' | 'unclear' | 'not_yet'
@@ -80,12 +81,12 @@ const fmt = (v: number, unit: string) =>
   `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(unit === '%' ? 1 : unit === 'min' ? 0 : unit === 'bpm' ? 1 : 2)}${unit === '%' ? '%' : ` ${unit}`}`
 
 // Interval on a number line: the detectable band (±MDE) is shaded, the 95 % interval is the bar, the estimate the tick.
-// Kept for the experiment and intervention views.
-export function IntervalBar({ effect, mde }: { effect: Effect; mde: number }) {
+// Kept for the experiment and intervention views. `metric` (an outcome or metric id) gives the interval its metric's ink.
+export function IntervalBar({ effect, mde, metric }: { effect: Effect; mde: number; metric?: string }) {
   const reach = Math.max(Math.abs(effect.lo), Math.abs(effect.hi), mde) * 1.15 || 1
   const pos = (v: number) => `${((v + reach) / (2 * reach)) * 100}%`
   return (
-    <div className="conf-bar" role="img" aria-label={`Estimate ${fmt(effect.value, effect.unit)}, interval ${fmt(effect.lo, effect.unit)} to ${fmt(effect.hi, effect.unit)}`}>
+    <div className="conf-bar" style={{ ['--ink' as string]: metricInk(metric) }} role="img" aria-label={`Estimate ${fmt(effect.value, effect.unit)}, interval ${fmt(effect.lo, effect.unit)} to ${fmt(effect.hi, effect.unit)}`}>
       <div className="conf-bar-mde" style={{ left: pos(-mde), width: `${(mde / reach) * 100}%` }} />
       <div className="conf-bar-zero" />
       <div className="conf-bar-ci" style={{ left: pos(effect.lo), width: `${((effect.hi - effect.lo) / (2 * reach)) * 100}%` }} />
@@ -94,14 +95,15 @@ export function IntervalBar({ effect, mde }: { effect: Effect; mde: number }) {
   )
 }
 
-// One forest-plot row on its group's shared axis: zone, zero, detectable-effect ticks, interval, estimate.
+// One forest-plot row on its group's shared axis: zone, zero, detectable-effect ticks, interval, estimate. The interval and the
+// estimate are in the outcome's metric ink; the zone and the zero stay neutral.
 function ForestRow({ p, scale }: { p: Payload; scale: number }) {
   const e = p.effect
   if (!e) return null
   const x = (v: number) => 50 + Math.max(-52, Math.min(52, (v / scale) * 48))
   const zone = p.noEffect ?? 0
   return (
-    <svg className="ev-forest" viewBox="0 0 100 10" preserveAspectRatio="none" role="img"
+    <svg className="ev-forest" style={{ ['--ink' as string]: metricInk(p.outcome) }} viewBox="0 0 100 10" preserveAspectRatio="none" role="img"
       aria-label={`${fmt(e.value, e.unit)}, 95% interval ${fmt(e.lo, e.unit)} to ${fmt(e.hi, e.unit)}, no-effect zone ±${zone}`}>
       {zone > 0 && <rect x={x(-zone)} y={0} width={x(zone) - x(-zone)} height={10} className="ev-zone" />}
       <line x1={50} x2={50} y1={0} y2={10} className="ev-zero" />
@@ -112,12 +114,14 @@ function ForestRow({ p, scale }: { p: Payload; scale: number }) {
   )
 }
 
-// Days around an event, or lags after an exposure, on a labelled y axis: chance band, 95% interval, estimate.
-export function CurveChart({ points, unit, label, marker }: {
+// Days around an event, or lags after an exposure, on a labelled y axis: chance band, 95% interval, estimate. The line and its
+// interval are in the ink of `metric` (the outcome); the chance band, grid and zero stay neutral.
+export function CurveChart({ points, unit, label, marker, metric }: {
   points: { x: number; mean: number | null; lo: number | null; hi: number | null; chanceLo?: number | null; chanceHi?: number | null }[]
   unit: string
   label: (x: number) => string
   marker?: number
+  metric?: string
 }) {
   const vals = points.flatMap((p) => [p.mean, p.lo, p.hi, p.chanceLo ?? null, p.chanceHi ?? null]).filter((v): v is number => v !== null)
   if (vals.length === 0) return null
@@ -140,7 +144,7 @@ export function CurveChart({ points, unit, label, marker }: {
   }
   const line = points.filter((p) => p.mean !== null)
   return (
-    <svg className="ev-curve" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Curve in ${unit}`}>
+    <svg className="ev-curve" style={{ ['--ink' as string]: metricInk(metric) }} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Curve in ${unit}`}>
       {ticks.map((t) => (
         <g key={t}>
           <line x1={L} x2={W} y1={py(t)} y2={py(t)} className="ev-grid" />
@@ -314,14 +318,14 @@ export function Confirmatory() {
                       {curve && curve.state === 'ready' && curve.days.length > 0 && (
                         <div className="ev-chart">
                           <div className="ev-chart-label mono">THE DAYS AROUND IT · {curve.events} EVENTS</div>
-                          <CurveChart points={curve.days.map((d) => ({ x: d.k, mean: d.mean, lo: d.lo, hi: d.hi, chanceLo: d.chanceLo, chanceHi: d.chanceHi }))} unit={curve.unit} label={(k) => (k === 0 ? 'event' : k > 0 ? `+${k}` : `${k}`)} marker={0} />
+                          <CurveChart points={curve.days.map((d) => ({ x: d.k, mean: d.mean, lo: d.lo, hi: d.hi, chanceLo: d.chanceLo, chanceHi: d.chanceHi }))} unit={curve.unit} label={(k) => (k === 0 ? 'event' : k > 0 ? `+${k}` : `${k}`)} marker={0} metric={p.outcome} />
                           <p className="conf-footnote">{curve.summary} Line: difference from comparable days without it, with its 95% interval; grey: simultaneous chance band.</p>
                         </div>
                       )}
                       {lag && lag.state === 'ready' && lag.lags.length > 0 && (
                         <div className="ev-chart">
                           <div className="ev-chart-label mono">OVER THE WEEK AFTER · {lag.perText.toUpperCase()}</div>
-                          <CurveChart points={lag.lags.map((l) => ({ x: l.lag, mean: l.value, lo: l.lo, hi: l.hi }))} unit={lag.unit} label={(l) => (l === 0 ? 'same day' : `+${l}`)} />
+                          <CurveChart points={lag.lags.map((l) => ({ x: l.lag, mean: l.value, lo: l.lo, hi: l.hi }))} unit={lag.unit} label={(l) => (l === 0 ? 'same day' : `+${l}`)} metric={p.outcome} />
                           <p className="conf-footnote">{lag.summary}</p>
                           {lag.dose?.map((d) => <p key={d.group} className="conf-footnote">{d.group} drinks: {fmt(d.mean, lag.unit)} from expected ({fmt(d.lo, lag.unit)} to {fmt(d.hi, lag.unit)}), {d.n} mornings</p>)}
                         </div>

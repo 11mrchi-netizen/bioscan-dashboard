@@ -12,6 +12,7 @@ import { LoadBanner } from '../components/shared/LoadBanner'
 import { loadFrame, type LoadedFrame } from '../../../supabase/functions/_shared/analysis-core/runRelationships.ts'
 import { DEFAULT_NO_EFFECT, DISCOVERY, discover, type DiscoveryCell } from '../../../supabase/functions/_shared/analysis-core/discovery.ts'
 import { REGISTRABLE_EXPOSURES } from '../../../supabase/functions/_shared/analysis-core/hypotheses.ts'
+import { metricInk } from '../lib/metrics'
 import './Discovery.css'
 
 const OUTCOME_LABEL = { hrv: 'HRV', rhr: 'resting HR', sleep_hours: 'sleep' } as const
@@ -102,7 +103,8 @@ export function Discovery() {
                   const c = cell(e, o, lag)
                   const strength = c.r === null || c.band === null ? 0 : Math.min(1, Math.abs(c.r) / (2 * c.band))
                   const outside = c.r !== null && c.band !== null && Math.abs(c.r) > c.band
-                  const bg = c.r === null ? 'transparent' : c.r < 0 ? `rgba(96,165,250,${0.08 + 0.5 * strength})` : `rgba(245,158,11,${0.08 + 0.5 * strength})`
+                  // the outcome's metric ink, stronger the further from zero; whether the outcome is lower or higher is told by the number's sign
+                  const bg = c.r === null ? 'transparent' : `color-mix(in srgb, ${metricInk(o)} ${Math.round((0.08 + 0.5 * strength) * 100)}%, transparent)`
                   return (
                     <td key={lag}>
                       <button
@@ -123,7 +125,7 @@ export function Discovery() {
           </tbody>
         </table>
         <div className="disc-legend mono">
-          <span><i className="sw neg" /> lower outcome</span><span><i className="sw pos" /> higher outcome</span>
+          <span>shade: the outcome's colour, stronger the further from zero · sign: − lower outcome, + higher</span>
           <span><i className="sw flag" /> flagged (q &lt; {DISCOVERY.fdr})</span><span className="disc-muted">faint: inside the 95% chance band</span>
           <span>◆ in the catalogue · ● registered · — too few</span>
         </div>

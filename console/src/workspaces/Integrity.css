@@ -35,7 +35,7 @@
 .fr-stale, .fr-never { color: var(--color-critical); }
 .ig-cov { display: inline-flex; align-items: center; gap: 6px; }
 .ig-cov-track { display: inline-block; width: 48px; height: 4px; background: var(--color-glass-strong); border-radius: 2px; overflow: hidden; }
-.ig-cov-track i { display: block; height: 100%; background: var(--color-emerald); }
+.ig-cov-track i { display: block; height: 100%; background: var(--m-weight-ema); } /* the series' own hue is set inline (metricInk) */
 
 .ig-issues { display: flex; flex-direction: column; gap: var(--sp-2); }
 .ig-issues-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); font-size: 11px; color: var(--color-text-secondary); }

@@ -16,6 +16,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { localToday, localDaysAgo } from '../lib/dates'
 import { hrefFor, integrityHref, itemIdFromParams } from '../lib/links'
+import { metricInk } from '../lib/metrics'
 import { LoadBanner } from '../components/shared/LoadBanner'
 import { HYPOTHESES } from '../../../supabase/functions/_shared/analysis-core/hypotheses.ts'
 import type { Issue } from '../../../supabase/functions/_shared/analysis-core/integrity.ts'
@@ -182,7 +183,7 @@ function EffectBar({ item }: { item: EvidenceItem }) {
   const span = Math.max(Math.abs(e.lo), Math.abs(e.hi), zone * 1.5, 1e-9) * 1.15
   const x = (v: number) => 50 + (v / span) * 50
   return (
-    <svg className="dec-effect" viewBox="0 0 100 18" preserveAspectRatio="none" role="img" aria-label={`effect ${fmt(e.value)} ${e.unit}, interval ${fmt(e.lo)} to ${fmt(e.hi)}, no-effect zone ±${zone}`}>
+    <svg className="dec-effect" style={{ ['--ink' as string]: metricInk(item.outcome) }} viewBox="0 0 100 18" preserveAspectRatio="none" role="img" aria-label={`effect ${fmt(e.value)} ${e.unit}, interval ${fmt(e.lo)} to ${fmt(e.hi)}, no-effect zone ±${zone}`}>
       {zone > 0 && <rect x={x(-zone)} y="2" width={x(zone) - x(-zone)} height="14" className="dec-zone" />}
       <line x1="50" x2="50" y1="0" y2="18" className="dec-zero" />
       <line x1={x(e.lo)} x2={x(e.hi)} y1="9" y2="9" className="dec-ci" />

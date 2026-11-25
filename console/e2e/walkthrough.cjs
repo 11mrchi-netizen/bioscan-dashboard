@@ -641,6 +641,24 @@ async function waitForServer() {
       await page.goto(`${BASE}#${path}`); await page.waitForSelector(sel, { timeout: 15000 }).catch(async () => { await shot(`broken-${label}`) })
       check((await page.locator(sel).count()) > 0 && (await page.locator('.error-boundary').count()) === 0, `${path} renders its own page`)
       check((await navOn()).some((n) => n.startsWith(path.slice(1))), `and ${label.toUpperCase()} is the marked item in the menu`, (await navOn()).join(','))
+      check((await page.locator('.tabbed.ft-skin').count()) === 1 && (await page.locator('.tabbed.ft-wash').count()) === 0, `and it is in the new look, on the plain ground`)
+      await page.waitForTimeout(300); await shot(`skin-${label}`)
+    }
+    // the new look everywhere (web redesign, phase 5 finish): the Lab too is on the plain ground (the Log is checked with its sessions, below)
+    await page.goto(`${BASE}#/lab/evidence`); await page.waitForTimeout(300)
+    check((await page.locator('.tabbed.ft-skin').count()) === 1 && (await page.locator('.ft-wash').count()) === 0, 'the Lab is in the new look on the plain ground, with no wash')
+    await page.goto(`${BASE}#/lab/evidence?view=board`); await page.waitForTimeout(700)
+    check(await page.evaluate(() => [...document.querySelectorAll('.ev-forest')].every((e) => /^var\(--(m-|ft-domain-)/.test(e.style.getPropertyValue('--ink')))), 'the evidence board draws each interval in its outcome\'s metric ink')
+    await page.goto(`${BASE}#/lab/evidence?view=discovery`); await page.waitForTimeout(900)
+    check(await page.evaluate(() => [...document.querySelectorAll('.disc-cell')].every((c) => !/rgba\((96|245)/.test(c.getAttribute('style') ?? ''))), 'the discovery grid shades in the outcome\'s ink, not a fixed blue and amber')
+    {
+      const out = await b.newContext({ viewport: { width: 1440, height: 1000 } })
+      const lp = await out.newPage()
+      await lp.goto(`${BASE}#/login`); await lp.waitForSelector('.login-card', { timeout: 15000 })
+      check((await lp.locator('.login-page.ft-skin').count()) === 1, 'the sign-in page is in the new look')
+      check(await lp.evaluate(() => getComputedStyle(document.querySelector('.btn-signin')).backgroundImage.includes('gradient')), 'and its one action is platinum')
+      await lp.screenshot({ path: path.join(OUT, 'skin-login.png') })
+      await out.close()
     }
     check((await level1()).join('|') === 'Today|Me|Lab|Plan|Log|⚙ Setup', 'the menu is the five tabs and Setup', (await level1()).join('|'))
     await page.goto(`${BASE}#/plan/races`); await page.waitForTimeout(300)
@@ -791,6 +809,9 @@ async function waitForServer() {
     // the Log and the planned list lead here
     await page.goto(`${BASE}#/log?day=${ymd(dayPlus(-2))}`); await page.waitForSelector('.log-row', { timeout: 15000 })
     check((await page.locator('a[href="#/plan/sessions/900010"]').count()) === 1, 'a session in the day log opens its page')
+    check((await page.locator('.ft-skin .log').count()) === 1, 'the Log is in the new look')
+    check(await page.evaluate(() => getComputedStyle(document.querySelector('.log-section')).backdropFilter.includes('blur')), 'and its sections are glass')
+    await shot('skin-log')
     await page.goto(`${BASE}#/plan/sessions?w=recent`); await page.waitForSelector('section.pg-card', { timeout: 15000 })
     check((await page.locator('a[href="#/plan/sessions/900010"]').count()) === 1, 'a planned session matched to a workout opens it')
     await page.goto(`${BASE}#/plan/sessions/999999`); await page.waitForTimeout(500)
@@ -801,6 +822,7 @@ async function waitForServer() {
     await shot('session-phone')
     await page.setViewportSize({ width: 1440, height: 1000 }); await page.waitForTimeout(300)
     await page.goto(`${BASE}#/plan/sessions/900010`); await page.waitForSelector('.sd-exercise', { timeout: 15000 }); await shot('session')
+    check((await page.locator('.ft-skin .sd-exercise').count()) > 0, 'a session page is in the new look')
 
     // 8k. editing the plan before it starts: a planned session (move, fine-tune, sets/reps/load as a new revision, take out), a block's start
     const psess = (id) => T.planned_sessions.find((x) => x.id === id)

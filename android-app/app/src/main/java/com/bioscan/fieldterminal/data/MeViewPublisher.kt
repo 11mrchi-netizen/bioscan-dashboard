@@ -7,7 +7,7 @@ import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-// Saves a Me tab for the web Dashboard (domain/meview/MeView.kt; supabase/migrations/20261118140000_me_views.sql): once
+// Saves a Me tab for the web Dashboard (domain/meview/MeView.kt; supabase/migrations/20261118121249_me_views.sql): once
 // per change, from the tab on screen or from the background refresh (MeViewPublishWorker).
 object MeViewPublisher {
     private val lastSent = java.util.concurrent.ConcurrentHashMap<String, Int>()

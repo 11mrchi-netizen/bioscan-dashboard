@@ -21,7 +21,7 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlin.math.roundToInt
 
-// Risk profile R0 (docs/risk-profile/01-plan.md; supabase/migrations/20261119090000_bp_readings.sql): home readings in
+// Risk profile R0 (docs/risk-profile/01-plan.md; supabase/migrations/20261119053318_bp_readings.sql): home readings in
 // bp_readings, typed here or imported from Health Connect, and the clinic readings that already come with lab draws
 // (lab_results 'SBP, Sitting' / 'DBP, Sitting'). occurred_at is a logged time: the local digits labelled +00 (WallClock).
 

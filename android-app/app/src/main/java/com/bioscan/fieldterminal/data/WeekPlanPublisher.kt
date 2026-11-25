@@ -16,7 +16,7 @@ import java.time.format.DateTimeFormatter
 
 // The web's meal prep portions its containers from the same week the phone works out (console MEAL PREP, Nov 2026):
 // each time the phone computes a prep week (FuelPlanRepository.loadWeekPlan), it writes the coded days and the foods to
-// fuel_week_plans (supabase/migrations/20261117090000_fuel_week_plans.sql). A plain, versioned snapshot: the web reads
+// fuel_week_plans (supabase/migrations/20261117073643_fuel_week_plans.sql). A plain, versioned snapshot: the web reads
 // targets and foods, never the phone's internal types. Meal times are local wall-clock "HH:mm".
 
 private val HM = DateTimeFormatter.ofPattern("HH:mm")

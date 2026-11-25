@@ -13,7 +13,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 // The web Dashboard shows any day's TODAY as the phone drew it (web transition plan, phase 2, Nov 2026): each time TODAY is
-// built, the plan rows and the SO FAR line go to today_plans (supabase/migrations/20261118120000_today_plans.sql). A plain,
+// built, the plan rows and the SO FAR line go to today_plans (supabase/migrations/20261118114843_today_plans.sql). A plain,
 // versioned snapshot (plan.v = 1): the web reads it and never recomputes the plan. Times are local wall clock "HH:mm".
 
 private val HM = DateTimeFormatter.ofPattern("HH:mm")

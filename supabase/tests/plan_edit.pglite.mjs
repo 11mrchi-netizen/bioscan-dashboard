@@ -1,4 +1,4 @@
-// Tests of migrations/20261125000000_plan_edit.sql on a real Postgres engine (PGlite), with the repo's own table definitions,
+// Tests of migrations/20261124063309_plan_edit.sql on a real Postgres engine (PGlite), with the repo's own table definitions,
 // so the immutability trigger, the unique indexes and row-level security actually fire. Not part of CI (it needs a dev dependency):
 //   npm i @electric-sql/pglite   (anywhere)   then   node supabase/tests/plan_edit.pglite.mjs
 import { PGlite } from '@electric-sql/pglite'
@@ -17,7 +17,7 @@ await db.exec(`
   create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
   create table public.exercise_sessions (id bigint primary key);
 `)
-for (const f of ['20260916035915_create_training_cycles_table.sql', '20261006102330_training_programming_schema.sql', '20261013042315_planned_sessions_zepp_template.sql', '20261125000000_plan_edit.sql']) {
+for (const f of ['20260916035915_create_training_cycles_table.sql', '20261006102330_training_programming_schema.sql', '20261013042315_planned_sessions_zepp_template.sql', '20261124063309_plan_edit.sql']) {
   try { await db.exec(mig(f)) } catch (e) { console.log('LOAD FAILED', f, e.message); process.exit(2) }
 }
 await db.exec(`grant usage on schema public, auth to authenticated, anon; grant all on all tables in schema public to authenticated; grant usage on all sequences in schema public to authenticated;

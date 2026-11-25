@@ -3,7 +3,7 @@ package com.bioscan.fieldterminal.data.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// breathwork_sessions (supabase/migrations/20261118160000_breathwork_sessions.sql): one guided breathing session.
+// breathwork_sessions (supabase/migrations/20261119003036_breathwork_sessions.sql): one guided breathing session.
 
 /** One step of the pattern as it was run; `kind` is a BreathStepKind name. */
 @Serializable

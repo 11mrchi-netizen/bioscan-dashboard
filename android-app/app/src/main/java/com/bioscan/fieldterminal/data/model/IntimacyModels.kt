@@ -31,7 +31,7 @@ data class PersonProfileRow(
 const val PERSON_PROFILE_COLUMNS =
     "id,name,period,score,where_met,relationship,gender,country,age_range,body_type,activities,interested_in,first_met_date,availability,notes"
 
-// One infection's result from one test (supabase/migrations/20261115_sti_tests.sql). A panel is several rows on one date.
+// One infection's result from one test (supabase/migrations/20261116141602_sti_tests.sql). A panel is several rows on one date.
 @Serializable
 data class StiTestRow(
     val id: Long,

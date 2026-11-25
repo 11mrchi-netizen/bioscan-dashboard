@@ -460,7 +460,7 @@ suspend fun updateBlockAccessories(
         val after = JsonArray(kept.take(at) + items.map { it.liftJson() } + kept.drop(at))
         if (after == JsonArray(before)) continue
         // A session's prescription is immutable in the database (planned_sessions_immutable: "create a new revision"), so the change goes in as a new revision of the
-        // session, the old row set aside (supabase/migrations/20261125000000_plan_edit.sql), never as an update in place.
+        // session, the old row set aside (supabase/migrations/20261124063309_plan_edit.sql), never as an update in place.
         supabase.postgrest.rpc("revise_planned_session", buildJsonObject { put("p_id", s.id); put("p_today", from.toString()); put("p_prescription", after) })
         changed++
     }

@@ -12,9 +12,11 @@ import {
   bandWord, chargeRankLine, directionGlyph, directionWords, DOMAINS, domainSentence, driverSummary, formatJudgedValue, referenceLine,
   type DayScores, type DomainKey,
 } from '../lib/scoreText'
-import { type DayPlan, loadToday, type PlanRowJson, shownScore, stripCharge, type TodayData } from './todayData'
+import { loadToday, shownScore, stripCharge, type TodayData } from './todayData'
+import { type LiveKind, type LivePlan, livePlan } from './todayLive'
 
 const STRIP_DAYS = 28
+const REFRESH_MS = 60_000 // while today is on screen
 
 function shift(day: string, n: number): string {
   const [y, m, d] = day.split('-').map(Number)
@@ -29,6 +31,9 @@ type Overlay = 'CHARGE' | DomainKey | null
 
 export function Today({ day, onDay }: { day: string; onDay: (d: string) => void }) {
   const [data, setData] = useState<TodayData | null>(null)
+  const [readAt, setReadAt] = useState<Date | null>(null)
+  // Bumped to read the day again: once a minute while today is on screen, and when the tab comes back into view.
+  const [tick, setTick] = useState(0)
   // An overlay belongs to the day it was opened on: picking another day closes it.
   const [opened, setOpened] = useState<{ day: string; which: Overlay }>({ day, which: null })
   const overlay = opened.day === day ? opened.which : null
@@ -36,8 +41,18 @@ export function Today({ day, onDay }: { day: string; onDay: (d: string) => void 
   const from = shift(day, -(STRIP_DAYS - 1))
   const status = useLoadEffect(async (isCurrent) => {
     const d = await loadToday(day, from)
-    if (isCurrent()) setData(d)
-  }, [day])
+    if (isCurrent()) { setData(d); setReadAt(new Date()) }
+  }, [day, tick])
+  const isToday = day === localToday()
+  useEffect(() => {
+    if (!isToday) return
+    // A reload keeps the page on screen (useLoadEffect: refreshing) and only replaces it once the new read is in.
+    const again = () => { if (document.visibilityState === 'visible') setTick((t) => t + 1) }
+    const timer = window.setInterval(again, REFRESH_MS)
+    document.addEventListener('visibilitychange', again)
+    window.addEventListener('focus', again)
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', again); window.removeEventListener('focus', again) }
+  }, [isToday])
 
   const strip = Array.from({ length: STRIP_DAYS }, (_, i) => shift(from, i))
   const charge = data ? round(shownScore(data, day, 'CHARGE')) : null
@@ -51,7 +66,7 @@ export function Today({ day, onDay }: { day: string; onDay: (d: string) => void 
         <section className="ft-card today-hero" aria-label="CHARGE">
           <div className="today-day">{longDate(day)}</div>
           {status.loading && !data ? <div className="today-empty">Loading the day…</div>
-            : status.error ? <div className="today-empty">Could not load the scores: {status.error} <button className="dash-link" onClick={status.retry}>RETRY</button></div>
+            : status.error && !data ? <div className="today-empty">Could not load the scores: {status.error} <button className="dash-link" onClick={status.retry}>RETRY</button></div>
             : !hasDay ? <div className="today-empty">No scores were saved for this day. The phone saves them each day it is opened.</div>
             : (
               <>
@@ -74,7 +89,7 @@ export function Today({ day, onDay }: { day: string; onDay: (d: string) => void 
           </div>
         </section>
 
-        {data && <PlanCard plan={data.plan} day={day} />}
+        {data && <PlanCard data={data} day={day} readAt={readAt} />}
 
         <section className="ft-card today-strip" aria-label={`CHARGE, the ${STRIP_DAYS} days to ${day}`}>
           <div className="today-strip-head"><span>CHARGE · {STRIP_DAYS} DAYS</span><span>tap a day</span></div>
@@ -154,12 +169,17 @@ function ReportCard() {
 
 // ---------------- the day's plan and eaten so far ----------------
 
-const KIND_HUE: Record<PlanRowJson['kind'], string> = {
+const KIND_HUE: Record<LiveKind, string> = {
   MEAL: 'var(--ft-domain-fuel)', SESSION: 'var(--ft-domain-load)', SUPPLEMENTS: 'var(--ft-domain-balance)', CLOSE: 'var(--ft-muted)',
+  ACTIVITY: 'var(--ft-domain-cardio)',
 }
+const hhmm = (d: Date) => d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
 
-function PlanCard({ plan, day }: { plan: DayPlan | null; day: string }) {
-  if (!plan) {
+function PlanCard({ data, day, readAt }: { data: TodayData; day: string; readAt: Date | null }) {
+  // The phone's saved plan with what was logged since laid over it (todayLive.ts); the saved copy alone when the log failed to load.
+  const plan: LivePlan | null = data.logs ? livePlan(data.plan, data.logs)
+    : data.plan ? { rows: data.plan.rows, so_far: data.plan.so_far, builtAt: data.plan.builtAt } : null
+  if (!plan || (plan.rows.length === 0 && !plan.so_far)) {
     return (
       <section className="ft-card today-plan">
         <div className="today-strip-head"><span>THE DAY'S PLAN</span></div>
@@ -169,10 +189,13 @@ function PlanCard({ plan, day }: { plan: DayPlan | null; day: string }) {
     )
   }
   const isToday = day === localToday()
-  const saved = new Date(plan.builtAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  const saved = plan.builtAt ? hhmm(new Date(plan.builtAt)) : null
+  const live = data.logs != null
+  const state = isToday ? (live && readAt ? `live · ${hhmm(readAt)}` : saved ? `as of ${saved}` : '')
+    : live ? 'with everything logged' : 'as the phone last showed it'
   return (
     <section className="ft-card today-plan">
-      <div className="today-strip-head"><span>THE DAY'S PLAN</span><span>{isToday ? `as of ${saved}` : 'as the phone last showed it'}</span></div>
+      <div className="today-strip-head"><span>THE DAY'S PLAN</span><span>{state}</span></div>
       {plan.so_far && <SoFarBar s={plan.so_far} />}
       <ol className="plan-rows">
         {plan.rows.map((r, i) => (
@@ -181,15 +204,16 @@ function PlanCard({ plan, day }: { plan: DayPlan | null; day: string }) {
             <span className="plan-dot" style={{ background: KIND_HUE[r.kind] ?? 'var(--ft-muted)' }} aria-hidden="true" />
             <span className="plan-title">{r.title}</span>
             {r.detail && <span className="plan-detail">{r.detail}</span>}
-            <span className="plan-state">{r.done ? 'DONE ✓' : ''}</span>
+            <span className="plan-state">{r.logged ? 'LOGGED ✓' : r.done ? 'DONE ✓' : ''}</span>
           </li>
         ))}
       </ol>
+      {live && <p className="today-hint">{saved ? `Plan as the phone drew it at ${saved}` : 'No plan was saved by the phone for this day'}; meals, workouts and check-ins logged since are read live.</p>}
     </section>
   )
 }
 
-function SoFarBar({ s }: { s: NonNullable<DayPlan['so_far']> }) {
+function SoFarBar({ s }: { s: NonNullable<LivePlan['so_far']> }) {
   const parts = [
     { label: 'Carbs', kcal: 4 * s.carbs_g, color: 'var(--m-carbs)', g: s.carbs_g },
     { label: 'Protein', kcal: 4 * s.protein_g, color: 'var(--m-protein)', g: s.protein_g },

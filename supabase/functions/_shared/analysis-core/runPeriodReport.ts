@@ -16,6 +16,7 @@ import {
 import { localDateAt, type Admin } from './runRelationships.ts'
 import { addDays, aggregateDays, localDateOf, type SeriesContract, type SeriesFile } from './seriesContract.ts'
 import { CORE_VERSION } from './version.ts'
+import { energyAvailability, sessionFuel, trainingFuelSection, type TfBody, type TfFuel, type TfMeal, type TfSession, type TrainingFuelSection } from './trainingFuel.ts'
 
 /** Days after a period's end during which its report is rewritten each night. */
 export const REWRITE_DAYS = 3
@@ -87,6 +88,31 @@ async function readMealProfiles(admin: Admin, userId: string, start: string, end
     date: String(r.logged_at).slice(0, 10), calories: n(r.calories), proteinG: n(r.protein_g), fiberG: n(r.fiber_g),
     energyDensity: n(r.energy_density_kcal_g), glycemicLoad: n(r.glycemic_load_est), ultraProcessedPct: n(r.ultra_processed_pct),
   }))
+}
+
+/** Meals, sessions, in-session fuel and body composition from [start] to [end] for food against training (trainingFuel.ts). */
+async function readTrainingFuel(admin: Admin, userId: string, start: string, end: string, weightKg: number | null): Promise<TrainingFuelSection> {
+  const from = `${addDays(start, -1)}T00:00:00`, to = `${end}T23:59:59.999`
+  const [meals, sessions, body] = await Promise.all([
+    fetchAll<Record<string, unknown>>((a, b) => admin.from('meals').select('id, logged_at, calories, carbs_g, protein_g').eq('user_id', userId)
+      .gte('logged_at', from).lte('logged_at', `${addDays(end, 1)}T03:59:59.999`).order('logged_at').order('id').range(a, b)),
+    fetchAll<Record<string, unknown>>((a, b) => admin.from('exercise_sessions').select('id, start_time, type, duration_min, calories_active').eq('user_id', userId)
+      .gte('start_time', from).lte('start_time', to).order('start_time').order('id').range(a, b)),
+    fetchAll<Record<string, unknown>>((a, b) => admin.from('body_metrics').select('id, date, weight_kg, body_fat_pct').eq('user_id', userId)
+      .gte('date', addDays(start, -60)).lte('date', end).order('date').order('id').range(a, b)),
+  ])
+  for (const r of [meals, sessions, body]) if (r.error) throw new Error(`training fuel: ${r.error}`)
+  const num = (v: unknown) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v))
+  const ms: TfMeal[] = meals.rows.map((r) => ({ at: String(r.logged_at), kcal: num(r.calories), carbsG: num(r.carbs_g), proteinG: num(r.protein_g) }))
+  const ss: TfSession[] = sessions.rows.map((r) => ({ id: Number(r.id), at: String(r.start_time), type: (r.type as string | null) ?? null, durationMin: num(r.duration_min), activeKcal: num(r.calories_active) }))
+  const bs: TfBody[] = body.rows.map((r) => ({ date: String(r.date), weightKg: num(r.weight_kg), bodyFatPct: num(r.body_fat_pct) }))
+  // In-session fuel, read softly: the fuelling log is optional.
+  let fuel: TfFuel[] = []
+  if (ss.length) {
+    const f = await admin.from('fueling_intake_log').select('exercise_session_id, carbs_g, status').eq('user_id', userId).in('exercise_session_id', ss.map((s) => s.id))
+    if (!f.error) fuel = ((f.data ?? []) as Record<string, unknown>[]).map((r) => ({ sessionId: Number(r.exercise_session_id), carbsG: num(r.carbs_g), status: (r.status as string | null) ?? null }))
+  }
+  return trainingFuelSection(sessionFuel(ss, ms, fuel), energyAvailability(ms, ss, bs), start, end, weightKg)
 }
 
 /** nutrient_intake rows that are food; supplement doses are written there too (source_type `supplement`, source_id the
@@ -263,8 +289,10 @@ export async function buildPeriodReport(admin: Admin, userId: string, file: Seri
   let meals: MealProfileRead[] | null = null
   try { meals = await readMealProfiles(admin, userId, prev.start, period.end) } catch { meals = null }
   const mq = meals ? mealQuality(meals, period, lastWeight) : undefined
+  let tf: TrainingFuelSection | undefined
+  try { tf = await readTrainingFuel(admin, userId, period.start, period.end, lastWeight) } catch { tf = undefined }
 
-  return buildReport({ period, today, metrics, micro, regimen, lab, foodStool: fs, mealQuality: mq, weightKg: lastWeight })
+  return buildReport({ period, today, metrics, micro, regimen, lab, foodStool: fs, mealQuality: mq, trainingFuel: tf, weightKg: lastWeight })
 }
 
 async function storedKeys(admin: Admin, userId: string): Promise<Set<string>> {

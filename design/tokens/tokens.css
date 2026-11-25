@@ -110,6 +110,7 @@
   --m-caffeine:          #b98a4d;
   --m-sweat-rate:        #35c7e0;
   --m-energy-density:    #b6e35a;  /* meal profile: kcal per gram */
+  --m-energy-availability: #f2c94c; /* training fuel: kcal per kg fat-free mass left after training */
   --m-glycemic-load:     #ff7d5c;  /* meal profile: estimated glycemic load */
   --m-fullness:          #6fd6b4;  /* meal profile: estimated fullness factor */
   --m-ultra-processed:   #c48cff;  /* meal profile: share of kcal ultra-processed */

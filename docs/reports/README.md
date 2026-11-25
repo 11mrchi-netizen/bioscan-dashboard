@@ -63,6 +63,13 @@ dose (0.3 g/kg, 25 g without a weight), the median energy density of the meals w
 (estimated; days with meals only), fibre per 1,000 kcal (meals with a fibre value, from 500 kcal) and the share of energy
 from ultra-processed food. Reports written before the profile existed have no such section.
 
+**Training fuel.** Food against training (docs/nutrition/food-and-training.md): for each session of 20 minutes or more
+(walks left out), the hours since the last meal, whether it started fasted, carbs in the 4 h before and logged during,
+and protein and carbs in the 2 h after; and for each day with food logged, the energy availability (food minus the
+watch's training kcal, per kg of fat-free mass). Three fixed-rule suggestions: low energy availability (2 days a week, 6 a
+month), long sessions started fasted with no fuel, and fewer than half the sessions followed by a protein dose. Reports
+written before it existed have no such section.
+
 **Food and stool (tentative).** Over the 90 days to the period's end: the share of normal stools (Bristol 3-5) the day
 after a day above the median of fibre, water, fat or energy, against the day after one below it. Shown only with 8 days
 each side and a gap of 20 points or more. An association, never a cause.

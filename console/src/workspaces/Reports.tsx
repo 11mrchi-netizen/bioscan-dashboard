@@ -220,6 +220,56 @@ function ReportView({ r, busy, onRebuild }: { r: PeriodReport; busy: string | nu
           </section>
         )}
 
+        {r.trainingFuel && r.trainingFuel.counts.sessions + r.trainingFuel.energy.days > 0 && (() => {
+          const t = r.trainingFuel
+          const e = t.energy
+          return (
+            <section className="ft-card pg-card rp-card">
+              <h3 className="pg-card-title mono"><span>TRAINING FUEL</span><span>{t.counts.sessions} sessions</span></h3>
+              <ul className="pg-rows">
+                {e.days > 0 && (
+                  <li className="pg-row">
+                    <span className="pg-row-title">Energy availability</span>
+                    <span className="pg-row-value" style={{ color: 'var(--m-energy-availability)' }}>{fmt(e.median)}<small> kcal/kg FFM</small></span>
+                    <span className="pg-row-sub">
+                      Median of {e.days} days · <span style={toneStyle(e.low > 0 ? 'bad' : null)}>{e.low} low</span> (under 30), {e.reduced} reduced, {e.adequate} adequate (45+)
+                      {e.lowest.length > 0 && ` · lowest ${e.lowest.map((d) => `${d.date.slice(5)} (${fmt(d.ea)})`).join(', ')}`}
+                    </span>
+                  </li>
+                )}
+                {t.counts.sessions > 0 && (
+                  <>
+                    <li className="pg-row">
+                      <span className="pg-row-title">Started fasted</span>
+                      <span className="pg-row-value">{t.counts.fasted}<small> of {t.counts.sessions}</small></span>
+                      <span className="pg-row-sub">No meal in the 4 h before and none for 8 h · {t.counts.long} long (90 min or more), {t.counts.longFastedNoFuel} of them fasted with no fuel logged during</span>
+                    </li>
+                    <li className="pg-row">
+                      <span className="pg-row-title">Protein after</span>
+                      <span className="pg-row-value" style={{ color: 'var(--m-protein)' }}>{t.counts.proteinAfterOk}<small> of {t.counts.sessions}</small></span>
+                      <span className="pg-row-sub">Sessions with {t.proteinDoseG} g of protein or more in the 2 h after</span>
+                    </li>
+                  </>
+                )}
+              </ul>
+              {t.sessions.length > 0 && (
+                <ul className="pg-rows">{t.sessions.map((s) => (
+                  <li key={s.id} className="pg-row">
+                    <span className="pg-row-title">{s.date.slice(5)} {s.type} · {s.durationMin} min</span>
+                    <span className="pg-row-value" style={{ color: 'var(--m-carbs)' }}>{s.carbsBefore}<small> g before</small></span>
+                    <span className="pg-row-sub">
+                      {s.hoursSinceMeal === null ? 'no meal in 18 h' : `${fmt(s.hoursSinceMeal)} h since a meal`}{s.fasted && ' (fasted)'}
+                      {s.carbsDuring !== null && ` · ${s.carbsDuring} g during`}
+                      {` · ${s.proteinAfter} g protein and ${s.carbsAfter} g carbs after`}
+                    </span>
+                  </li>
+                ))}</ul>
+              )}
+              <p className="rp-dim rp-foot">Energy availability is food minus the watch's training kcal, per kg of fat-free mass (latest weight and body fat). Watches tend to overstate kcal, so it is an estimate. Walks are left out.</p>
+            </section>
+          )
+        })()}
+
         <section className="ft-card pg-card rp-card">
           <h3 className="pg-card-title mono"><span>FOOD AND STOOL</span><span>TENTATIVE</span></h3>
           {r.foodStool.length === 0 ? (

@@ -24,7 +24,7 @@ class MealProfileTest {
         assertEquals("light", lines.of(MealIndex.ENERGY_DENSITY).band)
         assertEquals("1.2 kcal/g", lines.of(MealIndex.ENERGY_DENSITY).value)
         assertEquals("full dose", lines.of(MealIndex.PROTEIN).band)
-        assertEquals("low carb", lines.of(MealIndex.CARBS).band)
+        assertEquals("moderate carb", lines.of(MealIndex.CARBS).band) // 10 g per 100 kcal = 40% of the energy
         assertEquals("low fibre", lines.of(MealIndex.FIBER).band)
         assertEquals("high", lines.of(MealIndex.GLYCEMIC_LOAD).band)
         assertEquals("average", lines.of(MealIndex.FULLNESS).band)

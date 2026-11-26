@@ -1,16 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The 320 × 180 banner Google TV shows in its app row: a house outline over a thermometer bar. -->
+<!-- The 320 x 180 banner Google TV shows in its app row: the Bioscan mark (design/logo) beside the app name. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="320dp"
     android:height="180dp"
     android:viewportWidth="320"
     android:viewportHeight="180">
     <path android:fillColor="@color/banner_background" android:pathData="M0,0h320v180h-320z" />
-    <path
-        android:pathData="M110,100 L160,55 L210,100 M122,90 V135 H198 V90"
-        android:strokeColor="@color/banner_ink"
-        android:strokeWidth="8"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-    <path android:fillColor="@color/banner_ink" android:pathData="M154,95h12v30h-12z" />
+    <group android:translateX="32.4" android:translateY="58.0">
+        <path android:fillColor="@color/banner_ink" android:pathData="M0.59 50.91A32.00 32.00 0 1 1 56.00 18.91ZM11.82 50.58L66.26 19.15A32.00 32.00 0 0 1 67.96 27.40L18.12 56.18A32.00 32.00 0 0 1 11.82 50.58ZM21.06 57.94L68.02 30.83A32.00 32.00 0 0 1 67.17 37.10L26.92 60.34A32.00 32.00 0 0 1 21.06 57.94ZM31.24 61.30L65.84 41.33A32.00 32.00 0 0 1 63.46 46.17L36.63 61.66A32.00 32.00 0 0 1 31.24 61.30Z" />
+    </group>
+    <group android:translateX="114.4" android:translateY="96.5">
+        <path android:fillColor="@color/banner_ink" android:pathData="M1.3 0.0H3.6V-5.2H9.0V-7.1H3.6V-11.0H9.6V-13.0H1.3ZM16.2 -13.0H13.9V0.0H16.2ZM20.9 0.0H29.4V-2.0H23.2V-5.6H28.9V-7.5H23.2V-11.0H29.4V-13.0H20.9ZM33.8 0.0H41.9V-2.0H36.1V-13.0H33.8ZM50.4 0.0C54.4 0.0 56.7 -2.5 56.7 -6.5C56.7 -10.6 54.4 -13.0 50.5 -13.0H46.0V0.0ZM48.3 -2.0V-11.0H50.3C53.0 -11.0 54.4 -9.5 54.4 -6.5C54.4 -3.5 53.0 -2.0 50.3 -2.0ZM67.0 -11.0H71.0V0.0H73.3V-11.0H77.3V-13.0H67.0ZM81.4 0.0H89.9V-2.0H83.8V-5.6H89.4V-7.5H83.8V-11.0H89.9V-13.0H81.4ZM94.3 0.0H96.7V-4.8H99.1L101.7 0.0H104.3L101.4 -5.2C103.0 -5.8 103.8 -7.1 103.8 -8.8C103.8 -11.3 102.2 -13.0 99.2 -13.0H94.3ZM96.7 -6.7V-11.0H98.8C100.6 -11.0 101.4 -10.2 101.4 -8.8C101.4 -7.5 100.6 -6.7 98.9 -6.7ZM108.1 0.0H110.4V-6.6C110.4 -7.5 110.3 -9.3 110.3 -10.8C110.8 -9.1 111.3 -7.4 111.6 -6.6L114.0 0.0H116.0L118.4 -6.6C118.7 -7.4 119.3 -9.2 119.7 -10.9C119.7 -9.3 119.6 -7.5 119.6 -6.6V0.0H121.9V-13.0H118.4L116.0 -6.3C115.7 -5.5 115.3 -3.9 115.0 -2.6C114.7 -3.9 114.3 -5.5 114.1 -6.3L111.6 -13.0H108.1ZM129.0 -13.0H126.6V0.0H129.0ZM133.7 0.0H136.0V-6.5C136.0 -7.2 136.0 -8.6 135.9 -10.2C136.7 -8.5 137.2 -7.5 137.9 -6.4L142.0 0.0H144.6V-13.0H142.3V-6.2C142.3 -5.4 142.3 -4.1 142.4 -2.8C141.8 -4.1 141.3 -5.1 140.8 -5.8L136.3 -13.0H133.7ZM148.4 0.0H151.0L152.1 -3.2H156.9L158.0 0.0H160.6L155.9 -13.0H153.0ZM152.7 -5.1 153.2 -6.8C153.6 -7.9 154.0 -9.4 154.4 -11.2C154.9 -9.4 155.3 -7.9 155.7 -6.8L156.3 -5.1ZM164.4 0.0H172.5V-2.0H166.7V-13.0H164.4Z" />
+    </group>
 </vector>

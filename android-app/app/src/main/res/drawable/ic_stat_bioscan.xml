@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Notification small icon: the Bioscan mark, small-size cut. Status-bar icons are tinted, only the shape matters. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M1.20 18.50A11.00 11.00 0 1 1 20.25 7.50ZM5.22 18.56L23.85 7.80A11.00 11.00 0 0 1 24.39 11.46L8.12 20.85A11.00 11.00 0 0 1 5.22 18.56ZM9.39 21.45L24.26 12.86A11.00 11.00 0 0 1 23.04 16.47L13.13 22.19A11.00 11.00 0 0 1 9.39 21.45Z" />
+</vector>

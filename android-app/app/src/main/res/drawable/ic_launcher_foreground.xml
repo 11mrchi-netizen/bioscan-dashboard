@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Placeholder monogram only. Real app icon is a design decision for
-     Phase B, not scoped yet. -->
+<!-- Bioscan mark (design/logo): the disc swept and sliced. Platinum on the Field Terminal background; sized inside the 66 dp adaptive-icon safe zone. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:fillColor="#FFB02E"
-        android:pathData="M40,34 L74,34 L74,46 L54,46 L54,52 L70,52 L70,64 L54,64 L54,80 L40,80 Z" />
+        android:fillColor="#FFE4E9F0"
+        android:pathData="M29.46 68.77A25.00 25.00 0 1 1 72.75 43.78ZM38.23 68.51L80.77 43.96A25.00 25.00 0 0 1 82.09 50.41L43.16 72.89A25.00 25.00 0 0 1 38.23 68.51ZM45.46 74.27L82.14 53.09A25.00 25.00 0 0 1 81.47 57.98L50.03 76.14A25.00 25.00 0 0 1 45.46 74.27ZM53.41 76.89L80.44 61.29A25.00 25.00 0 0 1 78.58 65.07L57.61 77.17A25.00 25.00 0 0 1 53.41 76.89Z" />
 </vector>

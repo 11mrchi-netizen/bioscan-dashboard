@@ -1,7 +1,7 @@
 package com.bioscan.fieldterminal.data.routine
 
 import android.Manifest
-import android.R
+import com.bioscan.fieldterminal.R
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
@@ -74,7 +74,7 @@ object RoutineTimerStore {
         if (ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         val since = t.start.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
         val n = NotificationCompat.Builder(context, CHANNEL)
-            .setSmallIcon(R.drawable.ic_menu_recent_history)
+            .setSmallIcon(R.drawable.ic_stat_bioscan)
             .setContentTitle(t.name)
             .setContentText("Timing since %02d:%02d".format(t.start.hour, t.start.minute))
             .setWhen(since).setUsesChronometer(true).setShowWhen(true)

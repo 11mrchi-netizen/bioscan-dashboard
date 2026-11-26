@@ -23,3 +23,19 @@ test('derived rows: the digestion score and energy availability per day, and the
   const s = r.sessions[0]
   assert.deepEqual([s.session_id, s.long, s.fasted, s.hours_since_meal, s.carbs_before_g, s.protein_after_g, s.protein_dose_g], [7, true, true, 12, 0, 35, 21])
 })
+
+test('derived rows: the logged energy balance only on days the log looks complete and the watch has a total', () => {
+  const r = derivedRows('u', {
+    stool: [], checkins: [],
+    meals: [
+      { at: '2026-11-23 08:00:00+00', kcal: 800, carbsG: 90, proteinG: 40 },
+      { at: '2026-11-23 19:00:00+00', kcal: 900, carbsG: 90, proteinG: 40 },
+      { at: '2026-11-24 12:00:00+00', kcal: 600, carbsG: 70, proteinG: 35 }, // under 1,200 kcal: not a complete log
+    ],
+    sessions: [], body: [{ date: '2026-11-01', weightKg: 70, bodyFatPct: 15 }], fuel: [],
+    expenditure: [{ date: '2026-11-23', kcal: 2300 }, { date: '2026-11-24', kcal: 2300 }],
+  }, '2026-11-23', '2026-11-24')
+  const b = r.daily.filter((d) => d.metric === 'energy_balance')
+  assert.deepEqual(b.map((d) => [d.date, d.value]), [['2026-11-23', -600]])
+  assert.deepEqual(b[0].detail, { intake_kcal: 1700, expenditure_kcal: 2300 })
+})

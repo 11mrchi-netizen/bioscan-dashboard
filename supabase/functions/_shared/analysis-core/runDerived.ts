@@ -15,6 +15,8 @@ import { offsetLookup, samplesOf, watchStressDays, type WatchStressDay } from '.
 import { energyAvailability, sessionFuel, TRAINING_FUEL, type TfBody, type TfFuel, type TfMeal, type TfSession } from './trainingFuel.ts'
 
 export const WINDOW_DAYS = 180
+/** A day with fewer logged kcal than this counts as not fully logged: no energy balance for it. */
+export const MIN_LOGGED_KCAL = 1200
 /** The nightly window for the watch's stress; a first fill asks for more (`stress_days`). */
 export const STRESS_WINDOW_DAYS = 60
 export const STRESS_METRICS = ['watch_stress_mean', 'watch_stress_high_share'] as const
@@ -32,6 +34,8 @@ export interface DerivedInputs {
   sessions: TfSession[]
   body: TfBody[]
   fuel: TfFuel[]
+  /** The watch's total daily energy use (wearable_daily.calories_total), for the logged energy balance. Optional. */
+  expenditure?: { date: string; kcal: number | null }[]
 }
 
 /** The rows for [from]..[to] (local dates). Pure. */
@@ -45,6 +49,15 @@ export function derivedRows(userId: string, x: DerivedInputs, from: string, to: 
   for (const e of energyAvailability(x.meals, x.sessions, x.body)) {
     if (e.date < from || e.date > to) continue
     daily.push({ user_id: userId, metric: 'energy_availability', date: e.date, value: e.ea, detail: { intake_kcal: e.intakeKcal, exercise_kcal: e.exerciseKcal, ffm_kg: e.ffmKg } })
+  }
+  // Logged energy balance: what was eaten (the log) minus what the watch says was spent, only on days the log looks complete
+  // (at least MIN_LOGGED_KCAL eaten), so a half-logged day is not read as a deficit. Over weeks its sum against the scale's
+  // trend says whether the log and the watch agree (7,700 kcal is about a kilogram).
+  const spent = new Map((x.expenditure ?? []).map((r) => [r.date, r.kcal]))
+  for (const e of energyAvailability(x.meals, x.sessions, x.body)) {
+    const out = spent.get(e.date)
+    if (e.date < from || e.date > to || out === null || out === undefined || !(out > 800) || e.intakeKcal < MIN_LOGGED_KCAL) continue
+    daily.push({ user_id: userId, metric: 'energy_balance', date: e.date, value: Math.round(e.intakeKcal - out), detail: { intake_kcal: e.intakeKcal, expenditure_kcal: out } })
   }
   const weights = x.body.filter((b) => b.weightKg !== null).sort((a, b) => a.date.localeCompare(b.date))
   const doseOn = (date: string) => {
@@ -78,12 +91,13 @@ export async function runDerived(admin: Admin, userId: string, now: Date = new D
   const early = addDays(from, -60) // the 28-day stool baseline, a day of meals before the first session, 60 days of body data
   const q = (table: string, cols: string, col: string, lo: string, hi: string) => (a: number, b: number) =>
     admin.from(table).select(cols).eq('user_id', userId).gte(col, lo).lte(col, hi).order(col).order('id').range(a, b)
-  const [stool, checkins, meals, sessions, body] = await Promise.all([
+  const [stool, checkins, meals, sessions, body, wear] = await Promise.all([
     fetchAll<Record<string, unknown>>(q('stool_log', 'id, occurred_at, bristol_type, discomfort, complete_evacuation', 'occurred_at', `${addDays(from, -28)}T00:00:00`, `${to}T23:59:59.999`)),
     fetchAll<Record<string, unknown>>((a, b) => admin.from('evening_checkins').select('date, gut_comfort, gut_symptoms').eq('user_id', userId).gte('date', from).lte('date', to).order('date').range(a, b)),
     fetchAll<Record<string, unknown>>(q('meals', 'id, logged_at, calories, carbs_g, protein_g', 'logged_at', `${addDays(from, -1)}T00:00:00`, `${addDays(to, 1)}T23:59:59.999`)),
     fetchAll<Record<string, unknown>>(q('exercise_sessions', 'id, start_time, type, duration_min, calories_active', 'start_time', `${from}T00:00:00`, `${to}T23:59:59.999`)),
     fetchAll<Record<string, unknown>>(q('body_metrics', 'id, date, weight_kg, body_fat_pct', 'date', early, to)),
+    fetchAll<Record<string, unknown>>((a, b) => admin.from('wearable_daily').select('date, calories_total').eq('user_id', userId).gte('date', from).lte('date', to).order('date').range(a, b)),
   ])
   for (const r of [stool, meals, sessions, body]) if (r.error) throw new Error(`derived: ${r.error}`)
   const ss: TfSession[] = sessions.rows.map((r) => ({ id: Number(r.id), at: String(r.start_time), type: (r.type as string | null) ?? null, durationMin: num(r.duration_min), activeKcal: num(r.calories_active) }))
@@ -99,6 +113,7 @@ export async function runDerived(admin: Admin, userId: string, now: Date = new D
     sessions: ss,
     body: body.rows.map((r) => ({ date: String(r.date), weightKg: num(r.weight_kg), bodyFatPct: num(r.body_fat_pct) })),
     fuel,
+    expenditure: wear.error ? [] : wear.rows.map((r) => ({ date: String(r.date), kcal: num(r.calories_total) })),
   }, from, to)
 
   const del = await admin.from('derived_daily').delete().eq('user_id', userId).gte('date', from).lte('date', to)

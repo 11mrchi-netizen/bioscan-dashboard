@@ -872,6 +872,33 @@
     ]
    },
    "hasSource": false
+  },
+  {
+   "id": "energy_balance",
+   "metric": null,
+   "label": "Logged energy balance",
+   "unit": "kcal",
+   "table": "derived_daily",
+   "column": "value",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "mean",
+   "period": "mean",
+   "longGrain": "day",
+   "plausible": [
+    -6000,
+    6000
+   ],
+   "expect": "none",
+   "filters": {
+    "metric": [
+     "energy_balance"
+    ]
+   },
+   "hasSource": false
   }
  ]
 }

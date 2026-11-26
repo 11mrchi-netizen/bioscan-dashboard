@@ -199,6 +199,20 @@ function sleepQualityQuestions(): Hypothesis[] {
   ]
 }
 
+// Catalogue 2.5.0: water logged against the next morning (litres, per half a litre). Only days with a hydration entry are used.
+const HYDRATION_MODEL = 'Water logged that day; days without a hydration entry are left out, never zero.'
+function hydrationQuestions(): Hypothesis[] {
+  const q = (key: string, label: string, spec: object, targetText: string, sign: -1 | 0 | 1): Hypothesis => ({
+    id: `hydration_${key}`, label: `Water drunk and ${label}`, cause: 'hydration_l', lag: 1, exposure: 'continuous', causeScale: 0.5, ...spec,
+    causeText: 'Each extra half litre of water logged', targetText, expectedSign: sign, exposureModel: HYDRATION_MODEL,
+  } as Hypothesis)
+  return [
+    q('rhr', 'next-morning resting heart rate', RHR, 'next-morning resting heart rate', -1),
+    q('hrv', 'next-morning HRV', HRV, 'next-morning HRV', 1),
+    q('energy', 'next-day energy', ENERGY, 'next-day energy', 1),
+  ]
+}
+
 export const HYPOTHESES: Hypothesis[] = [
   {
     id: 'alcohol_hrv', label: 'Alcohol and next-morning HRV', cause: 'alcohol_any', lag: 1, exposure: 'binary', ...HRV,
@@ -298,6 +312,7 @@ export const HYPOTHESES: Hypothesis[] = [
   ...mealAndGutQuestions(),
   ...watchStressQuestions(),
   ...sleepQualityQuestions(),
+  ...hydrationQuestions(),
 ]
 
 // Analysis review phase E: questions a person registers from a hint (what came before off mornings). Each is tested only

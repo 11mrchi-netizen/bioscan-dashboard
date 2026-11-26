@@ -48,6 +48,8 @@ export interface CheckinRow {
 export interface RawInputs {
   wearable: { date: string; hrv: number | null; rhr: number | null; steps: number | null; spo2_avg?: number | null }[]
   sleep: { date: string; hours: number | null; deep_min?: number | null; rem_min?: number | null; light_min?: number | null; respiratory_rate?: number | null; bedtime?: string | null }[]
+  /** Water logged per day (hydration_daily), litres in the frame; a day without a row is unknown. */
+  hydration?: { date: string; ml: number | null }[]
   /** The nightly heart-rate dip (hr_dip_nightly), a sleep outcome from catalogue 2.5.0. */
   hrDip?: { date: string; dip_pct: number | null }[]
   wellbeing: { date: string; energy: number | null; mood: number | null; stress: number | null; soreness: number | null }[]
@@ -301,6 +303,7 @@ export function buildFrame(raw: RawInputs, today: string, lookbackDays = RELATIO
   Object.assign(series, mealSeries(axis, raw.meals, raw.sleep, localMsOf(raw.context ?? [])))
   series.gut_day_score = gutDayScore(axis, raw.stool ?? [], (raw.checkins ?? []) as GutCheckinRow[])
   // Catalogue 2.5.0 (sleepExposures.ts): the caffeine still on board at bedtime, and sleep outcomes the engine did not read.
+  series.hydration_l = alignToAxis(axis, (raw.hydration ?? []).map((h) => { const ml = num(h.ml); return { date: h.date, value: ml !== null && ml >= 200 && ml <= 8000 ? Math.round(ml) / 1000 : null } }))
   series.caffeine_board_bed = caffeineBoardSeries(axis, raw.meals, raw.sleep, localMsOf(raw.context ?? []))
   Object.assign(series, sleepOutcomeSeries(axis, raw.sleep, raw.hrDip ?? [], raw.wearable, localMsOf(raw.context ?? [])))
 
@@ -361,7 +364,7 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
   const q = (table: string, cols: string, col: string, from: string) => (a: number, b: number) =>
     admin.from(table).select(cols).eq('user_id', userId).gte(col, from).order(col).range(a, b)
 
-  const [wearable, sleep, wellbeing, meals, sessions, recovery, ill, checkins, context, health, phone, phoneApps, mobility, commutes, scoreRows, stool, gutCheckins, mealTags, stressRaw, hrDip] = await Promise.all([
+  const [wearable, sleep, wellbeing, meals, sessions, recovery, ill, checkins, context, health, phone, phoneApps, mobility, commutes, scoreRows, stool, gutCheckins, mealTags, stressRaw, hrDip, hydration] = await Promise.all([
     fetchAll<RawInputs['wearable'][number]>(q('wearable_daily', 'date, hrv, rhr, steps, spo2_avg', 'date', since)),
     fetchAll<RawInputs['sleep'][number]>(q('sleep_daily', 'date, hours, deep_min, rem_min, light_min, respiratory_rate, bedtime', 'date', since)),
     fetchAll<RawInputs['wellbeing'][number]>(q('wellbeing_daily', 'date, energy, mood, stress, soreness', 'date', since)),
@@ -394,6 +397,7 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
       admin.from('zepp_raw_extracts').select('query_date, raw_body').eq('user_id', userId).eq('metric', 'stress').eq('status_code', 200)
         .gte('query_date', shift(since, -1)).order('query_date').range(a, b), 200),
     fetchAll<NonNullable<RawInputs['hrDip']>[number]>(q('hr_dip_nightly', 'date, dip_pct', 'date', since)),
+    fetchAll<NonNullable<RawInputs['hydration']>[number]>(q('hydration_daily', 'date, ml', 'date', since)),
   ])
   const failed = [wearable, sleep, wellbeing, meals, sessions, recovery].find((r) => r.error)
   if (failed) return { userId, error: failed.error as string }
@@ -408,6 +412,7 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
       stool: stool.error ? [] : stool.rows,
       mealTags: mealTags.error ? [] : mealTags.rows,
       hrDip: hrDip.error ? [] : hrDip.rows,
+      hydration: hydration.error ? [] : hydration.rows,
       watchStress: stressRaw.error ? [] : watchStressDays(stressRaw.rows.flatMap((r) => samplesOf(r.raw_body)), offsetLookup(context.error ? [] : context.rows)),
       context: context.error ? [] : context.rows,
       routine: {

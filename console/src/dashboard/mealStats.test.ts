@@ -59,3 +59,13 @@ test('an index is null when one part of the meal lacks it', () => {
   assert.equal(c.energy_density_kcal_g, null)
   assert.equal(combineProfiles([]), null)
 })
+
+test('a total is null when one part lacks it, but an entry with nothing recorded is left out', () => {
+  const a = combineProfiles([prof({}), prof({ meal_id: 2, protein_g: null })])!
+  assert.equal(a.protein_g, null)
+  assert.equal(a.protein_per_100kcal, null)
+  assert.equal(a.calories, 800)
+  const b = combineProfiles([prof({}), prof({ meal_id: 2, calories: null, protein_g: null, carbs_g: null, fat_g: null })])!
+  assert.equal(b.calories, 400)
+  assert.equal(b.protein_g, 40)
+})

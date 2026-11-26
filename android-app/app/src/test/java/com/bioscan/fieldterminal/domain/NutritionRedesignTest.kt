@@ -37,12 +37,12 @@ class NutritionRedesignTest {
         val meals = listOf(
             MealRow(loggedAt = "2026-10-01T19:00:00Z", proteinG = 40.0),
             MealRow(loggedAt = "2026-10-01T08:00:00Z", proteinG = 25.0),
-            MealRow(loggedAt = "2026-10-01T08:30:00Z", proteinG = 5.0),
+            MealRow(loggedAt = "2026-10-01T09:45:00Z", proteinG = 5.0),
             MealRow(loggedAt = "2026-10-01T13:00:00Z", proteinG = 30.0, mealSlot = "lunch"),
             MealRow(loggedAt = "2026-10-02T08:00:00Z"),
         )
         val out = proteinByMeal(meals)
-        // breakfast 25, the second morning meal a snack, lunch by label, 19:00 unlabelled is dinner
+        // breakfast 25, a later morning meal (over an hour on) a snack, lunch by label, 19:00 unlabelled is dinner
         assertEquals(listOf(25.0, 0.0, 30.0, 5.0, 0.0, 40.0), out[d])
         assertEquals(listOf(0.0, 0.0, 0.0, 0.0, 0.0, 0.0), out[d.plusDays(1)])
     }

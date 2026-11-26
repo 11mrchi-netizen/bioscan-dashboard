@@ -10,7 +10,7 @@ export function SideMenu({ email, onSignOut, narrow }: { email?: string | null; 
   const to = (t: NavTarget) => navTo(t, pathname, search)
   return (
     <nav className="side-menu ft-skin" aria-label="Navigation">
-      <div className="menu-brand mono"><img className="menu-mark" src="/mark.svg" alt="" width={18} height={18} />FIELD TERMINAL</div>
+      <div className="menu-brand mono"><img className="menu-mark" src={`${import.meta.env.BASE_URL}mark.svg`} alt="" width={18} height={18} />FIELD TERMINAL</div>
       <ul className="menu-list">
         {NAV.map((s) => {
           const here = loc.section?.id === s.id

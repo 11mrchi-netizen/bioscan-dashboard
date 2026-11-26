@@ -108,6 +108,7 @@
   --m-sodium:            #9aa6bd;  /* = weight */
   --m-hydration:         #3aa8ff;
   --m-caffeine:          #b98a4d;
+  --m-alcohol:           #b5546b;  /* substances: ethanol in the body */
   --m-sweat-rate:        #35c7e0;
   --m-energy-density:    #b6e35a;  /* meal profile: kcal per gram */
   --m-energy-availability: #f2c94c; /* training fuel: kcal per kg fat-free mass left after training */

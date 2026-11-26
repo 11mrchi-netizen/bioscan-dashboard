@@ -220,3 +220,10 @@ a.me-tile.tappable:hover { border-color: var(--ft-muted); }
 .today-report-row { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--ft-line); text-decoration: none; color: inherit; }
 .today-report-row:hover { border-color: var(--ft-muted); }
 .today-report-title { font: 500 11px var(--ft-mono); letter-spacing: .1em; color: var(--ft-fg); }
+
+/* Substances in the body (Substances.tsx) */
+.subst-chart { width: 100%; height: auto; display: block; }
+.subst-tick { font: 500 9px var(--ft-mono); fill: var(--ft-muted); }
+.subst-head { display: flex; flex-wrap: wrap; gap: 4px 16px; font: 500 12px var(--ft-body, inherit); color: var(--ft-muted); }
+.subst-head b { font: 800 20px var(--ft-num); color: var(--ft-fg); margin-right: 4px; }
+.subst-head b.subst-warn { color: var(--ft-warn, var(--color-warning)); }

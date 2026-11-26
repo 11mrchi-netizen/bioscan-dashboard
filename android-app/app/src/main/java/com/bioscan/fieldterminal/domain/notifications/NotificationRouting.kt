@@ -32,7 +32,10 @@ fun notificationDestination(kind: String?): NotificationDestination = when (kind
     else -> NotificationDestination.NONE
 }
 
-// The ids a "LOG ALL" press should still write: de-duplicated, minus any already logged today (in the app, or by an
-// earlier press), so a double-tap or an in-app log can never produce a second supplement_log row.
-fun idsStillToLog(ids: List<Long>, takenToday: Set<Long>): List<Long> =
-    ids.distinct().filter { it !in takenToday }
+// The ids a "LOG ALL" press should still write: de-duplicated, and only those whose slot is still open. [openNow] is
+// what supplementsDueForBucket says is due for the notification's bundle at the time of the press (it counts doses per
+// slot: vitamin C taken in the morning is still due in the afternoon and at night). A day-level "already taken today"
+// test would drop every later bundle's dose of an item that sits in several bundles. Null (a notification posted before
+// the bundle travelled with it): the notification's own list, de-duplicated; it was cancelled on the first tap.
+fun idsStillToLog(ids: List<Long>, openNow: Set<Long>?): List<Long> =
+    ids.distinct().filter { openNow == null || it in openNow }

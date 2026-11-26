@@ -4,10 +4,10 @@ import java.time.LocalDate
 import java.time.LocalTime
 
 // Weekly and monthly reports (docs/reports): the nightly analysis run writes one `period_report` row in analysis_results
-// after each Monday-to-Sunday week and each calendar month. The phone announces each new one once and opens it on the web
-// (Lab › Reports), where the whole report is drawn. Pure, so it is unit-tested.
+// after each Monday-to-Sunday week and each calendar month. The phone announces each new one once, on the first two days
+// after its period, and opens it in the app (Lab › N=1 › the report page). Pure, so it is unit-tested.
 
-/** The web app (GitHub Pages), where Lab › Reports lives. */
+/** The web app (GitHub Pages), where Lab › Reports lives (the report page links to it). */
 const val WEB_APP_URL = "https://11mrchi-netizen.github.io/bioscan-dashboard/"
 
 /** The web address of one report, or of the Reports page when [key] is null. */
@@ -29,20 +29,24 @@ data class ReportBrief(
 /** The notification_log dedupe key of a report's announcement. */
 fun reportDedupeKey(key: String): String = "report:$key"
 
+/** A report is news on the first [REPORT_FRESH_DAYS] days after its period ends (Monday and Tuesday for a week). */
+const val REPORT_FRESH_DAYS = 2L
+
 /** Announcements wait for the day: not before 08:00 or after 21:30 local. */
 val REPORT_PROMPT_FROM: LocalTime = LocalTime.of(8, 0)
 val REPORT_PROMPT_UNTIL: LocalTime = LocalTime.of(21, 30)
 
 /**
- * The report to announce now, or null: the newest not announced yet, written for a period that ended at most 7 days ago
- * (an old report filled in later is not news), and only in the day's window. A week and a month that end together (the
+ * The report to announce now, or null: the newest not announced yet, written for a period that ended at most
+ * [REPORT_FRESH_DAYS] days ago (a report filled in later, or first seen by a new install mid-week, is not news: it waits on
+ * Lab › N=1), and only in the day's window. A week and a month that end together (the
  * month ending on a Sunday) are announced one after the other, the week first.
  */
 fun reportToAnnounce(reports: List<ReportBrief>, shownKeys: Set<String>, today: LocalDate, now: LocalTime): ReportBrief? {
     if (now.isBefore(REPORT_PROMPT_FROM) || now.isAfter(REPORT_PROMPT_UNTIL)) return null
     return reports
         .filter { reportDedupeKey(it.key) !in shownKeys }
-        .filter { r -> runCatching { !LocalDate.parse(r.end).isBefore(today.minusDays(7)) }.getOrDefault(false) }
+        .filter { r -> runCatching { !LocalDate.parse(r.end).isBefore(today.minusDays(REPORT_FRESH_DAYS)) }.getOrDefault(false) }
         .sortedWith(compareByDescending<ReportBrief> { it.end }.thenBy { if (it.grain == "week") 0 else 1 })
         .firstOrNull()
 }

@@ -22,6 +22,12 @@ class ReportPromptsTest {
         assertNull(reportToAnnounce(listOf(week), emptySet(), LocalDate.parse("2026-12-05"), LocalTime.of(9, 0)))
     }
 
+    @Test fun aWeekIsNewsOnMondayAndTuesdayOnly() {
+        // A phone that first sees the week's report on Thursday (a new install) does not announce it: it waits on Lab › N=1.
+        assertEquals(week, reportToAnnounce(listOf(week), emptySet(), LocalDate.parse("2026-11-24"), LocalTime.of(9, 0)))
+        assertNull(reportToAnnounce(listOf(week), emptySet(), LocalDate.parse("2026-11-26"), LocalTime.of(9, 0)))
+    }
+
     @Test fun aWeekAndAMonthEndingTogetherComeWeekFirst() {
         val w = week.copy(key = "week:2026-11-24", start = "2026-11-24", end = "2026-11-30")
         val today = LocalDate.parse("2026-12-01")

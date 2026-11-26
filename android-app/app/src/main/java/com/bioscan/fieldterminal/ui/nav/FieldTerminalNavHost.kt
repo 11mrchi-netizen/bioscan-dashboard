@@ -109,6 +109,8 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
     var supplementsRequested by rememberSaveable { mutableStateOf<String?>(null) }
     // The monthly body check-in reminder opens Lab › Tests with the check-in sheet up.
     var bodyCheckInRequested by rememberSaveable { mutableStateOf(false) }
+    // A report notification opens Lab › N=1 with that report's page up (its key, e.g. "week:2026-11-16").
+    var reportRequested by rememberSaveable { mutableStateOf<String?>(null) }
     // Contract A4: the dock keeps lit the tab whose stack you are in, also on pushed screens (tiles, settings and detail
     // pages), which used to light nothing. Set whenever a top-level destination is shown and when a dock tab is tapped,
     // so a deep link pushed onto the current stack keeps that stack's tab.
@@ -167,6 +169,11 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
             }
             NotificationDestination.ROUTINE -> {
                 labsRequestedTab = LabTab.Routine
+                navController.navigate(TileRoute.Lab.route) { launchSingleTop = true }
+            }
+            NotificationDestination.REPORT -> {
+                reportRequested = target.substringAfter(':', "").ifEmpty { null }
+                labsRequestedTab = LabTab.N1
                 navController.navigate(TileRoute.Lab.route) { launchSingleTop = true }
             }
             NotificationDestination.NONE -> Unit
@@ -271,6 +278,8 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                         onRequestedTabConsumed = { labsRequestedTab = null },
                         openBodyCheckIn = bodyCheckInRequested,
                         onBodyCheckInHandled = { bodyCheckInRequested = false },
+                        openReport = reportRequested,
+                        onReportHandled = { reportRequested = null },
                     )
                 }
             }

@@ -47,6 +47,9 @@ fun LabTileScreen(
     onRequestedTabConsumed: () -> Unit = {},
     openBodyCheckIn: Boolean = false,
     onBodyCheckInHandled: () -> Unit = {},
+    // A report notification: the report's key, opened over N=1, then cleared via the callback.
+    openReport: String? = null,
+    onReportHandled: () -> Unit = {},
 ) {
     var tab by rememberSaveable { mutableStateOf(requestedTab ?: if (openBodyCheckIn) LabTab.Tests else LabTab.N1) }
     LaunchedEffect(requestedTab) {
@@ -84,7 +87,7 @@ fun LabTileScreen(
         scrollState = scroll,
     ) {
         when (tab) {
-            LabTab.N1 -> N1Tab()
+            LabTab.N1 -> N1Tab(openReport = openReport, onReportHandled = onReportHandled)
             LabTab.Supplements -> SupplementsScreen(onOpenPantry = onOpenPantry)
             LabTab.Tests -> TestsTab(reloadKey = testsReload, onStart = { test = it }, onOpenBreathwork = onOpenBreathwork)
             LabTab.Routine -> RoutineTab(onOpenDay = onOpenDayMap)

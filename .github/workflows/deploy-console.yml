@@ -47,9 +47,10 @@ jobs:
         run: |
           rm -rf console/assets
           cp -r console/dist/assets console/assets
-          cp console/dist/favicon.svg console/favicon.svg 2>/dev/null || true
-          cp console/dist/icons.svg console/icons.svg 2>/dev/null || true
-          sed -e 's#"\./assets/#"./console/assets/#g' -e 's#"\./favicon\.svg"#"./console/favicon.svg"#g' console/dist/app.html > index.html
+          # The public files (logo mark, favicon, touch icon, icon sprite) sit beside index.html at the site root, where the page
+          # and the menu ask for them; they were never copied before, so the logo 404ed on the live site.
+          for f in favicon.svg icons.svg mark.svg apple-touch-icon.png; do cp "console/dist/$f" "$f"; done
+          sed -e 's#"\./assets/#"./console/assets/#g' console/dist/app.html > index.html
           grep -q 'console/assets/app-' index.html
           cat > console/index.html <<'STUB'
           <!doctype html>
@@ -62,7 +63,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add index.html console/index.html console/assets
+          git add index.html favicon.svg icons.svg mark.svg apple-touch-icon.png console/index.html console/assets
           # Only commit if there are changes
           git diff --cached --quiet || git commit -m "chore: deploy console build [skip ci]"
           git push

@@ -23,9 +23,11 @@ left. Catalogue version 2.5.0, engine `CORE_VERSION` unchanged.
 - **Step 6 (intimacy against next-morning outcomes)** already exists on the web Intimacy page (Effects view, aggregates only,
   discreet by default) and the phone page; it is deliberately not an engine question, so it never appears on the general
   evidence boards.
-- **Step 11 (capture repair)**: `evening_checkins.late_screen` is filled on 0 of 33 days, but the phone's score input
-  `rhythm.late_screen` reads it, so removing or replacing it is a score change for the owner to decide (the phone's own
-  bed-window measure could replace it). Recovery sessions (stopped 9 Sep) and breathwork nudges are Android work.
+- **Step 11 (capture repair)**: the yes/no `evening_checkins.late_screen` was filled on 0 of 33 days. The owner chose to
+  replace it with the phone's measured bed-window (`phone_usage_daily.bed_window_min`). The web Log now shows
+  "phone before sleep N min" and no longer reads `late_screen`. The Android score already prefers the measured value
+  (`phoneBedMin`) and falls back to the old field only when the phone has no measure; that Android code is left as is
+  because it cannot be built in the cloud. Recovery sessions (stopped 9 Sep) and breathwork nudges are Android work.
 - **Calendar load against stress and sleep**: the calendar has 35 events in the last five weeks, mostly sessions; it needs a
   classification of what counts as a busy day first. Revisit about 20 Dec.
 - **Awake minutes from `stage_intervals`**, **SpO2 as a question** (its night-to-night spread is tiny), **phone surfaces for the

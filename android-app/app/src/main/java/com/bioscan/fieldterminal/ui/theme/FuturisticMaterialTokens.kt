@@ -159,6 +159,7 @@ object FuturisticMaterialTokens {
         val Hydration = Color(0xFF3AA8FF)
         val Caffeine = Color(0xFFB98A4D)
         val Alcohol = Color(0xFFB5546B)
+        val Supplement = Color(0xFF8F9BDB)
         // meal profile (MealProfileBlock): one hue per index
         val EnergyDensity = Color(0xFFB6E35A)
         val EnergyAvailability = Color(0xFFF2C94C)

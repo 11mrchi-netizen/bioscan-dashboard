@@ -6,11 +6,11 @@ import { plusDays } from '../lib/dates'
 import { supabase } from '../lib/supabase'
 import { metricHref } from '../lib/metrics'
 import {
-  alcoholSeries, caffeineAt, caffeineBelowAt, caffeineSeries, CAFFEINE_BEDTIME_MG, CAFFEINE_HALF_LIFE_H, clockLabel,
-  type CurvePoint, type Dose, usualBedtimeMin, wallParts,
+  alcoholSeries, amountIn, caffeineAt, caffeineBelowAt, caffeineSeries, CAFFEINE_BEDTIME_MG, CAFFEINE_HALF_LIFE_H, clockLabel,
+  type Compound, COMPOUNDS, compoundFor, compoundSeries, type CurvePoint, type Dose, oneCompartmentAt, usualBedtimeMin, wallParts,
 } from '../lib/substanceCurves'
 
-interface SubstanceData { caffeine: Dose[]; alcohol: Dose[]; bedtime: number | null }
+interface SubstanceData { caffeine: Dose[]; alcohol: Dose[]; supplements: Record<string, Dose[]>; bedtime: number | null }
 
 const dayDiff = (a: string, b: string) => Math.round((Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000)
 
@@ -18,11 +18,13 @@ const dayDiff = (a: string, b: string) => Math.round((Date.parse(`${a}T00:00:00Z
 async function loadSubstances(day: string): Promise<SubstanceData> {
   // Logged times are wall clock labelled +00 (CLAUDE.md, "Dates and times"): their digits are local.
   const lo = `${plusDays(day, -1)}T00:00:00+00:00`, hi = `${plusDays(day, 1)}T00:00:00+00:00`
-  const [meals, others, sleep] = await Promise.all([
+  const [meals, others, sleep, taken] = await Promise.all([
     supabase.from('meals').select('logged_at,meal_items(caffeine_mg,alcohol_g)').gte('logged_at', lo).lt('logged_at', hi),
     // Caffeine and alcohol that did not come in as a meal item (gels and supplements taken in training): single-counted in nutrient_intake.
     supabase.from('nutrient_intake').select('logged_at,nutrient,amount,unit,source_type').in('nutrient', ['caffeine', 'alcohol']).neq('source_type', 'meal_item').gte('logged_at', lo).lt('logged_at', hi),
     supabase.from('sleep_daily').select('bedtime,tz_offset_min').lte('date', day).order('date', { ascending: false }).limit(14),
+    // What was taken and when (supplement_log.taken_at is the phone's wall clock); the doses are in nutrient_intake, one row per nutrient.
+    supabase.from('supplement_log').select('id,taken_at').gte('taken_at', lo).lt('taken_at', hi),
   ])
   if (meals.error) throw new Error(`meals: ${meals.error.message}`)
   const at = (iso: string) => { const p = wallParts(iso); return p ? dayDiff(p.day, day) * 1440 + p.min : null }
@@ -44,9 +46,30 @@ async function loadSubstances(day: string): Promise<SubstanceData> {
       else if (r.nutrient === 'alcohol' && (r.unit == null || r.unit === 'g')) alcohol.push({ at: t, amount: Number(r.amount) })
     }
   }
+  const supplements: Record<string, Dose[]> = {}
+  const takenAt = new Map(((taken.error ? [] : taken.data) as { id: number; taken_at: string }[] ?? []).map((r) => [r.id, r.taken_at]))
+  if (takenAt.size > 0) {
+    // nutrient_intake.logged_at of a supplement is not the time it was taken: the time comes from supplement_log.
+    const doses = await supabase.from('nutrient_intake').select('source_id,nutrient,amount,unit').eq('source_type', 'supplement').in('source_id', [...takenAt.keys()])
+    if (!doses.error) {
+      for (const r of (doses.data ?? []) as { source_id: number; nutrient: string; amount: number; unit: string | null }[]) {
+        const c = compoundFor(r.nutrient), iso = takenAt.get(r.source_id)
+        const t = iso ? at(iso) : null, a = c ? amountIn(c, Number(r.amount), r.unit) : null
+        if (c && t != null && a != null && a > 0) (supplements[c.key] ??= []).push({ at: t, amount: a })
+      }
+    }
+  }
   const bedtime = sleep.error ? null : usualBedtimeMin((sleep.data ?? []) as { bedtime: string | null; tz_offset_min: number | null }[])
-  return { caffeine, alcohol, bedtime }
+  return { caffeine, alcohol, supplements, bedtime }
 }
+
+/** The next 1, 2 or 5 times a power of ten above `v`, so the axis tops out just over the curve. */
+function niceMax(v: number): number {
+  if (!(v > 0)) return 1
+  const p = 10 ** Math.floor(Math.log10(v))
+  return ([1, 2, 5, 10].find((m) => m * p >= v) ?? 10) * p
+}
+const tickText = (v: number) => (v >= 10 || Number.isInteger(v) ? String(Math.round(v)) : v.toFixed(1))
 
 const W = 560, H = 150, PAD = { l: 34, r: 8, t: 10, b: 22 }
 
@@ -65,7 +88,7 @@ function Curve({ pts, color, yMax, now, bedtime, line, label }: {
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="subst-chart" role="img" aria-label={label}>
       {[0, 0.5, 1].map((f) => <line key={f} x1={PAD.l} x2={W - PAD.r} y1={y(yMax * f)} y2={y(yMax * f)} stroke="var(--ft-line)" strokeWidth="1" />)}
-      {[0, 0.5, 1].map((f) => <text key={f} x={PAD.l - 5} y={y(yMax * f) + 3} textAnchor="end" className="subst-tick">{Math.round(yMax * f)}</text>)}
+      {[0, 0.5, 1].map((f) => <text key={f} x={PAD.l - 5} y={y(yMax * f) + 3} textAnchor="end" className="subst-tick">{tickText(yMax * f)}</text>)}
       {ticks.map((m) => <text key={m} x={x(m)} y={H - 6} textAnchor="middle" className="subst-tick">{clockLabel(m)}</text>)}
       {line != null && <line x1={PAD.l} x2={W - PAD.r} y1={y(line)} y2={y(line)} stroke="var(--ft-muted)" strokeDasharray="3 3" strokeWidth="1" />}
       {area && <path d={area} fill={color} opacity=".22" />}
@@ -82,6 +105,24 @@ function Curve({ pts, color, yMax, now, bedtime, line, label }: {
   )
 }
 
+function CompoundRow({ c, doses, now, bed, end }: { c: Compound; doses: Dose[]; now: number | null; bed: number | null; end: number }) {
+  const series = compoundSeries(c, doses, 0, end)
+  const top = Math.max(...series.map((p) => p.v), 0)
+  const nowV = now != null ? oneCompartmentAt(doses, now, c.halfLifeH, c.kaPerH) : null
+  const taken = doses.filter((d) => d.at >= 0)
+  const fmt = (v: number) => (c.unit === 'g' ? v.toFixed(1) : String(Math.round(v)))
+  return (
+    <>
+      <div className="today-strip-head">
+        <span style={{ color: 'var(--m-supplement)' }}>{c.label} IN THE BODY</span>
+        <span>{taken.map((d) => `${fmt(d.amount)} ${c.unit} at ${clockLabel(d.at)}`).join(' · ')}</span>
+      </div>
+      {nowV != null && <div className="subst-head"><span><b>{fmt(nowV)}</b> {c.unit} now</span></div>}
+      <Curve pts={series} color="var(--m-supplement)" yMax={niceMax(top)} now={now} bedtime={bed} line={null} label={`${c.label.toLowerCase()} in the body, ${c.unit}, through the day`} />
+    </>
+  )
+}
+
 export function SubstanceCard({ day, isToday, nowMin }: { day: string; isToday: boolean; nowMin: number | null }) {
   const [data, setData] = useState<SubstanceData | null>(null)
   useLoadEffect(async (cur) => {
@@ -93,7 +134,8 @@ export function SubstanceCard({ day, isToday, nowMin }: { day: string; isToday: 
   const todayAlc = data.alcohol.filter((d) => d.at >= 0)
   // A day with nothing logged and nothing left over from the evening before has no curve to draw.
   const carry = caffeineAt(data.caffeine, 0), carryAlc = alcoholSeries(data.alcohol, 0, 0)[0]?.v ?? 0
-  if (today.length === 0 && todayAlc.length === 0 && carry < 1 && carryAlc < 0.1) return null
+  const shownCompounds = COMPOUNDS.filter((c) => (data.supplements[c.key] ?? []).some((d) => d.at >= 0))
+  if (today.length === 0 && todayAlc.length === 0 && carry < 1 && carryAlc < 0.1 && shownCompounds.length === 0) return null
 
   const bed = data.bedtime ?? 24 * 60
   const end = Math.max(24 * 60, bed + 60)
@@ -127,9 +169,10 @@ export function SubstanceCard({ day, isToday, nowMin }: { day: string; isToday: 
           <Curve pts={aSeries} color="var(--m-alcohol)" yMax={Math.max(10, Math.ceil(aPeak / 10) * 10)} now={now} bedtime={data.bedtime} line={null} label="Alcohol in the body, g, through the day" />
         </>
       )}
+      {shownCompounds.map((c) => <CompoundRow key={c.key} c={c} doses={data.supplements[c.key]} now={now} bed={data.bedtime} end={end} />)}
       <p className="today-hint">
         Estimated from logged drinks, so unlogged ones are missing. Caffeine: half-life {CAFFEINE_HALF_LIFE_H} h (people range 3 to 7 h), peak about 50 min after a dose; the dashed line is {CAFFEINE_BEDTIME_MG} mg, a working line for sleep.
-        Alcohol: cleared at about 7 g an hour. {isToday ? 'The dashed part is the projection from what is logged so far. ' : ''}
+        Alcohol: cleared at about 7 g an hour. Supplements: only the fast ones (melatonin, glycine, theanine, tyrosine) have a curve, with rough half-lives; magnesium, zinc, vitamin D, omega-3 and creatine do not move within a day. {isToday ? 'The dashed part is the projection from what is logged so far. ' : ''}
         <a className="dash-link" href={metricHref('fuel.late_caffeine', { day })}>CAFFEINE HISTORY →</a>
       </p>
     </section>

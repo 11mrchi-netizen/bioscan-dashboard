@@ -61,3 +61,20 @@ test('wall clock helpers', () => {
   assert.equal(clockLabel(1437), '23:57')
   assert.equal(clockLabel(1500), '01:00')
 })
+
+import { amountIn, compoundFor, compoundSeries, oneCompartmentAt } from './substanceCurves.ts'
+test('supplements: compounds by key, units, a short half-life empties in hours', () => {
+  assert.equal(compoundFor('l-theanine')?.key, 'l-theanine')
+  assert.equal(compoundFor('Theanine')?.key, 'l-theanine')
+  assert.equal(compoundFor('magnesium'), null)
+  const gly = compoundFor('glycine')!
+  assert.equal(amountIn(gly, 3, 'Gram(s)'), 3)
+  assert.equal(amountIn(gly, 3000, 'mg'), 3)
+  const mel = compoundFor('melatonin')!
+  assert.equal(amountIn(mel, 500, 'mcg'), 0.5)
+  assert.equal(amountIn(mel, 1, 'IU'), null)
+  const s = compoundSeries(mel, [{ at: 0, amount: 1 }], 0, 480, 60)
+  assert.ok(s[1].v > 0.4 && s[1].v < 0.8, `${s[1].v}`)
+  assert.ok(s[7].v < 0.01, `${s[7].v}`)
+  assert.equal(oneCompartmentAt([{ at: 0, amount: 100 }], 90, 5, 4), caffeineAt([{ at: 0, amount: 100 }], 90))
+})

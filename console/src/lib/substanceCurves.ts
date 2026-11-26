@@ -25,6 +25,47 @@ export const CAFFEINE_BEDTIME_MG = 50
 export const ALCOHOL_KA_PER_H = 2
 export const ALCOHOL_CLEARANCE_G_PER_H = 7
 
+// SUPPLEMENTS with a real intraday curve: melatonin, glycine, L-theanine and tyrosine are absorbed within the hour and gone
+// in hours, so a curve says something (the same model as caffeine, with their own half-lives). Half-lives are rounded
+// from small pharmacokinetic studies (melatonin 0.5 to 1 h: Harpsoe 2015 review; theanine about 1 h: Scheid 2012; tyrosine
+// plasma back to baseline in 6 to 8 h, 2 to 3 h half-life; glycine about 1 h) and are rougher than caffeine's.
+// The slow ones (magnesium, zinc, vitamin D, omega-3, creatine) have no intraday curve: blood levels are held tight or move
+// over days to weeks, so a curve of the dose would imply a precision that is not there. They are left out on purpose.
+export interface Compound { key: string; label: string; unit: 'mg' | 'g'; halfLifeH: number; kaPerH: number }
+export const COMPOUNDS: Compound[] = [
+  { key: 'melatonin', label: 'MELATONIN', unit: 'mg', halfLifeH: 0.75, kaPerH: 4 },
+  { key: 'glycine', label: 'GLYCINE', unit: 'g', halfLifeH: 1, kaPerH: 3 },
+  { key: 'l-theanine', label: 'L-THEANINE', unit: 'mg', halfLifeH: 1, kaPerH: 3 },
+  { key: 'tyrosine', label: 'TYROSINE', unit: 'mg', halfLifeH: 2.5, kaPerH: 3 },
+]
+/** The compound a logged nutrient key stands for ('theanine' and 'l-theanine' alike), or null. */
+export function compoundFor(nutrient: string): Compound | null {
+  const k = nutrient.trim().toLowerCase().replace(/_/g, '-')
+  return COMPOUNDS.find((c) => c.key === k || (c.key === 'l-theanine' && k === 'theanine')) ?? null
+}
+/** A logged amount in the compound's unit (mcg, mg, g, "Gram(s)"), or null for a unit that is not a mass. */
+export function amountIn(c: Compound, amount: number, unit: string | null): number | null {
+  const u = (unit ?? c.unit).trim().toLowerCase()
+  const mg = u === 'mg' ? amount : u === 'mcg' || u === 'µg' || u === 'ug' ? amount / 1000 : u === 'g' || u.startsWith('gram') ? amount * 1000 : null
+  return mg == null ? null : c.unit === 'g' ? mg / 1000 : mg
+}
+/** One-compartment amount in the body at `t`, any half-life and absorption rate (per hour). */
+export function oneCompartmentAt(doses: Dose[], t: number, halfLifeH: number, kaPerH: number): number {
+  const ke = Math.LN2 / halfLifeH / 60, ka = kaPerH / 60
+  let sum = 0
+  for (const d of doses) {
+    const dt = t - d.at
+    if (dt <= 0 || !(d.amount > 0)) continue
+    sum += d.amount * (ka / (ka - ke)) * (Math.exp(-ke * dt) - Math.exp(-ka * dt))
+  }
+  return sum
+}
+export function compoundSeries(c: Compound, doses: Dose[], start: number, end: number, step = 5): CurvePoint[] {
+  const out: CurvePoint[] = []
+  for (let t = start; t <= end + 1e-9; t += step) out.push({ t, v: oneCompartmentAt(doses, t, c.halfLifeH, c.kaPerH) })
+  return out
+}
+
 export interface Dose { /** Minutes from the shown day's local midnight. */ at: number; amount: number }
 export interface CurvePoint { t: number; v: number }
 

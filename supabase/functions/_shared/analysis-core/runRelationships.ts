@@ -20,6 +20,13 @@ import { offsetLookup, samplesOf, watchStressDays, type WatchStressDay } from '.
 import type { GutCheckinRow, StoolRow } from './mealExposures.ts'
 
 export const RELATIONSHIP_LOOKBACK_DAYS = 365
+/**
+ * The relationship engine's own lookback: sleep (from Mar 2023), sessions, steps and resting heart rate go back years, so the
+ * questions that rest on them use about 4 years instead of 1 (HRV starts in Jan 2026, so its questions are unchanged: a day
+ * without both ends of a pair is never used). The model already carries a weekday term and a spline trend every 60 days. The
+ * other engines keep the 365-day frame their calibrations were set on.
+ */
+export const RELATIONSHIP_LONG_LOOKBACK_DAYS = 1500
 // A day counts as having "afternoon caffeine" from this local hour on.
 export const CAFFEINE_PM_HOUR = 14
 export const MIN_TRAINING_MIN = 20
@@ -341,9 +348,9 @@ export interface LoadedFrame {
 }
 
 /** Reads a user's raw rows once and builds the daily frame; engines that need it share the result. */
-export async function loadFrame(admin: Admin, userId: string, now: Date = new Date()): Promise<LoadedFrame | { userId: string; error: string }> {
+export async function loadFrame(admin: Admin, userId: string, now: Date = new Date(), lookbackDays: number = RELATIONSHIP_LOOKBACK_DAYS): Promise<LoadedFrame | { userId: string; error: string }> {
   const today = now.toISOString().slice(0, 10)
-  const since = shift(today, -(RELATIONSHIP_LOOKBACK_DAYS - 1))
+  const since = shift(today, -(lookbackDays - 1))
   const sinceStamp = `${since}T00:00:00Z`
   const q = (table: string, cols: string, col: string, from: string) => (a: number, b: number) =>
     admin.from(table).select(cols).eq('user_id', userId).gte(col, from).order(col).range(a, b)
@@ -404,6 +411,7 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
       scores: scoreRows.error ? [] : scoreRows.rows,
     },
     today,
+    lookbackDays,
   )
   return { userId, today, localToday: localDateAt(now, context.error ? [] : context.rows), frame }
 }

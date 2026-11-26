@@ -39,7 +39,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { buildPreview, runExperiments } from "../_shared/analysis-core/runExperiments.ts";
 import { runInterventionIts, runInterventionResponses } from "../_shared/analysis-core/runInterventionResponse.ts";
 import { runEventEvidence } from "../_shared/analysis-core/runEventEvidence.ts";
-import { loadFrame, runRelationships } from "../_shared/analysis-core/runRelationships.ts";
+import { loadFrame, RELATIONSHIP_LONG_LOOKBACK_DAYS, runRelationships } from "../_shared/analysis-core/runRelationships.ts";
 import { runEvidence } from "../_shared/analysis-core/runEvidence.ts";
 import { runExpectedBands } from "../_shared/analysis-core/runExpectedBands.ts";
 import { runFitnessFatigue } from "../_shared/analysis-core/runFitnessFatigue.ts";
@@ -210,12 +210,20 @@ Deno.serve(async (req) => {
       // The frame is read once and shared; one engine failing must not hide the others: each reports its own error.
       // Typicality and the expected bands run in a later group than the series breaks because they restart at confirmed ones.
       if (needsFrame(group)) {
-        const loaded = await run("loadFrame", () => loadFrame(admin, id));
+        // The relationship engine reads about four years (its questions on sleep, resting heart rate, sessions and steps rest on
+        // them); the other engines keep the one-year frame they were calibrated on. When relationships is the only engine of
+        // the request (group `core`) the one frame is the long one; in a mixed request it loads its own.
+        const frameEngines = [...want].filter((n) => !["breaks", "integrity", "air", "derived", "reports"].includes(n));
+        const onlyRelationships = frameEngines.length === 1 && frameEngines[0] === "relationships";
+        const loaded = await run("loadFrame", () => loadFrame(admin, id, new Date(), onlyRelationships ? RELATIONSHIP_LONG_LOOKBACK_DAYS : undefined));
         if ("error" in loaded) {
           for (const name of want) if (!["breaks", "integrity", "air", "derived", "reports"].includes(name)) out[name] = loaded;
         } else {
           const engines: Record<string, () => Promise<unknown>> = {
-            relationships: () => runRelationships(admin, id, new Date(), loaded),
+            relationships: async () => {
+              const long = onlyRelationships ? loaded : await loadFrame(admin, id, new Date(), RELATIONSHIP_LONG_LOOKBACK_DAYS);
+              return "error" in long ? long : runRelationships(admin, id, new Date(), long);
+            },
             typicality: () => runTypicality(admin, loaded),
             expectedBands: () => runExpectedBands(admin, loaded),
             evidence: () => runEvidence(admin, loaded, new Date(), engineTrace("evidence")),

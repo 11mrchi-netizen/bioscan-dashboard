@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase'
 import { metricHref } from '../lib/metrics'
 import {
   alcoholSeries, amountIn, caffeineAt, caffeineBelowAt, caffeineSeries, CAFFEINE_BEDTIME_MG, CAFFEINE_HALF_LIFE_H, clockLabel,
-  type Compound, COMPOUNDS, DEFAULT_TMAX_H, doseQty, kaFromTmax, lookbackDays, type Qty, qtyText, quantity, compoundFor, compoundSeries, type CurvePoint, type Dose, oneCompartmentAt, usualBedtimeMin, wallParts,
+  type Compound, COMPOUNDS, ingredientAmount, isCaffeine, DEFAULT_TMAX_H, doseQty, kaFromTmax, lookbackDays, type Qty, qtyText, quantity, compoundFor, compoundSeries, type CurvePoint, type Dose, oneCompartmentAt, usualBedtimeMin, wallParts,
 } from '../lib/substanceCurves'
 
 /** A regimen item (medication, peptide, hormone, other) with a half-life: the person's own entry, else the FDA label's. */
@@ -23,11 +23,11 @@ async function loadSubstances(day: string): Promise<SubstanceData> {
   const lo = `${plusDays(day, -1)}T00:00:00+00:00`, hi = `${plusDays(day, 1)}T00:00:00+00:00`
   const [meals, others, sleep, taken] = await Promise.all([
     supabase.from('meals').select('logged_at,meal_items(caffeine_mg,alcohol_g)').gte('logged_at', lo).lt('logged_at', hi),
-    // Caffeine and alcohol that did not come in as a meal item (gels and supplements taken in training): single-counted in nutrient_intake.
-    supabase.from('nutrient_intake').select('logged_at,nutrient,amount,unit,source_type').in('nutrient', ['caffeine', 'alcohol']).neq('source_type', 'meal_item').gte('logged_at', lo).lt('logged_at', hi),
+    // Caffeine and alcohol that did not come in as a meal item or a supplement (gels taken in training): single-counted in nutrient_intake.
+    supabase.from('nutrient_intake').select('logged_at,nutrient,amount,unit,source_type').in('nutrient', ['caffeine', 'alcohol']).not('source_type', 'in', '(meal_item,supplement)').gte('logged_at', lo).lt('logged_at', hi),
     supabase.from('sleep_daily').select('bedtime,tz_offset_min').lte('date', day).order('date', { ascending: false }).limit(14),
     // What was taken and when (supplement_log.taken_at is the phone's wall clock); the doses are in nutrient_intake, one row per nutrient.
-    supabase.from('supplement_log').select('id,taken_at').gte('taken_at', lo).lt('taken_at', hi),
+    supabase.from('supplement_log').select('id,taken_at,product_id,serving_count').gte('taken_at', lo).lt('taken_at', hi),
   ])
   if (meals.error) throw new Error(`meals: ${meals.error.message}`)
   const at = (iso: string) => { const p = wallParts(iso); return p ? dayDiff(p.day, day) * 1440 + p.min : null }
@@ -50,15 +50,46 @@ async function loadSubstances(day: string): Promise<SubstanceData> {
     }
   }
   const supplements: Record<string, Dose[]> = {}
-  const takenAt = new Map(((taken.error ? [] : taken.data) as { id: number; taken_at: string }[] ?? []).map((r) => [r.id, r.taken_at]))
-  if (takenAt.size > 0) {
+  type TakenRow = { id: number; taken_at: string; product_id: number | null; serving_count: number | null }
+  const rows = (taken.error ? [] : taken.data ?? []) as unknown as TakenRow[]
+  // What a supplement holds comes from its product's ingredient rows (a label row named "Caffeine" has no nutrient key, so
+  // nutrient_intake never got it): servings taken times the amount in a serving. Logs with no product fall back to nutrient_intake.
+  const productIds = [...new Set(rows.map((r) => r.product_id).filter((x): x is number => x != null))]
+  if (productIds.length > 0) {
+    const links = await supabase.from('supplement_product_ingredients')
+      .select('supplement_product_id,compound_amount,compound_unit,elemental_amount,elemental_unit,supplement_ingredients(name,nutrient_key,canonical_key)').in('supplement_product_id', productIds)
+    type Link = { supplement_product_id: number; compound_amount: number | null; compound_unit: string | null; elemental_amount: number | null; elemental_unit: string | null; supplement_ingredients: { name: string; nutrient_key: string | null; canonical_key: string | null } | null }
+    const byProduct = new Map<number, Link[]>()
+    for (const l of (links.error ? [] : links.data ?? []) as unknown as Link[]) byProduct.set(l.supplement_product_id, [...(byProduct.get(l.supplement_product_id) ?? []), l])
+    for (const r of rows) {
+      const t = at(r.taken_at)
+      if (t == null || r.product_id == null) continue
+      for (const l of byProduct.get(r.product_id) ?? []) {
+        const ing = l.supplement_ingredients, per = ingredientAmount(l)
+        if (!ing || !per) continue
+        const servings = r.serving_count != null ? Number(r.serving_count) : 1
+        if (isCaffeine(ing.name, ing.nutrient_key, ing.canonical_key)) {
+          const mg = amountIn({ key: 'caffeine', label: '', unit: 'mg', halfLifeH: 0, kaPerH: 0 }, per.amount * servings, per.unit)
+          if (mg != null && mg > 0) caffeine.push({ at: t, amount: mg })
+          continue
+        }
+        const c = compoundFor(ing.nutrient_key ?? '') ?? compoundFor(ing.canonical_key ?? '') ?? compoundFor(ing.name)
+        const a = c ? amountIn(c, per.amount * servings, per.unit) : null
+        if (c && a != null && a > 0) (supplements[c.key] ??= []).push({ at: t, amount: a })
+      }
+    }
+  }
+  const noProduct = new Map(rows.filter((r) => r.product_id == null).map((r) => [r.id, r.taken_at]))
+  if (noProduct.size > 0) {
     // nutrient_intake.logged_at of a supplement is not the time it was taken: the time comes from supplement_log.
-    const doses = await supabase.from('nutrient_intake').select('source_id,nutrient,amount,unit').eq('source_type', 'supplement').in('source_id', [...takenAt.keys()])
+    const doses = await supabase.from('nutrient_intake').select('source_id,nutrient,amount,unit').eq('source_type', 'supplement').in('source_id', [...noProduct.keys()])
     if (!doses.error) {
       for (const r of (doses.data ?? []) as { source_id: number; nutrient: string; amount: number; unit: string | null }[]) {
-        const c = compoundFor(r.nutrient), iso = takenAt.get(r.source_id)
-        const t = iso ? at(iso) : null, a = c ? amountIn(c, Number(r.amount), r.unit) : null
-        if (c && t != null && a != null && a > 0) (supplements[c.key] ??= []).push({ at: t, amount: a })
+        const iso = noProduct.get(r.source_id), t = iso ? at(iso) : null
+        if (t == null || !(r.amount > 0)) continue
+        if (r.nutrient === 'caffeine') { const mg = amountIn({ key: 'caffeine', label: '', unit: 'mg', halfLifeH: 0, kaPerH: 0 }, Number(r.amount), r.unit); if (mg != null && mg > 0) caffeine.push({ at: t, amount: mg }); continue }
+        const c = compoundFor(r.nutrient), a = c ? amountIn(c, Number(r.amount), r.unit) : null
+        if (c && a != null && a > 0) (supplements[c.key] ??= []).push({ at: t, amount: a })
       }
     }
   }

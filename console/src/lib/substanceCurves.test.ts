@@ -118,3 +118,20 @@ test('peak time: the absorption rate is solved so the curve peaks where entered'
   const ka = kaFromTmax(17.5, 2)
   assert.ok(oneCompartmentAt([{ at: 0, amount: 1 }], 26 * 60, 17.5, ka) > 0.35)
 })
+
+import { ingredientAmount, isCaffeine } from './substanceCurves.ts'
+test('supplement ingredients: caffeine under any name, theanine and tyrosine under any key, amount per serving', () => {
+  assert.ok(isCaffeine('Caffeine'))
+  assert.ok(isCaffeine(null, 'caffeine'))
+  assert.ok(isCaffeine('Caffeine Anhydrous'))
+  assert.ok(isCaffeine('Caffeine (from green tea)'))
+  assert.ok(!isCaffeine('Decaffeinated tea', 'Huperzine A'))
+  assert.equal(compoundFor('L-Tyrosine')?.key, 'tyrosine')
+  assert.equal(compoundFor('l-tyrosine')?.key, 'tyrosine')
+  assert.equal(compoundFor('L-Theanine')?.key, 'l-theanine')
+  assert.equal(compoundFor('theanine')?.key, 'l-theanine')
+  assert.equal(compoundFor('Glycine')?.key, 'glycine')
+  assert.deepEqual(ingredientAmount({ compound_amount: 100, compound_unit: 'mg', elemental_amount: null, elemental_unit: null }), { amount: 100, unit: 'mg' })
+  assert.deepEqual(ingredientAmount({ compound_amount: 100, compound_unit: 'mg', elemental_amount: 40, elemental_unit: 'mg' }), { amount: 40, unit: 'mg' })
+  assert.equal(ingredientAmount({ compound_amount: null, compound_unit: null, elemental_amount: null, elemental_unit: null }), null)
+})

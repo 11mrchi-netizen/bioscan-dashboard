@@ -126,4 +126,21 @@ class SubstanceCurvesTest {
         // the 17.5 h tablet carries into the next day: about 40 % of the dose is left 24 h later
         assertTrue(sc.oneCompartmentAt(listOf(Dose(0.0, 1.0)), 26 * 60.0, 17.5, sc.kaFromTmax(17.5, 2.0)) > 0.35)
     }
+
+    @Test
+    fun supplementIngredientsCaffeineUnderAnyNameAndCompoundsUnderAnyKey() {
+        assertTrue(sc.isCaffeine("Caffeine"))
+        assertTrue(sc.isCaffeine(null, "caffeine"))
+        assertTrue(sc.isCaffeine("Caffeine Anhydrous"))
+        assertTrue(sc.isCaffeine("Caffeine (from green tea)"))
+        assertTrue(!sc.isCaffeine("Decaffeinated tea", "Huperzine A"))
+        assertEquals("tyrosine", sc.compoundFor("L-Tyrosine")?.key)
+        assertEquals("tyrosine", sc.compoundFor("l-tyrosine")?.key)
+        assertEquals("l-theanine", sc.compoundFor("L-Theanine")?.key)
+        assertEquals("l-theanine", sc.compoundFor("theanine")?.key)
+        assertEquals("glycine", sc.compoundFor("Glycine")?.key)
+        assertEquals(100.0 to "mg", sc.ingredientAmount(100.0, "mg", null, null))
+        assertEquals(40.0 to "mg", sc.ingredientAmount(100.0, "mg", 40.0, "mg"))
+        assertNull(sc.ingredientAmount(null, null, null, null))
+    }
 }

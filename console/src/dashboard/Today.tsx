@@ -2,6 +2,7 @@
 // rings, the overlays behind them (what moved CHARGE, each ring's inputs against your usual), the day's plan as a
 // timeline and eaten so far. Every score and input opens its history (workspaces/Metric.tsx); the day's log is one tap away.
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useLoadEffect } from '../lib/useLoadEffect'
 import { localDateString, localToday } from '../lib/dates'
 import { metricHref } from '../lib/metrics'
@@ -36,10 +37,16 @@ export function Today({ day, onDay }: { day: string; onDay: (d: string) => void 
   const [readAt, setReadAt] = useState<Date | null>(null)
   // Bumped to read the day again: once a minute while today is on screen, and when the tab comes back into view.
   const [tick, setTick] = useState(0)
-  // An overlay belongs to the day it was opened on: picking another day closes it.
-  const [opened, setOpened] = useState<{ day: string; which: Overlay }>({ day, which: null })
-  const overlay = opened.day === day ? opened.which : null
-  const setOverlay = (which: Overlay) => setOpened({ day, which })
+  // What is in focus (web desk W2): CHARGE or one ring, in the address (#/today?focus=sleep) so Back closes it and it can be linked.
+  // It belongs to the day it was opened on: picking another day (DayPages) rewrites the address without it.
+  const [params, setParams] = useSearchParams()
+  const focusRaw = (params.get('focus') ?? '').toUpperCase()
+  const overlay: Overlay = focusRaw === 'CHARGE' ? 'CHARGE' : DOMAINS.find((d) => d.key === focusRaw)?.key ?? null
+  const setOverlay = (which: Overlay) => {
+    const next = new URLSearchParams(params)
+    if (which) next.set('focus', which.toLowerCase()); else next.delete('focus')
+    setParams(next)
+  }
   const from = shift(day, -(STRIP_DAYS - 1))
   const status = useLoadEffect(async (isCurrent) => {
     const d = await loadToday(day, from)
@@ -73,15 +80,15 @@ export function Today({ day, onDay }: { day: string; onDay: (d: string) => void 
             : (
               <>
                 <div className="today-scores">
-                  <Ring value={charge} size={168} stroke="url(#charge-spectrum)" label="CHARGE" big onOpen={details ? () => setOverlay('CHARGE') : undefined} />
+                  <Ring value={charge} size={168} stroke="url(#charge-spectrum)" label="CHARGE" big selected={overlay === 'CHARGE'} onOpen={details ? () => setOverlay(overlay === 'CHARGE' ? null : 'CHARGE') : undefined} />
                   <div className="today-rings">
                     {DOMAINS.map((r) => (
                       <Ring key={r.key} value={round(shownScore(data!, day, r.key))} size={92} stroke={r.hue} label={r.label}
-                        onOpen={details?.domains[r.key] ? () => setOverlay(r.key) : undefined} />
+                        selected={overlay === r.key} onOpen={details?.domains[r.key] ? () => setOverlay(overlay === r.key ? null : r.key) : undefined} />
                     ))}
                   </div>
                 </div>
-                {details ? <p className="today-hint">{chargeRankLine(details.charge) ?? ''} Tap a ring for what moved it.</p>
+                {details ? <p className="today-hint">{chargeRankLine(details.charge) ?? ''} Choose a ring for what moved it; it opens beside.</p>
                   : <p className="today-hint">The scores of this day were saved without their detail (kept from 6 Oct 2026 on): the rings do not open.</p>}
               </>
             )}
@@ -90,6 +97,8 @@ export function Today({ day, onDay }: { day: string; onDay: (d: string) => void 
             <a className="dash-link" href={historyHref('charge', day)}>CHARGE HISTORY →</a>
           </div>
         </section>
+
+        {overlay && details && <FocusCard scores={details} which={overlay} day={day} onPick={setOverlay} onClose={() => setOverlay(null)} />}
 
         {data && <PlanCard data={data} day={day} readAt={readAt} />}
 
@@ -113,8 +122,6 @@ export function Today({ day, onDay }: { day: string; onDay: (d: string) => void 
         <ReportCard />
       </Board>
 
-      {overlay && details && <ScoreOverlay scores={details} which={overlay} day={day} onPick={setOverlay} onClose={() => setOverlay(null)} />}
-
       <svg width="0" height="0" aria-hidden="true" style={{ position: 'absolute' }}>
         <defs>
           <linearGradient id="charge-spectrum" x1="0" y1="0" x2="1" y2="1">
@@ -127,7 +134,7 @@ export function Today({ day, onDay }: { day: string; onDay: (d: string) => void 
   )
 }
 
-function Ring({ value, size, stroke, label, big, onOpen }: { value: number | null; size: number; stroke: string; label: string; big?: boolean; onOpen?: () => void }) {
+function Ring({ value, size, stroke, label, big, selected, onOpen }: { value: number | null; size: number; stroke: string; label: string; big?: boolean; selected?: boolean; onOpen?: () => void }) {
   const r = 42, c = 2 * Math.PI * r
   const frac = value == null ? 0 : Math.max(0, Math.min(100, value)) / 100
   const body = (
@@ -142,7 +149,7 @@ function Ring({ value, size, stroke, label, big, onOpen }: { value: number | nul
     </>
   )
   return onOpen
-    ? <button type="button" className={`ring ring-btn ${big ? 'big' : ''}`} style={{ width: size }} onClick={onOpen}>{body}</button>
+    ? <button type="button" className={`ring ring-btn ${big ? 'big' : ''} ${selected ? 'on' : ''}`} style={{ width: size }} aria-pressed={selected ?? false} onClick={onOpen}>{body}</button>
     : <figure className={`ring ${big ? 'big' : ''}`} style={{ width: size }}>{body}</figure>
 }
 
@@ -247,21 +254,19 @@ function SoFarBar({ s }: { s: NonNullable<LivePlan['so_far']> }) {
   )
 }
 
-// ---------------- overlays: CHARGE and the five rings ----------------
+// ---------------- the focus: CHARGE or one ring, beside the rings (web desk W2; was a pop-up over the page) ----------------
 
-function ScoreOverlay({ scores, which, day, onPick, onClose }: { scores: DayScores; which: Exclude<Overlay, null>; day: string; onPick: (o: Overlay) => void; onClose: () => void }) {
+function FocusCard({ scores, which, day, onPick, onClose }: { scores: DayScores; which: Exclude<Overlay, null>; day: string; onPick: (o: Overlay) => void; onClose: () => void }) {
   useEffect(() => {
     const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', k)
     return () => window.removeEventListener('keydown', k)
   }, [onClose])
   return (
-    <div className="ov-scrim" onClick={onClose}>
-      <div className="ov ft-card" role="dialog" aria-modal="true" aria-label={`${which} overlay`} onClick={(e) => e.stopPropagation()}>
-        <button className="ov-close" onClick={onClose} aria-label="Close">×</button>
-        {which === 'CHARGE' ? <ChargeOverlay scores={scores} day={day} onPick={onPick} /> : <RingOverlay scores={scores} k={which} day={day} onPick={onPick} />}
-      </div>
-    </div>
+    <section className="ft-card today-focus" aria-label={`${which} in focus`}>
+      <button className="ov-close" onClick={onClose} aria-label="Close">×</button>
+      {which === 'CHARGE' ? <ChargeOverlay scores={scores} day={day} onPick={onPick} /> : <RingOverlay scores={scores} k={which} day={day} onPick={onPick} />}
+    </section>
   )
 }
 

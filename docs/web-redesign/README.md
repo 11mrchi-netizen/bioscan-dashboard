@@ -37,6 +37,12 @@ Every old address redirects with its query kept (`#/lab/...`, `#/setup/...`, `#/
 views under the old names still open, and the sign-in return path accepts the old ones. The Desk (landing) arrives in W3; until then
 the web opens on Today. Where the sections below say Lab, Setup or Log, read Analyse, Data and Review.
 
+**W2 (first part): Today's rings open beside, not over.** CHARGE and each ring open as a focus card next to the rings
+(`#/today?focus=charge|recovery|sleep|load|fuel|balance`), not as a pop-up: the open ring is marked, choosing another swaps the card in
+place, Escape or × closes it, Back undoes it, and a link opens it. The meal view is still a pop-up. The phone's fuller overlays
+(illness and signals lines, scorecards, relations, TSB, weights, the stool, bowel, stress and night pictures) need the phone to save them
+with the day; that is the next part of W2 (decided 26 Nov).
+
 ## The structure
 
 One app, one shell, one router (`console/src/App.tsx`). Five tabs in the phone's order, and a gear:

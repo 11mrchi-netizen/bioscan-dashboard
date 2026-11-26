@@ -54,6 +54,7 @@
 /* Phase 2: tappable rings, the day's plan, eaten so far, the score overlays. */
 .ring-btn { background: none; border: 0; padding: 4px; border-radius: 14px; cursor: pointer; color: inherit; }
 .ring-btn:hover { background: var(--ft-chip-idle); }
+.ring-btn.on { background: var(--ft-chip-idle); box-shadow: inset 0 0 0 1.5px var(--ft-fg); }
 .ring-btn:focus-visible { outline: 2px solid var(--ft-fg); outline-offset: 2px; }
 .today-hint { margin: 0; font-size: 13px; color: var(--ft-muted); line-height: 1.45; }
 
@@ -83,6 +84,8 @@
 .ov { position: relative; width: min(520px, 100%); height: 100%; overflow-y: auto; border-radius: 18px 0 0 18px; display: flex; flex-direction: column; gap: 12px;
   padding: max(20px, env(safe-area-inset-top, 0px)) max(18px, env(safe-area-inset-right, 0px)) max(24px, env(safe-area-inset-bottom, 0px)) 18px; background: var(--ft-bg); box-sizing: border-box; }
 .ov-close { position: absolute; top: 10px; right: 12px; background: none; border: 0; color: var(--ft-muted); font-size: 26px; cursor: pointer; line-height: 1; }
+.today-focus { position: relative; display: flex; flex-direction: column; gap: 12px; }
+.today-focus .ov-close { position: absolute; top: 8px; right: 12px; background: none; border: 0; color: var(--ft-muted); font-size: 26px; cursor: pointer; line-height: 1; }
 .ov-eyebrow { font: 500 10.5px var(--ft-mono); letter-spacing: .12em; color: var(--ft-muted); text-transform: uppercase; padding-right: 30px; }
 .ov-head { display: flex; align-items: baseline; gap: 12px; }
 .ov-score { font: 800 48px var(--ft-num); color: var(--ft-fg); line-height: 1; }

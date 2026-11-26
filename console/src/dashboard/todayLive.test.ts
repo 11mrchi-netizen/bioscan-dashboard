@@ -110,3 +110,16 @@ test('a day the phone never saved still shows what was logged', () => {
   assert.equal(p.so_far!.kcal, 500)
   assert.equal(p.so_far!.target_kcal, undefined)
 })
+
+test('two things logged for one meal are one row, with their kcal added', () => {
+  const p = livePlan(null, logs({ meals: [
+    { ...meal('2026-11-24T12:42:00+00:00', 'lunch', 478, 50, 47, 10), id: 1, description: 'Steak with rice' },
+    { ...meal('2026-11-24T12:54:00+00:00', 'lunch', 296, 40, 3, 5), id: 2, description: 'Banana bread' },
+  ] }))
+  const rows = p.rows.filter((r) => r.kind === 'MEAL')
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].kcal, 774)
+  assert.deepEqual(rows[0].mealIds, [1, 2])
+  assert.equal(rows[0].detail, '774 kcal · Steak with rice + Banana bread')
+  assert.equal(p.so_far?.kcal, 774)
+})

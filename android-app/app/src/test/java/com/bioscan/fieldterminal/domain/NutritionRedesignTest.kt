@@ -45,6 +45,22 @@ class NutritionRedesignTest {
         // breakfast 25, the second morning meal a snack, lunch by label, 19:00 unlabelled is dinner
         assertEquals(listOf(25.0, 0.0, 30.0, 5.0, 0.0, 40.0), out[d])
         assertEquals(listOf(0.0, 0.0, 0.0, 0.0, 0.0, 0.0), out[d.plusDays(1)])
-        assertEquals(listOf("Breakfast", "Snack"), mealNames(meals.subList(1, 3)))
+    }
+
+    @Test
+    fun thingsLoggedForOneMealAreOneMeal() {
+        val lunch = listOf(
+            MealRow(loggedAt = "2026-10-01T12:54:00Z", proteinG = 3.0, mealSlot = "lunch"),
+            MealRow(loggedAt = "2026-10-01T12:42:00Z", proteinG = 47.0, mealSlot = "lunch"),
+        )
+        assertEquals(listOf(listOf("2026-10-01T12:42:00Z", "2026-10-01T12:54:00Z")), mealGroups(lunch).map { g -> g.map { it.loggedAt } })
+        assertEquals(listOf(50.0), proteinByMeal(lunch)[d]!!.filter { it > 0 })
+        // two unlabelled drinks a minute apart are one meal, not a meal and a snack
+        val drinks = listOf(MealRow(loggedAt = "2026-10-01T09:57:00Z", proteinG = 1.0), MealRow(loggedAt = "2026-10-01T09:58:00Z", proteinG = 2.0))
+        assertEquals(1, mealGroups(drinks).size)
+        assertEquals(listOf("Breakfast"), mealNames(mealGroups(drinks)))
+        // different labels stay apart, and more than an hour starts a new meal
+        assertEquals(2, mealGroups(listOf(MealRow(loggedAt = "2026-10-01T21:07:00Z", mealSlot = "dinner"), MealRow(loggedAt = "2026-10-01T21:16:00Z", mealSlot = "snack"))).size)
+        assertEquals(2, mealGroups(listOf(MealRow(loggedAt = "2026-10-01T12:00:00Z", mealSlot = "lunch"), MealRow(loggedAt = "2026-10-01T13:01:00Z", mealSlot = "lunch"))).size)
     }
 }

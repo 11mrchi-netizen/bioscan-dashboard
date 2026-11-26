@@ -3,8 +3,8 @@
 // separate, never one combined score; each is drawn in its metric's hue (CLAUDE.md, visual design).
 import { useEffect, useState } from 'react'
 import { useLoadEffect } from '../lib/useLoadEffect'
-import { COMPARE_DAYS, loadMealDetail, type MealDetail, type ProfileData, PROTEIN_DOSE_G } from './mealView'
-import { macroSplit, microName, standing } from './mealStats'
+import { COMPARE_DAYS, loadMealDetail, type MealDetail, PROTEIN_DOSE_G } from './mealView'
+import { macroSplit, microName, type ProfileData, standing } from './mealStats'
 import { wallTime } from './todayLive'
 
 const n0 = (x: number | null | undefined) => (x == null ? '–' : String(Math.round(x)))
@@ -23,26 +23,22 @@ const INDEXES: IndexSpec[] = [
 ]
 
 export function MealOverlay({ ids, day, onClose }: { ids: number[]; day: string; onClose: () => void }) {
-  const [pick, setPick] = useState(0)
   const [detail, setDetail] = useState<MealDetail | null>(null)
-  const id = ids[Math.min(pick, ids.length - 1)]
+  const key = ids.join(',')
   const status = useLoadEffect(async (isCurrent) => {
-    const d = await loadMealDetail(id, day)
+    const d = await loadMealDetail(ids, day)
     if (isCurrent()) setDetail(d)
-  }, [id, day])
+  }, [key, day])
   useEffect(() => {
     const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', k)
     return () => window.removeEventListener('keydown', k)
   }, [onClose])
-  const shown = detail && detail.meal.id === id ? detail : null
+  const shown = detail && detail.meal.ids.join(',') === key ? detail : null
   return (
     <div className="ov-scrim" onClick={onClose}>
       <div className="ov ft-card" role="dialog" aria-modal="true" aria-label="Meal" onClick={(e) => e.stopPropagation()}>
         <button className="ov-close" onClick={onClose} aria-label="Close">×</button>
-        {ids.length > 1 && (
-          <div className="meal-tabs">{ids.map((x, i) => <button key={x} className={`dash-link ${i === pick ? 'on' : ''}`} onClick={() => setPick(i)}>MEAL {i + 1}</button>)}</div>
-        )}
         {shown ? <MealBody d={shown} /> : status.error ? <p className="ov-line">This meal could not be read: {status.error}</p> : <p className="today-hint">Reading the meal…</p>}
       </div>
     </div>
@@ -67,6 +63,7 @@ function MealBody({ d }: { d: MealDetail }) {
       <div className="ov-eyebrow">{slotName(m.meal_slot)} · {wallTime(m.logged_at) ?? ''}</div>
       <div className="ov-head"><span className="ov-score">{n0(kcal)}</span><span className="ov-band">KCAL</span></div>
       {m.description && <p className="ov-line">{m.description}</p>}
+      {m.ids.length > 1 && <p className="today-hint">{m.ids.length} things logged together, shown as one meal.</p>}
       {p?.macro_mismatch && <p className="ov-warn">The kcal and the macros disagree: this entry is probably worth a look.</p>}
 
       <div className="ov-label">MACROS</div>

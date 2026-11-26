@@ -191,7 +191,7 @@ fun NutritionScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit) {
             }
         }
 
-        Section("PROTEIN PER MEAL", info = "Each column a day, split by meal: the label it was logged under, else the main meal its time falls in (a second meal in the same part of the day is a snack). Even parts mean protein is spread through the day; a few large ones mean it is bunched into one or two meals.") {
+        Section("PROTEIN PER MEAL", info = "Each column a day, split by meal: the label it was logged under, else the main meal its time falls in (a second one in the same part of the day is a snack; things logged within the hour for the same meal count as one). Even parts mean protein is spread through the day; a few large ones mean it is bunched into one or two meals.") {
             val byDay = remember(o) { proteinByMeal(o.meals).entries.map { it.key to it.value } }
             val shades = MEAL_NAMES.indices.map { NutrientColor.Protein.copy(alpha = 1f - it * 0.13f) }
             StackedBars(

@@ -1,4 +1,10 @@
 // Pure numbers behind the per-meal view (mealView.ts): where a meal stands among the others, its macro split, its micronutrients.
+export interface ProfileData {
+  meal_id: number; logged_at: string; food_grams: number | null; calories: number | null; protein_g: number | null; carbs_g: number | null; fat_g: number | null; fiber_g: number | null
+  energy_density_kcal_g: number | null; protein_per_100kcal: number | null; carbs_per_100kcal: number | null; fiber_per_1000kcal: number | null
+  glycemic_load_est: number | null; fullness_factor_est: number | null; ultra_processed_pct: number | null
+  food_groups: string[] | null; tags: string[] | null; macro_mismatch: boolean | null
+}
 export interface Micro { nutrient: string; amount: number; unit: string; /** Share of the day's total of that nutrient. */ dayShare: number | null }
 
 /** Where [value] stands among [others]: share of them at or below it (0-100), with their quartiles. Null under 5 values. */
@@ -35,3 +41,38 @@ export function rankMicros(rows: { nutrient: string; amount: number; unit: strin
     .sort((a, b) => rank(a.nutrient) - rank(b.nutrient) || a.nutrient.localeCompare(b.nutrient))
 }
 
+
+const sumOf = (xs: (number | null)[]) => (xs.some((x) => x != null) ? xs.reduce<number>((a, x) => a + (x ?? 0), 0) : null)
+const all = (xs: (number | null)[]): xs is number[] => xs.length > 0 && xs.every((x) => x != null)
+
+/**
+ * One profile for the meals of one sitting. Amounts add up; the indexes are worked out again from the sums, or combined the way
+ * they are defined (energy density from food kcal over food grams, glycemic load adds, the rest weighted by grams or kcal).
+ * An index is null when any part of the meal lacks it: never guessed.
+ */
+export function combineProfiles(ps: ProfileData[]): ProfileData | null {
+  if (ps.length === 0) return null
+  if (ps.length === 1) return ps[0]
+  const kcal = sumOf(ps.map((p) => p.calories)), protein = sumOf(ps.map((p) => p.protein_g)), carbs = sumOf(ps.map((p) => p.carbs_g))
+  const fibres = ps.map((p) => p.fiber_g), grams = ps.map((p) => p.food_grams)
+  const per = (x: number | null, k: number) => (x != null && kcal != null && kcal >= 50 ? (x / kcal) * k : null)
+  const g = all(grams) ? grams : null
+  const weighted = (idx: (p: ProfileData) => number | null, by: number[] | null) => {
+    const v = ps.map(idx)
+    if (!all(v) || !by) return null
+    const w = by.reduce((a, x) => a + x, 0)
+    return w > 0 ? v.reduce((a, x, i) => a + x * by[i], 0) / w : null
+  }
+  const kcals = ps.map((p) => p.calories)
+  return {
+    meal_id: ps[0].meal_id, logged_at: ps[0].logged_at, calories: kcal, protein_g: protein, carbs_g: carbs, fat_g: sumOf(ps.map((p) => p.fat_g)),
+    fiber_g: all(fibres) ? sumOf(fibres) : null, food_grams: g ? g.reduce((a, x) => a + x, 0) : null,
+    energy_density_kcal_g: weighted((p) => p.energy_density_kcal_g, g),
+    protein_per_100kcal: per(protein, 100), carbs_per_100kcal: per(carbs, 100), fiber_per_1000kcal: all(fibres) ? per(sumOf(fibres), 1000) : null,
+    glycemic_load_est: all(ps.map((p) => p.glycemic_load_est)) ? ps.reduce((a, p) => a + p.glycemic_load_est!, 0) : null,
+    fullness_factor_est: weighted((p) => p.fullness_factor_est, g),
+    ultra_processed_pct: weighted((p) => p.ultra_processed_pct, all(kcals) && kcals.some((x) => x > 0) ? kcals : null),
+    food_groups: [...new Set(ps.flatMap((p) => p.food_groups ?? []))], tags: [...new Set(ps.flatMap((p) => p.tags ?? []))],
+    macro_mismatch: ps.some((p) => p.macro_mismatch),
+  }
+}

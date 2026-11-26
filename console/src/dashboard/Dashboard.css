@@ -229,8 +229,6 @@ a.me-tile.tappable:hover { border-color: var(--ft-muted); }
 .subst-head b.subst-warn { color: var(--ft-warn, var(--color-warning)); }
 
 /* Per-meal view (MealOverlay.tsx) */
-.meal-tabs { display: flex; gap: 6px; padding-right: 30px; }
-.meal-tabs .dash-link.on { border-color: var(--ft-fg); }
 .meal-macros { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; }
 .meal-macros b { font: 800 16px var(--ft-num); }
 .meal-split { display: flex; flex-direction: column; gap: 4px; }

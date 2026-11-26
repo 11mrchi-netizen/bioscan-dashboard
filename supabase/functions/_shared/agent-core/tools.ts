@@ -6,7 +6,7 @@
 // tool whose tables the person has not shared.
 
 import seriesFile from '../metric-registry/metric-series.json' with { type: 'json' }
-import { tableAccess, type ScopeSettings } from './scope.ts'
+import { tableAccess, TABLE_SCOPE, type ScopeSettings } from './scope.ts'
 
 export type Mode = 'explain' | 'ask' | 'coach'
 export const MODES: Mode[] = ['explain', 'ask', 'coach']
@@ -23,8 +23,11 @@ export interface ToolDef {
   modes: Mode[]
 }
 
-export const SERIES_IDS: string[] = (seriesFile as { series: { id: string }[] }).series.map((s) => s.id)
-export const SERIES_TABLES: string[] = [...new Set((seriesFile as { series: { table: string }[] }).series.map((s) => s.table))]
+// The assistant is offered the series of tables it may read: phone use and mobility (routine and location data) are never
+// shared with it, though the web and the phone chart them.
+const OFFERED = (seriesFile as { series: { id: string; table: string }[] }).series.filter((s) => !['never', 'internal'].includes(TABLE_SCOPE[s.table]?.scope ?? ''))
+export const SERIES_IDS: string[] = OFFERED.map((s) => s.id)
+export const SERIES_TABLES: string[] = [...new Set(OFFERED.map((s) => s.table))]
 
 /** What `registered_questions` accepts today (20261016_evidence_ledger.sql); tools.test.ts compares with the migration. */
 export const REGISTERED_SPACE = {

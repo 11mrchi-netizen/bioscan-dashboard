@@ -59,6 +59,28 @@ object SubstanceCurves {
         return if (c.unit == "g") mg / 1000 else mg
     }
 
+    // MEDICATIONS (a medication on the regimen with a label half-life, e.g. tadalafil 17.5 h): the same model with the half-life
+    // from the FDA label (regimen_references.half_life_hours) and ka 2 per hour, which puts the peak at 2 h, the label's median
+    // for tadalafil. Doses back to five half-lives count, so a daily 17.5 h drug shows its carry-over.
+    const val MEDICATION_KA_PER_H = 2.0
+
+    /** Days of doses that still matter for a half-life: five half-lives, at least one day. */
+    fun lookbackDays(halfLifeH: Double): Long = maxOf(1L, Math.ceil(halfLifeH * 5 / 24).toLong())
+
+    /** A mass in mg (mg, mcg, g), or null for a unit that is not one (tablet, pill). */
+    fun massMg(amount: Double, unit: String?): Double? = when (unit?.trim()?.lowercase()) {
+        "mg" -> amount
+        "mcg", "µg", "ug" -> amount / 1000
+        "g" -> amount * 1000
+        else -> null
+    }
+
+    /** One logged dose in mg: its own mass when logged in one, else the servings taken times the mg in a serving. */
+    fun doseMg(doseValue: Double?, doseUnit: String?, servingCount: Double?, mgPerServing: Double?): Double? {
+        doseValue?.let { v -> massMg(v, doseUnit)?.let { return it } }
+        return if (servingCount != null && mgPerServing != null) servingCount * mgPerServing else null
+    }
+
     /** Amount in the body at minute [t], first-order absorption and elimination. */
     fun oneCompartmentAt(doses: List<Dose>, t: Double, halfLifeH: Double, kaPerH: Double): Double {
         val ke = ln(2.0) / halfLifeH / 60

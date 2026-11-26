@@ -88,4 +88,20 @@ class SubstanceCurvesTest {
         assertEquals(-31.0, sc.minutesFromDay("2026-11-23T23:29:00+00:00", day)!!, 1e-9)
         assertEquals("23:57", sc.clockLabel(1437.0))
     }
+
+    @Test
+    fun medicationDosesInMgAndTheTabletCarriesIntoTheNextDay() {
+        assertEquals(2.5, sc.massMg(2.5, "mg")!!, 1e-9)
+        assertEquals(0.5, sc.massMg(500.0, "mcg")!!, 1e-9)
+        assertNull(sc.massMg(1.0, "tablet"))
+        assertEquals(2.5, sc.doseMg(0.5, "tablet", 0.5, 5.0)!!, 1e-9)
+        assertEquals(2.5, sc.doseMg(2.5, "mg", 1.0, null)!!, 1e-9)
+        assertNull(sc.doseMg(0.5, "tablet", 0.5, null))
+        assertEquals(4L, sc.lookbackDays(17.5))
+        assertEquals(1L, sc.lookbackDays(0.75))
+        val d = listOf(Dose(8 * 60.0, 2.5))
+        val peak = (480..1200 step 5).maxByOrNull { sc.oneCompartmentAt(d, it.toDouble(), 17.5, sc.MEDICATION_KA_PER_H) }!!
+        assertTrue("peak ${peak - 480} min", kotlin.math.abs(peak - 480 - 120) <= 15)
+        assertTrue(sc.oneCompartmentAt(d, 32 * 60.0, 17.5, sc.MEDICATION_KA_PER_H) / 2.5 > 0.35)
+    }
 }

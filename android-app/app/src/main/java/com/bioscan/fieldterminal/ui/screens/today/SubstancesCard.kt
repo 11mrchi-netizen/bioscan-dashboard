@@ -53,7 +53,10 @@ fun SubstancesCard(data: SubstanceDay?, modifier: Modifier = Modifier) {
     val todayCaf = data.caffeine.filter { it.atMin >= 0 }
     val todayAlc = data.alcohol.filter { it.atMin >= 0 }
     val compounds = sc.COMPOUNDS.filter { c -> data.supplements[c.key].orEmpty().any { it.atMin >= 0 } }
-    if (todayCaf.isEmpty() && todayAlc.isEmpty() && carry < 1 && carryAlc < 0.1 && compounds.isEmpty()) return
+    val meds = data.medications.filter { m ->
+        m.doses.any { it.atMin >= 0 } || sc.oneCompartmentAt(m.doses, 0.0, m.halfLifeH, sc.MEDICATION_KA_PER_H) >= 0.05
+    }
+    if (todayCaf.isEmpty() && todayAlc.isEmpty() && carry < 1 && carryAlc < 0.1 && compounds.isEmpty() && meds.isEmpty()) return
 
     val bed = data.bedtimeMin ?: (24 * 60.0)
     val end = maxOf(24 * 60.0, bed + 60)
@@ -95,9 +98,18 @@ fun SubstancesCard(data: SubstanceDay?, modifier: Modifier = Modifier) {
             Text("${fmt(sc.oneCompartmentAt(doses, nowMin, c.halfLifeH, c.kaPerH))} ${c.unit} now", style = FTType.Value, color = FT.TextPrimary)
             Curve(series, FT.Metric.Supplement, sc.niceMax(series.maxOf { it.v }), nowMin, data.bedtimeMin, null, "${c.label.lowercase()} in the body, ${c.unit}, through the day")
         }
+        for (m in meds) {
+            val series = sc.series(0.0, end) { sc.oneCompartmentAt(m.doses, it, m.halfLifeH, sc.MEDICATION_KA_PER_H) }
+            val fmt = { v: Double -> if (v < 10) "%.1f".format(v) else v.roundToInt().toString() }
+            val taken = m.doses.filter { it.atMin >= 0 }
+            Header(m.name.uppercase(), FT.Metric.Supplement, if (taken.isEmpty()) "carried over" else taken.joinToString(" · ") { "${fmt(it.amount)} mg at ${sc.clockLabel(it.atMin)}" })
+            Text("${fmt(sc.oneCompartmentAt(m.doses, nowMin, m.halfLifeH, sc.MEDICATION_KA_PER_H))} mg now", style = FTType.Value, color = FT.TextPrimary)
+            Curve(series, FT.Metric.Supplement, sc.niceMax(series.maxOf { it.v }), nowMin, data.bedtimeMin, null, "${m.name} in the body, mg, through the day")
+        }
         Text(
             "Estimated from logged drinks and supplements; unlogged ones are missing. Caffeine: half-life ${sc.CAFFEINE_HALF_LIFE_H.roundToInt()} h " +
                 "(people range 3 to 7 h), peak about 50 min after a dose; the dashed line is ${sc.CAFFEINE_BEDTIME_MG.roundToInt()} mg, a working line for sleep. " +
+                (if (meds.isEmpty()) "" else "Medication: the label's half-life (${meds.joinToString(", ") { "${it.name} ${it.halfLifeH} h" }}), peak at about 2 h, earlier days' doses carried over. ") +
                 "Alcohol: cleared at about 7 g an hour. Dashed curve: the projection from what is logged so far. " +
                 "Only melatonin, glycine, theanine and tyrosine have a curve; magnesium, zinc, vitamin D, omega-3 and creatine do not move within a day.",
             style = FTType.Caption, color = FT.TextMuted,

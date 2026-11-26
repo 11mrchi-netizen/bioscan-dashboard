@@ -49,6 +49,24 @@ export function amountIn(c: Compound, amount: number, unit: string | null): numb
   const mg = u === 'mg' ? amount : u === 'mcg' || u === 'µg' || u === 'ug' ? amount / 1000 : u === 'g' || u.startsWith('gram') ? amount * 1000 : null
   return mg == null ? null : c.unit === 'g' ? mg / 1000 : mg
 }
+// MEDICATIONS (a medication on the regimen with a label half-life, e.g. tadalafil 17.5 h): the same one-compartment model with the
+// half-life from the FDA label (regimen_references.half_life_hours) and absorption ka = 2 per hour, which puts the peak at 2 h, the
+// label's median for tadalafil. Doses back to five half-lives still count, so a daily 17.5 h drug shows its carry-over.
+export const MEDICATION_KA_PER_H = 2
+/** Days of doses that still matter for a half-life: five half-lives, at least one day. */
+export const lookbackDays = (halfLifeH: number): number => Math.max(1, Math.ceil((halfLifeH * 5) / 24))
+/** A mass in mg (mg, mcg, g), or null for a unit that is not one (tablet, pill). */
+export function massMg(amount: number, unit: string | null): number | null {
+  const u = (unit ?? '').trim().toLowerCase()
+  return u === 'mg' ? amount : u === 'mcg' || u === 'µg' || u === 'ug' ? amount / 1000 : u === 'g' ? amount * 1000 : null
+}
+/** One logged dose in mg: its own mass when logged in one, else the servings taken times the mg in a serving. */
+export function doseMg(log: { dose_value: number | null; dose_unit: string | null; serving_count: number | null }, mgPerServing: number | null): number | null {
+  const own = log.dose_value != null ? massMg(Number(log.dose_value), log.dose_unit) : null
+  if (own != null) return own
+  return log.serving_count != null && mgPerServing != null ? Number(log.serving_count) * mgPerServing : null
+}
+
 /** One-compartment amount in the body at `t`, any half-life and absorption rate (per hour). */
 export function oneCompartmentAt(doses: Dose[], t: number, halfLifeH: number, kaPerH: number): number {
   const ke = Math.LN2 / halfLifeH / 60, ka = kaPerH / 60

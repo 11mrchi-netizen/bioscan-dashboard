@@ -78,3 +78,22 @@ test('supplements: compounds by key, units, a short half-life empties in hours',
   assert.ok(s[7].v < 0.01, `${s[7].v}`)
   assert.equal(oneCompartmentAt([{ at: 0, amount: 100 }], 90, 5, 4), caffeineAt([{ at: 0, amount: 100 }], 90))
 })
+
+import { doseMg, lookbackDays, massMg, MEDICATION_KA_PER_H } from './substanceCurves.ts'
+test('medications: doses in mg from the log, the 17.5 h tablet peaks at about 2 h and carries into the next day', () => {
+  assert.equal(massMg(2.5, 'mg'), 2.5)
+  assert.equal(massMg(500, 'mcg'), 0.5)
+  assert.equal(massMg(1, 'tablet'), null)
+  // 0.5 of a 5 mg tablet, logged as a count of servings; or 2.5 mg logged as a mass
+  assert.equal(doseMg({ dose_value: 0.5, dose_unit: 'tablet', serving_count: 0.5 }, 5), 2.5)
+  assert.equal(doseMg({ dose_value: 2.5, dose_unit: 'mg', serving_count: 1 }, null), 2.5)
+  assert.equal(doseMg({ dose_value: 0.5, dose_unit: 'tablet', serving_count: 0.5 }, null), null)
+  assert.equal(lookbackDays(17.5), 4)
+  assert.equal(lookbackDays(0.75), 1)
+  const d = [{ at: 8 * 60, amount: 2.5 }]
+  let best = 0, bestT = 0
+  for (let t = 8 * 60; t < 20 * 60; t += 5) { const v = oneCompartmentAt(d, t, 17.5, MEDICATION_KA_PER_H); if (v > best) { best = v; bestT = t } }
+  assert.ok(Math.abs(bestT - 8 * 60 - 120) <= 15, `peak at ${bestT - 480} min`)
+  // 24 h later 17.5 h half-life still leaves about 40 % of the dose
+  assert.ok(oneCompartmentAt(d, 32 * 60, 17.5, MEDICATION_KA_PER_H) / 2.5 > 0.35)
+})

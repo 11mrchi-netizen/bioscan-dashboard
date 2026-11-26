@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase'
 import { useLoadEffect } from '../lib/useLoadEffect'
 import { localDaysAgo } from '../lib/dates'
 import { MeSections } from './MeView'
-import { loadMeView, ME_TABS, type MeRow, type MeTab, type MeViewRow } from './meView'
+import { loadMeView, ME_TABS, type MeRow, type MeTab, type MeViewRow } from './meData'
 import type { Concern } from './Body3D'
 
 const Body3D = lazy(() => import('./Body3D').then((m) => ({ default: m.Body3D })))

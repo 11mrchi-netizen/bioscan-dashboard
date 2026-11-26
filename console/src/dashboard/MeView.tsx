@@ -1,6 +1,6 @@
 // Draws a Me tab's document (meView.ts): sections of tiles, rows, trend charts, rings and notes, as the phone laid them out.
 import { useMemo } from 'react'
-import { hueVar, type MeBars, type MeChart, type MeItem, type MeRadar, type MeRibbons, type MeRing, type MeRow, type MeSection, type MeTile, type Point } from './meView'
+import { hueVar, type MeBars, type MeChart, type MeItem, type MeRadar, type MeRibbons, type MeRing, type MeRow, type MeSection, type MeTile, type Point } from './meData'
 import { meRef, metricHref } from '../lib/metrics'
 
 export function MeSections({ sections, sinceDay, tab }: { sections: MeSection[]; sinceDay: string | null; tab: string }) {

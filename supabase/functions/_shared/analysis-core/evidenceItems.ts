@@ -67,8 +67,9 @@ export const CONTROLLABLE = new Set([
   'screen_bed_any', 'screen_pm_social_any', 'daylight_day', // the routine experiments' adherence series
   'meal_gap_h', 'kcal_before_bed', 'carbs_day', 'protein_day', 'fiber_day', 'fat_day', // catalogue 2.3.0: meal timing and food
   'caffeine_any', // catalogue 2.4.0
+  'caffeine_board_bed', 'hydration_l', 'screen_total_min', 'unlocks_day', // catalogue 2.5.0
 ])
-export const NOT_CONTROLLABLE = new Set(['stress_high', 'training_day', 'sleep_hours', 'steps', 'home_day', 'travel_day', 'commute_long', 'training_min', 'long_session'])
+export const NOT_CONTROLLABLE = new Set(['stress_high', 'stress_watch', 'temp_max_c', 'mobility_entropy', 'new_places_day', 'training_day', 'sleep_hours', 'steps', 'home_day', 'travel_day', 'commute_long', 'training_min', 'long_session'])
 
 const ref = (r: ResultRow): DataRef => ({ kind: 'result', resultKind: r.kind, key: r.key, asOf: r.as_of })
 

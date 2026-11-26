@@ -818,6 +818,175 @@
     ]
    },
    "hasSource": false
+  },
+  {
+   "id": "watch_stress",
+   "metric": null,
+   "label": "Watch stress (day mean)",
+   "unit": "/100",
+   "table": "derived_daily",
+   "column": "value",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "mean",
+   "period": "mean",
+   "longGrain": "day",
+   "plausible": [
+    0,
+    100
+   ],
+   "expect": "none",
+   "filters": {
+    "metric": [
+     "watch_stress_mean"
+    ]
+   },
+   "hasSource": false
+  },
+  {
+   "id": "watch_stress_high_share",
+   "metric": null,
+   "label": "Time in high stress (watch)",
+   "unit": "%",
+   "table": "derived_daily",
+   "column": "value",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "mean",
+   "period": "mean",
+   "longGrain": "day",
+   "plausible": [
+    0,
+    100
+   ],
+   "expect": "none",
+   "filters": {
+    "metric": [
+     "watch_stress_high_share"
+    ]
+   },
+   "hasSource": false
+  },
+  {
+   "id": "energy_balance",
+   "metric": null,
+   "label": "Logged energy balance",
+   "unit": "kcal",
+   "table": "derived_daily",
+   "column": "value",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "mean",
+   "period": "mean",
+   "longGrain": "day",
+   "plausible": [
+    -6000,
+    6000
+   ],
+   "expect": "none",
+   "filters": {
+    "metric": [
+     "energy_balance"
+    ]
+   },
+   "hasSource": false
+  },
+  {
+   "id": "hr_dip",
+   "metric": null,
+   "label": "Night heart-rate dip",
+   "unit": "%",
+   "table": "hr_dip_nightly",
+   "column": "dip_pct",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "mean",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    100
+   ],
+   "expect": "none",
+   "hasSource": false
+  },
+  {
+   "id": "phone_screen_min",
+   "metric": null,
+   "label": "Screen time",
+   "unit": "min",
+   "table": "phone_usage_daily",
+   "column": "screen_min",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "last",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    1440
+   ],
+   "expect": "none",
+   "hasSource": true
+  },
+  {
+   "id": "phone_night_screen_min",
+   "metric": null,
+   "label": "Phone use at night",
+   "unit": "min",
+   "table": "phone_usage_daily",
+   "column": "night_screen_min",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "last",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    720
+   ],
+   "expect": "none",
+   "hasSource": true
+  },
+  {
+   "id": "outdoor_daylight_min",
+   "metric": null,
+   "label": "Outdoor daylight time",
+   "unit": "min",
+   "table": "mobility_daily",
+   "column": "outdoor_daylight_min",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "last",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    1000
+   ],
+   "expect": "none",
+   "hasSource": false
   }
  ]
 }

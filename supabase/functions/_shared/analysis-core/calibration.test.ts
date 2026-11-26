@@ -60,3 +60,33 @@ test('the confirmatory catalogue: with no effect in any of its questions, none i
   // a verdict needs the whole widened interval beyond the no-effect zone, which is far stricter than p < 0.05
   assert.equal(anyClear, 0)
 })
+
+test('the confirmatory catalogue on a four-year frame: no effect anywhere, none is called clear, and the run stays quick', () => {
+  const RUNS = 10
+  let anyClear = 0
+  let slowest = 0
+  for (let seed = 1; seed <= RUNS; seed++) {
+    const rng = mulberry32(seed * 15485863)
+    // 1,500 days; HRV, like the watch, only in the last 330; meal and phone exposures only in the last 70
+    const dates = axis(1500)
+    const series: Record<string, (number | null)[]> = {}
+    const recent = (days: number, f: (i: number) => number | null) => dates.map((_, i) => (i >= dates.length - days ? f(i) : null))
+    for (const h of HYPOTHESES) {
+      if (!series[h.target]) {
+        let ar = 0
+        const make = () => { ar = 0.5 * ar + gaussian(rng); return h.target === 'hrv' ? 62 + 3.5 * ar : h.target === 'rhr' ? 55 + 1.5 * ar : h.target === 'sleep_hours' ? 7.4 + 0.6 * ar : 6 + 1.2 * ar }
+        series[h.target] = h.target === 'hrv' ? recent(330, () => make()) : dates.map(() => { const v = make(); return h.target === 'energy' ? Math.max(1, Math.min(10, Math.round(v))) : v })
+      }
+      if (!series[h.cause]) {
+        const draw = () => (h.exposure === 'binary' ? (rng() < 0.3 ? 1 : 0) : Math.max(0, 8000 + 2500 * gaussian(rng)))
+        series[h.cause] = ['steps', 'sleep_hours', 'training_day', 'training_min', 'evening_training', 'long_session'].includes(h.cause) ? dates.map(() => draw()) : recent(70, () => draw())
+      }
+    }
+    const t0 = performance.now()
+    const outcomes = runCatalogue(HYPOTHESES, { dates, series, excluded: dates.map(() => false) } as never)
+    slowest = Math.max(slowest, performance.now() - t0)
+    if (outcomes.some((o) => o.state === 'clear')) anyClear++
+  }
+  assert.equal(anyClear, 0)
+  assert.ok(slowest < 20000, `the catalogue took ${Math.round(slowest)} ms on 1,500 days`)
+})

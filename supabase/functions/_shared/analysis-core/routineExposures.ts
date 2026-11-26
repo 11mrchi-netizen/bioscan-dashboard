@@ -12,6 +12,10 @@ export interface PhoneDayRow {
   bed_window_min: number | null
   night_screen_min: number | null
   night_unlocks: number | null
+  /** Catalogue 2.5.0: the day's totals. Optional so older callers and tests keep working. */
+  screen_min?: number | null
+  unlocks?: number | null
+  longest_free_min?: number | null
 }
 
 export interface PhoneAppRow {
@@ -25,6 +29,10 @@ export interface MobilityRow {
   coverage_pct: number
   day_type: string
   outdoor_daylight_min: number | null
+  /** Catalogue 2.5.0: how widely the day was spread (0-1), the radius of gyration (km) and places never visited before. */
+  entropy_norm?: number | null
+  radius_gyration_km?: number | null
+  new_places?: number | null
 }
 
 export interface CommuteRow {
@@ -108,6 +116,11 @@ export function routineSeries(axis: string[], raw: RoutineInputs, clock: (stamp:
     // Social and video minutes after 21:00; zero on a measured day without any.
     screen_pm_social: axis.map((d) => (phone.has(d) ? lateSocial.get(d) ?? 0 : null)),
     outdoor_daylight_min: axis.map((d) => num(mobility.get(d)?.outdoor_daylight_min)),
+    // Catalogue 2.5.0: total screen time, how often the phone was picked up, and how varied the day's movement was.
+    screen_total_min: axis.map((d) => num(phone.get(d)?.screen_min)),
+    unlocks_day: axis.map((d) => num(phone.get(d)?.unlocks)),
+    mobility_entropy: axis.map((d) => num(mobility.get(d)?.entropy_norm)),
+    new_places_day: axis.map((d) => { const m = mobility.get(d); return m ? num(m.new_places) : null }),
     home_day: axis.map((d) => dayType(d, 'home_day')),
     travel_day: axis.map((d) => dayType(d, 'travel')),
     // Only commute days are compared with each other: a day without a commute says nothing about how one went.

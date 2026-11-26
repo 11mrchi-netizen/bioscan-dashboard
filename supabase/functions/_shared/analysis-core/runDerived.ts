@@ -11,9 +11,16 @@ import { fetchAll } from './paging.ts'
 import { gutDayScore, type GutCheckinRow, type StoolRow } from './mealExposures.ts'
 import { localDateAt, type Admin } from './runRelationships.ts'
 import { addDays } from './seriesContract.ts'
+import { fetchWeather } from './weatherBackfill.ts'
+import { offsetLookup, samplesOf, watchStressDays, type WatchStressDay } from './watchStress.ts'
 import { energyAvailability, sessionFuel, TRAINING_FUEL, type TfBody, type TfFuel, type TfMeal, type TfSession } from './trainingFuel.ts'
 
 export const WINDOW_DAYS = 180
+/** A day with fewer logged kcal than this counts as not fully logged: no energy balance for it. */
+export const MIN_LOGGED_KCAL = 1200
+/** The nightly window for the watch's stress; a first fill asks for more (`stress_days`). */
+export const STRESS_WINDOW_DAYS = 60
+export const STRESS_METRICS = ['watch_stress_mean', 'watch_stress_high_share'] as const
 
 export interface DerivedDailyRow { user_id: string; metric: string; date: string; value: number; detail: Record<string, unknown> | null }
 export interface SessionFuelRow {
@@ -28,6 +35,8 @@ export interface DerivedInputs {
   sessions: TfSession[]
   body: TfBody[]
   fuel: TfFuel[]
+  /** The watch's total daily energy use (wearable_daily.calories_total), for the logged energy balance. Optional. */
+  expenditure?: { date: string; kcal: number | null }[]
 }
 
 /** The rows for [from]..[to] (local dates). Pure. */
@@ -41,6 +50,15 @@ export function derivedRows(userId: string, x: DerivedInputs, from: string, to: 
   for (const e of energyAvailability(x.meals, x.sessions, x.body)) {
     if (e.date < from || e.date > to) continue
     daily.push({ user_id: userId, metric: 'energy_availability', date: e.date, value: e.ea, detail: { intake_kcal: e.intakeKcal, exercise_kcal: e.exerciseKcal, ffm_kg: e.ffmKg } })
+  }
+  // Logged energy balance: what was eaten (the log) minus what the watch says was spent, only on days the log looks complete
+  // (at least MIN_LOGGED_KCAL eaten), so a half-logged day is not read as a deficit. Over weeks its sum against the scale's
+  // trend says whether the log and the watch agree (7,700 kcal is about a kilogram).
+  const spent = new Map((x.expenditure ?? []).map((r) => [r.date, r.kcal]))
+  for (const e of energyAvailability(x.meals, x.sessions, x.body)) {
+    const out = spent.get(e.date)
+    if (e.date < from || e.date > to || out === null || out === undefined || !(out > 800) || e.intakeKcal < MIN_LOGGED_KCAL) continue
+    daily.push({ user_id: userId, metric: 'energy_balance', date: e.date, value: Math.round(e.intakeKcal - out), detail: { intake_kcal: e.intakeKcal, expenditure_kcal: out } })
   }
   const weights = x.body.filter((b) => b.weightKg !== null).sort((a, b) => a.date.localeCompare(b.date))
   const doseOn = (date: string) => {
@@ -57,21 +75,30 @@ export function derivedRows(userId: string, x: DerivedInputs, from: string, to: 
 
 const num = (v: unknown) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v))
 
+/** derived_daily rows for the watch's stress: the day's mean (0-100) and the share of readings in the high band (%). Pure. */
+export function stressDerivedRows(userId: string, days: WatchStressDay[]): DerivedDailyRow[] {
+  return days.flatMap((d) => [
+    { user_id: userId, metric: 'watch_stress_mean', date: d.date, value: d.mean, detail: { n: d.n } },
+    { user_id: userId, metric: 'watch_stress_high_share', date: d.date, value: d.highShare, detail: { n: d.n } },
+  ])
+}
+
 export interface DerivedRun { userId: string; from: string; to: string; daily: number; sessions: number }
 
-export async function runDerived(admin: Admin, userId: string, now: Date = new Date()): Promise<DerivedRun> {
+export async function runDerived(admin: Admin, userId: string, now: Date = new Date(), opts: { stressDays?: number; weatherDays?: number } = {}): Promise<DerivedRun> {
   const ctx = await admin.from('daily_context').select('date, utc_offset_min').eq('user_id', userId).order('date', { ascending: false }).limit(5)
   const to = localDateAt(now, ctx.error ? [] : (ctx.data ?? []) as { date: string; utc_offset_min: number | null }[])
   const from = addDays(to, -(WINDOW_DAYS - 1))
   const early = addDays(from, -60) // the 28-day stool baseline, a day of meals before the first session, 60 days of body data
   const q = (table: string, cols: string, col: string, lo: string, hi: string) => (a: number, b: number) =>
     admin.from(table).select(cols).eq('user_id', userId).gte(col, lo).lte(col, hi).order(col).order('id').range(a, b)
-  const [stool, checkins, meals, sessions, body] = await Promise.all([
+  const [stool, checkins, meals, sessions, body, wear] = await Promise.all([
     fetchAll<Record<string, unknown>>(q('stool_log', 'id, occurred_at, bristol_type, discomfort, complete_evacuation', 'occurred_at', `${addDays(from, -28)}T00:00:00`, `${to}T23:59:59.999`)),
     fetchAll<Record<string, unknown>>((a, b) => admin.from('evening_checkins').select('date, gut_comfort, gut_symptoms').eq('user_id', userId).gte('date', from).lte('date', to).order('date').range(a, b)),
     fetchAll<Record<string, unknown>>(q('meals', 'id, logged_at, calories, carbs_g, protein_g', 'logged_at', `${addDays(from, -1)}T00:00:00`, `${addDays(to, 1)}T23:59:59.999`)),
     fetchAll<Record<string, unknown>>(q('exercise_sessions', 'id, start_time, type, duration_min, calories_active', 'start_time', `${from}T00:00:00`, `${to}T23:59:59.999`)),
     fetchAll<Record<string, unknown>>(q('body_metrics', 'id, date, weight_kg, body_fat_pct', 'date', early, to)),
+    fetchAll<Record<string, unknown>>((a, b) => admin.from('wearable_daily').select('date, calories_total').eq('user_id', userId).gte('date', from).lte('date', to).order('date').range(a, b)),
   ])
   for (const r of [stool, meals, sessions, body]) if (r.error) throw new Error(`derived: ${r.error}`)
   const ss: TfSession[] = sessions.rows.map((r) => ({ id: Number(r.id), at: String(r.start_time), type: (r.type as string | null) ?? null, durationMin: num(r.duration_min), activeKcal: num(r.calories_active) }))
@@ -87,6 +114,7 @@ export async function runDerived(admin: Admin, userId: string, now: Date = new D
     sessions: ss,
     body: body.rows.map((r) => ({ date: String(r.date), weightKg: num(r.weight_kg), bodyFatPct: num(r.body_fat_pct) })),
     fuel,
+    expenditure: wear.error ? [] : wear.rows.map((r) => ({ date: String(r.date), kcal: num(r.calories_total) })),
   }, from, to)
 
   const del = await admin.from('derived_daily').delete().eq('user_id', userId).gte('date', from).lte('date', to)
@@ -101,5 +129,55 @@ export async function runDerived(admin: Admin, userId: string, now: Date = new D
     const { error } = await admin.from('session_fuel').upsert(rows.sessions, { onConflict: 'session_id' })
     if (error) throw new Error(`session_fuel: ${error.message}`)
   }
-  return { userId, from, to, daily: rows.daily.length, sessions: rows.sessions.length }
+
+  // The watch's all-day stress, from the raw extracts the zepp-extract function stores (watchStress.ts), per local day.
+  const stressFrom = addDays(to, -((opts.stressDays ?? STRESS_WINDOW_DAYS) - 1))
+  const raw = await fetchAll<{ query_date: string; raw_body: unknown }>((a, b) =>
+    admin.from('zepp_raw_extracts').select('query_date, raw_body').eq('user_id', userId).eq('metric', 'stress').eq('status_code', 200)
+      .gte('query_date', addDays(stressFrom, -1)).lte('query_date', addDays(to, 1)).order('query_date').range(a, b), 200)
+  let stressRows = 0
+  if (!raw.error) {
+    const offsets = await fetchAll<{ date: string; utc_offset_min: number | null }>((a, b) =>
+      admin.from('daily_context').select('date, utc_offset_min').eq('user_id', userId).gte('date', addDays(stressFrom, -30)).order('date').range(a, b))
+    const days = watchStressDays(raw.rows.flatMap((r) => samplesOf(r.raw_body)), offsetLookup(offsets.error ? [] : offsets.rows))
+      .filter((d) => d.date >= stressFrom && d.date <= to)
+    const sr = stressDerivedRows(userId, days)
+    const delStress = await admin.from('derived_daily').delete().eq('user_id', userId).in('metric', [...STRESS_METRICS]).gte('date', stressFrom).lte('date', to)
+    if (delStress.error) throw new Error(`derived_daily: ${delStress.error.message}`)
+    for (let i = 0; i < sr.length; i += 500) {
+      const { error } = await admin.from('derived_daily').insert(sr.slice(i, i + 500))
+      if (error) throw new Error(`derived_daily: ${error.message}`)
+    }
+    stressRows = sr.length
+  }
+
+  // Weather for the days the phone did not fill (weatherBackfill.ts); only when asked (`weather_days`), once, then the phone keeps up.
+  if ((opts.weatherDays ?? 0) > 0) await backfillWeather(admin, userId, addDays(to, -(opts.weatherDays as number)), to)
+  return { userId, from, to, daily: rows.daily.length + stressRows, sessions: rows.sessions.length }
+}
+
+/** Fills daily_context with archive weather for the dates between [from] and [to] that have none; never overwrites a row. */
+export async function backfillWeather(admin: Admin, userId: string, from: string, to: string, get: (url: string) => Promise<unknown> = async (u) => (await fetch(u)).json()): Promise<number> {
+  const home = await admin.from('places').select('lat, lon').eq('user_id', userId).ilike('category', 'home').limit(1)
+  const place = !home.error && home.data?.[0] ? home.data[0] as { lat: number | null; lon: number | null } : null
+  if (!place || place.lat === null || place.lon === null) return 0
+  const have = await fetchAll<{ date: string; utc_offset_min: number; temp_max_c: number | null }>((a, b) =>
+    admin.from('daily_context').select('date, utc_offset_min, temp_max_c').eq('user_id', userId).order('date').range(a, b))
+  if (have.error) return 0
+  const filled = new Set(have.rows.filter((r) => r.temp_max_c !== null).map((r) => r.date))
+  const offsetOn = offsetLookup(have.rows)
+  let wrote = 0
+  // the archive trails real time by a few days, so never ask for the last 5
+  const last = addDays(to, -5)
+  for (let start = from; start <= last; start = addDays(start, 366)) {
+    const end = addDays(start, 365) < last ? addDays(start, 365) : last
+    const days = (await fetchWeather(Number(place.lat), Number(place.lon), start, end, get)).filter((w) => !filled.has(w.date))
+    const rows = days.map((w) => ({ user_id: userId, date: w.date, utc_offset_min: offsetOn(w.date), source: 'open-meteo-archive', temp_max_c: w.temp_max_c, humidity_mean_pct: w.humidity_mean_pct, daylight_hours: w.daylight_hours }))
+    for (let i = 0; i < rows.length; i += 500) {
+      const r = await admin.from('daily_context').upsert(rows.slice(i, i + 500), { onConflict: 'user_id,date', ignoreDuplicates: true })
+      if (r.error) throw new Error(`daily_context: ${r.error.message}`)
+      wrote += Math.min(500, rows.length - i)
+    }
+  }
+  return wrote
 }

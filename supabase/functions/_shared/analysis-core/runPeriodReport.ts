@@ -327,7 +327,15 @@ export async function buildPeriodReport(admin: Admin, userId: string, file: Seri
   let ft: FoodTriggerSection | undefined
   try { ft = await readFoodTriggers(admin, userId, period.end) } catch { ft = undefined }
 
-  return buildReport({ period, today, metrics, micro, regimen, lab, foodStool: fs, mealQuality: mq, trainingFuel: tf, foodTriggers: ft, weightKg: lastWeight })
+  // The latest blood draw, for the repeat-test suggestion (read softly: the report goes on without it).
+  let daysSinceDraw: number | null = null
+  try {
+    const d = await admin.from('lab_draws').select('draw_date').eq('user_id', userId).order('draw_date', { ascending: false }).limit(1)
+    const last = !d.error && d.data?.[0]?.draw_date ? String(d.data[0].draw_date).slice(0, 10) : null
+    if (last) daysSinceDraw = Math.round((Date.parse(today + 'T00:00:00Z') - Date.parse(last + 'T00:00:00Z')) / 86400000)
+  } catch { daysSinceDraw = null }
+
+  return buildReport({ period, today, metrics, micro, regimen, lab, foodStool: fs, mealQuality: mq, trainingFuel: tf, foodTriggers: ft, weightKg: lastWeight, daysSinceDraw })
 }
 
 async function storedKeys(admin: Admin, userId: string): Promise<Set<string>> {

@@ -42,7 +42,29 @@ private data class SubItem(@SerialName("caffeine_mg") val caffeineMg: Double? = 
 private data class SubMeal(@SerialName("logged_at") val loggedAt: String, @SerialName("meal_items") val items: List<SubItem> = emptyList())
 
 @Serializable
-private data class SubSupplementLog(val id: Long, @SerialName("taken_at") val takenAt: String)
+private data class SubSupplementLog(
+    val id: Long,
+    @SerialName("taken_at") val takenAt: String,
+    @SerialName("product_id") val productId: Long? = null,
+    @SerialName("serving_count") val servingCount: Double? = null,
+)
+
+@Serializable
+private data class SubIngredientNames(
+    val name: String,
+    @SerialName("nutrient_key") val nutrientKey: String? = null,
+    @SerialName("canonical_key") val canonicalKey: String? = null,
+)
+
+@Serializable
+private data class SubIngredientLink(
+    @SerialName("supplement_product_id") val productId: Long,
+    @SerialName("compound_amount") val compoundAmount: Double? = null,
+    @SerialName("compound_unit") val compoundUnit: String? = null,
+    @SerialName("elemental_amount") val elementalAmount: Double? = null,
+    @SerialName("elemental_unit") val elementalUnit: String? = null,
+    @SerialName("supplement_ingredients") val ingredient: SubIngredientNames? = null,
+)
 
 @Serializable
 private data class SubSupplementDose(
@@ -73,25 +95,8 @@ class SubstanceRepository(private val supabase: SupabaseClient) {
             }
         }
         // Supplements are optional extras: a failed read leaves the curves of drinks alone.
-        val supplements = catching<Map<String, List<Dose>>> {
-            val taken = supabase.postgrest.from("supplement_log").select(Columns.list("id,taken_at")) {
-                filter { gte("taken_at", lo); lt("taken_at", hi) }
-            }.decodeList<SubSupplementLog>().associate { it.id to it.takenAt }
-            if (taken.isEmpty()) emptyMap() else {
-                // nutrient_intake.logged_at of a supplement is not the time it was taken: that comes from supplement_log.
-                val doses = supabase.postgrest.from("nutrient_intake").select(Columns.list("source_id,nutrient,amount,unit")) {
-                    filter { eq("source_type", "supplement"); isIn("source_id", taken.keys.toList()) }
-                }.decodeList<SubSupplementDose>()
-                val out = HashMap<String, MutableList<Dose>>()
-                for (d in doses) {
-                    val c = SubstanceCurves.compoundFor(d.nutrient) ?: continue
-                    val t = taken[d.sourceId]?.let { SubstanceCurves.minutesFromDay(it, day) } ?: continue
-                    val a = SubstanceCurves.amountIn(c, d.amount, d.unit)?.takeIf { it > 0 } ?: continue
-                    out.getOrPut(c.key) { ArrayList() } += Dose(t, a)
-                }
-                out
-            }
-        }.getOrElse { emptyMap() }
+        val supplements = catching { loadSupplementDoses(lo, hi, day) }.getOrNull()
+        caffeine += supplements?.first.orEmpty()
         val bedtime = catching {
             val nights = supabase.postgrest.from("sleep_daily").select(Columns.list("bedtime,tz_offset_min")) {
                 filter { lte("date", day.toString()) }
@@ -101,7 +106,56 @@ class SubstanceRepository(private val supabase: SupabaseClient) {
             SubstanceCurves.usualBedtimeMin(nights.map { it.bedtime to it.tzOffsetMin })
         }.getOrNull()
         val regimen = catching { loadRegimen(day) }.getOrElse { RegimenCurves(emptyList(), emptyList()) }
-        return SubstanceDay(day, caffeine, alcohol, supplements, regimen, bedtime)
+        return SubstanceDay(day, caffeine, alcohol, supplements?.second.orEmpty(), regimen, bedtime)
+    }
+
+    /**
+     * Caffeine and the fast compounds from the supplements taken since the evening before. What a supplement holds comes from its
+     * product's ingredient rows (a label row named "Caffeine" has no nutrient key, so nutrient_intake never got it): the servings
+     * taken times the amount in a serving. A log with no product falls back to nutrient_intake.
+     */
+    private suspend fun loadSupplementDoses(lo: String, hi: String, day: LocalDate): Pair<List<Dose>, Map<String, List<Dose>>> {
+        val logs = supabase.postgrest.from("supplement_log").select(Columns.list("id,taken_at,product_id,serving_count")) {
+            filter { gte("taken_at", lo); lt("taken_at", hi) }
+        }.decodeList<SubSupplementLog>()
+        val caffeine = ArrayList<Dose>()
+        val compounds = HashMap<String, MutableList<Dose>>()
+        val caffeineUnit = SubstanceCurves.Compound("caffeine", "", "mg", 0.0, 0.0)
+        val productIds = logs.mapNotNull { it.productId }.distinct()
+        if (productIds.isNotEmpty()) {
+            val links = supabase.postgrest.from("supplement_product_ingredients")
+                .select(Columns.list("supplement_product_id,compound_amount,compound_unit,elemental_amount,elemental_unit,supplement_ingredients(name,nutrient_key,canonical_key)")) {
+                    filter { isIn("supplement_product_id", productIds) }
+                }.decodeList<SubIngredientLink>().groupBy { it.productId }
+            for (l in logs) {
+                val t = SubstanceCurves.minutesFromDay(l.takenAt, day) ?: continue
+                for (link in links[l.productId].orEmpty()) {
+                    val ing = link.ingredient ?: continue
+                    val (amount, unit) = SubstanceCurves.ingredientAmount(link.compoundAmount, link.compoundUnit, link.elementalAmount, link.elementalUnit) ?: continue
+                    val servings = l.servingCount ?: 1.0
+                    if (SubstanceCurves.isCaffeine(ing.name, ing.nutrientKey, ing.canonicalKey)) {
+                        SubstanceCurves.amountIn(caffeineUnit, amount * servings, unit)?.takeIf { it > 0 }?.let { caffeine += Dose(t, it) }
+                        continue
+                    }
+                    val c = listOfNotNull(ing.nutrientKey, ing.canonicalKey, ing.name).firstNotNullOfOrNull { SubstanceCurves.compoundFor(it) } ?: continue
+                    SubstanceCurves.amountIn(c, amount * servings, unit)?.takeIf { it > 0 }?.let { compounds.getOrPut(c.key) { ArrayList() } += Dose(t, it) }
+                }
+            }
+        }
+        val noProduct = logs.filter { it.productId == null }.associate { it.id to it.takenAt }
+        if (noProduct.isNotEmpty()) {
+            // nutrient_intake.logged_at of a supplement is not the time it was taken: that comes from supplement_log.
+            val doses = supabase.postgrest.from("nutrient_intake").select(Columns.list("source_id,nutrient,amount,unit")) {
+                filter { eq("source_type", "supplement"); isIn("source_id", noProduct.keys.toList()) }
+            }.decodeList<SubSupplementDose>()
+            for (d in doses) {
+                val t = noProduct[d.sourceId]?.let { SubstanceCurves.minutesFromDay(it, day) } ?: continue
+                if (d.nutrient == "caffeine") { SubstanceCurves.amountIn(caffeineUnit, d.amount, d.unit)?.takeIf { it > 0 }?.let { caffeine += Dose(t, it) }; continue }
+                val c = SubstanceCurves.compoundFor(d.nutrient) ?: continue
+                SubstanceCurves.amountIn(c, d.amount, d.unit)?.takeIf { it > 0 }?.let { compounds.getOrPut(c.key) { ArrayList() } += Dose(t, it) }
+            }
+        }
+        return caffeine to compounds
     }
 
     /**

@@ -40,8 +40,17 @@ export const COMPOUNDS: Compound[] = [
 ]
 /** The compound a logged nutrient key stands for ('theanine' and 'l-theanine' alike), or null. */
 export function compoundFor(nutrient: string): Compound | null {
-  const k = nutrient.trim().toLowerCase().replace(/_/g, '-')
-  return COMPOUNDS.find((c) => c.key === k || (c.key === 'l-theanine' && k === 'theanine')) ?? null
+  // 'l-tyrosine', 'tyrosine' and 'L-Tyrosine' are one thing: the leading "l-" is dropped on both sides.
+  const bare = (x: string) => x.trim().toLowerCase().replace(/_/g, '-').replace(/^l-/, '')
+  const k = bare(nutrient)
+  return COMPOUNDS.find((c) => bare(c.key) === k) ?? null
+}
+/** Whether an ingredient (by any of its names) is caffeine: label rows are often named "Caffeine" with no nutrient key. */
+export const isCaffeine = (...names: (string | null | undefined)[]): boolean => names.some((n) => (n ?? '').trim().toLowerCase().replace(/\s*(anhydrous|\(.*\))\s*$/, '') === 'caffeine')
+/** What one ingredient row holds per serving, taking the elemental amount when the row has one. */
+export function ingredientAmount(l: { compound_amount: number | null; compound_unit: string | null; elemental_amount: number | null; elemental_unit: string | null }): { amount: number; unit: string | null } | null {
+  if (l.elemental_amount != null) return { amount: Number(l.elemental_amount), unit: l.elemental_unit }
+  return l.compound_amount != null ? { amount: Number(l.compound_amount), unit: l.compound_unit } : null
 }
 /** A logged amount in the compound's unit (mcg, mg, g, "Gram(s)"), or null for a unit that is not a mass. */
 export function amountIn(c: Compound, amount: number, unit: string | null): number | null {

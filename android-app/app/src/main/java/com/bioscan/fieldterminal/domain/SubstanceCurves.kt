@@ -43,9 +43,20 @@ object SubstanceCurves {
 
     /** The compound a logged nutrient key stands for ('theanine' and 'l-theanine' alike), or null. */
     fun compoundFor(nutrient: String): Compound? {
-        val k = nutrient.trim().lowercase().replace('_', '-')
-        return COMPOUNDS.firstOrNull { it.key == k || (it.key == "l-theanine" && k == "theanine") }
+        // 'l-tyrosine', 'tyrosine' and 'L-Tyrosine' are one thing: the leading "l-" is dropped on both sides.
+        fun bare(x: String) = x.trim().lowercase().replace('_', '-').removePrefix("l-")
+        val k = bare(nutrient)
+        return COMPOUNDS.firstOrNull { bare(it.key) == k }
     }
+
+    /** Whether an ingredient (by any of its names) is caffeine: label rows are often named "Caffeine" with no nutrient key. */
+    fun isCaffeine(vararg names: String?): Boolean = names.any {
+        it != null && it.trim().lowercase().replace(Regex("""\s*(anhydrous|\(.*\))\s*$"""), "") == "caffeine"
+    }
+
+    /** What one ingredient row holds per serving, taking the elemental amount when the row has one. */
+    fun ingredientAmount(compoundAmount: Double?, compoundUnit: String?, elementalAmount: Double?, elementalUnit: String?): Pair<Double, String?>? =
+        if (elementalAmount != null) elementalAmount to elementalUnit else compoundAmount?.let { it to compoundUnit }
 
     /** A logged amount in the compound's unit (mcg, mg, g, "Gram(s)"), or null for a unit that is not a mass. */
     fun amountIn(c: Compound, amount: Double, unit: String?): Double? {

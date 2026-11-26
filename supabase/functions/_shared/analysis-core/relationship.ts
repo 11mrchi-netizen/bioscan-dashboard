@@ -315,7 +315,12 @@ export function analyseHypothesis(h: Hypothesis, frame: Frame): RelationshipOutc
     return notYet(h, hash, n, `${n} paired days, ${MIN_PAIRS} needed`, nOn, nOff, readinessBeforeTest(h, cause, target, frame.dates, nOn, n))
   }
   if (h.exposure === 'binary' && ((nOn as number) < MIN_GROUP || (nOff as number) < MIN_GROUP)) {
-    return notYet(h, hash, n, `${nOn} days with it and ${nOff} without, at least ${MIN_GROUP} of each are needed`, nOn, nOff, readinessBeforeTest(h, cause, target, frame.dates, nOn, n))
+    // An exposure that never (or always) happened in the days measured cannot be compared with anything: say so, not "not yet".
+    const never = nOn === 0 || nOff === 0
+    const why = never
+      ? `it ${nOn === 0 ? 'never happened' : 'happened every day'} in the ${n} days measured, so there is nothing to compare; it needs a deliberate experiment or a change of habit`
+      : `${nOn} days with it and ${nOff} without, at least ${MIN_GROUP} of each are needed`
+    return notYet(h, hash, n, why, nOn, nOff, readinessBeforeTest(h, cause, target, frame.dates, nOn, n))
   }
   if (residualExposureSd(design, frame.dates) < 1e-9) {
     return notYet(h, hash, n, 'no variation left after adjusting for day of week (it follows a fixed weekly schedule)', nOn, nOff, null)

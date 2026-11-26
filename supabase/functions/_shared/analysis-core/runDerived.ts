@@ -11,9 +11,13 @@ import { fetchAll } from './paging.ts'
 import { gutDayScore, type GutCheckinRow, type StoolRow } from './mealExposures.ts'
 import { localDateAt, type Admin } from './runRelationships.ts'
 import { addDays } from './seriesContract.ts'
+import { offsetLookup, samplesOf, watchStressDays, type WatchStressDay } from './watchStress.ts'
 import { energyAvailability, sessionFuel, TRAINING_FUEL, type TfBody, type TfFuel, type TfMeal, type TfSession } from './trainingFuel.ts'
 
 export const WINDOW_DAYS = 180
+/** The nightly window for the watch's stress; a first fill asks for more (`stress_days`). */
+export const STRESS_WINDOW_DAYS = 60
+export const STRESS_METRICS = ['watch_stress_mean', 'watch_stress_high_share'] as const
 
 export interface DerivedDailyRow { user_id: string; metric: string; date: string; value: number; detail: Record<string, unknown> | null }
 export interface SessionFuelRow {
@@ -57,9 +61,17 @@ export function derivedRows(userId: string, x: DerivedInputs, from: string, to: 
 
 const num = (v: unknown) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v))
 
+/** derived_daily rows for the watch's stress: the day's mean (0-100) and the share of readings in the high band (%). Pure. */
+export function stressDerivedRows(userId: string, days: WatchStressDay[]): DerivedDailyRow[] {
+  return days.flatMap((d) => [
+    { user_id: userId, metric: 'watch_stress_mean', date: d.date, value: d.mean, detail: { n: d.n } },
+    { user_id: userId, metric: 'watch_stress_high_share', date: d.date, value: d.highShare, detail: { n: d.n } },
+  ])
+}
+
 export interface DerivedRun { userId: string; from: string; to: string; daily: number; sessions: number }
 
-export async function runDerived(admin: Admin, userId: string, now: Date = new Date()): Promise<DerivedRun> {
+export async function runDerived(admin: Admin, userId: string, now: Date = new Date(), opts: { stressDays?: number } = {}): Promise<DerivedRun> {
   const ctx = await admin.from('daily_context').select('date, utc_offset_min').eq('user_id', userId).order('date', { ascending: false }).limit(5)
   const to = localDateAt(now, ctx.error ? [] : (ctx.data ?? []) as { date: string; utc_offset_min: number | null }[])
   const from = addDays(to, -(WINDOW_DAYS - 1))
@@ -101,5 +113,26 @@ export async function runDerived(admin: Admin, userId: string, now: Date = new D
     const { error } = await admin.from('session_fuel').upsert(rows.sessions, { onConflict: 'session_id' })
     if (error) throw new Error(`session_fuel: ${error.message}`)
   }
-  return { userId, from, to, daily: rows.daily.length, sessions: rows.sessions.length }
+
+  // The watch's all-day stress, from the raw extracts the zepp-extract function stores (watchStress.ts), per local day.
+  const stressFrom = addDays(to, -((opts.stressDays ?? STRESS_WINDOW_DAYS) - 1))
+  const raw = await fetchAll<{ query_date: string; raw_body: unknown }>((a, b) =>
+    admin.from('zepp_raw_extracts').select('query_date, raw_body').eq('user_id', userId).eq('metric', 'stress').eq('status_code', 200)
+      .gte('query_date', addDays(stressFrom, -1)).lte('query_date', addDays(to, 1)).order('query_date').range(a, b), 200)
+  let stressRows = 0
+  if (!raw.error) {
+    const offsets = await fetchAll<{ date: string; utc_offset_min: number | null }>((a, b) =>
+      admin.from('daily_context').select('date, utc_offset_min').eq('user_id', userId).gte('date', addDays(stressFrom, -30)).order('date').range(a, b))
+    const days = watchStressDays(raw.rows.flatMap((r) => samplesOf(r.raw_body)), offsetLookup(offsets.error ? [] : offsets.rows))
+      .filter((d) => d.date >= stressFrom && d.date <= to)
+    const sr = stressDerivedRows(userId, days)
+    const delStress = await admin.from('derived_daily').delete().eq('user_id', userId).in('metric', [...STRESS_METRICS]).gte('date', stressFrom).lte('date', to)
+    if (delStress.error) throw new Error(`derived_daily: ${delStress.error.message}`)
+    for (let i = 0; i < sr.length; i += 500) {
+      const { error } = await admin.from('derived_daily').insert(sr.slice(i, i + 500))
+      if (error) throw new Error(`derived_daily: ${error.message}`)
+    }
+    stressRows = sr.length
+  }
+  return { userId, from, to, daily: rows.daily.length + stressRows, sessions: rows.sessions.length }
 }

@@ -108,7 +108,7 @@ test('runRelationships publishes one row per hypothesis from raw tables and repl
   assert.equal(row('steps_hrv').state, 'not_yet') // no steps recorded
   assert.equal(row('caffeine_pm_sleep').state, 'not_yet') // no caffeine logged
   const payload = row('alcohol_hrv').payload as Row
-  assert.equal(payload.catalogueVersion, '2.4.0')
+  assert.equal(payload.catalogueVersion, '2.5.0')
   assert.equal(payload.rung, 'associated')
   assert.equal(payload.noEffect, 2)
   assert.ok('capture' in payload)
@@ -217,4 +217,25 @@ test('morning scores from score_history become next-morning RECOVERY and SLEEP o
   const ids = HYPOTHESES.filter((h) => h.outcome === 'recovery_score' || h.outcome === 'sleep_score').map((h) => h.id)
   assert.ok(ids.includes('alcohol_recovery_score') && ids.includes('caffeine_pm_sleep_score'))
   assert.ok(!ids.includes('caffeine_pm_recovery_score'))
+})
+
+test('buildFrame: a high-stress day is a 4 or 5 in the evening check-in or the wellbeing log; the watch stress is its own series', () => {
+  const dates = ['2026-03-01', '2026-03-02', '2026-03-03', '2026-03-04']
+  const raw: RawInputs = {
+    wearable: dates.map((date) => ({ date, hrv: 60, rhr: 55, steps: 8000 })),
+    sleep: [],
+    // 03-01 morning rating 5 (high), 03-02 rating 2 (low), 03-03 none, 03-04 rating 2 but the evening check-in says 4
+    wellbeing: [
+      { date: '2026-03-01', energy: 6, mood: 6, stress: 5, soreness: 1 },
+      { date: '2026-03-02', energy: 6, mood: 6, stress: 2, soreness: 1 },
+      { date: '2026-03-04', energy: 6, mood: 6, stress: 2, soreness: 1 },
+    ],
+    meals: [], sessions: [], recovery: [], illnesses: [],
+    checkins: [{ date: '2026-03-04', drinks: 0, caffeine_after_14: false, late_meal: false, stress: 4 }],
+    watchStress: [{ date: '2026-03-02', mean: 41.5, highShare: 8, n: 200 }, { date: '2026-03-03', mean: 55, highShare: 20, n: 180 }],
+  }
+  const f = buildFrame(raw, '2026-03-04', 4)
+  assert.deepEqual(f.series.stress_high, [1, 0, null, 1])
+  assert.deepEqual(f.series.stress_watch, [null, 41.5, 55, null])
+  assert.deepEqual(f.series.stress_watch_high, [null, 8, 20, null])
 })

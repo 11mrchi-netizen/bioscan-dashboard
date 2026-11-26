@@ -221,7 +221,7 @@ test('too little data and one-sided exposure read NOT YET, with progress toward 
   const never: Frame = { ...frame, series: { ...frame.series, alcohol_any: frame.dates.map(() => 0) } }
   const o = analyseHypothesis(byId('alcohol_hrv'), never)
   assert.equal(o.state, 'not_yet')
-  assert.match(o.reason!, /0 days with it/)
+  assert.match(o.reason!, /never happened in the \d+ days measured/)
   assert.equal(o.readiness!.unit, 'days with it')
   assert.equal(o.readiness!.have, 0)
   assert.ok(o.readiness!.need >= 6)

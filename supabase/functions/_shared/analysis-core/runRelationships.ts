@@ -16,6 +16,7 @@ import { baselineExclusionSpans, loadHealthInputs } from './healthLoad.ts'
 import { LATE_SCREEN_CATEGORIES, routineSeries } from './routineExposures.ts'
 import type { RoutineInputs } from './routineExposures.ts'
 import { gutDayScore, mealSeries } from './mealExposures.ts'
+import { offsetLookup, samplesOf, watchStressDays, type WatchStressDay } from './watchStress.ts'
 import type { GutCheckinRow, StoolRow } from './mealExposures.ts'
 
 export const RELATIONSHIP_LOOKBACK_DAYS = 365
@@ -64,6 +65,8 @@ export interface RawInputs {
   stool?: StoolRow[]
   /** Meal profile tags (catalogue 2.4.0): a meal tagged caffeine by its food groups counts as caffeine. */
   mealTags?: { logged_at: string; tags: string[] | null }[]
+  /** The watch's all-day stress per local day (watchStress.ts), from the raw extracts; days under 12 readings are absent. */
+  watchStress?: WatchStressDay[]
 }
 
 // Until 04:00 the small hours belong to the evening before: a drink or a late meal logged at 00:40 is part of that night.
@@ -216,10 +219,18 @@ export function buildFrame(raw: RawInputs, today: string, lookbackDays = RELATIO
   series.caffeine_pm_any = axis.map((d) => exposure(d, (caffeinePmByDay.get(d) ?? 0) > 0, checkins.get(d)?.caffeine_after_14))
   series.late_meal = axis.map((d) => exposure(d, lateMealDays.has(d), checkins.get(d)?.late_meal))
   // Stress is a rating, so only an answered check-in says anything about it.
+  // A high-stress day is a 4 or 5 in the evening check-in or in the morning wellbeing log (the question's own model text says
+  // so; the wellbeing log was never read, so the evening check-in's 1-3 left the exposure at zero days). Either one saying
+  // high makes it a high day; otherwise a known low rating makes it a zero; neither known leaves the day out.
+  const wellbeingStress = new Map(raw.wellbeing.map((w) => [w.date, num(w.stress)]))
   series.stress_high = axis.map((d) => {
-    const s = num(checkins.get(d)?.stress)
-    return s === null ? null : s >= HIGH_STRESS ? 1 : 0
+    const rated = [num(checkins.get(d)?.stress), wellbeingStress.get(d) ?? null].filter((v): v is number => v !== null)
+    return rated.length === 0 ? null : rated.some((v) => v >= HIGH_STRESS) ? 1 : 0
   })
+  // The watch's own all-day stress (Zepp), from Feb 2025: the day's mean and the share of readings in its high band.
+  const watchByDay = new Map((raw.watchStress ?? []).map((w) => [w.date, w]))
+  series.stress_watch = axis.map((d) => watchByDay.get(d)?.mean ?? null)
+  series.stress_watch_high = axis.map((d) => watchByDay.get(d)?.highShare ?? null)
 
   // Training: recorded by the watch, so a day with a watch record and no qualifying session is a real zero.
   const training = raw.sessions.filter((s) => (num(s.duration_min) ?? 0) >= MIN_TRAINING_MIN && !NON_TRAINING_TYPES.includes(String(s.type ?? '')))
@@ -337,7 +348,7 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
   const q = (table: string, cols: string, col: string, from: string) => (a: number, b: number) =>
     admin.from(table).select(cols).eq('user_id', userId).gte(col, from).order(col).range(a, b)
 
-  const [wearable, sleep, wellbeing, meals, sessions, recovery, ill, checkins, context, health, phone, phoneApps, mobility, commutes, scoreRows, stool, gutCheckins, mealTags] = await Promise.all([
+  const [wearable, sleep, wellbeing, meals, sessions, recovery, ill, checkins, context, health, phone, phoneApps, mobility, commutes, scoreRows, stool, gutCheckins, mealTags, stressRaw] = await Promise.all([
     fetchAll<RawInputs['wearable'][number]>(q('wearable_daily', 'date, hrv, rhr, steps', 'date', since)),
     fetchAll<RawInputs['sleep'][number]>(q('sleep_daily', 'date, hours, deep_min, rem_min, respiratory_rate, bedtime', 'date', since)),
     fetchAll<RawInputs['wellbeing'][number]>(q('wellbeing_daily', 'date, energy, mood, stress, soreness', 'date', since)),
@@ -365,6 +376,10 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
     fetchAll<{ date: string; gut_comfort: number | null; gut_symptoms: string[] | null }>(q('evening_checkins', 'date, gut_comfort, gut_symptoms', 'date', since)),
     // Catalogue 2.4.0: meal profile tags (a view), read softly.
     fetchAll<NonNullable<RawInputs['mealTags']>[number]>(q('meal_profiles', 'logged_at, tags', 'logged_at', sinceStamp)),
+    // The watch's all-day stress: the raw extracts zepp-extract stores, one row per UTC day (read in small pages, they are large).
+    fetchAll<{ query_date: string; raw_body: unknown }>((a: number, b: number) =>
+      admin.from('zepp_raw_extracts').select('query_date, raw_body').eq('user_id', userId).eq('metric', 'stress').eq('status_code', 200)
+        .gte('query_date', shift(since, -1)).order('query_date').range(a, b), 200),
   ])
   const failed = [wearable, sleep, wellbeing, meals, sessions, recovery].find((r) => r.error)
   if (failed) return { userId, error: failed.error as string }
@@ -378,6 +393,7 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
       checkins: checkins.error ? [] : mergeGut(checkins.rows, gutCheckins.error ? [] : gutCheckins.rows),
       stool: stool.error ? [] : stool.rows,
       mealTags: mealTags.error ? [] : mealTags.rows,
+      watchStress: stressRaw.error ? [] : watchStressDays(stressRaw.rows.flatMap((r) => samplesOf(r.raw_body)), offsetLookup(context.error ? [] : context.rows)),
       context: context.error ? [] : context.rows,
       routine: {
         phone: phone.error ? [] : phone.rows,

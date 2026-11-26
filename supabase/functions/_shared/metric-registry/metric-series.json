@@ -818,6 +818,60 @@
     ]
    },
    "hasSource": false
+  },
+  {
+   "id": "watch_stress",
+   "metric": null,
+   "label": "Watch stress (day mean)",
+   "unit": "/100",
+   "table": "derived_daily",
+   "column": "value",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "mean",
+   "period": "mean",
+   "longGrain": "day",
+   "plausible": [
+    0,
+    100
+   ],
+   "expect": "none",
+   "filters": {
+    "metric": [
+     "watch_stress_mean"
+    ]
+   },
+   "hasSource": false
+  },
+  {
+   "id": "watch_stress_high_share",
+   "metric": null,
+   "label": "Time in high stress (watch)",
+   "unit": "%",
+   "table": "derived_daily",
+   "column": "value",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "mean",
+   "period": "mean",
+   "longGrain": "day",
+   "plausible": [
+    0,
+    100
+   ],
+   "expect": "none",
+   "filters": {
+    "metric": [
+     "watch_stress_high_share"
+    ]
+   },
+   "hasSource": false
   }
  ]
 }

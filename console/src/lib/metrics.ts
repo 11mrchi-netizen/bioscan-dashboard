@@ -48,6 +48,7 @@ export const SERIES_HUE: Record<string, string> = {
   meal_fiber: 'm-fiber', run_duration: 'm-duration', run_distance: 'm-distance', run_avg_hr: 'm-heart-rate', strength_duration: 'm-duration',
   session_rpe: 'm-rpe',
   gut_day_score: 'm-gut-comfort', energy_availability: 'm-energy-availability',
+  watch_stress: 'm-phys-stress', watch_stress_high_share: 'm-phys-stress',
 }
 
 /**

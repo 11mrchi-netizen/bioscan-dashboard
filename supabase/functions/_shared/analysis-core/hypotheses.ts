@@ -25,7 +25,7 @@
 // supplements are tested as pre-registered N-of-1 experiments (Phase 5) with their own design, not here.
 import type { Hypothesis } from './relationship.ts'
 
-export const CATALOGUE_VERSION = '2.4.0'
+export const CATALOGUE_VERSION = '2.5.0'
 
 const EXPLICIT_MODEL = 'A day counts as none only when the evening check-in says so (or, before the first check-in, when food was logged that day); other days are left out.'
 const DEVICE_MODEL = 'Sessions come from the watch; days with a watch record and no session count as none.'
@@ -45,6 +45,7 @@ const RECOVERY_SCORE = { target: 'recovery_score', targetUnit: 'points', noEffec
 const SLEEP_SCORE = { target: 'sleep_score', targetUnit: 'points', noEffect: 5, outcome: 'sleep_score' as const }
 // Five points on the 0-100 digestion score: a type 5 instead of a 4, or one gut symptom ticked, moves it 5 to 10.
 const GUT = { target: 'gut_day_score', targetUnit: 'points', noEffect: 5, outcome: 'gut' as const }
+const WATCH_STRESS_MODEL = 'The watch\'s own all-day stress (Zepp, 1-100) averaged over the local day, from days with at least 12 readings; days without are left out, never zero.'
 const MEAL_MODEL = 'Only days with meals logged are used (a day before 04:00 belongs to the evening before); timing also needs that night\'s bedtime from the watch. Missing days are left out, never zero.'
 const GUT_NOTE = ' The digestion score needs a stool logged or the evening gut questions answered that day; other days are left out.'
 const SCORE_NOTE = ' Scores come from the app; mornings it could not score are left out.'
@@ -151,6 +152,24 @@ function mealAndGutQuestions(): Hypothesis[] {
   ]
 }
 
+// Catalogue 2.5.0: the watch's all-day stress, objective and recorded every day since Feb 2025, against what it should cost.
+// Per 10 points of the day's mean. No sign is assumed for energy or the digestion score beyond "lower when stressed".
+function watchStressQuestions(): Hypothesis[] {
+  const q = (key: string, label: string, lag: number, spec: object, targetText: string, sign: -1 | 0 | 1): Hypothesis => ({
+    id: `stress_watch_${key}`, label: `Watch stress and ${label}`, cause: 'stress_watch', lag, exposure: 'continuous', causeScale: 10, ...spec,
+    causeText: 'Each 10 points higher day mean of the watch\'s stress', targetText, expectedSign: sign, exposureModel: WATCH_STRESS_MODEL,
+  } as Hypothesis)
+  return [
+    q('sleep', 'that night\'s sleep', 1, SLEEP, 'that night\'s sleep', -1),
+    q('sleep_score', 'that night\'s SLEEP score', 1, SLEEP_SCORE, 'that night\'s SLEEP score', -1),
+    q('hrv', 'next-morning HRV', 1, HRV, 'next-morning HRV', -1),
+    q('rhr', 'next-morning resting heart rate', 1, RHR, 'next-morning resting heart rate', 1),
+    q('recovery_score', 'next-morning RECOVERY', 1, RECOVERY_SCORE, 'next-morning RECOVERY score', -1),
+    q('energy', 'next-day energy', 1, ENERGY, 'next-day energy', -1),
+    q('gut', 'that day\'s digestion', 0, GUT, 'that day\'s digestion score', -1),
+  ]
+}
+
 export const HYPOTHESES: Hypothesis[] = [
   {
     id: 'alcohol_hrv', label: 'Alcohol and next-morning HRV', cause: 'alcohol_any', lag: 1, exposure: 'binary', ...HRV,
@@ -248,6 +267,7 @@ export const HYPOTHESES: Hypothesis[] = [
   },
   ...morningScoreQuestions(),
   ...mealAndGutQuestions(),
+  ...watchStressQuestions(),
 ]
 
 // Analysis review phase E: questions a person registers from a hint (what came before off mornings). Each is tested only

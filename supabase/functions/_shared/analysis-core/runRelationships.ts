@@ -16,6 +16,7 @@ import { baselineExclusionSpans, loadHealthInputs } from './healthLoad.ts'
 import { LATE_SCREEN_CATEGORIES, routineSeries } from './routineExposures.ts'
 import type { RoutineInputs } from './routineExposures.ts'
 import { gutDayScore, mealSeries } from './mealExposures.ts'
+import { caffeineBoardSeries, sleepOutcomeSeries } from './sleepExposures.ts'
 import { offsetLookup, samplesOf, watchStressDays, type WatchStressDay } from './watchStress.ts'
 import type { GutCheckinRow, StoolRow } from './mealExposures.ts'
 
@@ -45,8 +46,10 @@ export interface CheckinRow {
 }
 
 export interface RawInputs {
-  wearable: { date: string; hrv: number | null; rhr: number | null; steps: number | null }[]
-  sleep: { date: string; hours: number | null; deep_min?: number | null; rem_min?: number | null; respiratory_rate?: number | null; bedtime?: string | null }[]
+  wearable: { date: string; hrv: number | null; rhr: number | null; steps: number | null; spo2_avg?: number | null }[]
+  sleep: { date: string; hours: number | null; deep_min?: number | null; rem_min?: number | null; light_min?: number | null; respiratory_rate?: number | null; bedtime?: string | null }[]
+  /** The nightly heart-rate dip (hr_dip_nightly), a sleep outcome from catalogue 2.5.0. */
+  hrDip?: { date: string; dip_pct: number | null }[]
   wellbeing: { date: string; energy: number | null; mood: number | null; stress: number | null; soreness: number | null }[]
   meals: {
     logged_at: string
@@ -297,6 +300,9 @@ export function buildFrame(raw: RawInputs, today: string, lookbackDays = RELATIO
   // Catalogue 2.3.0 (mealExposures.ts): meal timing and composition per eating day, and the daily digestion score.
   Object.assign(series, mealSeries(axis, raw.meals, raw.sleep, localMsOf(raw.context ?? [])))
   series.gut_day_score = gutDayScore(axis, raw.stool ?? [], (raw.checkins ?? []) as GutCheckinRow[])
+  // Catalogue 2.5.0 (sleepExposures.ts): the caffeine still on board at bedtime, and sleep outcomes the engine did not read.
+  series.caffeine_board_bed = caffeineBoardSeries(axis, raw.meals, raw.sleep, localMsOf(raw.context ?? []))
+  Object.assign(series, sleepOutcomeSeries(axis, raw.sleep, raw.hrDip ?? [], raw.wearable, localMsOf(raw.context ?? [])))
 
   // Routine intelligence R4: phone use, places and commutes, each known only on days its source covers.
   Object.assign(series, routineSeries(axis, raw.routine ?? {}, instantClock))
@@ -355,9 +361,9 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
   const q = (table: string, cols: string, col: string, from: string) => (a: number, b: number) =>
     admin.from(table).select(cols).eq('user_id', userId).gte(col, from).order(col).range(a, b)
 
-  const [wearable, sleep, wellbeing, meals, sessions, recovery, ill, checkins, context, health, phone, phoneApps, mobility, commutes, scoreRows, stool, gutCheckins, mealTags, stressRaw] = await Promise.all([
-    fetchAll<RawInputs['wearable'][number]>(q('wearable_daily', 'date, hrv, rhr, steps', 'date', since)),
-    fetchAll<RawInputs['sleep'][number]>(q('sleep_daily', 'date, hours, deep_min, rem_min, respiratory_rate, bedtime', 'date', since)),
+  const [wearable, sleep, wellbeing, meals, sessions, recovery, ill, checkins, context, health, phone, phoneApps, mobility, commutes, scoreRows, stool, gutCheckins, mealTags, stressRaw, hrDip] = await Promise.all([
+    fetchAll<RawInputs['wearable'][number]>(q('wearable_daily', 'date, hrv, rhr, steps, spo2_avg', 'date', since)),
+    fetchAll<RawInputs['sleep'][number]>(q('sleep_daily', 'date, hours, deep_min, rem_min, light_min, respiratory_rate, bedtime', 'date', since)),
     fetchAll<RawInputs['wellbeing'][number]>(q('wellbeing_daily', 'date, energy, mood, stress, soreness', 'date', since)),
     fetchAll<RawInputs['meals'][number]>(q('meals', 'logged_at, calories, protein_g, carbs_g, fat_g, fiber_g, meal_items(alcohol_g, caffeine_mg)', 'logged_at', sinceStamp)),
     fetchAll<RawInputs['sessions'][number]>(q('exercise_sessions', 'start_time, duration_min, type, rpe, avg_hr, max_hr', 'start_time', sinceStamp)),
@@ -387,6 +393,7 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
     fetchAll<{ query_date: string; raw_body: unknown }>((a: number, b: number) =>
       admin.from('zepp_raw_extracts').select('query_date, raw_body').eq('user_id', userId).eq('metric', 'stress').eq('status_code', 200)
         .gte('query_date', shift(since, -1)).order('query_date').range(a, b), 200),
+    fetchAll<NonNullable<RawInputs['hrDip']>[number]>(q('hr_dip_nightly', 'date, dip_pct', 'date', since)),
   ])
   const failed = [wearable, sleep, wellbeing, meals, sessions, recovery].find((r) => r.error)
   if (failed) return { userId, error: failed.error as string }
@@ -400,6 +407,7 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
       checkins: checkins.error ? [] : mergeGut(checkins.rows, gutCheckins.error ? [] : gutCheckins.rows),
       stool: stool.error ? [] : stool.rows,
       mealTags: mealTags.error ? [] : mealTags.rows,
+      hrDip: hrDip.error ? [] : hrDip.rows,
       watchStress: stressRaw.error ? [] : watchStressDays(stressRaw.rows.flatMap((r) => samplesOf(r.raw_body)), offsetLookup(context.error ? [] : context.rows)),
       context: context.error ? [] : context.rows,
       routine: {

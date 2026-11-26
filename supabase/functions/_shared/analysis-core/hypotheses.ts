@@ -46,6 +46,9 @@ const SLEEP_SCORE = { target: 'sleep_score', targetUnit: 'points', noEffect: 5, 
 // Five points on the 0-100 digestion score: a type 5 instead of a 4, or one gut symptom ticked, moves it 5 to 10.
 const GUT = { target: 'gut_day_score', targetUnit: 'points', noEffect: 5, outcome: 'gut' as const }
 const WATCH_STRESS_MODEL = 'The watch\'s own all-day stress (Zepp, 1-100) averaged over the local day, from days with at least 12 readings; days without are left out, never zero.'
+const HR_DIP = { target: 'hr_dip', targetUnit: 'points', noEffect: 3, outcome: 'sleep' as const }
+const DEEP_SHARE = { target: 'deep_share', targetUnit: 'points', noEffect: 2, outcome: 'sleep' as const }
+const CAFFEINE_BOARD_MODEL = 'Caffeine from the logged food and drink, decayed with a 5-hour half-life to that night\'s bedtime; a day with meals and no caffeine counts as zero, a day without meals or a bedtime is left out.'
 const MEAL_MODEL = 'Only days with meals logged are used (a day before 04:00 belongs to the evening before); timing also needs that night\'s bedtime from the watch. Missing days are left out, never zero.'
 const GUT_NOTE = ' The digestion score needs a stool logged or the evening gut questions answered that day; other days are left out.'
 const SCORE_NOTE = ' Scores come from the app; mornings it could not score are left out.'
@@ -170,6 +173,32 @@ function watchStressQuestions(): Hypothesis[] {
   ]
 }
 
+// Catalogue 2.5.0: a caffeine dose (mg still on board at bedtime) and the sleep outcomes the engine did not read: the night's
+// heart-rate dip and the deep-sleep share (both filed under SLEEP). Training and the watch's stress against the same two.
+function sleepQualityQuestions(): Hypothesis[] {
+  const board = (key: string, label: string, spec: object, targetText: string): Hypothesis => ({
+    id: `caffeine_board_${key}`, label: `Caffeine on board at bedtime and ${label}`, cause: 'caffeine_board_bed', lag: 1, exposure: 'continuous', causeScale: 50, ...spec,
+    causeText: 'Each 50 mg more caffeine still on board at bedtime', targetText, expectedSign: -1, exposureModel: CAFFEINE_BOARD_MODEL,
+  } as Hypothesis)
+  return [
+    board('sleep', 'that night\'s sleep', SLEEP, 'that night\'s sleep'),
+    board('sleep_score', 'that night\'s SLEEP score', SLEEP_SCORE, 'that night\'s SLEEP score'),
+    board('hrv', 'next-morning HRV', HRV, 'next-morning HRV'),
+    board('deep_share', 'the deep-sleep share', DEEP_SHARE, 'that night\'s deep-sleep share'),
+    board('hr_dip', 'the night\'s heart-rate dip', HR_DIP, 'that night\'s heart-rate dip'),
+    { id: 'stress_watch_hr_dip', label: 'Watch stress and the night\'s heart-rate dip', cause: 'stress_watch', lag: 1, exposure: 'continuous', causeScale: 10, ...HR_DIP,
+      causeText: 'Each 10 points higher day mean of the watch\'s stress', targetText: 'that night\'s heart-rate dip', expectedSign: -1, exposureModel: WATCH_STRESS_MODEL },
+    { id: 'stress_watch_deep_share', label: 'Watch stress and the deep-sleep share', cause: 'stress_watch', lag: 1, exposure: 'continuous', causeScale: 10, ...DEEP_SHARE,
+      causeText: 'Each 10 points higher day mean of the watch\'s stress', targetText: 'that night\'s deep-sleep share', expectedSign: -1, exposureModel: WATCH_STRESS_MODEL },
+    { id: 'kcal_before_bed_hr_dip', label: 'Food in the 3 hours before sleep and the night\'s heart-rate dip', cause: 'kcal_before_bed', lag: 1, exposure: 'continuous', causeScale: 250, ...HR_DIP,
+      causeText: 'Each 250 kcal eaten in the 3 hours before sleep', targetText: 'that night\'s heart-rate dip', expectedSign: -1, exposureModel: MEAL_MODEL },
+    { id: 'training_min_deep_share', label: 'Training minutes and that night\'s deep-sleep share', cause: 'training_min', lag: 1, exposure: 'continuous', causeScale: 30, ...DEEP_SHARE,
+      causeText: 'Each 30 more minutes of training', targetText: 'that night\'s deep-sleep share', expectedSign: 0, exposureModel: DEVICE_MODEL },
+    { id: 'training_min_hr_dip', label: 'Training minutes and the night\'s heart-rate dip', cause: 'training_min', lag: 1, exposure: 'continuous', causeScale: 30, ...HR_DIP,
+      causeText: 'Each 30 more minutes of training', targetText: 'that night\'s heart-rate dip', expectedSign: 0, exposureModel: DEVICE_MODEL },
+  ]
+}
+
 export const HYPOTHESES: Hypothesis[] = [
   {
     id: 'alcohol_hrv', label: 'Alcohol and next-morning HRV', cause: 'alcohol_any', lag: 1, exposure: 'binary', ...HRV,
@@ -268,6 +297,7 @@ export const HYPOTHESES: Hypothesis[] = [
   ...morningScoreQuestions(),
   ...mealAndGutQuestions(),
   ...watchStressQuestions(),
+  ...sleepQualityQuestions(),
 ]
 
 // Analysis review phase E: questions a person registers from a hint (what came before off mornings). Each is tested only

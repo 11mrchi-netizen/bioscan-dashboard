@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import meshUrl from './assets/body-mesh.json?url'
-import { BODY_REGIONS, H_MAX, regionAt, regionOfCode, type MeRow } from './meView'
+import { BODY_REGIONS, H_MAX, regionAt, regionOfCode, type MeRow } from './meData'
 
 // Marker anchors: front-most vertices of each region (mesh units), worked out from the mesh itself.
 const ANCHORS: Record<string, [number, number, number]> = {

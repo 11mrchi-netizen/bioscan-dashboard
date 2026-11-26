@@ -3,7 +3,7 @@
 // console's row style, so the numbers are the phone's own and nothing is worked out twice. Only tiles, rows and notes
 // occur in these sections. The air and the questionnaires have their own views above, so they are left out here.
 import { useEffect, useState } from 'react'
-import { loadMeView, type MeItem, type MeSection } from '../dashboard/meView'
+import { loadMeView, type MeItem, type MeSection } from '../dashboard/meData'
 import { Board } from '../components/layout/Board'
 
 const TONE: Record<string, string> = { ok: 'var(--ft-ok, #10B981)', warn: 'var(--ft-warn, #F59E0B)', bad: 'var(--ft-bad, #EF4444)' }

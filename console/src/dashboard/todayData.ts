@@ -44,7 +44,7 @@ export async function loadDayLogs(day: string): Promise<DayLogs> {
   // Logged times are the phone's wall clock labelled +00: the local day is the UTC-labelled day of their digits.
   const lo = `${day}T00:00:00+00:00`, hi = `${plusDays(day, 1)}T00:00:00+00:00`
   const [meals, sessions, supps, routines, acts, breath, checkins] = await Promise.all([
-    supabase.from('meals').select('logged_at,meal_slot,calories,carbs_g,protein_g,fat_g,description').gte('logged_at', lo).lt('logged_at', hi).order('logged_at'),
+    supabase.from('meals').select('id,logged_at,meal_slot,calories,carbs_g,protein_g,fat_g,description').gte('logged_at', lo).lt('logged_at', hi).order('logged_at'),
     supabase.from('exercise_sessions').select('start_time,type,duration_min').gte('start_time', lo).lt('start_time', hi).order('start_time'),
     supabase.from('supplement_log').select('taken_at,created_at').gte('taken_at', lo).lt('taken_at', hi),
     supabase.from('routine_logs').select('activity_id,started_at,minutes,status').eq('date', day),

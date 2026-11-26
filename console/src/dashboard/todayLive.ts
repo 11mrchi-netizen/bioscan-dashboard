@@ -11,7 +11,7 @@
 // Logged times are wall clock labelled +00 (CLAUDE.md, "Dates and times"): their digits are read as local, never shifted.
 import type { DayPlan, PlanRowJson, SoFarJson } from './todayData'
 
-export interface LoggedMeal { logged_at: string; meal_slot: string | null; calories: number | null; carbs_g: number | null; protein_g: number | null; fat_g: number | null; description: string | null }
+export interface LoggedMeal { id?: number; logged_at: string; meal_slot: string | null; calories: number | null; carbs_g: number | null; protein_g: number | null; fat_g: number | null; description: string | null }
 export interface LoggedSession { start_time: string; type: string | null; duration_min: number | null }
 export interface LoggedSupplement { taken_at: string; created_at: string }
 export interface LoggedRoutine { started_at: string | null; minutes: number | null; name: string | null }
@@ -29,7 +29,7 @@ export interface DayLogs {
 }
 
 export type LiveKind = PlanRowJson['kind'] | 'ACTIVITY'
-export interface LiveRow extends Omit<PlanRowJson, 'kind'> { kind: LiveKind; /** Added from the log: no plan row held it. */ logged?: boolean }
+export interface LiveRow extends Omit<PlanRowJson, 'kind'> { kind: LiveKind; /** Added from the log: no plan row held it. */ logged?: boolean; /** The logged meals this row stands for (meals.id), for its per-meal view. */ mealIds?: number[] }
 export interface LivePlan { rows: LiveRow[]; so_far?: SoFarJson; builtAt: string | null }
 
 const SESSION_WINDOW_MIN = 4 * 60
@@ -75,11 +75,11 @@ export function livePlan(saved: DayPlan | null, logs: DayLogs): LivePlan {
         return bm == null || Math.abs(rm - at) < Math.abs(bm - at) ? r : best
       }, undefined)
     }
-    if (row) { row.done = true; continue }
+    if (row) { row.done = true; if (m.id != null) (row.mealIds ??= []).push(m.id); continue }
     rows.push({
       time: t, title: m.meal_slot ? titleCase(m.meal_slot) : 'Meal', kind: 'MEAL', done: true, logged: true,
       detail: [m.calories != null ? `${Math.round(m.calories)} kcal` : null, m.description].filter(Boolean).join(' · ') || undefined,
-      kcal: m.calories ?? undefined,
+      kcal: m.calories ?? undefined, mealIds: m.id != null ? [m.id] : undefined,
     })
   }
   const so_far: SoFarJson | undefined = logs.meals.length || saved?.so_far ? {

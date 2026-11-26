@@ -1,10 +1,7 @@
 package com.bioscan.fieldterminal.data
 
 import android.Manifest
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.content.pm.PackageManager
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
@@ -42,7 +39,6 @@ import com.bioscan.fieldterminal.domain.notifications.reportBody
 import com.bioscan.fieldterminal.domain.notifications.reportDedupeKey
 import com.bioscan.fieldterminal.domain.notifications.reportTitle
 import com.bioscan.fieldterminal.domain.notifications.reportToAnnounce
-import com.bioscan.fieldterminal.domain.notifications.reportWebUrl
 import com.bioscan.fieldterminal.domain.notifications.supplementsDueForBucket
 import com.bioscan.fieldterminal.domain.notifications.unratedEvents
 import com.bioscan.fieldterminal.domain.notifications.wellbeingCheckinNeeded
@@ -266,7 +262,7 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
             }
         }
 
-        // Weekly and monthly reports (docs/reports): each new one once, in the day's window, opening it on the web. It follows the
+        // Weekly and monthly reports (docs/reports): each new one once, in the day's window, opening its page in the app. It follows the
         // master switch (and a rule row, if one is ever saved off); a failed read just waits for the next run.
         val reportRule = rules.firstOrNull { it.kind == NotificationKind.PERIOD_REPORT }
         if (prefs.masterEnabled && reportRule?.enabled != false) {
@@ -275,11 +271,7 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                 val shownKeys = repo.loadShownSince(dayStart.minusSeconds(14 * 86_400L)).mapNotNull { it.dedupeKey }.toSet()
                 val r = reportToAnnounce(reports, shownKeys, today, now.toLocalTime())
                 if (r != null) {
-                    val open = PendingIntent.getActivity(
-                        applicationContext, r.key.hashCode(),
-                        Intent(Intent.ACTION_VIEW, Uri.parse(reportWebUrl(r.key))).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-                    )
+                    val open = NotificationActionReceiver.contentIntent(applicationContext, NotificationKind.PERIOD_REPORT, bucket = r.key)
                     val body = reportBody(r)
                     val n = NotificationCompat.Builder(applicationContext, NotificationKind.PERIOD_REPORT)
                         .setSmallIcon(android.R.drawable.ic_dialog_info)

@@ -227,3 +227,29 @@ a.me-tile.tappable:hover { border-color: var(--ft-muted); }
 .subst-head { display: flex; flex-wrap: wrap; gap: 4px 16px; font: 500 12px var(--ft-body, inherit); color: var(--ft-muted); }
 .subst-head b { font: 800 20px var(--ft-num); color: var(--ft-fg); margin-right: 4px; }
 .subst-head b.subst-warn { color: var(--ft-warn, var(--color-warning)); }
+
+/* Per-meal view (MealOverlay.tsx) */
+.meal-tabs { display: flex; gap: 6px; padding-right: 30px; }
+.meal-tabs .dash-link.on { border-color: var(--ft-fg); }
+.meal-macros { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; }
+.meal-macros b { font: 800 16px var(--ft-num); }
+.meal-split { display: flex; flex-direction: column; gap: 4px; }
+.meal-split-label { font-size: 10px; letter-spacing: .1em; color: var(--ft-muted); }
+.meal-dose { height: 10px; border-radius: 5px; background: var(--ft-chip-idle); border: 1px solid var(--ft-line); overflow: hidden; }
+.meal-dose i { display: block; height: 100%; }
+.meal-index { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-top: 1px solid var(--ft-line); }
+.meal-index-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; }
+.meal-index-head small { font-size: 10px; color: var(--ft-muted); }
+.meal-strip { position: relative; height: 14px; border-radius: 7px; background: var(--ft-chip-idle); border: 1px solid var(--ft-line); }
+.meal-strip-box { position: absolute; top: 2px; bottom: 2px; border-radius: 4px; background: var(--ft-glass-border); }
+.meal-strip-median { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--ft-muted); }
+.meal-strip b { position: absolute; top: -3px; width: 10px; height: 18px; margin-left: -5px; border-radius: 5px; border: 2px solid var(--ft-bg); box-sizing: border-box; }
+.meal-index-sub { display: flex; justify-content: space-between; gap: 8px; font-size: 10.5px; }
+.meal-item, .meal-micro { display: grid; gap: 10px; padding: 5px 0; border-top: 1px solid var(--ft-line); font-size: 13px; align-items: baseline; }
+.meal-item { grid-template-columns: minmax(0, 1fr) auto; }
+.meal-micro { grid-template-columns: minmax(0, 1fr) auto 110px; }
+.meal-micro > :last-child { text-align: right; font-size: 11px; }
+.plan-row.opens { cursor: pointer; }
+.plan-row.opens:hover .plan-title { text-decoration: underline; }
+.plan-open { all: unset; cursor: pointer; grid-area: title; font-size: 14px; color: var(--ft-fg); min-width: 0; }
+.plan-open:focus-visible { outline: 2px solid var(--ft-fg); outline-offset: 2px; }

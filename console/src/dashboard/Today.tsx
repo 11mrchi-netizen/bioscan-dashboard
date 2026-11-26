@@ -15,6 +15,7 @@ import {
 import { loadToday, shownScore, stripCharge, type TodayData } from './todayData'
 import { type LiveKind, type LivePlan, livePlan } from './todayLive'
 import { SubstanceCard } from './Substances'
+import { MealOverlay } from './MealOverlay'
 
 const STRIP_DAYS = 28
 const REFRESH_MS = 60_000 // while today is on screen
@@ -179,6 +180,8 @@ const KIND_HUE: Record<LiveKind, string> = {
 const hhmm = (d: Date) => d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
 
 function PlanCard({ data, day, readAt }: { data: TodayData; day: string; readAt: Date | null }) {
+  // The meal rows open the per-meal view (MealOverlay.tsx); it belongs to the day it was opened on.
+  const [meal, setMeal] = useState<{ day: string; ids: number[] } | null>(null)
   // The phone's saved plan with what was logged since laid over it (todayLive.ts); the saved copy alone when the log failed to load.
   const plan: LivePlan | null = data.logs ? livePlan(data.plan, data.logs)
     : data.plan ? { rows: data.plan.rows, so_far: data.plan.so_far, builtAt: data.plan.builtAt } : null
@@ -205,12 +208,15 @@ function PlanCard({ data, day, readAt }: { data: TodayData; day: string; readAt:
           <li key={i} className={`plan-row ${r.done ? 'done' : ''}`}>
             <span className="plan-time">{r.time ?? '—'}</span>
             <span className="plan-dot" style={{ background: KIND_HUE[r.kind] ?? 'var(--ft-muted)' }} aria-hidden="true" />
-            <span className="plan-title">{r.title}</span>
+            {r.kind === 'MEAL' && r.mealIds?.length
+              ? <button className="plan-open" onClick={() => setMeal({ day, ids: r.mealIds! })} aria-label={`Open ${r.title}`}>{r.title} ›</button>
+              : <span className="plan-title">{r.title}</span>}
             {r.detail && <span className="plan-detail">{r.detail}</span>}
             <span className="plan-state">{r.logged ? 'LOGGED ✓' : r.done ? 'DONE ✓' : ''}</span>
           </li>
         ))}
       </ol>
+      {meal && meal.day === day && <MealOverlay ids={meal.ids} day={day} onClose={() => setMeal(null)} />}
       {live && <p className="today-hint">{saved ? `Plan as the phone drew it at ${saved}` : 'No plan was saved by the phone for this day'}; meals, workouts and check-ins logged since are read live.</p>}
     </section>
   )

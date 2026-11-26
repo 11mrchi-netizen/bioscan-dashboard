@@ -14,6 +14,7 @@ import {
 } from '../lib/scoreText'
 import { loadToday, shownScore, stripCharge, type TodayData } from './todayData'
 import { type LiveKind, type LivePlan, livePlan } from './todayLive'
+import { SubstanceCard } from './Substances'
 import { MealOverlay } from './MealOverlay'
 
 const STRIP_DAYS = 28
@@ -91,6 +92,8 @@ export function Today({ day, onDay }: { day: string; onDay: (d: string) => void 
         </section>
 
         {data && <PlanCard data={data} day={day} readAt={readAt} />}
+
+        <SubstanceCard day={day} isToday={isToday} nowMin={readAt ? readAt.getHours() * 60 + readAt.getMinutes() : null} />
 
         <section className="ft-card today-strip" aria-label={`CHARGE, the ${STRIP_DAYS} days to ${day}`}>
           <div className="today-strip-head"><span>CHARGE · {STRIP_DAYS} DAYS</span><span>tap a day</span></div>

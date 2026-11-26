@@ -49,6 +49,7 @@ export const SERIES_HUE: Record<string, string> = {
   session_rpe: 'm-rpe',
   gut_day_score: 'm-gut-comfort', energy_availability: 'm-energy-availability',
   watch_stress: 'm-phys-stress', watch_stress_high_share: 'm-phys-stress', energy_balance: 'm-calories',
+  hr_dip: 'm-hr-dip', phone_screen_min: 'm-time-phone', phone_night_screen_min: 'm-night-screen', outdoor_daylight_min: 'm-daylight',
 }
 
 /**
@@ -62,6 +63,7 @@ export const OUTCOME_HUE: Record<string, string> = {
   energy: 'm-energy', mood: 'm-mood', stress: 'm-stress', soreness: 'm-soreness', resp_rate: 'm-respiratory',
   fueling_carb_rate: 'm-carbs', screen_bed_min: 'm-night-screen', screen_pm_social: 'm-time-phone', outdoor_daylight_min: 'm-daylight',
   sleep_score: 'm-sleep-score', recovery_score: 'ft-domain-cardio', gut: 'm-gut-comfort', gut_day_score: 'm-gut-comfort',
+  hr_dip: 'm-hr-dip', deep_share: 'm-stage-deep',
 }
 
 /** `var(--token)` of an outcome or a series; a chart that names no known metric draws in the neutral weight-trend hue (contract). */
@@ -162,7 +164,7 @@ export function rangeFor(focus: string | null, today: string): (typeof METRIC_RA
 
 const DOMAIN_WASH: Record<string, string> = { SLEEP: 'ft-domain-sleep', RECOVERY: 'ft-domain-cardio', LOAD: 'ft-domain-load', FUEL: 'ft-domain-fuel', BALANCE: 'ft-domain-balance' }
 export const SERIES_DOMAIN: Record<string, string> = {
-  hrv: 'RECOVERY', rhr: 'RECOVERY', spo2: 'RECOVERY', vo2max: 'RECOVERY', energy: 'RECOVERY', soreness: 'RECOVERY',
+  hrv: 'RECOVERY', rhr: 'RECOVERY', spo2: 'RECOVERY', hr_dip: 'RECOVERY', vo2max: 'RECOVERY', energy: 'RECOVERY', soreness: 'RECOVERY',
   steps: 'LOAD', calories_active: 'LOAD', calories_total: 'LOAD', zone_minutes: 'LOAD', run_duration: 'LOAD', run_distance: 'LOAD', run_avg_hr: 'LOAD', strength_duration: 'LOAD', session_rpe: 'LOAD',
   water_intake: 'FUEL', meal_energy: 'FUEL', meal_protein: 'FUEL', meal_carbs: 'FUEL', meal_fat: 'FUEL', meal_fiber: 'FUEL',
   gut_day_score: 'FUEL', energy_availability: 'FUEL', energy_balance: 'FUEL',

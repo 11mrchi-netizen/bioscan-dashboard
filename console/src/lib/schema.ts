@@ -18,7 +18,7 @@ export function seriesById(id: string): SeriesContract | undefined {
 }
 
 // Tables that carry a `source` column (wellbeing_daily, meals, exercise_sessions do not all have the same shape).
-export const TABLES_WITH_SOURCE = new Set(['wearable_daily', 'sleep_daily', 'body_metrics', 'hydration_daily', 'rest_days', 'exercise_sessions', 'meals'])
+export const TABLES_WITH_SOURCE = new Set(['wearable_daily', 'sleep_daily', 'body_metrics', 'hydration_daily', 'rest_days', 'exercise_sessions', 'meals', 'phone_usage_daily'])
 
 // exercise_sessions.type values (live counts 2026-10-12: walk 4655, other 1295, strength 534, run 143, ride 16, hike 2, yoga 1).
 // Walks are auto-detected background movement and would swamp any load model or timeline.
@@ -55,5 +55,8 @@ export const LIVE_COLUMNS: Record<string, string[]> = {
   hydration_daily: ['id', 'user_id', 'date', 'ml', 'created_at', 'source'],
   meals: ['id', 'user_id', 'logged_at', 'description', 'calories', 'protein_g', 'fat_g', 'carbs_g', 'created_at', 'fiber_g', 'sugar_g', 'sodium_mg', 'source'],
   derived_daily: ['id', 'user_id', 'metric', 'date', 'value', 'detail', 'computed_at'],
+  hr_dip_nightly: ['user_id', 'date', 'dip_pct', 'computed_at'],
+  phone_usage_daily: ['user_id', 'date', 'coverage_pct', 'screen_min', 'unlocks', 'first_unlock_at', 'last_use_before_sleep_at', 'bed_window_min', 'night_screen_min', 'night_unlocks', 'longest_free_min', 'by_category', 'by_place_category', 'source', 'recorded_at'],
+  mobility_daily: ['user_id', 'date', 'coverage_pct', 'minutes_by_category', 'n_places', 'new_places', 'entropy_norm', 'radius_gyration_km', 'time_from_home_min', 'outdoor_daylight_min', 'routine_similarity', 'day_type', 'recorded_at'],
   exercise_sessions: ['id', 'user_id', 'type', 'start_time', 'end_time', 'duration_min', 'distance_km', 'calories_active', 'calories_total', 'avg_hr', 'max_hr', 'elevation_gain_m', 'avg_power_w', 'avg_speed_kmh', 'rpe', 'notes', 'details', 'source', 'health_connect_record_id', 'created_at'],
 }

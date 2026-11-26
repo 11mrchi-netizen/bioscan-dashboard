@@ -23,7 +23,7 @@ interface MealProfile {
 interface Meal { id: number; logged_at: string; description: string | null; meal_slot: string | null; calories: number | null; carbs_g: number | null; protein_g: number | null; fat_g: number | null; source: string | null; meal_items: Item[]; profile?: MealProfile }
 interface Supp { id: number; taken_at: string; supplement_name: string | null; dose_value: number | null; dose_unit: string | null; serving_count: number | null; source: string | null }
 interface Session { id: number; start_time: string; type: string | null; duration_min: number | null; distance_km: number | null; avg_hr: number | null; rpe: number | null; source: string | null; notes: string | null }
-interface Evening { date: string; drinks: number | null; stress: number | null; caffeine_after_14: boolean | null; late_meal: boolean | null; late_screen: boolean | null; gut_comfort: number | null; gut_symptoms: string[] | null; note: string | null }
+interface Evening { date: string; drinks: number | null; stress: number | null; caffeine_after_14: boolean | null; late_meal: boolean | null; bed_window_min?: number | null; gut_comfort: number | null; gut_symptoms: string[] | null; note: string | null }
 interface Wellbeing { id: number; date: string; energy: number | null; mood: number | null; stress: number | null; soreness: number | null }
 interface Stool { id: number; occurred_at: string; bristol_type: number | null; discomfort: number | null; notes: string | null }
 interface Note { id: number; occurred_at: string; text: string | null }
@@ -61,11 +61,11 @@ async function loadRange(from: string, to: string): Promise<DayLog> {
   type R<T> = Promise<{ data: T[] | null; error: { message: string } | null }>
   const between = <T,>(table: string, cols: string, col: string) => supabase.from(table).select(cols).gte(col, lo).lt(col, hi).order(col) as unknown as R<T>
   const dated = <T,>(table: string, cols: string) => supabase.from(table).select(cols).gte('date', from).lte('date', to).order('date') as unknown as R<T>
-  const [m, s, x, e, w, st, nt, b, dr, g, mp] = await Promise.all([
+  const [m, s, x, e, w, st, nt, b, dr, g, mp, ph] = await Promise.all([
     between<Meal>('meals', 'id,logged_at,description,meal_slot,calories,carbs_g,protein_g,fat_g,source,meal_items(description,calories,quantity,quantity_unit,is_beverage)', 'logged_at'),
     between<Supp>('supplement_log', 'id,taken_at,supplement_name,dose_value,dose_unit,serving_count,source', 'taken_at'),
     between<Session>('exercise_sessions', 'id,start_time,type,duration_min,distance_km,avg_hr,rpe,source,notes', 'start_time'),
-    dated<Evening>('evening_checkins', 'date,drinks,stress,caffeine_after_14,late_meal,late_screen,gut_comfort,gut_symptoms,note'),
+    dated<Evening>('evening_checkins', 'date,drinks,stress,caffeine_after_14,late_meal,gut_comfort,gut_symptoms,note'),
     dated<Wellbeing>('wellbeing_daily', 'id,date,energy,mood,stress,soreness'),
     between<Stool>('stool_log', 'id,occurred_at,bristol_type,discomfort,notes', 'occurred_at'),
     between<Note>('notes', 'id,occurred_at,text', 'occurred_at'),
@@ -73,12 +73,15 @@ async function loadRange(from: string, to: string): Promise<DayLog> {
     dated<Drink>('hydration_daily', 'id,date,ml,source'),
     between<Grip>('grip_strength_log', 'id,occurred_at,hand,kg', 'occurred_at'),
     between<MealProfile>('meal_profiles', 'meal_id,energy_density_kcal_g,protein_g,protein_per_100kcal,carbs_per_100kcal,fiber_per_1000kcal,glycemic_load_est,fullness_factor_est,ultra_processed_pct,food_groups,tags,macro_mismatch', 'logged_at'),
+    // The phone's own measure of phone use in the hour before sleep, which replaced the old yes/no "late screen" question.
+    dated<{ date: string; bed_window_min: number | null }>('phone_usage_daily', 'date,bed_window_min'),
   ])
   for (const [name, r] of [['meals', m], ['supplement_log', s], ['exercise_sessions', x]] as const) if (r.error) throw new Error(`${name}: ${r.error.message}`)
   const ok = <T,>(r: { data: T[] | null; error: unknown }) => (r.error ? [] : r.data ?? [])
   const profiles = new Map(ok(mp).map((p) => [p.meal_id, p]))
+  const bedWindow = new Map(ok(ph).map((p) => [p.date, p.bed_window_min]))
   return {
-    meals: ok(m).map((x) => ({ ...x, profile: profiles.get(x.id) })), supps: ok(s), sessions: ok(x), evening: ok(e), wellbeing: ok(w), stool: ok(st), notes: ok(nt), body: ok(b), drinks: ok(dr), grip: ok(g),
+    meals: ok(m).map((x) => ({ ...x, profile: profiles.get(x.id) })), supps: ok(s), sessions: ok(x), evening: ok(e).map((ev) => ({ ...ev, bed_window_min: bedWindow.get(ev.date) ?? null })), wellbeing: ok(w), stool: ok(st), notes: ok(nt), body: ok(b), drinks: ok(dr), grip: ok(g),
   }
 }
 
@@ -262,7 +265,7 @@ function DayGrid({ log, show, onChanged }: { log: DayLog; show: Set<Kind>; onCha
           {log.wellbeing.map((w) => <Row key={`w${w.id}`} time="AM" title="Morning check-in" edit={wellbeingEdit(w)} onChanged={onChanged}
             detail={`energy ${n0(w.energy)} · mood ${n0(w.mood)} · stress ${n0(w.stress)} · soreness ${n0(w.soreness)}`} />)}
           {log.evening.map((ev) => <Row key={`e${ev.date}`} time="PM" title="Closing the day"
-            detail={`drinks ${n0(ev.drinks)} · stress ${n0(ev.stress)} · caffeine after 14:00 ${yes(ev.caffeine_after_14)} · late meal ${yes(ev.late_meal)} · late screen ${yes(ev.late_screen)}${ev.gut_comfort != null ? ` · gut comfort ${ev.gut_comfort}` : ''}`}
+            detail={`drinks ${n0(ev.drinks)} · stress ${n0(ev.stress)} · caffeine after 14:00 ${yes(ev.caffeine_after_14)} · late meal ${yes(ev.late_meal)} · phone before sleep ${ev.bed_window_min == null ? '–' : `${Math.round(ev.bed_window_min)} min`}${ev.gut_comfort != null ? ` · gut comfort ${ev.gut_comfort}` : ''}`}
             items={[...(ev.gut_symptoms ?? []).map((g) => `gut: ${g}`), ...(ev.note ? [ev.note] : [])]} />)}
         </Section>
       )}

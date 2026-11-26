@@ -304,7 +304,7 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                         if (key in shownKeys || !withinLimits(practiceRule, prefs, now, shown)) continue
                         val R = RoutineActionReceiver
                         val n = NotificationCompat.Builder(applicationContext, NotificationKind.PRACTICE_DUE)
-                            .setSmallIcon(R.drawable.ic_stat_bioscan)
+                            .setSmallIcon(com.bioscan.fieldterminal.R.drawable.ic_stat_bioscan)
                             .setContentTitle(a.name)
                             .setContentText(a.targetMin?.let { "$it min, now" } ?: "Now")
                             .setPriority(NotificationCompat.PRIORITY_DEFAULT)

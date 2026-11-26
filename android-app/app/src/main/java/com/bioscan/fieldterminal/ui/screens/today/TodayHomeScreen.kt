@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -57,6 +58,10 @@ import com.bioscan.fieldterminal.domain.score.ScoreScale
 import com.bioscan.fieldterminal.domain.score.SignalsVerdict
 import com.bioscan.fieldterminal.domain.score.SleepTarget
 import com.bioscan.fieldterminal.domain.score.trendOf
+import com.bioscan.fieldterminal.data.SubstanceDay
+import com.bioscan.fieldterminal.data.SubstanceRepository
+import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTChevron
@@ -226,6 +231,10 @@ fun TodayHomeScreen(
     var supplementBucket by remember { mutableStateOf<String?>(null) }
     // A voice already done: tapping it shows a read-only card instead of the log flow.
     var doneRow by remember { mutableStateOf<PlanRow?>(null) }
+    // What was logged since the evening before, read again whenever the page is rebuilt (after a log, a sync, a minute).
+    val substances by produceState<SubstanceDay?>(null, view?.day, page.guard.attempt, nut) {
+        catching { SubstanceRepository(SupabaseClientProvider.client).load(LocalDate.now()) }.getOrNull()?.let { value = it }
+    }
 
     LaunchedEffect(openCheckIn) {
         if (openCheckIn) {
@@ -270,6 +279,8 @@ fun TodayHomeScreen(
             // A completed voice opens its card; one still to do opens its log flow.
             onRow = { row -> if (row.done) doneRow = row else openAction(row.action) },
             onSoFar = { soFar = true },
+            // IN THE BODY: caffeine, alcohol and fast supplements from what was logged (SubstancesCard.kt); a failed read leaves it out.
+            extra = { SubstancesCard(substances) },
         )
     }
 
@@ -371,6 +382,8 @@ fun TodayContent(
     onOpenOverlay: (ScoreOverlay) -> Unit,
     onRow: (PlanRow) -> Unit,
     onSoFar: () -> Unit,
+    // Cards after the plan and SO FAR (IN THE BODY).
+    extra: @Composable () -> Unit = {},
 ) {
     Column(
         modifier = Modifier.fillMaxSize().ftChargeWash().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
@@ -454,6 +467,8 @@ fun TodayContent(
                 SoFarBar(s, now)
             }
         }
+
+        extra()
 
         Spacer(Modifier.height(24.dp))
     }

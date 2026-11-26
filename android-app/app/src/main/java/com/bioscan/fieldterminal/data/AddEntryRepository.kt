@@ -115,7 +115,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
             .decodeList<ExistingHydrationRow>()
             .firstOrNull()
 
-        val total = ml + (existing?.ml ?: 0)
+        val total = (ml + (existing?.ml ?: 0)).coerceAtLeast(0)
         supabase.postgrest.from("hydration_daily").upsert(
             NewHydrationRow(date = date, ml = total)
         ) { onConflict = "user_id,date" }

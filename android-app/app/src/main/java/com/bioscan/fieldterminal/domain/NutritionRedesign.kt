@@ -40,20 +40,50 @@ val MEAL_NAMES = listOf("Breakfast", "Pre-session", "Lunch", "Snack", "Recovery"
 
 private val MAIN_BY_CLOCK = listOf(4 to "Breakfast", 11 to "Lunch", 16 to "Dinner")
 
-/**
- * The name of each meal of one day (same order as [day]): the label it was logged under (meal_slot), else the main meal its
- * clock time falls in (breakfast from 04:00, lunch from 11:00, dinner from 16:00), and a Snack when that main meal is
- * already taken that day. Logged times are wall clock, so their digits are the local hour.
- */
-fun mealNames(day: List<MealRow>): List<String> {
-    fun label(slot: String?) = slot?.trim()?.lowercase()?.replace('-', '_')?.let {
-        when (it) { "breakfast" -> "Breakfast"; "lunch" -> "Lunch"; "dinner" -> "Dinner"; "snack" -> "Snack"
-            "pre_session" -> "Pre-session"; "recovery" -> "Recovery"; else -> null }
+/** Entries one hour or less apart that do not carry different labels are one meal (kept in step with console/src/dashboard/mealGroups.ts). */
+const val SAME_MEAL_MIN = 60
+
+private fun slotLabel(slot: String?): String? = slot?.trim()?.lowercase()?.replace('-', '_')?.let {
+    when (it) {
+        "breakfast" -> "Breakfast"; "lunch" -> "Lunch"; "dinner" -> "Dinner"; "snack" -> "Snack"
+        "pre_session" -> "Pre-session"; "recovery" -> "Recovery"; else -> null
     }
-    val taken = day.mapNotNull { label(it.mealSlot) }.toMutableSet()
-    return day.map { m ->
-        label(m.mealSlot) ?: run {
-            val hour = m.loggedAt.drop(11).take(2).toIntOrNull() ?: 12
+}
+
+/** Minutes since midnight of a logged (wall clock) time: its digits are the local time. */
+private fun minuteOfDay(loggedAt: String): Int =
+    (loggedAt.drop(11).take(2).toIntOrNull() ?: 12) * 60 + (loggedAt.drop(14).take(2).toIntOrNull() ?: 0)
+
+/**
+ * The meals of one day: each food or drink is logged as its own entry, so a meal of two things is two entries. Each entry joins
+ * the meal before it when it follows that meal's last entry by [SAME_MEAL_MIN] minutes or less and does not carry a different
+ * label (an unlabelled entry joins any meal, and a meal takes the first label it meets). Entries are in time order.
+ */
+fun mealGroups(day: List<MealRow>): List<List<MealRow>> {
+    class G(val items: MutableList<MealRow>, var label: String?, var last: Int)
+    val groups = mutableListOf<G>()
+    for (e in day.sortedBy { it.loggedAt }) {
+        val at = minuteOfDay(e.loggedAt)
+        val l = slotLabel(e.mealSlot)
+        val g = groups.lastOrNull()
+        if (g != null && at - g.last <= SAME_MEAL_MIN && (l == null || g.label == null || l == g.label)) {
+            g.items.add(e); if (g.label == null) g.label = l; g.last = at
+        } else groups.add(G(mutableListOf(e), l, at))
+    }
+    return groups.map { it.items }
+}
+
+/**
+ * The name of each meal of [groups] (from [mealGroups], one day): the label it was logged under, else the main meal its first
+ * entry's time falls in (breakfast from 04:00, lunch from 11:00, dinner from 16:00), and a Snack when that main meal is already
+ * taken that day. Logged times are wall clock, so their digits are the local hour.
+ */
+fun mealNames(groups: List<List<MealRow>>): List<String> {
+    val labels = groups.map { g -> g.firstNotNullOfOrNull { slotLabel(it.mealSlot) } }
+    val taken = labels.filterNotNull().toMutableSet()
+    return groups.mapIndexed { i, g ->
+        labels[i] ?: run {
+            val hour = minuteOfDay(g.first().loggedAt) / 60
             val main = MAIN_BY_CLOCK.lastOrNull { hour >= it.first }?.second ?: "Dinner"
             if (taken.add(main)) main else "Snack"
         }
@@ -64,8 +94,8 @@ fun mealNames(day: List<MealRow>): List<String> {
 fun proteinByMeal(meals: List<MealRow>): Map<LocalDate, List<Double>> =
     meals.groupBy { LocalDate.parse(it.loggedAt.take(10)) }
         .mapValues { (_, day) ->
-            val sorted = day.sortedBy { it.loggedAt }
+            val groups = mealGroups(day)
             val totals = DoubleArray(MEAL_NAMES.size)
-            mealNames(sorted).forEachIndexed { i, n -> totals[MEAL_NAMES.indexOf(n)] += sorted[i].proteinG ?: 0.0 }
+            mealNames(groups).forEachIndexed { i, n -> totals[MEAL_NAMES.indexOf(n)] += groups[i].sumOf { it.proteinG ?: 0.0 } }
             totals.toList()
         }

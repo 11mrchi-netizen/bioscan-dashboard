@@ -10,6 +10,7 @@
 //   - meals, workouts, routines and breathwork that no plan row holds are added as their own done rows.
 // Logged times are wall clock labelled +00 (CLAUDE.md, "Dates and times"): their digits are read as local, never shifted.
 import type { DayPlan, PlanRowJson, SoFarJson } from './todayData'
+import { groupMeals } from './mealGroups.ts'
 
 export interface LoggedMeal { id?: number; logged_at: string; meal_slot: string | null; calories: number | null; carbs_g: number | null; protein_g: number | null; fat_g: number | null; description: string | null }
 export interface LoggedSession { start_time: string; type: string | null; duration_min: number | null }
@@ -29,7 +30,7 @@ export interface DayLogs {
 }
 
 export type LiveKind = PlanRowJson['kind'] | 'ACTIVITY'
-export interface LiveRow extends Omit<PlanRowJson, 'kind'> { kind: LiveKind; /** Added from the log: no plan row held it. */ logged?: boolean; /** The logged meals this row stands for (meals.id), for its per-meal view. */ mealIds?: number[] }
+export interface LiveRow extends Omit<PlanRowJson, 'kind'> { kind: LiveKind; /** Added from the log: no plan row held it. */ logged?: boolean; /** The logged meals this row stands for, one list of meals.id per meal (mealGroups.ts), for its per-meal view. */ meals?: number[][] }
 export interface LivePlan { rows: LiveRow[]; so_far?: SoFarJson; builtAt: string | null }
 
 const SESSION_WINDOW_MIN = 4 * 60
@@ -62,10 +63,13 @@ export function livePlan(saved: DayPlan | null, logs: DayLogs): LivePlan {
   // ---- meals and SO FAR ----
   const mealRows = rows.filter((r) => r.kind === 'MEAL')
   const slotRow = new Map(mealRows.map((r) => [rowSlot(r.title), r]))
-  for (const m of logs.meals) {
-    const t = wallTime(m.logged_at)
-    let row = m.meal_slot ? slotRow.get(m.meal_slot.toLowerCase()) : undefined
-    if (!row && !m.meal_slot) {
+  // Things logged for one meal (mealGroups.ts) are one meal: one row, one tick.
+  for (const items of groupMeals(logs.meals)) {
+    const first = items[0]
+    const slot = items.find((x) => x.meal_slot)?.meal_slot ?? null
+    const t = wallTime(first.logged_at)
+    let row = slot ? slotRow.get(slot.toLowerCase()) : undefined
+    if (!row && !slot) {
       // Unlabelled: the planned meal nearest in time, as the phone places it.
       const at = minutesOf(t)
       if (at != null) row = mealRows.reduce<LiveRow | undefined>((best, r) => {
@@ -75,11 +79,13 @@ export function livePlan(saved: DayPlan | null, logs: DayLogs): LivePlan {
         return bm == null || Math.abs(rm - at) < Math.abs(bm - at) ? r : best
       }, undefined)
     }
-    if (row) { row.done = true; if (m.id != null) (row.mealIds ??= []).push(m.id); continue }
+    const ids = items.map((x) => x.id).filter((x): x is number => x != null)
+    if (row) { row.done = true; if (ids.length) row.meals = [...(row.meals ?? []), ids]; continue }
+    const kcal = items.some((x) => x.calories != null) ? sum(items.map((x) => x.calories)) : undefined
     rows.push({
-      time: t, title: m.meal_slot ? titleCase(m.meal_slot) : 'Meal', kind: 'MEAL', done: true, logged: true,
-      detail: [m.calories != null ? `${Math.round(m.calories)} kcal` : null, m.description].filter(Boolean).join(' · ') || undefined,
-      kcal: m.calories ?? undefined, mealIds: m.id != null ? [m.id] : undefined,
+      time: t, title: slot ? titleCase(slot) : 'Meal', kind: 'MEAL', done: true, logged: true,
+      detail: [kcal != null ? `${Math.round(kcal)} kcal` : null, items.map((x) => x.description).filter(Boolean).join(' + ')].filter(Boolean).join(' · ') || undefined,
+      kcal, meals: ids.length ? [ids] : undefined,
     })
   }
   const so_far: SoFarJson | undefined = logs.meals.length || saved?.so_far ? {

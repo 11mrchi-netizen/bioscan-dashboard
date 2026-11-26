@@ -49,7 +49,7 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     // nutrition, supplements, fuel
     'meals', 'meal_items', 'meal_profiles', 'food_group_rules', 'nutrient_intake', 'foods', 'food_nutrients', 'food_servings', 'food_sources',
     'breakfast_templates', 'meal_prep_weeks', 'fuel_plans', 'fuel_plan_reviews', 'fuel_schedules', 'fuel_standards', 'fueling_intake_log',
-    'fueling_products', 'fueling_recipe_ingredients', 'fueling_recipe_versions', 'supplements', 'supplement_changes', 'regimen_references', 'regimen_vials', 'supplement_log',
+    'fueling_products', 'fueling_recipe_ingredients', 'fueling_recipe_versions', 'supplements', 'supplement_changes', 'regimen_references', 'substance_kinetics', 'regimen_vials', 'supplement_log',
     'supplement_products', 'supplement_ingredients', 'supplement_product_ingredients', 'supplement_nutrients',
     'supplement_sources', 'supplement_source_snapshots', 'supplement_stock_events', 'interaction_records',
     // labs

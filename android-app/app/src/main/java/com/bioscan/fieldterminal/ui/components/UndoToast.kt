@@ -78,6 +78,27 @@ object Toasts {
         }
     }
 
+    /**
+     * Saves [commit] now (a tap that must not be lost to a closed sheet, a backgrounded app or a killed process) and offers
+     * UNDO for the undo window; UNDO runs [undo], which reverses the write. A failed commit says so with RETRY.
+     */
+    fun committed(message: String, commit: suspend () -> Unit, undo: suspend () -> Unit) {
+        flush()
+        scope.launch {
+            val failure = catching { commit() }.exceptionOrNull()
+            if (failure != null) {
+                notice("Couldn't save: ${failure.message ?: "try again"}", "RETRY") { committed(message, commit, undo) }
+                return@launch
+            }
+            val id = ++nextId
+            current.value = Toast(id, message, "UNDO") {
+                scope.launch { catching { undo() }.onFailure { notice("Couldn't undo: ${it.message ?: "try again"}") } }
+                dismiss(id)
+            }
+            timer = launch { delay(UNDO_WINDOW_MS); dismiss(id) }
+        }
+    }
+
     /** A plain notice, optionally with one action (RETRY). */
     fun notice(message: String, action: String? = null, onAction: (() -> Unit)? = null) {
         val id = ++nextId

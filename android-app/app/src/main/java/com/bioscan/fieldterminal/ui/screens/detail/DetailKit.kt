@@ -229,7 +229,7 @@ fun positionWords(p: InputDirection?): String = when (p) {
     else -> "no normal yet"
 }
 
-private fun whenWords(date: LocalDate?, today: LocalDate): String? = when (date) {
+internal fun whenWords(date: LocalDate?, today: LocalDate): String? = when (date) {
     null, today -> null
     today.minusDays(1) -> "yesterday"
     else -> "${date.dayOfMonth} ${date.month.name.take(3).lowercase()}"

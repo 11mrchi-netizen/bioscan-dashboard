@@ -1,8 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.detail
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
@@ -68,6 +66,11 @@ private const val SLEEP_INFO_DURATION =
     "Hours asleep each night. The bold line is the week's average, the shaded band your normal (the middle of your own " +
         "last 60 nights) and the dashed lines the 7 to 9 hours most adults need."
 
+private const val SLEEP_INFO_MEASURES =
+    "Deep (slow-wave) sleep is the most restorative stage and front-loaded in the night. Light is usually about half of the night. " +
+        "REM lengthens towards morning and a short night cuts it most. Breathing is breaths a minute asleep: it is very steady, so a jump of " +
+        "more than one a minute is worth noticing (illness, alcohol, a hard day)."
+
 private const val SLEEP_INFO_INDEX =
     "A 0-100 summary of duration, regularity, breathing steadiness and stage mix, each scored against your own history. " +
         "When its scorecard shows it predicts tomorrow no better than one of its parts, the score is hidden and only the parts are shown."
@@ -96,32 +99,31 @@ fun SleepScreen(onBack: () -> Unit) {
         val zone = ZoneId.systemDefault()
         val days = LocalRangeDays.current
 
-        LastNightSection(s.filter { it.hours != null }.maxByOrNull { it.date }, zone)
+        val lastNight = s.filter { it.hours != null }.maxByOrNull { it.date }
 
-        Section("STAGES", info = SLEEP_INFO_STAGES) {
+        // Lead and support (contract A10): the measure picked from the list leads; duration to begin with.
+        FocusMetrics(
+            "sleep",
+            listOf(
+                FocusMetric("duration", "DURATION", remember(s) { s.series { it.hours } }, "", Fmt.hm, FT.Metric.SleepDuration,
+                    minSd = 0.25, betterHigher = true, target = 7.0 to 9.0, targetLabel = "7–9 h"),
+                FocusMetric("deep", "DEEP", s.series { it.deepMin }, "min", Fmt.int, DEEP, minSd = 8.0, betterHigher = true),
+                FocusMetric("light", "LIGHT", s.series { it.lightMin }, "min", Fmt.int, LIGHT, minSd = 10.0),
+                FocusMetric("rem", "REM", s.series { it.remMin }, "min", Fmt.int, REM, minSd = 8.0, betterHigher = true),
+                FocusMetric("breathing", "BREATHING", s.series { it.respiratoryRate }, "/min", Fmt.one, FT.Metric.Respiratory, minSd = 0.3),
+            ),
+            today,
+        ) { key -> if (key == "duration") LastNightExtra(lastNight, zone) }
+
+        // Depth: folded, one line each.
+        FocusDepth("sleep:stages", "STAGES BY NIGHT", lastNight?.let { r -> "deep ${(r.deepMin ?: 0.0).roundToInt()}′ · REM ${(r.remMin ?: 0.0).roundToInt()}′" }) {
             val columns = remember(s, days) { stageColumns(s, today, days) }
             StackedBars(columns, listOf(DEEP, LIGHT, REM), listOf("Deep", "Light", "REM"), Fmt.int, "min")
         }
 
-        MetricPanel(
-            "DURATION", remember(s) { s.series { it.hours } }, "", Fmt.hm, info = SLEEP_INFO_DURATION,
-            minSd = 0.25, color = FT.Metric.SleepDuration, betterHigher = true, target = 7.0 to 9.0, targetLabel = "7–9 h",
-        )
-
-        Section("EACH STAGE") {
-            MetricRow("Deep", s.series { it.deepMin }, "min", Fmt.int, color = DEEP, minSd = 8.0, betterHigher = true,
-                info = "Minutes of deep (slow-wave) sleep a night: the most physically restorative stage, front-loaded in the night.")
-            MetricRow("Light", s.series { it.lightMin }, "min", Fmt.int, color = LIGHT, minSd = 10.0,
-                info = "Minutes of light sleep a night, usually about half of it.")
-            MetricRow("REM", s.series { it.remMin }, "min", Fmt.int, color = REM, minSd = 8.0, betterHigher = true,
-                info = "Minutes of REM (dreaming) sleep, which lengthens towards morning; a short night cuts REM most.")
-            MetricRow("Breathing", s.series { it.respiratoryRate }, "/min", Fmt.one, color = FT.Metric.Respiratory, minSd = 0.3,
-                info = "Breaths per minute asleep. It is very steady night to night, so a jump of more than one breath a minute is worth noticing (illness, alcohol, a hard day).")
-        }
-
         val index = remember(s, w, wb, ses, page.breakStarts, page.loadSpans) { compositeInputs(w, s, wb, ses, page.breakStarts, page.loadSpans).sleepIndex() }
         val demoted = scorecards?.sleepIndex.demotes()
-        Section("SLEEP INDEX", info = SLEEP_INFO_INDEX, trailing = if (demoted) "INPUTS ONLY" else index.score?.let { "${it.roundToInt()} / 100" }) {
+        FocusDepth("sleep:index", "SLEEP INDEX", if (demoted) "INPUTS ONLY" else index.score?.let { "${it.roundToInt()} / 100" }) {
             if (index.score == null) {
                 EmptyLine("Needs at least two of duration, regularity, breathing and stage mix.")
             } else {
@@ -141,40 +143,44 @@ fun SleepScreen(onBack: () -> Unit) {
                 ses.mapNotNull { WallClock.zoned(it.startTime, zone)?.toOffsetDateTime() },
             )
         }
-        Section("DAILY RHYTHM", info = SLEEP_INFO_CIRCADIAN, trailing = circadian.score?.let { "${it.roundToInt()} / 100" }) {
+        FocusDepth("sleep:rhythm", "DAILY RHYTHM", circadian.score?.let { "${it.roundToInt()} / 100" }) {
             if (circadian.components.isEmpty()) EmptyLine("Needs a few weeks of sleep, meal and training times.")
             else ShareBars(circadian.components.map { (c, sc) ->
                 Triple(c.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, sc.score, sc.score.roundToInt().toString())
             }, 100.0)
         }
+
+        FocusHowBuilt("sleep:how", listOf(
+            "Duration" to SLEEP_INFO_DURATION,
+            "Stages" to SLEEP_INFO_STAGES,
+            "Sleep index" to SLEEP_INFO_INDEX,
+            "Daily rhythm" to SLEEP_INFO_CIRCADIAN,
+            "Each measure" to SLEEP_INFO_MEASURES,
+        ))
     }
 }
 
+/** What only the duration lead has: last night's bed and wake times and its stage bar (it was the LAST NIGHT card). */
 @Composable
-private fun LastNightSection(row: SleepAnalysisRow?, zone: ZoneId) {
-    Section("LAST NIGHT", trailing = row?.date?.let { shortDate(LocalDate.parse(it)) }) {
-        if (row == null) {
-            EmptyLine("No night recorded yet.")
-            return@Section
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(row.hours?.let(Fmt.hm) ?: "—", style = FTType.MetricMedium, color = FT.TextPrimary)
-            val bed = row.bedtime?.let { runCatching { Instant.parse(it).atZone(zone).toLocalTime() }.getOrNull() }
-            val wake = row.wakeTime?.let { runCatching { Instant.parse(it).atZone(zone).toLocalTime() }.getOrNull() }
-            if (bed != null && wake != null) Text("%02d:%02d → %02d:%02d".format(bed.hour, bed.minute, wake.hour, wake.minute), style = FTType.Telemetry, color = FT.TextSecondary)
-        }
-        val parts = listOf(row.deepMin ?: 0.0, row.lightMin ?: 0.0, row.remMin ?: 0.0)
-        val total = parts.sum()
-        if (total > 0) {
-            Canvas(Modifier.fillMaxWidth().height(16.dp)) {
-                var x = 0f
-                parts.forEachIndexed { i, v ->
-                    val w = (v / total).toFloat() * size.width
-                    drawRoundRect(listOf(DEEP, LIGHT, REM)[i], Offset(x, 0f), Size((w - 2f).coerceAtLeast(1f), size.height), CornerRadius(4f))
-                    x += w
-                }
+private fun LastNightExtra(row: SleepAnalysisRow?, zone: ZoneId) {
+    if (row == null) {
+        EmptyLine("No night recorded yet.")
+        return
+    }
+    val bed = row.bedtime?.let { runCatching { Instant.parse(it).atZone(zone).toLocalTime() }.getOrNull() }
+    val wake = row.wakeTime?.let { runCatching { Instant.parse(it).atZone(zone).toLocalTime() }.getOrNull() }
+    if (bed != null && wake != null) Text("%02d:%02d → %02d:%02d".format(bed.hour, bed.minute, wake.hour, wake.minute), style = FTType.Telemetry, color = FT.TextSecondary)
+    val parts = listOf(row.deepMin ?: 0.0, row.lightMin ?: 0.0, row.remMin ?: 0.0)
+    val total = parts.sum()
+    if (total > 0) {
+        Canvas(Modifier.fillMaxWidth().height(16.dp)) {
+            var x = 0f
+            parts.forEachIndexed { i, v ->
+                val w = (v / total).toFloat() * size.width
+                drawRoundRect(listOf(DEEP, LIGHT, REM)[i], Offset(x, 0f), Size((w - 2f).coerceAtLeast(1f), size.height), CornerRadius(4f))
+                x += w
             }
-            Legend(listOf("Deep ${parts[0].roundToInt()}′" to DEEP, "Light ${parts[1].roundToInt()}′" to LIGHT, "REM ${parts[2].roundToInt()}′" to REM))
         }
+        Legend(listOf("Deep ${parts[0].roundToInt()}′" to DEEP, "Light ${parts[1].roundToInt()}′" to LIGHT, "REM ${parts[2].roundToInt()}′" to REM))
     }
 }

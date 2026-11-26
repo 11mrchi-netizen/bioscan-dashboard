@@ -22,8 +22,11 @@ const INDEXES: IndexSpec[] = [
   { key: 'ultra_processed_pct', label: 'Processed share', unit: '% of kcal', hue: 'm-ultra-processed', digits: 0, info: 'Share of the meal\'s kcal from ultra-processed foods.' },
 ]
 
-export function MealOverlay({ ids, day, onClose }: { ids: number[]; day: string; onClose: () => void }) {
+/** [meals]: one list of ids per meal; a row with several meals (two lunches) gets a tab for each. */
+export function MealOverlay({ meals, day, onClose }: { meals: number[][]; day: string; onClose: () => void }) {
+  const [pick, setPick] = useState(0)
   const [detail, setDetail] = useState<MealDetail | null>(null)
+  const ids = meals[Math.min(pick, meals.length - 1)]
   const key = ids.join(',')
   const status = useLoadEffect(async (isCurrent) => {
     const d = await loadMealDetail(ids, day)
@@ -39,6 +42,9 @@ export function MealOverlay({ ids, day, onClose }: { ids: number[]; day: string;
     <div className="ov-scrim" onClick={onClose}>
       <div className="ov ft-card" role="dialog" aria-modal="true" aria-label="Meal" onClick={(e) => e.stopPropagation()}>
         <button className="ov-close" onClick={onClose} aria-label="Close">×</button>
+        {meals.length > 1 && (
+          <div className="meal-tabs">{meals.map((g, i) => <button key={g.join(',')} className={`dash-link ${i === pick ? 'on' : ''}`} onClick={() => setPick(i)}>MEAL {i + 1}</button>)}</div>
+        )}
         {shown ? <MealBody d={shown} /> : status.error ? <p className="ov-line">This meal could not be read: {status.error}</p> : <p className="today-hint">Reading the meal…</p>}
       </div>
     </div>

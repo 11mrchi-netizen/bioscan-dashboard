@@ -30,7 +30,7 @@ export interface DayLogs {
 }
 
 export type LiveKind = PlanRowJson['kind'] | 'ACTIVITY'
-export interface LiveRow extends Omit<PlanRowJson, 'kind'> { kind: LiveKind; /** Added from the log: no plan row held it. */ logged?: boolean; /** The logged meals this row stands for (meals.id), for its per-meal view. */ mealIds?: number[] }
+export interface LiveRow extends Omit<PlanRowJson, 'kind'> { kind: LiveKind; /** Added from the log: no plan row held it. */ logged?: boolean; /** The logged meals this row stands for, one list of meals.id per meal (mealGroups.ts), for its per-meal view. */ meals?: number[][] }
 export interface LivePlan { rows: LiveRow[]; so_far?: SoFarJson; builtAt: string | null }
 
 const SESSION_WINDOW_MIN = 4 * 60
@@ -80,12 +80,12 @@ export function livePlan(saved: DayPlan | null, logs: DayLogs): LivePlan {
       }, undefined)
     }
     const ids = items.map((x) => x.id).filter((x): x is number => x != null)
-    if (row) { row.done = true; if (ids.length) row.mealIds = [...(row.mealIds ?? []), ...ids]; continue }
+    if (row) { row.done = true; if (ids.length) row.meals = [...(row.meals ?? []), ids]; continue }
     const kcal = items.some((x) => x.calories != null) ? sum(items.map((x) => x.calories)) : undefined
     rows.push({
       time: t, title: slot ? titleCase(slot) : 'Meal', kind: 'MEAL', done: true, logged: true,
       detail: [kcal != null ? `${Math.round(kcal)} kcal` : null, items.map((x) => x.description).filter(Boolean).join(' + ')].filter(Boolean).join(' · ') || undefined,
-      kcal, mealIds: ids.length ? ids : undefined,
+      kcal, meals: ids.length ? [ids] : undefined,
     })
   }
   const so_far: SoFarJson | undefined = logs.meals.length || saved?.so_far ? {

@@ -53,9 +53,10 @@ export function combineProfiles(ps: ProfileData[]): ProfileData | null {
   if (ps.length === 0) return null
   // An entry with nothing recorded at all (a coffee logged without numbers) adds nothing and does not blank the meal.
   const empty = (p: ProfileData) => p.calories == null && p.protein_g == null && p.carbs_g == null && p.fat_g == null
+  const everyone = ps
   const kept = ps.filter((p) => !empty(p))
   ps = kept.length ? kept : ps.slice(0, 1)
-  if (ps.length === 1) return ps[0]
+  if (ps.length === 1 && everyone.length === 1) return ps[0]
   const total = (pick: (p: ProfileData) => number | null) => { const v = ps.map(pick); return all(v) ? v.reduce((a, x) => a + x, 0) : null }
   const kcal = total((p) => p.calories), protein = total((p) => p.protein_g), carbs = total((p) => p.carbs_g)
   const grams = ps.map((p) => p.food_grams)
@@ -76,7 +77,8 @@ export function combineProfiles(ps: ProfileData[]): ProfileData | null {
     glycemic_load_est: all(ps.map((p) => p.glycemic_load_est)) ? ps.reduce((a, p) => a + p.glycemic_load_est!, 0) : null,
     fullness_factor_est: weighted((p) => p.fullness_factor_est, g),
     ultra_processed_pct: weighted((p) => p.ultra_processed_pct, all(kcals) && kcals.some((x) => x > 0) ? kcals : null),
-    food_groups: [...new Set(ps.flatMap((p) => p.food_groups ?? []))], tags: [...new Set(ps.flatMap((p) => p.tags ?? []))],
-    macro_mismatch: ps.some((p) => p.macro_mismatch),
+    // Food groups, gut tags and the mismatch flag come from every entry: a coffee with no numbers still carries its caffeine tag.
+    food_groups: [...new Set(everyone.flatMap((p) => p.food_groups ?? []))], tags: [...new Set(everyone.flatMap((p) => p.tags ?? []))],
+    macro_mismatch: everyone.some((p) => p.macro_mismatch),
   }
 }

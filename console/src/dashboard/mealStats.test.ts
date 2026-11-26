@@ -68,4 +68,7 @@ test('a total is null when one part lacks it, but an entry with nothing recorded
   const b = combineProfiles([prof({}), prof({ meal_id: 2, calories: null, protein_g: null, carbs_g: null, fat_g: null })])!
   assert.equal(b.calories, 400)
   assert.equal(b.protein_g, 40)
+  const c = combineProfiles([prof({}), prof({ meal_id: 2, calories: null, protein_g: null, carbs_g: null, fat_g: null, tags: ['caffeine'], food_groups: ['coffee_tea'] })])!
+  assert.deepEqual(c.tags, ['caffeine'])
+  assert.deepEqual(c.food_groups, ['eggs', 'coffee_tea'])
 })

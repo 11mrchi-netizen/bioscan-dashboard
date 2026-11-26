@@ -119,7 +119,16 @@ test('two things logged for one meal are one row, with their kcal added', () => 
   const rows = p.rows.filter((r) => r.kind === 'MEAL')
   assert.equal(rows.length, 1)
   assert.equal(rows[0].kcal, 774)
-  assert.deepEqual(rows[0].mealIds, [1, 2])
+  assert.deepEqual(rows[0].meals, [[1, 2]])
   assert.equal(rows[0].detail, '774 kcal · Steak with rice + Banana bread')
   assert.equal(p.so_far?.kcal, 774)
+})
+
+test('separate meals in one slot stay separate meals on their row', () => {
+  const p = livePlan(saved, logs({ meals: [
+    { ...meal('2026-11-25T12:55:00+00:00', 'lunch', 435), id: 5 },
+    { ...meal('2026-11-25T13:10:00+00:00', 'lunch', 100), id: 6 },
+    { ...meal('2026-11-25T16:30:00+00:00', 'lunch', 300), id: 7 },
+  ] }))
+  assert.deepEqual(p.rows.find((r) => r.kind === 'MEAL' && r.title.toLowerCase() === 'lunch')?.meals, [[5, 6], [7]])
 })

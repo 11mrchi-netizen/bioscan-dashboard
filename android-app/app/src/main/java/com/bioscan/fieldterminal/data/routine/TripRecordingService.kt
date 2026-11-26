@@ -1,6 +1,6 @@
 package com.bioscan.fieldterminal.data.routine
 
-import android.R
+import com.bioscan.fieldterminal.R
 import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
@@ -90,7 +90,7 @@ class TripRecordingService : Service() {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel(CHANNEL_ID, "Trip recording", NotificationManager.IMPORTANCE_MIN))
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_menu_mylocation)
+            .setSmallIcon(R.drawable.ic_stat_bioscan)
             .setContentTitle("Recording a trip")
             .setContentText("Locations · stops when you settle")
             .setOngoing(true)

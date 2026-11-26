@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import androidx.core.app.ActivityCompat
+import com.bioscan.fieldterminal.R
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.work.Constraints
@@ -212,7 +213,7 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
             }
 
             val builder = NotificationCompat.Builder(applicationContext, rule.kind)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setSmallIcon(R.drawable.ic_stat_bioscan)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -247,7 +248,7 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                     val rule = fuelRules[p.kind] ?: continue
                     if (!withinLimits(rule, prefs, now, shown)) continue
                     val n = NotificationCompat.Builder(applicationContext, p.kind)
-                        .setSmallIcon(android.R.drawable.ic_dialog_info)
+                        .setSmallIcon(R.drawable.ic_stat_bioscan)
                         .setContentTitle(p.title)
                         .setContentText(p.body)
                         .setStyle(NotificationCompat.BigTextStyle().bigText(p.body))
@@ -274,7 +275,7 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                     val open = NotificationActionReceiver.contentIntent(applicationContext, NotificationKind.PERIOD_REPORT, bucket = r.key)
                     val body = reportBody(r)
                     val n = NotificationCompat.Builder(applicationContext, NotificationKind.PERIOD_REPORT)
-                        .setSmallIcon(android.R.drawable.ic_dialog_info)
+                        .setSmallIcon(R.drawable.ic_stat_bioscan)
                         .setContentTitle(reportTitle(r))
                         .setContentText(body)
                         .setStyle(NotificationCompat.BigTextStyle().bigText(body))
@@ -303,7 +304,7 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                         if (key in shownKeys || !withinLimits(practiceRule, prefs, now, shown)) continue
                         val R = RoutineActionReceiver
                         val n = NotificationCompat.Builder(applicationContext, NotificationKind.PRACTICE_DUE)
-                            .setSmallIcon(android.R.drawable.ic_dialog_info)
+                            .setSmallIcon(R.drawable.ic_stat_bioscan)
                             .setContentTitle(a.name)
                             .setContentText(a.targetMin?.let { "$it min, now" } ?: "Now")
                             .setPriority(NotificationCompat.PRIORITY_DEFAULT)

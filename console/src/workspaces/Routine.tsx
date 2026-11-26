@@ -87,7 +87,7 @@ export default function Routine() {
               <thead><tr><th>DAY</th><th>WHAT</th><th>WHEN</th><th>LENGTH</th><th>HOW</th><th>NOTE</th></tr></thead>
               <tbody>{logs.map((l) => (
                 <tr key={l.id}>
-                  <td className="mono"><a href={`#/log?day=${l.date}`}>{l.date}</a></td>
+                  <td className="mono"><a href={`#/review/log?day=${l.date}`}>{l.date}</a></td>
                   <td>{nameOf.get(l.activity_id) ?? '—'}</td>
                   <td className="mono">{l.started_at ? `${l.started_at.slice(11, 16)}${l.ended_at ? `–${l.ended_at.slice(11, 16)}` : ''}` : ''}</td>
                   <td className="mono">{l.status === 'skipped' ? 'SKIPPED' : minutesWords(length(l))}</td>

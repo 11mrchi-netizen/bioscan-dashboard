@@ -88,7 +88,7 @@ export function Integrity() {
   const [busy, setBusy] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const [ms, setMs] = useState<number | null>(null)
-  // The focused series lives in the URL (#/setup/integrity?series=hrv), so the Decisions workbench and saved views can open it.
+  // The focused series lives in the URL (#/data/integrity?series=hrv), so the Decisions workbench and saved views can open it.
   const [params, setParams] = useSearchParams()
   const focusParam = params.get('series')
   const focus = focusParam && seriesById(focusParam) ? focusParam : null

@@ -114,7 +114,7 @@ export default function Connections() {
             ))}
           </ul>
           <div className="pg-actions">
-            <button className="pb-primary mono" onClick={() => { try { sessionStorage.setItem(RETURN_KEY, '/setup/connections') } catch { /* storage off */ } void signInWithGoogle() }}>{status?.google ? 'RECONNECT GOOGLE CALENDAR' : 'CONNECT GOOGLE CALENDAR'}</button>
+            <button className="pb-primary mono" onClick={() => { try { sessionStorage.setItem(RETURN_KEY, '/data/connections') } catch { /* storage off */ } void signInWithGoogle() }}>{status?.google ? 'RECONNECT GOOGLE CALENDAR' : 'CONNECT GOOGLE CALENDAR'}</button>
             <button className="btn-ghost mono" disabled={testing} onClick={() => void test()}>{testing ? 'TESTING…' : 'TEST THE CONNECTION'}</button>
           </div>
           <p className="pg-note">Connecting goes to Google's consent page and comes back here; it keeps you signed in.</p>

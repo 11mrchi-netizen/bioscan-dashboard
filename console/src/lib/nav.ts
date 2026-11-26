@@ -1,8 +1,8 @@
 // The navigation of the web app as data (web redesign, follow-up): one tree of sections, tabs and views, read by the side menu
 // and by the breadcrumb in the top bar, so they cannot disagree with each other or with the pages' own defaults.
 //
-//   section  Today, Me, Lab, Plan, Log, Setup           (the phone's dock, and the gear)
-//   tab      a page of a section: #/lab/<tab>, or Me's ?tab=
+//   section  Today, Me, Plan, Analyse, Review, Data    (web desk, W1: the places by the job you came to do; Data is the gear)
+//   tab      a page of a section: #/analyse/<tab>, or Me's ?tab=
 //   view     a way of seeing a tab: ?view=            (the first view of a tab is the page's default, written as no parameter)
 //
 // Parameters that are not navigation (range chips, windows, filters, the metrics of a comparison) stay in their pages; a menu
@@ -28,7 +28,12 @@ const title = (s: string) => s[0] + s.slice(1).toLowerCase()
 export const NAV: readonly NavSection[] = [
   { id: 'today', label: 'Today' },
   { id: 'me', label: 'Me', tabParam: 'tab', tabs: ME_TAB_IDS.map((t) => ({ id: t, label: title(t), ...(t === 'INTIMACY' ? { views: INTIMACY_VIEWS } : {}) })) },
-  { id: 'lab', label: 'Lab', tabs: [
+  { id: 'plan', label: 'Plan', tabs: [
+    { id: 'overview', label: 'Overview' }, { id: 'training', label: 'Training' }, { id: 'food', label: 'Food', views: [{ id: 'plan', label: 'Fuel plan', value: null }, { id: 'prep', label: 'Meal prep', value: 'prep' }] },
+    { id: 'sessions', label: 'Sessions' },
+    { id: 'races', label: 'Races' },
+  ] },
+  { id: 'analyse', label: 'Analyse', tabs: [
     { id: 'compare', label: 'Compare', views: [{ id: 'days', label: 'Days', value: null }, { id: 'periods', label: 'Periods', value: 'periods' }] },
     { id: 'evidence', label: 'Evidence', views: [
       { id: 'queue', label: 'Decisions', value: null }, { id: 'board', label: 'Evidence board', value: 'board' }, { id: 'ledger', label: 'Ledger', value: 'ledger' },
@@ -39,15 +44,9 @@ export const NAV: readonly NavSection[] = [
       { id: 'repeatable', label: 'Repeatable', value: 'repeatable' }, { id: 'fueling', label: 'Fuelling', value: 'fueling' },
     ] },
     { id: 'regimen', label: 'Regimen' }, { id: 'tests', label: 'Tests' }, { id: 'routine', label: 'Routine' },
-    { id: 'reports', label: 'Reports' },
   ] },
-  { id: 'plan', label: 'Plan', tabs: [
-    { id: 'overview', label: 'Overview' }, { id: 'training', label: 'Training' }, { id: 'food', label: 'Food', views: [{ id: 'plan', label: 'Fuel plan', value: null }, { id: 'prep', label: 'Meal prep', value: 'prep' }] },
-    { id: 'sessions', label: 'Sessions', detailView: 'recorded', views: [{ id: 'planned', label: 'Planned', value: null }, { id: 'recorded', label: 'Recorded', value: 'recorded' }] },
-    { id: 'races', label: 'Races' },
-  ] },
-  { id: 'log', label: 'Log' },
-  { id: 'setup', label: 'Setup', tabs: [{ id: 'integrity', label: 'Integrity' }, { id: 'data', label: 'Data' }, { id: 'connections', label: 'Connections' }] },
+  { id: 'review', label: 'Review', tabs: [{ id: 'reports', label: 'Reports' }, { id: 'sessions', label: 'Sessions' }, { id: 'log', label: 'Log' }] },
+  { id: 'data', label: 'Data', tabs: [{ id: 'integrity', label: 'Integrity' }, { id: 'rows', label: 'Rows' }, { id: 'connections', label: 'Connections' }] },
 ]
 
 export interface NavLocation { section: NavSection | null; tab: NavTab | null; view: NavView | null }

@@ -166,13 +166,13 @@ function ReportView({ r, busy, onRebuild }: { r: PeriodReport; busy: string | nu
             ))}</ul>
           )}
           {asNeeded.length > 0 && <p className="rp-dim rp-foot">As needed: {asNeeded.map((a) => `${a.name} ${a.taken}×`).join(' · ')}</p>}
-          <p className="rp-foot"><a className="rp-link" href="#/lab/regimen">REGIMEN ›</a></p>
+          <p className="rp-foot"><a className="rp-link" href="#/analyse/regimen">REGIMEN ›</a></p>
         </section>
 
         <section className="ft-card pg-card rp-card">
           <h3 className="pg-card-title mono"><span>LAB</span><span>{r.lab.length}</span></h3>
           {r.lab.length === 0 ? (
-            <p className="rp-dim">No intervention or experiment ran this {r.grain}. Something taken for months with nothing measuring it is a candidate: start one in <a className="rp-link" href="#/lab/experiments?view=interventions">Experiments ›</a></p>
+            <p className="rp-dim">No intervention or experiment ran this {r.grain}. Something taken for months with nothing measuring it is a candidate: start one in <a className="rp-link" href="#/analyse/experiments?view=interventions">Experiments ›</a></p>
           ) : (
             <ul className="pg-rows">{r.lab.map((l) => (
               <li key={`${l.source}:${l.id}`} className="pg-row">

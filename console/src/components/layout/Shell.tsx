@@ -20,8 +20,8 @@ export const RETURN_KEY = 'ft.console.returnTo'
  * (Explore). Every other page has its own (a day, a tab, range chips, filters) or none, so the control would only mislead.
  */
 function usesGlobalRange(pathname: string, search: string): boolean {
-  if (pathname === '/setup/integrity') return true
-  return pathname === '/lab/compare' && new URLSearchParams(search).get('view') === 'periods'
+  if (pathname === '/data/integrity') return true
+  return pathname === '/analyse/compare' && new URLSearchParams(search).get('view') === 'periods'
 }
 
 const MENU_KEY = 'ft.menu.open'
@@ -48,7 +48,7 @@ export function Shell() {
   useEffect(() => {
     let to: string | null = null
     try { to = sessionStorage.getItem(RETURN_KEY); sessionStorage.removeItem(RETURN_KEY) } catch { /* storage off */ }
-    // One or two segments (/log, /setup/connections); a value stored before the Setup move (/connections) still lands, through its redirect.
+    // One or two segments (/log, /data/connections); a value stored before the Setup move (/connections) still lands, through its redirect.
     if (to && /^\/[a-z-]+(\/[a-z-]+)?$/.test(to)) navigate(to, { replace: true })
   }, [navigate])
   const inspectionTarget = useInspection()

@@ -1,6 +1,6 @@
 // Analysis hub phase A: the console link for a data reference (analysis-core/dataRef.ts). Every issue, evidence point and
 // decision points at its data through one of these, so the convention lives in one place.
-//   record   -> Setup › Data, that row  #/setup/data?table=meals&id=42
+//   record   -> Setup › Data, that row  #/data/rows?table=meals&id=42
 //   day      -> Data, the series' table on that day
 //   period   -> Lab › Compare, long-range view, the series over that span
 //   result   -> Lab › Evidence, the published result
@@ -18,17 +18,17 @@ function href(path: string, params: Record<string, string>): string {
 export function hrefFor(ref: DataRef): string | null {
   switch (ref.kind) {
     case 'record':
-      return href('setup/data', { table: ref.table, id: String(ref.id) })
+      return href('data/rows', { table: ref.table, id: String(ref.id) })
     case 'day': {
       const s = seriesById(ref.series)
-      return s ? href('setup/data', { table: s.table, date: ref.date }) : null
+      return s ? href('data/rows', { table: s.table, date: ref.date }) : null
     }
     case 'period':
-      return seriesById(ref.series) ? href('lab/compare', { view: 'periods', series: ref.series, start: ref.start, end: ref.end }) : null
+      return seriesById(ref.series) ? href('analyse/compare', { view: 'periods', series: ref.series, start: ref.start, end: ref.end }) : null
     case 'result':
-      return href('lab/evidence', { result: ref.resultKind, key: ref.key, asOf: ref.asOf })
+      return href('analyse/evidence', { result: ref.resultKind, key: ref.key, asOf: ref.asOf })
     case 'question':
-      return href('lab/evidence', { question: ref.questionId })
+      return href('analyse/evidence', { question: ref.questionId })
   }
 }
 
@@ -48,5 +48,5 @@ export function itemIdFromParams(p: URLSearchParams): string | null {
 
 /** Setup › Integrity focused on one series. */
 export function integrityHref(seriesId: string): string {
-  return href('setup/integrity', { series: seriesId })
+  return href('data/integrity', { series: seriesId })
 }

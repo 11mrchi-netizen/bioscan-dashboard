@@ -8,7 +8,7 @@
 //   Record     a decision (adopt, reject, continue testing, inconclusive) with threshold, rationale and review
 //              condition; adopt and reject need a settled verdict. The row keeps a snapshot of the evidence it rested on
 //              (append-only `decisions`), so the record stays readable when later results change.
-// Deep links: #/lab/evidence?question=<catalogue id | reg_N> and #/lab/evidence?result=<kind>&key=<key> select an item.
+// Deep links: #/analyse/evidence?question=<catalogue id | reg_N> and #/analyse/evidence?result=<kind>&key=<key> select an item.
 
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -294,7 +294,7 @@ function Workbench({ item, state, reason, history, onClose, onRecorded }: {
       <p className="dec-limits">{CLASS_LIMITS[item.evidenceClass]}</p>
       <div className="dec-links mono">
         {exploreHref && <a href={exploreHref}>OUTCOME OVER TIME (180 D) →</a>}
-        {resultHref && item.evidenceClass === 'association' && <a href="#/lab/evidence?view=board">EVIDENCE BOARD →</a>}
+        {resultHref && item.evidenceClass === 'association' && <a href="#/analyse/evidence?view=board">EVIDENCE BOARD →</a>}
       </div>
 
       {series && (

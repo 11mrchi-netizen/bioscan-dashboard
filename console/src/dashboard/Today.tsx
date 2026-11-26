@@ -86,7 +86,7 @@ export function Today({ day, onDay }: { day: string; onDay: (d: string) => void 
               </>
             )}
           <div className="today-links">
-            <a className="dash-link" href={`#/log?day=${day}`}>DAY LOG →</a>
+            <a className="dash-link" href={`#/review/log?day=${day}`}>DAY LOG →</a>
             <a className="dash-link" href={historyHref('charge', day)}>CHARGE HISTORY →</a>
           </div>
         </section>
@@ -160,7 +160,7 @@ function ReportCard() {
   const shown = [latest(reports, 'week'), latest(reports, 'month')].filter((r): r is PeriodReport => r !== null)
   return (
     <section className="ft-card today-plan today-report" aria-label="Reports">
-      <div className="today-strip-head"><span>REPORTS</span><a className="rp-link" href="#/lab/reports">ALL ›</a></div>
+      <div className="today-strip-head"><span>REPORTS</span><a className="rp-link" href="#/review/reports">ALL ›</a></div>
       {shown.length === 0 ? <p className="today-hint">The first weekly report is written on Monday morning, for the week before.</p> : shown.map((r) => (
         <a key={r.key} className="today-report-row" href={reportHref(r.key)}>
           <span className="today-report-title mono">{r.grain === 'week' ? 'WEEK' : 'MONTH'} · {spanText(r)}</span>
@@ -190,7 +190,7 @@ function PlanCard({ data, day, readAt }: { data: TodayData; day: string; readAt:
       <section className="ft-card today-plan">
         <div className="today-strip-head"><span>THE DAY'S PLAN</span></div>
         <p className="today-hint">No plan was saved for this day: the phone saves TODAY's plan from 18 Nov 2026 on, each time it is opened. What was logged is in the day's log.</p>
-        <a className="dash-link" href={`#/log?day=${day}`}>DAY LOG →</a>
+        <a className="dash-link" href={`#/review/log?day=${day}`}>DAY LOG →</a>
       </section>
     )
   }

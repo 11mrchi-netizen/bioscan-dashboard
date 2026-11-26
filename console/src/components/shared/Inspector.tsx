@@ -196,8 +196,8 @@ function SeriesPointView({ target, timezone }: { target: SeriesPointInspection; 
       )}
 
       {isDay
-        ? <button className="inspector-drill mono" onClick={() => navigate(`/setup/data?table=${series.table}&date=${target.start}`)}>VIEW THE DAY IN DATA →</button>
-        : <button className="inspector-drill mono" onClick={() => navigate(`/lab/compare?${new URLSearchParams({ view: 'periods', series: target.seriesId, start: target.start, end: target.end })}`)}>OPEN THE DAYS OF THIS {target.grain.toUpperCase()} →</button>}
+        ? <button className="inspector-drill mono" onClick={() => navigate(`/data/rows?table=${series.table}&date=${target.start}`)}>VIEW THE DAY IN DATA →</button>
+        : <button className="inspector-drill mono" onClick={() => navigate(`/analyse/compare?${new URLSearchParams({ view: 'periods', series: target.seriesId, start: target.start, end: target.end })}`)}>OPEN THE DAYS OF THIS {target.grain.toUpperCase()} →</button>}
     </div>
   )
 }

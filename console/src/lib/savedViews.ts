@@ -10,10 +10,12 @@ export interface SavedView {
   range: SavedRange
 }
 
-// The routes a view can be saved from: a metric page, a Lab tab or a Setup tab (the tab is part of the path). The redirects of the
+// The routes a view can be saved from: a metric page, an Analyse tab or a Data tab (the tab is part of the path). The redirects of the
 // routes that moved (App.tsx) stay for bookmarks and links, but no view was ever saved under an old name (saved_views was empty when the
 // old names were dropped), so none is accepted here.
-const ROUTES = new Set(['m', 'lab', 'setup'])
+// 'lab' and 'setup' are the old names (before web desk W1): a view saved then still opens, through the redirect to the new place.
+const TABBED = new Set(['analyse', 'data', 'lab', 'setup'])
+const ROUTES = new Set(['m', ...TABBED])
 
 /** The route to save: the hash path with its query, only for a page of metrics, the Lab or Setup. */
 export function viewPath(pathname: string, search: string): string | null {
@@ -21,8 +23,8 @@ export function viewPath(pathname: string, search: string): string | null {
   const route = parts[0]
   if (!ROUTES.has(route)) return null
   // A metric page is #/m/<ref>: the ref is part of the view (a comparison is saved with its metrics, which are repeated ?with=).
-  if ((route === 'm' || route === 'lab' || route === 'setup') && !parts[1]) return null
-  return `/${route === 'm' || route === 'lab' || route === 'setup' ? parts.slice(0, 2).join('/') : route}${search && search !== '?' ? search : ''}`
+  if (!parts[1]) return null
+  return `/${parts.slice(0, 2).join('/')}${search && search !== '?' ? search : ''}`
 }
 
 /** Opening a view: the route to navigate to and the range to set, or null for a row that names no savable route. */

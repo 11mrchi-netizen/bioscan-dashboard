@@ -36,8 +36,8 @@ export default function SessionDetail() {
 
   if (st.error) return <div className="pg"><p className="pb-warn">Could not load: {st.error} <button className="btn-ghost mono" onClick={st.retry}>RETRY</button></p></div>
   if (row === undefined) return <div className="pg"><p className="state-loading mono">LOADING…</p></div>
-  if (row === null) return <div className="pg"><p className="state-empty">NO SUCH SESSION. <Link to="/plan/sessions?view=recorded">ALL RECORDED SESSIONS</Link></p></div>
-  return <Detail key={`${row.id}:${rev}`} row={row} plan={plan} onChanged={() => setRev((r) => r + 1)} onBack={() => (window.history.state?.idx > 0 ? navigate(-1) : navigate('/plan/sessions?view=recorded'))} />
+  if (row === null) return <div className="pg"><p className="state-empty">NO SUCH SESSION. <Link to="/review/sessions">ALL RECORDED SESSIONS</Link></p></div>
+  return <Detail key={`${row.id}:${rev}`} row={row} plan={plan} onChanged={() => setRev((r) => r + 1)} onBack={() => (window.history.state?.idx > 0 ? navigate(-1) : navigate('/review/sessions'))} />
 }
 
 function Detail({ row, plan, onChanged, onBack }: { row: SessionRow; plan: { linked: PlannedLink | null; candidates: PlannedLink[] }; onChanged: () => void; onBack: () => void }) {
@@ -92,7 +92,7 @@ function Detail({ row, plan, onChanged, onBack }: { row: SessionRow; plan: { lin
           <h2 className="pg-title mono sd-title">{(row.type ?? 'session').toUpperCase()} · {longDate(day).toUpperCase()} · {wallTime(row.start_time)}{wallTime(row.end_time) ? `–${wallTime(row.end_time)}` : ''}</h2>
           <p className="pg-sub">From {from}. Times, distance, heart rate and the rest of what the watch measured are not edited here; the effort, notes and the details below are yours.</p>
         </div>
-        <Link className="btn-ghost mono" to={`/log?day=${day}`}>THE DAY'S LOG →</Link>
+        <Link className="btn-ghost mono" to={`/review/log?day=${day}`}>THE DAY'S LOG →</Link>
       </header>
 
       <section className="sd-tiles" aria-label="What was measured">

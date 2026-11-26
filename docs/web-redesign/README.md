@@ -20,6 +20,23 @@ screen the button hides the menu (remembered); below 1280 px it is a drawer over
 Escape, with the account in its foot. A menu link that changes only the tab or the view keeps the page's other parameters. What stays
 in a page, because it is a parameter and not a place: range chips, Sessions' window and status filters, Me's 28D/90D.
 
+## Web desk, W1: the places by job (26 Nov 2026)
+
+The web is being decoupled from the phone: a planning and analysis desk, not a copy of the phone's tabs (proposal and milestones:
+the project's "Web as a planning and analysis desk" and "Web desk: plan and milestones" documents). W1 only moves things, no page
+changes content. The menu is now **Today, Me, Plan, Analyse, Review** and the **Data** gear:
+
+| Place | Route | Holds |
+|---|---|---|
+| Analyse (was Lab) | `#/analyse/<tab>` | Compare, Evidence, Experiments, Regimen, Tests, Routine (the last three stay until the topic pages of W5) |
+| Review | `#/review/<tab>` | Reports (was Lab › Reports), Sessions (the recorded workouts, was Plan › Sessions › Recorded; one workout is `#/review/sessions/<id>`), Log (was `#/log`) |
+| Plan | `#/plan/<tab>` | Overview, Training, Food, Sessions (the planned ones only), Races |
+| Data (was Setup) | `#/data/<tab>` | Integrity, Rows (was Data), Connections |
+
+Every old address redirects with its query kept (`#/lab/...`, `#/setup/...`, `#/log`, `#/plan/sessions/<id>`, `?view=recorded`), saved
+views under the old names still open, and the sign-in return path accepts the old ones. The Desk (landing) arrives in W3; until then
+the web opens on Today. Where the sections below say Lab, Setup or Log, read Analyse, Data and Review.
+
 ## The structure
 
 One app, one shell, one router (`console/src/App.tsx`). Five tabs in the phone's order, and a gear:

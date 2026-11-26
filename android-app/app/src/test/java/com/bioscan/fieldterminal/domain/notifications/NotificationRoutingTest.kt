@@ -32,11 +32,17 @@ class NotificationRoutingTest {
         assertEquals(NotificationDestination.NONE, notificationDestination("something_else"))
     }
 
-    @Test fun idsStillToLogSkipsAlreadyTakenAndDuplicates() {
-        assertEquals(listOf(1L, 3L), idsStillToLog(listOf(1L, 2L, 3L, 1L), setOf(2L)))
+    @Test fun idsStillToLogKeepsOnlyOpenSlotsAndDuplicatesOnce() {
+        assertEquals(listOf(1L, 3L), idsStillToLog(listOf(1L, 2L, 3L, 1L), setOf(1L, 3L)))
     }
 
-    @Test fun idsStillToLogIsEmptyWhenEverythingTaken() {
-        assertEquals(emptyList<Long>(), idsStillToLog(listOf(1L, 2L), setOf(1L, 2L)))
+    @Test fun idsStillToLogIsEmptyWhenNothingOpen() {
+        assertEquals(emptyList<Long>(), idsStillToLog(listOf(1L, 2L), emptySet()))
+    }
+
+    // Vitamin C sits in morning, afternoon and night: taken once this morning, it is still due in the afternoon bundle.
+    @Test fun anItemInSeveralBundlesIsStillLoggedByTheLaterBundle() {
+        assertEquals(listOf(22L, 7L), idsStillToLog(listOf(22L, 7L), setOf(22L, 7L)))
+        assertEquals(listOf(22L, 7L), idsStillToLog(listOf(22L, 7L), null))
     }
 }

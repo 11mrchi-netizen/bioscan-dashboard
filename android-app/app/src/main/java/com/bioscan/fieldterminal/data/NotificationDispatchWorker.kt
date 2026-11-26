@@ -222,7 +222,7 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                 builder.addAction(
                     0,
                     "LOG ALL",
-                    NotificationActionReceiver.logAllIntent(applicationContext, rule.kind, logAllIds),
+                    NotificationActionReceiver.logAllIntent(applicationContext, rule.kind, logAllIds, supplementBucket),
                 )
             }
             val notification = builder.build()

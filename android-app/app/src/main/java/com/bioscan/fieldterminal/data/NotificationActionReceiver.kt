@@ -12,6 +12,7 @@ import com.bioscan.fieldterminal.MainActivity
 import com.bioscan.fieldterminal.data.model.NotificationKind
 import com.bioscan.fieldterminal.data.model.NotificationOutcome
 import com.bioscan.fieldterminal.domain.notifications.idsStillToLog
+import com.bioscan.fieldterminal.domain.notifications.supplementsDueForBucket
 import com.bioscan.fieldterminal.domain.toAppIso
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +31,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
         val kind = intent.getStringExtra(EXTRA_KIND) ?: NotificationKind.SUPPLEMENT_DUE
         val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, kind.hashCode())
         val ids = intent.getLongArrayExtra(EXTRA_SUPPLEMENT_IDS)?.toList().orEmpty()
+        val bucket = intent.getStringExtra(EXTRA_BUCKET)
         val nm = NotificationManagerCompat.from(app)
         // Dismiss first so a second tap on the action can't start a second write.
         nm.cancel(notificationId)
@@ -38,9 +40,17 @@ class NotificationActionReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val supabase = SupabaseClientProvider.client
-                val takenToday = SupplementsRepository(supabase).loadRecentTakenDates(ids)
-                    .filterValues { it == LocalDate.now() }.keys
-                val toLog = idsStillToLog(ids, takenToday)
+                val openNow = bucket?.let {
+                    val suppRepo = SupplementsRepository(supabase)
+                    val today = LocalDate.now()
+                    val active = suppRepo.loadOverview().active
+                    val takes = suppRepo.loadRecentTakes(active.map { r -> r.id }, today)
+                    supplementsDueForBucket(
+                        active, it, takes.lastTaken, takes.lastTaken.filterValues { d -> d == today }.keys, today,
+                        skipIfLogged = true, takes.takesToday,
+                    ).map { d -> d.id }.toSet()
+                }
+                val toLog = idsStillToLog(ids, openNow)
                 val addRepo = AddEntryRepository(supabase)
                 val takenAt = LocalDateTime.now().toAppIso()
                 for (id in toLog) addRepo.addSupplementTakenById(takenAt, id, 1.0)
@@ -79,12 +89,13 @@ class NotificationActionReceiver : BroadcastReceiver() {
             return PendingIntent.getActivity(context, kind.hashCode(), intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         }
 
-        fun logAllIntent(context: Context, kind: String, supplementIds: List<Long>): PendingIntent {
+        fun logAllIntent(context: Context, kind: String, supplementIds: List<Long>, bucket: String? = null): PendingIntent {
             val intent = Intent(context, NotificationActionReceiver::class.java)
                 .setAction(ACTION_LOG_ALL)
                 .putExtra(EXTRA_KIND, kind)
                 .putExtra(EXTRA_SUPPLEMENT_IDS, supplementIds.toLongArray())
                 .putExtra(EXTRA_NOTIFICATION_ID, kind.hashCode())
+                .apply { if (bucket != null) putExtra(EXTRA_BUCKET, bucket) }
             return PendingIntent.getBroadcast(context, kind.hashCode(), intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         }
     }

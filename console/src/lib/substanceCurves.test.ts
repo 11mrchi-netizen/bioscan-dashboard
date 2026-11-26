@@ -79,21 +79,42 @@ test('supplements: compounds by key, units, a short half-life empties in hours',
   assert.equal(oneCompartmentAt([{ at: 0, amount: 100 }], 90, 5, 4), caffeineAt([{ at: 0, amount: 100 }], 90))
 })
 
-import { doseMg, lookbackDays, massMg, MEDICATION_KA_PER_H } from './substanceCurves.ts'
-test('medications: doses in mg from the log, the 17.5 h tablet peaks at about 2 h and carries into the next day', () => {
+import { DEFAULT_TMAX_H, doseQty, kaFromTmax, lookbackDays, massMg, qtyText, quantity } from './substanceCurves.ts'
+test('regimen items: amounts in a base unit, doses from the log or from servings', () => {
   assert.equal(massMg(2.5, 'mg'), 2.5)
   assert.equal(massMg(500, 'mcg'), 0.5)
   assert.equal(massMg(1, 'tablet'), null)
-  // 0.5 of a 5 mg tablet, logged as a count of servings; or 2.5 mg logged as a mass
-  assert.equal(doseMg({ dose_value: 0.5, dose_unit: 'tablet', serving_count: 0.5 }, 5), 2.5)
-  assert.equal(doseMg({ dose_value: 2.5, dose_unit: 'mg', serving_count: 1 }, null), 2.5)
-  assert.equal(doseMg({ dose_value: 0.5, dose_unit: 'tablet', serving_count: 0.5 }, null), null)
+  assert.deepEqual(quantity(250, 'IU'), { v: 250, base: 'IU' })
+  assert.deepEqual(quantity(10, 'units'), { v: 10, base: 'units' })
+  const mg5 = { v: 5, base: 'mg' as const }
+  assert.deepEqual(doseQty({ dose_value: 0.5, dose_unit: 'tablet', serving_count: 0.5 }, mg5), { v: 2.5, base: 'mg' })
+  assert.deepEqual(doseQty({ dose_value: 2.5, dose_unit: 'mg', serving_count: 1 }, null), { v: 2.5, base: 'mg' })
+  assert.deepEqual(doseQty({ dose_value: 250, dose_unit: 'mcg', serving_count: 1 }, null), { v: 0.25, base: 'mg' })
+  assert.equal(doseQty({ dose_value: 0.5, dose_unit: 'tablet', serving_count: 0.5 }, null), null)
+  assert.equal(qtyText(0.25, 'mg'), '250 mcg')
+  assert.equal(qtyText(2.5, 'mg'), '2.5 mg')
+  assert.equal(qtyText(40, 'IU'), '40 IU')
   assert.equal(lookbackDays(17.5), 4)
   assert.equal(lookbackDays(0.75), 1)
-  const d = [{ at: 8 * 60, amount: 2.5 }]
+  assert.equal(lookbackDays(8 * 24), 40)
+})
+
+function peakOf(halfLifeH: number, tmaxH: number): number {
+  const ka = kaFromTmax(halfLifeH, tmaxH)
+  const d = [{ at: 0, amount: 1 }]
   let best = 0, bestT = 0
-  for (let t = 8 * 60; t < 20 * 60; t += 5) { const v = oneCompartmentAt(d, t, 17.5, MEDICATION_KA_PER_H); if (v > best) { best = v; bestT = t } }
-  assert.ok(Math.abs(bestT - 8 * 60 - 120) <= 15, `peak at ${bestT - 480} min`)
-  // 24 h later 17.5 h half-life still leaves about 40 % of the dose
-  assert.ok(oneCompartmentAt(d, 32 * 60, 17.5, MEDICATION_KA_PER_H) / 2.5 > 0.35)
+  for (let t = 1; t <= 60 * 24 * 20; t += 1) { const v = oneCompartmentAt(d, t, halfLifeH, ka); if (v > best) { best = v; bestT = t } }
+  return bestT / 60
+}
+test('peak time: the absorption rate is solved so the curve peaks where entered', () => {
+  assert.ok(Math.abs(peakOf(17.5, DEFAULT_TMAX_H) - 2) < 0.05)
+  assert.ok(Math.abs(peakOf(4.5, 1) - 1) < 0.05)
+  assert.ok(Math.abs(peakOf(0.75, 0.5) - 0.5) < 0.05)
+  // a depot: half-life 8 days, peak 2.5 days (slower to absorb than to clear is not needed: 1/ke = 11.5 days)
+  assert.ok(Math.abs(peakOf(8 * 24, 2.5 * 24) - 60) < 1)
+  // flip-flop: a peak later than 1/ke (a slow-release product with a short half-life) still peaks where entered
+  assert.ok(Math.abs(peakOf(4, 8) - 8) < 0.1, `${peakOf(4, 8)}`)
+  // the 17.5 h tablet carries into the next day: about 40 % of the dose is left 24 h later
+  const ka = kaFromTmax(17.5, 2)
+  assert.ok(oneCompartmentAt([{ at: 0, amount: 1 }], 26 * 60, 17.5, ka) > 0.35)
 })

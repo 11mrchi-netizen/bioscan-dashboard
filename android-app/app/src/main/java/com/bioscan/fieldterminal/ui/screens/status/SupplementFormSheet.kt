@@ -379,6 +379,8 @@ fun SupplementFormSheet(
             if (regimen.kind != RegimenKind.SUPPLEMENT) {
                 RegimenReferenceSection(existing?.id, name.trim(), roster.filter { it.id != existing?.id }.map { it.id to it.name },
                     unit = regimen.unit, dose = regimen.amount.replace(',', '.').toDoubleOrNull())
+                // The person's own half-life and peak (TODAY's IN THE BODY curve): for a peptide or hormone the label does not cover.
+                SubstanceKineticsSection(existing?.id)
             }
 
             existing?.productId?.let { ProductVerifySection(it) }

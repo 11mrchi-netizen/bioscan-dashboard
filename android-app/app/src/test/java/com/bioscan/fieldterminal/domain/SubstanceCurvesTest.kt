@@ -90,18 +90,40 @@ class SubstanceCurvesTest {
     }
 
     @Test
-    fun medicationDosesInMgAndTheTabletCarriesIntoTheNextDay() {
+    fun regimenAmountsInABaseUnitAndDosesFromTheLogOrFromServings() {
         assertEquals(2.5, sc.massMg(2.5, "mg")!!, 1e-9)
         assertEquals(0.5, sc.massMg(500.0, "mcg")!!, 1e-9)
         assertNull(sc.massMg(1.0, "tablet"))
-        assertEquals(2.5, sc.doseMg(0.5, "tablet", 0.5, 5.0)!!, 1e-9)
-        assertEquals(2.5, sc.doseMg(2.5, "mg", 1.0, null)!!, 1e-9)
-        assertNull(sc.doseMg(0.5, "tablet", 0.5, null))
+        assertEquals(SubstanceCurves.Qty(250.0, SubstanceCurves.QtyBase.IU), sc.quantity(250.0, "IU"))
+        assertEquals(SubstanceCurves.Qty(10.0, SubstanceCurves.QtyBase.UNITS), sc.quantity(10.0, "units"))
+        val mg5 = SubstanceCurves.Qty(5.0, SubstanceCurves.QtyBase.MG)
+        assertEquals(2.5, sc.doseQty(0.5, "tablet", 0.5, mg5)!!.v, 1e-9)
+        assertEquals(2.5, sc.doseQty(2.5, "mg", 1.0, null)!!.v, 1e-9)
+        assertEquals(0.25, sc.doseQty(250.0, "mcg", 1.0, null)!!.v, 1e-9)
+        assertNull(sc.doseQty(0.5, "tablet", 0.5, null))
+        assertEquals("250 mcg", sc.qtyText(0.25, SubstanceCurves.QtyBase.MG))
+        assertEquals("2.5 mg", sc.qtyText(2.5, SubstanceCurves.QtyBase.MG))
+        assertEquals("40 IU", sc.qtyText(40.0, SubstanceCurves.QtyBase.IU))
         assertEquals(4L, sc.lookbackDays(17.5))
         assertEquals(1L, sc.lookbackDays(0.75))
-        val d = listOf(Dose(8 * 60.0, 2.5))
-        val peak = (480..1200 step 5).maxByOrNull { sc.oneCompartmentAt(d, it.toDouble(), 17.5, sc.MEDICATION_KA_PER_H) }!!
-        assertTrue("peak ${peak - 480} min", kotlin.math.abs(peak - 480 - 120) <= 15)
-        assertTrue(sc.oneCompartmentAt(d, 32 * 60.0, 17.5, sc.MEDICATION_KA_PER_H) / 2.5 > 0.35)
+        assertEquals(40L, sc.lookbackDays(8 * 24.0))
+    }
+
+    private fun peakOf(halfLifeH: Double, tmaxH: Double): Double {
+        val ka = sc.kaFromTmax(halfLifeH, tmaxH)
+        val d = listOf(Dose(0.0, 1.0))
+        return (1..(60 * 24 * 20)).maxByOrNull { sc.oneCompartmentAt(d, it.toDouble(), halfLifeH, ka) }!! / 60.0
+    }
+
+    @Test
+    fun theAbsorptionRateIsSolvedSoTheCurvePeaksWhereEntered() {
+        assertEquals(2.0, peakOf(17.5, 2.0), 0.05)
+        assertEquals(1.0, peakOf(4.5, 1.0), 0.05)
+        assertEquals(0.5, peakOf(0.75, 0.5), 0.05)
+        assertEquals(60.0, peakOf(8 * 24.0, 2.5 * 24), 1.0)
+        // a peak later than 1/ke (a slow-release product with a short half-life) still peaks where entered
+        assertEquals(8.0, peakOf(4.0, 8.0), 0.1)
+        // the 17.5 h tablet carries into the next day: about 40 % of the dose is left 24 h later
+        assertTrue(sc.oneCompartmentAt(listOf(Dose(0.0, 1.0)), 26 * 60.0, 17.5, sc.kaFromTmax(17.5, 2.0)) > 0.35)
     }
 }

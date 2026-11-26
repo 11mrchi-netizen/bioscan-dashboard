@@ -59,26 +59,66 @@ object SubstanceCurves {
         return if (c.unit == "g") mg / 1000 else mg
     }
 
-    // MEDICATIONS (a medication on the regimen with a label half-life, e.g. tadalafil 17.5 h): the same model with the half-life
-    // from the FDA label (regimen_references.half_life_hours) and ka 2 per hour, which puts the peak at 2 h, the label's median
-    // for tadalafil. Doses back to five half-lives count, so a daily 17.5 h drug shows its carry-over.
-    const val MEDICATION_KA_PER_H = 2.0
+    // REGIMEN ITEMS (medications, peptides, hormones, anything on the regimen with a half-life): the same model.
+    //   half-life  the person's own entry (substance_kinetics) wins; else the FDA label's (regimen_references.half_life_hours);
+    //              an item with neither has no curve.
+    //   peak time  the person's own entry; else 2 h, said as assumed. The absorption rate is solved from it, so the curve peaks
+    //              where entered (a depot injection with a peak of days and a half-life of days works the same way).
+    //   dose       what was logged in a unit this model can add (mg, mcg, g, IU, units); else servings taken times what a
+    //              serving holds (the person's own "amount per serving", else the product's ingredient row).
+    // Doses back to five half-lives count, so a daily 17.5 h drug shows its carry-over. Amounts are in the unit the item is
+    // logged in (mass in mg, shown as mcg when small; IU and units as they are).
+    const val DEFAULT_TMAX_H = 2.0
 
     /** Days of doses that still matter for a half-life: five half-lives, at least one day. */
     fun lookbackDays(halfLifeH: Double): Long = maxOf(1L, Math.ceil(halfLifeH * 5 / 24).toLong())
 
-    /** A mass in mg (mg, mcg, g), or null for a unit that is not one (tablet, pill). */
-    fun massMg(amount: Double, unit: String?): Double? = when (unit?.trim()?.lowercase()) {
-        "mg" -> amount
-        "mcg", "µg", "ug" -> amount / 1000
-        "g" -> amount * 1000
+    enum class QtyBase(val label: String) { MG("mg"), IU("IU"), UNITS("units") }
+    data class Qty(val v: Double, val base: QtyBase)
+
+    /** An amount in the model's base unit: mass in mg (from mg, mcg, g), IU and units as they are; null for tablet, pill and the like. */
+    fun quantity(amount: Double, unit: String?): Qty? = when (unit?.trim()?.lowercase()) {
+        "mg" -> Qty(amount, QtyBase.MG)
+        "mcg", "µg", "ug" -> Qty(amount / 1000, QtyBase.MG)
+        "g" -> Qty(amount * 1000, QtyBase.MG)
+        "iu" -> Qty(amount, QtyBase.IU)
+        "unit", "units" -> Qty(amount, QtyBase.UNITS)
         else -> null
     }
 
-    /** One logged dose in mg: its own mass when logged in one, else the servings taken times the mg in a serving. */
-    fun doseMg(doseValue: Double?, doseUnit: String?, servingCount: Double?, mgPerServing: Double?): Double? {
-        doseValue?.let { v -> massMg(v, doseUnit)?.let { return it } }
-        return if (servingCount != null && mgPerServing != null) servingCount * mgPerServing else null
+    /** A mass in mg (mg, mcg, g), or null for a unit that is not one. */
+    fun massMg(amount: Double, unit: String?): Double? = quantity(amount, unit)?.takeIf { it.base == QtyBase.MG }?.v
+
+    /** One logged dose: its own amount when logged in a unit the model can add, else the servings taken times what a serving holds. */
+    fun doseQty(doseValue: Double?, doseUnit: String?, servingCount: Double?, perServing: Qty?): Qty? {
+        doseValue?.let { v -> quantity(v, doseUnit)?.let { return it } }
+        return if (servingCount != null && perServing != null) Qty(servingCount * perServing.v, perServing.base) else null
+    }
+
+    /** A base amount as shown: milligrams under 1 mg as micrograms. */
+    fun qtyText(v: Double, base: QtyBase): String {
+        val (x, unit) = if (base == QtyBase.MG && v < 1) (v * 1000) to "mcg" else v to base.label
+        return (if (x < 10) "%.1f".format(x) else Math.round(x).toString()) + " " + unit
+    }
+
+    /**
+     * The absorption rate (per hour) whose curve peaks [tmaxH] after a dose for a half-life of [halfLifeH]. The peak time of
+     * ka/(ka-ke) (e^-ke t - e^-ka t) is symmetric in ka and ke, so a peak later than 1/ke (a slow-release depot) is a ka below ke.
+     */
+    fun kaFromTmax(halfLifeH: Double, tmaxH: Double): Double {
+        val ke = ln(2.0) / halfLifeH
+        fun peak(ka: Double) = ln(ka / ke) / (ka - ke)
+        val fast = tmaxH < 1 / ke
+        var lo = if (fast) ke else ke * 1e-6
+        var hi = if (fast) ke * 1e6 else ke
+        repeat(200) {
+            val mid = Math.sqrt(lo * hi)
+            if (Math.abs(mid - ke) < ke * 1e-9) return@repeat
+            // A larger ka peaks earlier on both sides of ke, so a peak before the wanted one means ka is too large.
+            if (peak(mid) < tmaxH) hi = mid else lo = mid
+        }
+        val ka = Math.sqrt(lo * hi)
+        return if (Math.abs(ka - ke) < ke * 1e-6) ke * 1.000001 else ka
     }
 
     /** Amount in the body at minute [t], first-order absorption and elimination. */

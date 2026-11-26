@@ -13,8 +13,17 @@ import java.time.LocalDate
 // What TODAY's IN THE BODY card reads: the drinks and supplements logged since the evening before, and the usual bedtime.
 // Logged times are the phone's wall clock labelled +00 (domain/WallClock.kt): their digits are local.
 
-/** A medication's doses in mg on the day's clock, back to five half-lives, with the label's half-life. */
-data class MedicationCurve(val name: String, val halfLifeH: Double, val doses: List<Dose>)
+/**
+ * A regimen item's doses on the day's clock, back to five half-lives, in one unit [base], with the half-life the curve uses:
+ * the person's own entry ([ownEntry], substance_kinetics) or the FDA label's. [tmaxAssumed]: no peak time was entered.
+ */
+data class MedicationCurve(
+    val name: String, val kind: String, val halfLifeH: Double, val tmaxH: Double, val tmaxAssumed: Boolean, val ownEntry: Boolean,
+    val base: SubstanceCurves.QtyBase, val doses: List<Dose>,
+)
+
+/** The regimen's curves, and the items taken lately that have no half-life yet (so nothing can be drawn for them). */
+data class RegimenCurves(val items: List<MedicationCurve>, val missing: List<String>)
 
 /** Doses on the day's own clock (minutes from its midnight) and the usual bedtime in the same terms, or null without enough nights. */
 data class SubstanceDay(
@@ -22,7 +31,7 @@ data class SubstanceDay(
     val caffeine: List<Dose>,
     val alcohol: List<Dose>,
     val supplements: Map<String, List<Dose>>,
-    val medications: List<MedicationCurve>,
+    val regimen: RegimenCurves,
     val bedtimeMin: Double?,
 )
 
@@ -91,52 +100,70 @@ class SubstanceRepository(private val supabase: SupabaseClient) {
             }.decodeList<SubSleep>()
             SubstanceCurves.usualBedtimeMin(nights.map { it.bedtime to it.tzOffsetMin })
         }.getOrNull()
-        val medications = catching { loadMedications(day) }.getOrElse { emptyList() }
-        return SubstanceDay(day, caffeine, alcohol, supplements, medications, bedtime)
+        val regimen = catching { loadRegimen(day) }.getOrElse { RegimenCurves(emptyList(), emptyList()) }
+        return SubstanceDay(day, caffeine, alcohol, supplements, regimen, bedtime)
     }
 
     /**
-     * Medications on the regimen whose label gives a half-life (regimen_references, from the FDA label), each with its doses
-     * in mg. A dose logged in tablets is the servings taken times the mg of the active ingredient in a serving.
+     * Active regimen items that are not supplements (medications, peptides, hormones, other) with a half-life: the person's own
+     * entry (substance_kinetics) wins over the FDA label's (regimen_references). A dose logged in tablets is the servings taken
+     * times what a serving holds (the person's own amount, else the product's ingredient row).
      */
-    private suspend fun loadMedications(day: LocalDate): List<MedicationCurve> {
-        val meds = supabase.postgrest.from("supplements").select(Columns.list("id,name,product_id")) {
-            filter { eq("kind", "medication"); eq("status", "active") }
+    private suspend fun loadRegimen(day: LocalDate): RegimenCurves {
+        val meds = supabase.postgrest.from("supplements").select(Columns.list("id,name,kind,product_id")) {
+            filter { neq("kind", "supplement"); eq("status", "active") }
         }.decodeList<SubMedication>()
-        if (meds.isEmpty()) return emptyList()
-        val half = supabase.postgrest.from("regimen_references").select(Columns.list("supplement_id,half_life_hours")) {
-            filter { isIn("supplement_id", meds.map { it.id }) }
+        if (meds.isEmpty()) return RegimenCurves(emptyList(), emptyList())
+        val ids = meds.map { it.id }
+        val label = supabase.postgrest.from("regimen_references").select(Columns.list("supplement_id,half_life_hours")) {
+            filter { isIn("supplement_id", ids) }
         }.decodeList<SubReference>().mapNotNull { r -> r.halfLifeHours?.takeIf { it > 0 }?.let { r.supplementId to it } }.toMap()
-        val withHalf = meds.filter { it.id in half }
-        if (withHalf.isEmpty()) return emptyList()
-        val products = withHalf.mapNotNull { it.productId }.distinct()
+        val own = catching {
+            supabase.postgrest.from("substance_kinetics")
+                .select(Columns.list("supplement_id,half_life_hours,tmax_hours,amount_per_serving,amount_unit")) { filter { isIn("supplement_id", ids) } }
+                .decodeList<KineticsRow>().associateBy { it.supplementId }
+        }.getOrElse { emptyMap() }
+        val products = meds.mapNotNull { it.productId }.distinct()
         val links = if (products.isEmpty()) emptyList() else supabase.postgrest.from("supplement_product_ingredients")
             .select(Columns.list("supplement_product_id,compound_amount,compound_unit,supplement_ingredients(name)")) {
                 filter { isIn("supplement_product_id", products) }
             }.decodeList<SubLink>()
         val hi = "${day.plusDays(1)}T00:00:00+00:00"
-        return withHalf.mapNotNull { m ->
-            val hl = half.getValue(m.id)
-            val since = "${day.minusDays(SubstanceCurves.lookbackDays(hl))}T00:00:00+00:00"
+        val items = ArrayList<MedicationCurve>()
+        val missing = ArrayList<String>()
+        for (m in meds) {
+            val o = own[m.id]
+            val hl = o?.halfLifeHours ?: label[m.id]
+            val since = "${day.minusDays(SubstanceCurves.lookbackDays(hl ?: 24.0))}T00:00:00+00:00"
             val logs = supabase.postgrest.from("supplement_log").select(Columns.list("taken_at,dose_value,dose_unit,serving_count")) {
                 filter { eq("supplement_id", m.id); gte("taken_at", since); lt("taken_at", hi) }
             }.decodeList<SubDoseLog>()
-            // mg of the active ingredient in one serving: the ingredient named like the medication, else the only one.
+            if (logs.isEmpty()) continue
+            if (hl == null) { missing += m.name; continue }
+            // What a serving holds: the person's own entry, else the product's ingredient named like the item (or its only one).
             val mine = links.filter { it.productId == m.productId }
             val named = mine.firstOrNull { it.ingredient?.name.orEmpty().lowercase().contains(m.name.lowercase()) } ?: mine.singleOrNull()
-            val perServing = named?.compoundAmount?.let { SubstanceCurves.massMg(it, named.compoundUnit) }
-            val doses = logs.mapNotNull { l ->
+            val perServing = if (o?.amountPerServing != null) SubstanceCurves.quantity(o.amountPerServing, o.amountUnit)
+            else named?.compoundAmount?.let { SubstanceCurves.quantity(it, named.compoundUnit) }
+            val qtys = logs.mapNotNull { l ->
                 val t = SubstanceCurves.minutesFromDay(l.takenAt, day) ?: return@mapNotNull null
-                val mg = SubstanceCurves.doseMg(l.doseValue, l.doseUnit, l.servingCount, perServing)?.takeIf { it > 0 } ?: return@mapNotNull null
-                Dose(t, mg)
+                val q = SubstanceCurves.doseQty(l.doseValue, l.doseUnit, l.servingCount, perServing)?.takeIf { it.v > 0 } ?: return@mapNotNull null
+                t to q
             }
-            if (doses.isEmpty()) null else MedicationCurve(m.name, hl, doses)
+            if (qtys.isEmpty()) { missing += m.name; continue }
+            // One unit per item: a dose logged in another family is left out.
+            val base = qtys.first().second.base
+            items += MedicationCurve(
+                m.name, m.kind, hl, o?.tmaxHours ?: SubstanceCurves.DEFAULT_TMAX_H, o?.tmaxHours == null, o != null, base,
+                qtys.filter { it.second.base == base }.map { Dose(it.first, it.second.v) },
+            )
         }
+        return RegimenCurves(items, missing)
     }
 }
 
 @Serializable
-private data class SubMedication(val id: Long, val name: String, @SerialName("product_id") val productId: Long? = null)
+private data class SubMedication(val id: Long, val name: String, val kind: String = "medication", @SerialName("product_id") val productId: Long? = null)
 
 @Serializable
 private data class SubReference(@SerialName("supplement_id") val supplementId: Long, @SerialName("half_life_hours") val halfLifeHours: Double? = null)

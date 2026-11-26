@@ -49,22 +49,63 @@ export function amountIn(c: Compound, amount: number, unit: string | null): numb
   const mg = u === 'mg' ? amount : u === 'mcg' || u === 'µg' || u === 'ug' ? amount / 1000 : u === 'g' || u.startsWith('gram') ? amount * 1000 : null
   return mg == null ? null : c.unit === 'g' ? mg / 1000 : mg
 }
-// MEDICATIONS (a medication on the regimen with a label half-life, e.g. tadalafil 17.5 h): the same one-compartment model with the
-// half-life from the FDA label (regimen_references.half_life_hours) and absorption ka = 2 per hour, which puts the peak at 2 h, the
-// label's median for tadalafil. Doses back to five half-lives still count, so a daily 17.5 h drug shows its carry-over.
-export const MEDICATION_KA_PER_H = 2
+// REGIMEN ITEMS (medications, peptides, hormones, anything on the regimen with a half-life): the same one-compartment model.
+//   half-life  the person's own entry (substance_kinetics) wins; else the FDA label's (regimen_references.half_life_hours);
+//              an item with neither has no curve.
+//   peak time  the person's own entry; else 2 h, said as assumed. The absorption rate is solved from it, so the curve peaks
+//              where entered (a depot injection with a peak of days and a half-life of days works the same way).
+//   dose       what was logged in a unit this model can add (mg, mcg, g, IU, units); else servings taken times what a
+//              serving holds (the product's ingredient row, else the person's own "amount per serving").
+// Doses back to five half-lives count, so a daily 17.5 h drug shows its carry-over. Amounts are in the unit the item is
+// logged in (mass in mg, shown as mcg when small; IU and units as they are).
+export const DEFAULT_TMAX_H = 2
 /** Days of doses that still matter for a half-life: five half-lives, at least one day. */
 export const lookbackDays = (halfLifeH: number): number => Math.max(1, Math.ceil((halfLifeH * 5) / 24))
-/** A mass in mg (mg, mcg, g), or null for a unit that is not one (tablet, pill). */
-export function massMg(amount: number, unit: string | null): number | null {
+
+export type QtyBase = 'mg' | 'IU' | 'units'
+export interface Qty { v: number; base: QtyBase }
+/** An amount in the model's base unit: mass in mg (from mg, mcg, g), IU and units as they are; null for tablet, pill and the like. */
+export function quantity(amount: number, unit: string | null): Qty | null {
   const u = (unit ?? '').trim().toLowerCase()
-  return u === 'mg' ? amount : u === 'mcg' || u === 'µg' || u === 'ug' ? amount / 1000 : u === 'g' ? amount * 1000 : null
+  if (u === 'mg') return { v: amount, base: 'mg' }
+  if (u === 'mcg' || u === 'µg' || u === 'ug') return { v: amount / 1000, base: 'mg' }
+  if (u === 'g') return { v: amount * 1000, base: 'mg' }
+  if (u === 'iu') return { v: amount, base: 'IU' }
+  if (u === 'unit' || u === 'units') return { v: amount, base: 'units' }
+  return null
 }
-/** One logged dose in mg: its own mass when logged in one, else the servings taken times the mg in a serving. */
-export function doseMg(log: { dose_value: number | null; dose_unit: string | null; serving_count: number | null }, mgPerServing: number | null): number | null {
-  const own = log.dose_value != null ? massMg(Number(log.dose_value), log.dose_unit) : null
-  if (own != null) return own
-  return log.serving_count != null && mgPerServing != null ? Number(log.serving_count) * mgPerServing : null
+/** A mass in mg (mg, mcg, g), or null for a unit that is not one. */
+export const massMg = (amount: number, unit: string | null): number | null => { const q = quantity(amount, unit); return q?.base === 'mg' ? q.v : null }
+/** One logged dose: its own amount when logged in a unit the model can add, else the servings taken times what a serving holds. */
+export function doseQty(log: { dose_value: number | null; dose_unit: string | null; serving_count: number | null }, perServing: Qty | null): Qty | null {
+  const own = log.dose_value != null ? quantity(Number(log.dose_value), log.dose_unit) : null
+  if (own) return own
+  return log.serving_count != null && perServing ? { v: Number(log.serving_count) * perServing.v, base: perServing.base } : null
+}
+/** A base amount as shown: milligrams under 1 mg as micrograms. */
+export function qtyText(v: number, base: QtyBase): string {
+  const [x, unit] = base === 'mg' && v < 1 ? [v * 1000, 'mcg'] : [v, base]
+  return `${x < 10 ? x.toFixed(1) : Math.round(x)} ${unit}`
+}
+
+/**
+ * The absorption rate (per hour) whose curve peaks `tmaxH` after a dose for a half-life of `halfLifeH`. The peak time of
+ * ka/(ka-ke) (e^-ke t - e^-ka t) is symmetric in ka and ke, so a peak later than 1/ke (a slow-release depot) is a ka below ke.
+ */
+export function kaFromTmax(halfLifeH: number, tmaxH: number): number {
+  const ke = Math.LN2 / halfLifeH
+  const peak = (ka: number) => Math.log(ka / ke) / (ka - ke)
+  // peak() falls from 1/ke at ka = ke to 0 as ka grows, and rises from 1/ke to infinity as ka falls to 0.
+  const fast = tmaxH < 1 / ke
+  let lo = fast ? ke : ke * 1e-6, hi = fast ? ke * 1e6 : ke
+  for (let i = 0; i < 200; i++) {
+    const mid = Math.sqrt(lo * hi)
+    if (Math.abs(mid - ke) < ke * 1e-9) break
+    // A larger ka peaks earlier on both sides of ke, so a peak before the wanted one means ka is too large.
+    if (peak(mid) < tmaxH) hi = mid; else lo = mid
+  }
+  const ka = Math.sqrt(lo * hi)
+  return Math.abs(ka - ke) < ke * 1e-6 ? ke * 1.000001 : ka
 }
 
 /** One-compartment amount in the body at `t`, any half-life and absorption rate (per hour). */

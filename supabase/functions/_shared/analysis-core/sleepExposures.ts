@@ -62,7 +62,7 @@ export function sleepOutcomeSeries(
   axis: string[],
   sleep: SleepStageRow[],
   dips: { date: string; dip_pct: number | null }[],
-  spo2: { date: string; spo2_avg: number | null }[],
+  spo2: { date: string; spo2_avg?: number | null }[],
   bedtimeLocalMs: (stamp: string) => number | null,
 ): Record<string, Num[]> {
   const sleepBy = new Map(sleep.map((s) => [s.date, s]))

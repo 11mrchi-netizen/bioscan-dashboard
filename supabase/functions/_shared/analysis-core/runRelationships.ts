@@ -68,7 +68,7 @@ export interface RawInputs {
   /** Evening check-ins (analysis review phase B); optional so older callers and tests keep working. */
   checkins?: CheckinRow[]
   /** The phone's UTC offset per local date (daily_context); timestamps become local dates and hours with it. */
-  context?: { date: string; utc_offset_min: number }[]
+  context?: { date: string; utc_offset_min: number; temp_max_c?: number | null }[]
   /** Routine intelligence R4: phone use and mobility published by the phone (routineExposures.ts). */
   routine?: RoutineInputs
   /** The app's scored mornings (score_history): next-morning RECOVERY and SLEEP as outcomes (catalogue 2.2.0). */
@@ -304,6 +304,7 @@ export function buildFrame(raw: RawInputs, today: string, lookbackDays = RELATIO
   series.gut_day_score = gutDayScore(axis, raw.stool ?? [], (raw.checkins ?? []) as GutCheckinRow[])
   // Catalogue 2.5.0 (sleepExposures.ts): the caffeine still on board at bedtime, and sleep outcomes the engine did not read.
   series.hydration_l = alignToAxis(axis, (raw.hydration ?? []).map((h) => { const ml = num(h.ml); return { date: h.date, value: ml !== null && ml >= 200 && ml <= 8000 ? Math.round(ml) / 1000 : null } }))
+  series.temp_max_c = alignToAxis(axis, (raw.context ?? []).map((c) => { const t = num(c.temp_max_c); return { date: c.date, value: t !== null && t > -40 && t < 55 ? t : null } }))
   series.caffeine_board_bed = caffeineBoardSeries(axis, raw.meals, raw.sleep, localMsOf(raw.context ?? []))
   Object.assign(series, sleepOutcomeSeries(axis, raw.sleep, raw.hrDip ?? [], raw.wearable, localMsOf(raw.context ?? [])))
 
@@ -374,7 +375,7 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
     admin.from('illnesses').select('start_date, end_date').eq('user_id', userId),
     // Phase B tables: read softly, so the nightly run keeps working before the migration is applied.
     fetchAll<CheckinRow>(q('evening_checkins', 'date, drinks, caffeine_after_14, late_meal, stress', 'date', since)),
-    fetchAll<{ date: string; utc_offset_min: number }>(q('daily_context', 'date, utc_offset_min', 'date', shift(since, -30))),
+    fetchAll<{ date: string; utc_offset_min: number; temp_max_c?: number | null }>(q('daily_context', 'date, utc_offset_min, temp_max_c', 'date', shift(since, -30))),
     // Health concerns (docs/health-concerns): systemic episodes leave their days out as logged illness does. Read softly;
     // for one release both are read (owner decision 7.2.7), and the copied legacy rows give the same spans.
     loadHealthInputs(admin, userId),

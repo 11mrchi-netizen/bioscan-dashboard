@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  let body: { action?: string; user_id?: string; planned_a?: number; planned_b?: number; group?: string; keys?: string[]; weeks?: number; months?: number; stress_days?: number } = {};
+  let body: { action?: string; user_id?: string; planned_a?: number; planned_b?: number; group?: string; keys?: string[]; weeks?: number; months?: number; stress_days?: number; weather_days?: number } = {};
   try {
     body = await req.json();
   } catch {
@@ -205,7 +205,7 @@ Deno.serve(async (req) => {
         : isScheduler && (body.weeks !== undefined || body.months !== undefined) ? { weeks: Math.max(0, Math.min(12, Math.round(body.weeks ?? 0))), months: Math.max(0, Math.min(6, Math.round(body.months ?? 0))) }
         : {};
       // Computed daily values and session fuel for the pages (runDerived.ts), before the reports.
-      if (want.has("derived")) out.derived = await run("derived", () => runDerived(admin, id, new Date(), { stressDays: Math.max(1, Math.min(900, Math.round(body.stress_days ?? 60))) }));
+      if (want.has("derived")) out.derived = await run("derived", () => runDerived(admin, id, new Date(), { stressDays: Math.max(1, Math.min(900, Math.round(body.stress_days ?? 60))), weatherDays: Math.max(0, Math.min(1600, Math.round(body.weather_days ?? 0))) }));
       if (want.has("reports")) out.reports = await run("reports", () => runReports(admin, id, seriesFile as SeriesFile, new Date(), reportOpts));
       // The frame is read once and shared; one engine failing must not hide the others: each reports its own error.
       // Typicality and the expected bands run in a later group than the series breaks because they restart at confirmed ones.

@@ -11,6 +11,7 @@ import { fetchAll } from './paging.ts'
 import { gutDayScore, type GutCheckinRow, type StoolRow } from './mealExposures.ts'
 import { localDateAt, type Admin } from './runRelationships.ts'
 import { addDays } from './seriesContract.ts'
+import { fetchWeather } from './weatherBackfill.ts'
 import { offsetLookup, samplesOf, watchStressDays, type WatchStressDay } from './watchStress.ts'
 import { energyAvailability, sessionFuel, TRAINING_FUEL, type TfBody, type TfFuel, type TfMeal, type TfSession } from './trainingFuel.ts'
 
@@ -84,7 +85,7 @@ export function stressDerivedRows(userId: string, days: WatchStressDay[]): Deriv
 
 export interface DerivedRun { userId: string; from: string; to: string; daily: number; sessions: number }
 
-export async function runDerived(admin: Admin, userId: string, now: Date = new Date(), opts: { stressDays?: number } = {}): Promise<DerivedRun> {
+export async function runDerived(admin: Admin, userId: string, now: Date = new Date(), opts: { stressDays?: number; weatherDays?: number } = {}): Promise<DerivedRun> {
   const ctx = await admin.from('daily_context').select('date, utc_offset_min').eq('user_id', userId).order('date', { ascending: false }).limit(5)
   const to = localDateAt(now, ctx.error ? [] : (ctx.data ?? []) as { date: string; utc_offset_min: number | null }[])
   const from = addDays(to, -(WINDOW_DAYS - 1))
@@ -149,5 +150,34 @@ export async function runDerived(admin: Admin, userId: string, now: Date = new D
     }
     stressRows = sr.length
   }
+
+  // Weather for the days the phone did not fill (weatherBackfill.ts); only when asked (`weather_days`), once, then the phone keeps up.
+  if ((opts.weatherDays ?? 0) > 0) await backfillWeather(admin, userId, addDays(to, -(opts.weatherDays as number)), to)
   return { userId, from, to, daily: rows.daily.length + stressRows, sessions: rows.sessions.length }
+}
+
+/** Fills daily_context with archive weather for the dates between [from] and [to] that have none; never overwrites a row. */
+export async function backfillWeather(admin: Admin, userId: string, from: string, to: string, get: (url: string) => Promise<unknown> = async (u) => (await fetch(u)).json()): Promise<number> {
+  const home = await admin.from('places').select('lat, lon').eq('user_id', userId).ilike('category', 'home').limit(1)
+  const place = !home.error && home.data?.[0] ? home.data[0] as { lat: number | null; lon: number | null } : null
+  if (!place || place.lat === null || place.lon === null) return 0
+  const have = await fetchAll<{ date: string; utc_offset_min: number; temp_max_c: number | null }>((a, b) =>
+    admin.from('daily_context').select('date, utc_offset_min, temp_max_c').eq('user_id', userId).order('date').range(a, b))
+  if (have.error) return 0
+  const filled = new Set(have.rows.filter((r) => r.temp_max_c !== null).map((r) => r.date))
+  const offsetOn = offsetLookup(have.rows)
+  let wrote = 0
+  // the archive trails real time by a few days, so never ask for the last 5
+  const last = addDays(to, -5)
+  for (let start = from; start <= last; start = addDays(start, 366)) {
+    const end = addDays(start, 365) < last ? addDays(start, 365) : last
+    const days = (await fetchWeather(Number(place.lat), Number(place.lon), start, end, get)).filter((w) => !filled.has(w.date))
+    const rows = days.map((w) => ({ user_id: userId, date: w.date, utc_offset_min: offsetOn(w.date), source: 'open-meteo-archive', temp_max_c: w.temp_max_c, humidity_mean_pct: w.humidity_mean_pct, daylight_hours: w.daylight_hours }))
+    for (let i = 0; i < rows.length; i += 500) {
+      const r = await admin.from('daily_context').upsert(rows.slice(i, i + 500), { onConflict: 'user_id,date', ignoreDuplicates: true })
+      if (r.error) throw new Error(`daily_context: ${r.error.message}`)
+      wrote += Math.min(500, rows.length - i)
+    }
+  }
+  return wrote
 }

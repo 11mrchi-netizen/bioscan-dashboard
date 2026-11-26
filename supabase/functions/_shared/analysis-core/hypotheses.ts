@@ -213,6 +213,20 @@ function hydrationQuestions(): Hypothesis[] {
   ]
 }
 
+// Catalogue 2.5.0: the day's peak temperature (daily_context, backfilled from the weather archive) against the night after it.
+const HEAT_MODEL = 'The day\'s highest temperature at home (phone, or the weather archive for earlier days); days without a value are left out.'
+function heatQuestions(): Hypothesis[] {
+  const q = (key: string, label: string, spec: object, targetText: string, sign: -1 | 0 | 1): Hypothesis => ({
+    id: `temp_max_${key}`, label: `A hotter day and ${label}`, cause: 'temp_max_c', lag: 1, exposure: 'continuous', causeScale: 5, ...spec,
+    causeText: 'Each 5 degrees warmer the day\'s high', targetText, expectedSign: sign, exposureModel: HEAT_MODEL,
+  } as Hypothesis)
+  return [
+    q('sleep', 'that night\'s sleep', SLEEP, 'that night\'s sleep', -1),
+    q('hrv', 'next-morning HRV', HRV, 'next-morning HRV', -1),
+    q('rhr', 'next-morning resting heart rate', RHR, 'next-morning resting heart rate', 1),
+  ]
+}
+
 export const HYPOTHESES: Hypothesis[] = [
   {
     id: 'alcohol_hrv', label: 'Alcohol and next-morning HRV', cause: 'alcohol_any', lag: 1, exposure: 'binary', ...HRV,
@@ -313,6 +327,7 @@ export const HYPOTHESES: Hypothesis[] = [
   ...watchStressQuestions(),
   ...sleepQualityQuestions(),
   ...hydrationQuestions(),
+  ...heatQuestions(),
 ]
 
 // Analysis review phase E: questions a person registers from a hint (what came before off mornings). Each is tested only

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { derivedRows } from './runDerived.ts'
+import { backfillWeather, derivedRows } from './runDerived.ts'
 
 test('derived rows: the digestion score and energy availability per day, and the food around each session', () => {
   const r = derivedRows('u', {
@@ -38,4 +38,26 @@ test('derived rows: the logged energy balance only on days the log looks complet
   const b = r.daily.filter((d) => d.metric === 'energy_balance')
   assert.deepEqual(b.map((d) => [d.date, d.value]), [['2026-11-23', -600]])
   assert.deepEqual(b[0].detail, { intake_kcal: 1700, expenditure_kcal: 2300 })
+})
+
+test('backfillWeather writes archive days only for dates without weather, at the home place, never overwriting', async () => {
+  const written: { date: string; source: string; utc_offset_min: number }[] = []
+  const calls: string[] = []
+  const admin = {
+    from(table: string) {
+      const q: Record<string, unknown> = {
+        select() { return q }, eq() { return q }, ilike() { return q }, order() { return q },
+        limit() { return Promise.resolve({ data: table === 'places' ? [{ lat: 25.04, lon: 121.56 }] : [], error: null }) },
+        range() { return Promise.resolve({ data: table === 'daily_context' ? [{ date: '2026-11-02', utc_offset_min: 480, temp_max_c: 24 }] : [], error: null }) },
+        upsert(rows: typeof written) { written.push(...rows); return Promise.resolve({ error: null }) },
+      }
+      return q
+    },
+  }
+  const get = async (u: string) => { calls.push(u); return { daily: { time: ['2026-11-01', '2026-11-02'], temperature_2m_max: [27, 20], relative_humidity_2m_mean: [70, 80], daylight_duration: [36000, 36000] } } }
+  const n = await backfillWeather(admin, 'u', '2026-11-01', '2026-11-20', get)
+  assert.equal(n, 1)
+  assert.deepEqual(written.map((w) => [w.date, w.source, w.utc_offset_min]), [['2026-11-01', 'open-meteo-archive', 480]])
+  assert.equal(calls.length, 1)
+  assert.ok(!/25\.04|121\.56/.test(calls[0]))
 })

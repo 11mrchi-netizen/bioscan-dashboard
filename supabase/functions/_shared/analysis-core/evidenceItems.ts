@@ -69,7 +69,7 @@ export const CONTROLLABLE = new Set([
   'caffeine_any', // catalogue 2.4.0
   'caffeine_board_bed', 'hydration_l', // catalogue 2.5.0
 ])
-export const NOT_CONTROLLABLE = new Set(['stress_high', 'stress_watch', 'training_day', 'sleep_hours', 'steps', 'home_day', 'travel_day', 'commute_long', 'training_min', 'long_session'])
+export const NOT_CONTROLLABLE = new Set(['stress_high', 'stress_watch', 'temp_max_c', 'training_day', 'sleep_hours', 'steps', 'home_day', 'travel_day', 'commute_long', 'training_min', 'long_session'])
 
 const ref = (r: ResultRow): DataRef => ({ kind: 'result', resultKind: r.kind, key: r.key, asOf: r.as_of })
 

@@ -35,7 +35,37 @@ fun perKg(days: List<DailyNutrition>, weights: List<Pair<LocalDate, Double>>, pi
         weightOn(date, weights)?.takeIf { it > 0 }?.let { date to pick(d) / it }
     }
 
-/** Protein of each meal, in the order eaten, for each day. A meal with no protein recorded counts as 0 g (it is a logged meal). */
+/** The names a meal can carry on the Nutrition page, in the order the day runs. */
+val MEAL_NAMES = listOf("Breakfast", "Pre-session", "Lunch", "Snack", "Recovery", "Dinner")
+
+private val MAIN_BY_CLOCK = listOf(4 to "Breakfast", 11 to "Lunch", 16 to "Dinner")
+
+/**
+ * The name of each meal of one day (same order as [day]): the label it was logged under (meal_slot), else the main meal its
+ * clock time falls in (breakfast from 04:00, lunch from 11:00, dinner from 16:00), and a Snack when that main meal is
+ * already taken that day. Logged times are wall clock, so their digits are the local hour.
+ */
+fun mealNames(day: List<MealRow>): List<String> {
+    fun label(slot: String?) = slot?.trim()?.lowercase()?.replace('-', '_')?.let {
+        when (it) { "breakfast" -> "Breakfast"; "lunch" -> "Lunch"; "dinner" -> "Dinner"; "snack" -> "Snack"
+            "pre_session" -> "Pre-session"; "recovery" -> "Recovery"; else -> null }
+    }
+    val taken = day.mapNotNull { label(it.mealSlot) }.toMutableSet()
+    return day.map { m ->
+        label(m.mealSlot) ?: run {
+            val hour = m.loggedAt.drop(11).take(2).toIntOrNull() ?: 12
+            val main = MAIN_BY_CLOCK.lastOrNull { hour >= it.first }?.second ?: "Dinner"
+            if (taken.add(main)) main else "Snack"
+        }
+    }
+}
+
+/** Protein of each meal for each day, one value per [MEAL_NAMES] entry (meals sharing a name add up). A logged meal with no protein counts as 0 g. */
 fun proteinByMeal(meals: List<MealRow>): Map<LocalDate, List<Double>> =
     meals.groupBy { LocalDate.parse(it.loggedAt.take(10)) }
-        .mapValues { (_, day) -> day.sortedBy { it.loggedAt }.map { it.proteinG ?: 0.0 } }
+        .mapValues { (_, day) ->
+            val sorted = day.sortedBy { it.loggedAt }
+            val totals = DoubleArray(MEAL_NAMES.size)
+            mealNames(sorted).forEachIndexed { i, n -> totals[MEAL_NAMES.indexOf(n)] += sorted[i].proteinG ?: 0.0 }
+            totals.toList()
+        }

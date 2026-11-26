@@ -5,13 +5,20 @@ import { useEffect, useState } from 'react'
 import { useLoadEffect } from '../lib/useLoadEffect'
 import { localDateString, localToday } from '../lib/dates'
 import { metricHref } from '../lib/metrics'
+import { Board } from '../components/layout/Board'
+import { supabase } from '../lib/supabase'
+import { headline, latest, type PeriodReport, reportHref, spanText } from '../lib/reports'
 import {
   bandWord, chargeRankLine, directionGlyph, directionWords, DOMAINS, domainSentence, driverSummary, formatJudgedValue, referenceLine,
   type DayScores, type DomainKey,
 } from '../lib/scoreText'
-import { type DayPlan, loadToday, type PlanRowJson, shownScore, stripCharge, type TodayData } from './todayData'
+import { loadToday, shownScore, stripCharge, type TodayData } from './todayData'
+import { type LiveKind, type LivePlan, livePlan } from './todayLive'
+import { SubstanceCard } from './Substances'
+import { MealOverlay } from './MealOverlay'
 
 const STRIP_DAYS = 28
+const REFRESH_MS = 60_000 // while today is on screen
 
 function shift(day: string, n: number): string {
   const [y, m, d] = day.split('-').map(Number)
@@ -26,6 +33,9 @@ type Overlay = 'CHARGE' | DomainKey | null
 
 export function Today({ day, onDay }: { day: string; onDay: (d: string) => void }) {
   const [data, setData] = useState<TodayData | null>(null)
+  const [readAt, setReadAt] = useState<Date | null>(null)
+  // Bumped to read the day again: once a minute while today is on screen, and when the tab comes back into view.
+  const [tick, setTick] = useState(0)
   // An overlay belongs to the day it was opened on: picking another day closes it.
   const [opened, setOpened] = useState<{ day: string; which: Overlay }>({ day, which: null })
   const overlay = opened.day === day ? opened.which : null
@@ -33,8 +43,18 @@ export function Today({ day, onDay }: { day: string; onDay: (d: string) => void 
   const from = shift(day, -(STRIP_DAYS - 1))
   const status = useLoadEffect(async (isCurrent) => {
     const d = await loadToday(day, from)
-    if (isCurrent()) setData(d)
-  }, [day])
+    if (isCurrent()) { setData(d); setReadAt(new Date()) }
+  }, [day, tick])
+  const isToday = day === localToday()
+  useEffect(() => {
+    if (!isToday) return
+    // A reload keeps the page on screen (useLoadEffect: refreshing) and only replaces it once the new read is in.
+    const again = () => { if (document.visibilityState === 'visible') setTick((t) => t + 1) }
+    const timer = window.setInterval(again, REFRESH_MS)
+    document.addEventListener('visibilitychange', again)
+    window.addEventListener('focus', again)
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', again); window.removeEventListener('focus', again) }
+  }, [isToday])
 
   const strip = Array.from({ length: STRIP_DAYS }, (_, i) => shift(from, i))
   const charge = data ? round(shownScore(data, day, 'CHARGE')) : null
@@ -43,48 +63,55 @@ export function Today({ day, onDay }: { day: string; onDay: (d: string) => void 
 
   return (
     <div className="today">
-      <section className="ft-card today-hero" aria-label="CHARGE">
-        <div className="today-day">{longDate(day)}</div>
-        {status.loading && !data ? <div className="today-empty">Loading the day…</div>
-          : status.error ? <div className="today-empty">Could not load the scores: {status.error} <button className="dash-link" onClick={status.retry}>RETRY</button></div>
-          : !hasDay ? <div className="today-empty">No scores were saved for this day. The phone saves them each day it is opened.</div>
-          : (
-            <>
-              <div className="today-scores">
-                <Ring value={charge} size={168} stroke="url(#charge-spectrum)" label="CHARGE" big onOpen={details ? () => setOverlay('CHARGE') : undefined} />
-                <div className="today-rings">
-                  {DOMAINS.map((r) => (
-                    <Ring key={r.key} value={round(shownScore(data!, day, r.key))} size={92} stroke={r.hue} label={r.label}
-                      onOpen={details?.domains[r.key] ? () => setOverlay(r.key) : undefined} />
-                  ))}
+      {/* Layout (Nov 2026): the scores and the 28 days on the left, the day's plan beside them, packed so neither leaves a hole. */}
+      <Board className="today-board">
+        <section className="ft-card today-hero" aria-label="CHARGE">
+          <div className="today-day">{longDate(day)}</div>
+          {status.loading && !data ? <div className="today-empty">Loading the day…</div>
+            : status.error && !data ? <div className="today-empty">Could not load the scores: {status.error} <button className="dash-link" onClick={status.retry}>RETRY</button></div>
+            : !hasDay ? <div className="today-empty">No scores were saved for this day. The phone saves them each day it is opened.</div>
+            : (
+              <>
+                <div className="today-scores">
+                  <Ring value={charge} size={168} stroke="url(#charge-spectrum)" label="CHARGE" big onOpen={details ? () => setOverlay('CHARGE') : undefined} />
+                  <div className="today-rings">
+                    {DOMAINS.map((r) => (
+                      <Ring key={r.key} value={round(shownScore(data!, day, r.key))} size={92} stroke={r.hue} label={r.label}
+                        onOpen={details?.domains[r.key] ? () => setOverlay(r.key) : undefined} />
+                    ))}
+                  </div>
                 </div>
-              </div>
-              {details ? <p className="today-hint">{chargeRankLine(details.charge) ?? ''} Tap a ring for what moved it.</p>
-                : <p className="today-hint">The scores of this day were saved without their detail (kept from 6 Oct 2026 on): the rings do not open.</p>}
-            </>
-          )}
-        <div className="today-links">
-          <a className="dash-link" href={`#/log?day=${day}`}>DAY LOG →</a>
-          <a className="dash-link" href={historyHref('charge', day)}>CHARGE HISTORY →</a>
-        </div>
-      </section>
+                {details ? <p className="today-hint">{chargeRankLine(details.charge) ?? ''} Tap a ring for what moved it.</p>
+                  : <p className="today-hint">The scores of this day were saved without their detail (kept from 6 Oct 2026 on): the rings do not open.</p>}
+              </>
+            )}
+          <div className="today-links">
+            <a className="dash-link" href={`#/log?day=${day}`}>DAY LOG →</a>
+            <a className="dash-link" href={historyHref('charge', day)}>CHARGE HISTORY →</a>
+          </div>
+        </section>
 
-      {data && <PlanCard plan={data.plan} day={day} />}
+        {data && <PlanCard data={data} day={day} readAt={readAt} />}
 
-      <section className="ft-card today-strip" aria-label={`CHARGE, the ${STRIP_DAYS} days to ${day}`}>
-        <div className="today-strip-head"><span>CHARGE · {STRIP_DAYS} DAYS</span><span>tap a day</span></div>
-        <div className="today-bars">
-          {strip.map((d) => {
-            const v = data ? round(stripCharge(data, d)) : null
-            return (
-              <button key={d} className={`today-bar ${d === day ? 'on' : ''}`} onClick={() => onDay(d)} title={`${d}: ${v ?? 'no score'}`} aria-label={`${d}, CHARGE ${v ?? 'none'}`}>
-                <span className="today-bar-fill" style={{ height: `${v == null ? 0 : Math.max(4, Math.min(100, v))}%` }} />
-                <span className="today-bar-day">{Number(d.slice(8))}</span>
-              </button>
-            )
-          })}
-        </div>
-      </section>
+        <SubstanceCard day={day} isToday={isToday} nowMin={readAt ? readAt.getHours() * 60 + readAt.getMinutes() : null} />
+
+        <section className="ft-card today-strip" aria-label={`CHARGE, the ${STRIP_DAYS} days to ${day}`}>
+          <div className="today-strip-head"><span>CHARGE · {STRIP_DAYS} DAYS</span><span>tap a day</span></div>
+          <div className="today-bars">
+            {strip.map((d) => {
+              const v = data ? round(stripCharge(data, d)) : null
+              return (
+                <button key={d} className={`today-bar ${d === day ? 'on' : ''}`} onClick={() => onDay(d)} title={`${d}: ${v ?? 'no score'}`} aria-label={`${d}, CHARGE ${v ?? 'none'}`}>
+                  <span className="today-bar-fill" style={{ height: `${v == null ? 0 : Math.max(4, Math.min(100, v))}%` }} />
+                  <span className="today-bar-day">{Number(d.slice(8))}</span>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+
+        <ReportCard />
+      </Board>
 
       {overlay && details && <ScoreOverlay scores={details} which={overlay} day={day} onPick={setOverlay} onClose={() => setOverlay(null)} />}
 
@@ -119,14 +146,46 @@ function Ring({ value, size, stroke, label, big, onOpen }: { value: number | nul
     : <figure className={`ring ${big ? 'big' : ''}`} style={{ width: size }}>{body}</figure>
 }
 
-// ---------------- the day's plan and eaten so far ----------------
+// ---------------- the latest weekly and monthly report ----------------
 
-const KIND_HUE: Record<PlanRowJson['kind'], string> = {
-  MEAL: 'var(--ft-domain-fuel)', SESSION: 'var(--ft-domain-load)', SUPPLEMENTS: 'var(--ft-domain-balance)', CLOSE: 'var(--ft-muted)',
+/** The newest weekly and monthly report (Lab › Reports), so a report is one tap away all week, not only on Monday. */
+function ReportCard() {
+  const [reports, setReports] = useState<PeriodReport[] | null>(null)
+  useLoadEffect(async (cur) => {
+    const { data, error } = await supabase.from('analysis_results').select('payload').eq('kind', 'period_report').order('as_of', { ascending: false }).limit(6)
+    if (error) throw new Error(error.message)
+    if (cur()) setReports(((data ?? []) as { payload: PeriodReport }[]).map((r) => r.payload).filter((p) => p && typeof p.key === 'string'))
+  }, [])
+  if (!reports) return null
+  const shown = [latest(reports, 'week'), latest(reports, 'month')].filter((r): r is PeriodReport => r !== null)
+  return (
+    <section className="ft-card today-plan today-report" aria-label="Reports">
+      <div className="today-strip-head"><span>REPORTS</span><a className="rp-link" href="#/lab/reports">ALL ›</a></div>
+      {shown.length === 0 ? <p className="today-hint">The first weekly report is written on Monday morning, for the week before.</p> : shown.map((r) => (
+        <a key={r.key} className="today-report-row" href={reportHref(r.key)}>
+          <span className="today-report-title mono">{r.grain === 'week' ? 'WEEK' : 'MONTH'} · {spanText(r)}</span>
+          <span className="today-hint">{headline(r)}{r.suggestions[0] ? ` ${r.suggestions[0].text}` : ''}</span>
+        </a>
+      ))}
+    </section>
+  )
 }
 
-function PlanCard({ plan, day }: { plan: DayPlan | null; day: string }) {
-  if (!plan) {
+// ---------------- the day's plan and eaten so far ----------------
+
+const KIND_HUE: Record<LiveKind, string> = {
+  MEAL: 'var(--ft-domain-fuel)', SESSION: 'var(--ft-domain-load)', SUPPLEMENTS: 'var(--ft-domain-balance)', CLOSE: 'var(--ft-muted)',
+  ACTIVITY: 'var(--ft-domain-cardio)',
+}
+const hhmm = (d: Date) => d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+
+function PlanCard({ data, day, readAt }: { data: TodayData; day: string; readAt: Date | null }) {
+  // The meal rows open the per-meal view (MealOverlay.tsx); it belongs to the day it was opened on.
+  const [meal, setMeal] = useState<{ day: string; ids: number[] } | null>(null)
+  // The phone's saved plan with what was logged since laid over it (todayLive.ts); the saved copy alone when the log failed to load.
+  const plan: LivePlan | null = data.logs ? livePlan(data.plan, data.logs)
+    : data.plan ? { rows: data.plan.rows, so_far: data.plan.so_far, builtAt: data.plan.builtAt } : null
+  if (!plan || (plan.rows.length === 0 && !plan.so_far)) {
     return (
       <section className="ft-card today-plan">
         <div className="today-strip-head"><span>THE DAY'S PLAN</span></div>
@@ -136,27 +195,34 @@ function PlanCard({ plan, day }: { plan: DayPlan | null; day: string }) {
     )
   }
   const isToday = day === localToday()
-  const saved = new Date(plan.builtAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  const saved = plan.builtAt ? hhmm(new Date(plan.builtAt)) : null
+  const live = data.logs != null
+  const state = isToday ? (live && readAt ? `live · ${hhmm(readAt)}` : saved ? `as of ${saved}` : '')
+    : live ? 'with everything logged' : 'as the phone last showed it'
   return (
     <section className="ft-card today-plan">
-      <div className="today-strip-head"><span>THE DAY'S PLAN</span><span>{isToday ? `as of ${saved}` : 'as the phone last showed it'}</span></div>
+      <div className="today-strip-head"><span>THE DAY'S PLAN</span><span>{state}</span></div>
       {plan.so_far && <SoFarBar s={plan.so_far} />}
       <ol className="plan-rows">
         {plan.rows.map((r, i) => (
           <li key={i} className={`plan-row ${r.done ? 'done' : ''}`}>
             <span className="plan-time">{r.time ?? '—'}</span>
             <span className="plan-dot" style={{ background: KIND_HUE[r.kind] ?? 'var(--ft-muted)' }} aria-hidden="true" />
-            <span className="plan-title">{r.title}</span>
+            {r.kind === 'MEAL' && r.mealIds?.length
+              ? <button className="plan-open" onClick={() => setMeal({ day, ids: r.mealIds! })} aria-label={`Open ${r.title}`}>{r.title} ›</button>
+              : <span className="plan-title">{r.title}</span>}
             {r.detail && <span className="plan-detail">{r.detail}</span>}
-            <span className="plan-state">{r.done ? 'DONE ✓' : ''}</span>
+            <span className="plan-state">{r.logged ? 'LOGGED ✓' : r.done ? 'DONE ✓' : ''}</span>
           </li>
         ))}
       </ol>
+      {meal && meal.day === day && <MealOverlay ids={meal.ids} day={day} onClose={() => setMeal(null)} />}
+      {live && <p className="today-hint">{saved ? `Plan as the phone drew it at ${saved}` : 'No plan was saved by the phone for this day'}; meals, workouts and check-ins logged since are read live.</p>}
     </section>
   )
 }
 
-function SoFarBar({ s }: { s: NonNullable<DayPlan['so_far']> }) {
+function SoFarBar({ s }: { s: NonNullable<LivePlan['so_far']> }) {
   const parts = [
     { label: 'Carbs', kcal: 4 * s.carbs_g, color: 'var(--m-carbs)', g: s.carbs_g },
     { label: 'Protein', kcal: 4 * s.protein_g, color: 'var(--m-protein)', g: s.protein_g },

@@ -29,6 +29,9 @@ object NotificationKind {
     const val PRACTICE_DUE = "practice_due"
     // Risk profile R2: a questionnaire (PHQ-9, GAD-7, WHO-5, UCLA-3, burnout, hours) is due; Sunday 10:00, only when one is.
     const val QUESTIONNAIRE_DUE = "questionnaire_due"
+    // Weekly and monthly reports (docs/reports): once per report, when the nightly run has written a new one. Not a rule in
+    // notification_rules (nothing to schedule): it follows the master switch, and its Android channel can be muted alone.
+    const val PERIOD_REPORT = "period_report"
     val ALL = listOf(
         SUPPLEMENT_DUE, CHECKIN_MORNING, CHECKIN_EVENING, WELLBEING_CHECKIN, EVENING_LOG, EVENING_CHECKIN, BODY_CHECKIN, FUEL_SESSION, FUEL_EVENT, HEALTH_CHECKIN,
         EVENT_RATING, EVENT_DRAW, EVENT_FOLLOWUP, PRACTICE_DUE, QUESTIONNAIRE_DUE,

@@ -9,6 +9,7 @@ import { cssColor, PALETTE } from '../lib/palette'
 import type { EChartsCoreOption } from '../lib/echarts'
 import './PlanBlock.css'
 import { DEFS, dueOn, type Instrument, INSTRUMENTS, localToday, optionsOf, score } from '../lib/instruments'
+import { Board } from '../components/layout/Board'
 
 export interface Response { id: number; instrument: string; local_date: string; score: number; band: string | null; flags: string[]; source: string }
 
@@ -106,13 +107,13 @@ export function RiskQuestionnaires({ responses, missing, onChanged }: { response
     <>
       {inst && <Form inst={inst} onSaved={onChanged} onCancel={() => setTaking(null)} />}
       {missing && <p className="pg-note">Not on this database yet: instrument_responses.</p>}
-      <div className="pg-grid">
+      <Board className="pg-grid">
         {DOMAINS.map(([domain, title]) => {
           const list = INSTRUMENTS.filter((i) => i.domain === domain)
           const series = list.filter((i) => (byInst.get(i.id) ?? []).length > 0)
           const option: EChartsCoreOption = {
             grid: { left: 40, right: 12, top: 28, bottom: 24 }, tooltip: { trigger: 'axis' }, legend: { top: 0, textStyle: { color: PALETTE.text } },
-            xAxis: { type: 'time', axisLabel: { color: PALETTE.textMuted } },
+            xAxis: { type: 'time', axisLabel: { color: PALETTE.textMuted, hideOverlap: true } },
             yAxis: { type: 'value', axisLabel: { color: PALETTE.textMuted }, splitLine: { lineStyle: { color: PALETTE.border } } },
             series: series.map((i) => ({ name: i.short, type: 'line', showSymbol: true, symbolSize: 6, itemStyle: { color: hueOf(i.id) }, lineStyle: { color: hueOf(i.id), width: 2 }, data: (byInst.get(i.id) ?? []).map((r) => [r.local_date, Number(r.score)]) })),
           }
@@ -130,9 +131,12 @@ export function RiskQuestionnaires({ responses, missing, onChanged }: { response
                     <li key={i.id} className="pg-row">
                       <span className="pg-row-title mono" style={{ color: hueOf(i.id) }}>{i.name.toUpperCase()} · {i.short}</span>
                       <span className="pg-row-value">
-                        {last ? <><b style={{ color: hueOf(i.id) }}>{Number(last.score)}</b> {i.unit} · <span style={{ color: band ? STATE[band.state] : undefined }}>{last.band}</span> · {last.local_date}</> : 'not taken'}
-                        {' · '}{isDue ? 'due now' : `next ${due}`}{' '}
                         <button className="btn-ghost" onClick={() => setTaking(i.id)}>{isDue ? 'TAKE' : 'AGAIN'}</button>
+                      </span>
+                      {/* The result on a line of its own, so a long one (WORKING HOURS) wraps instead of squeezing the title. */}
+                      <span className="pg-row-sub">
+                        {last ? <><b style={{ color: hueOf(i.id) }}>{Number(last.score)}</b> {i.unit} · <span style={{ color: band ? STATE[band.state] : undefined }}>{last.band}</span> · {last.local_date}</> : 'not taken'}
+                        {' · '}{isDue ? 'due now' : `next ${due}`}
                       </span>
                     </li>
                   )
@@ -142,7 +146,7 @@ export function RiskQuestionnaires({ responses, missing, onChanged }: { response
             </section>
           )
         })}
-      </div>
+      </Board>
     </>
   )
 }

@@ -30,6 +30,9 @@
 // calls it right after a check-in so the new state shows at once).
 // Risk profile R1 (docs/risk-profile): `air` (group `exposures`) writes air_exposure_daily and one `air_exposure` summary;
 // on demand with the action `air` (user JWT), so the app can refresh after a first setup.
+// Weekly and monthly reports (docs/reports): `period_report` rows (group `reports`), nightly for the last completed week and
+// month; on demand with the action `report` (user JWT) for given `keys` (week:<monday> | month:<yyyy-mm>) or a first fill
+// of the last `weeks` weeks and `months` months.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -43,6 +46,8 @@ import { runFitnessFatigue } from "../_shared/analysis-core/runFitnessFatigue.ts
 import { runHealth } from "../_shared/analysis-core/runHealth.ts";
 import { runIntegrity } from "../_shared/analysis-core/runIntegrity.ts";
 import { runAir } from "../_shared/analysis-core/runAir.ts";
+import { runReports } from "../_shared/analysis-core/runPeriodReport.ts";
+import { runDerived } from "../_shared/analysis-core/runDerived.ts";
 import type { SeriesFile } from "../_shared/analysis-core/seriesContract.ts";
 import seriesFile from "../_shared/metric-registry/metric-series.json" with { type: "json" };
 import { runSeriesBreaks } from "../_shared/analysis-core/runSeriesBreaks.ts";
@@ -77,7 +82,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  let body: { action?: string; user_id?: string; planned_a?: number; planned_b?: number; group?: string } = {};
+  let body: { action?: string; user_id?: string; planned_a?: number; planned_b?: number; group?: string; keys?: string[]; weeks?: number; months?: number } = {};
   try {
     body = await req.json();
   } catch {
@@ -135,6 +140,20 @@ Deno.serve(async (req) => {
     return json({ air }, air.error ? 500 : 200);
   }
 
+  if (body.action === "report") {
+    // On demand for the signed-in user only: rewrite the named reports, or fill the last weeks and months.
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const userClient = createClient(url, anon, { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } } });
+    const { data: { user } } = await userClient.auth.getUser();
+    if (!user) return json({ error: "unauthorized" }, 401);
+    const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const keys = Array.isArray(body.keys) ? body.keys.filter((k): k is string => typeof k === "string").slice(0, 24) : undefined;
+    const opts = keys ? { keys } : { weeks: Math.max(0, Math.min(12, Math.round(body.weeks ?? 1))), months: Math.max(0, Math.min(6, Math.round(body.months ?? 1))) };
+    const reports = await runReports(admin, user.id, seriesFile as SeriesFile, new Date(), opts).catch((e) => ({ userId: user.id, written: [], skipped: [], error: String(e) }));
+    return json({ reports }, reports.error ? 500 : 200);
+  }
+
   if (body.action === "run") {
     const url = Deno.env.get("SUPABASE_URL")!;
     const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -180,12 +199,20 @@ Deno.serve(async (req) => {
       if (want.has("integrity")) out.integrity = await run("integrity", () => runIntegrity(admin, id, seriesFile as SeriesFile));
       // Risk profile R1: the air breathed each day (outdoor feed + indoor sensors + places), group `exposures`.
       if (want.has("air")) out.air = await run("air", () => runAir(admin, id, new Date()));
+      // Weekly and monthly reports read their own rows and the Lab's published results (group `reports`, last).
+      // The scheduler may name periods (`keys`) or ask for the last `weeks` / `months` (a first fill); otherwise the due ones.
+      const reportOpts = isScheduler && Array.isArray(body.keys) ? { keys: body.keys.filter((k): k is string => typeof k === "string").slice(0, 24) }
+        : isScheduler && (body.weeks !== undefined || body.months !== undefined) ? { weeks: Math.max(0, Math.min(12, Math.round(body.weeks ?? 0))), months: Math.max(0, Math.min(6, Math.round(body.months ?? 0))) }
+        : {};
+      // Computed daily values and session fuel for the pages (runDerived.ts), before the reports.
+      if (want.has("derived")) out.derived = await run("derived", () => runDerived(admin, id, new Date()));
+      if (want.has("reports")) out.reports = await run("reports", () => runReports(admin, id, seriesFile as SeriesFile, new Date(), reportOpts));
       // The frame is read once and shared; one engine failing must not hide the others: each reports its own error.
       // Typicality and the expected bands run in a later group than the series breaks because they restart at confirmed ones.
       if (needsFrame(group)) {
         const loaded = await run("loadFrame", () => loadFrame(admin, id));
         if ("error" in loaded) {
-          for (const name of want) if (name !== "breaks" && name !== "integrity" && name !== "air") out[name] = loaded;
+          for (const name of want) if (!["breaks", "integrity", "air", "derived", "reports"].includes(name)) out[name] = loaded;
         } else {
           const engines: Record<string, () => Promise<unknown>> = {
             relationships: () => runRelationships(admin, id, new Date(), loaded),

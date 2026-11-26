@@ -70,7 +70,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
         // Tapping a notification opens MainActivity, which routes by kind (MainActivity.onNewIntent / FieldTerminalNavHost).
         // Request code is per kind so intents for different kinds don't collapse into one PendingIntent.
-        /** [bucket]: for a supplement reminder, the block it is about (morning, afternoon, night), opened ready to log. */
+        /** [bucket]: for a supplement reminder, the block it is about (morning, afternoon, night), opened ready to log; for a report, its key. */
         fun contentIntent(context: Context, kind: String, bucket: String? = null): PendingIntent {
             val intent = Intent(context, MainActivity::class.java)
                 .putExtra(EXTRA_KIND, kind)

@@ -1,5 +1,5 @@
 /* DAY LOG: one day's entries, by kind, each with its wall-clock time. */
-.log { display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-4); max-width: 1100px; }
+.log { display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-4); width: 100%; max-width: var(--page-max); margin: 0 auto; box-sizing: border-box; }
 .log-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-3) var(--sp-4); justify-content: space-between; }
 .log-title { font-size: 15px; letter-spacing: .1em; margin: 0; color: var(--color-text-primary); }
 .log-sub { margin: 4px 0 0; font-size: 12px; color: var(--color-text-muted); }

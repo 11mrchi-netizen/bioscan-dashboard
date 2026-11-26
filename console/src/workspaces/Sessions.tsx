@@ -10,6 +10,7 @@ import { PlanSessionRows } from './PlanSessionRows'
 import RecordedSessions from './RecordedSessions'
 import './PlanBlock.css'
 import './Pages.css'
+import { Board } from '../components/layout/Board'
 
 const WINDOWS = [{ id: 'ahead', label: 'NEXT 6 WEEKS' }, { id: 'recent', label: 'LAST 6 WEEKS' }, { id: 'both', label: 'BOTH' }]
 
@@ -55,7 +56,7 @@ function PlannedSessions() {
       {st.error && <p className="pb-warn">Could not load: {st.error}</p>}
       {st.loading && !d && <p className="state-loading">LOADING…</p>}
       {d && shown.length === 0 && <p className="state-empty">NO PLANNED SESSIONS IN THIS WINDOW.</p>}
-      <div className="pg-grid">
+      <Board className="pg-grid">
         {weeks.map((w) => {
           const rows = shown.filter((s) => mondayOf(s.scheduled_date) === w)
           return (
@@ -65,7 +66,7 @@ function PlannedSessions() {
             </section>
           )
         })}
-      </div>
+      </Board>
     </div>
   )
 }

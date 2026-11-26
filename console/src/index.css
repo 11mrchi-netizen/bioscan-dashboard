@@ -82,3 +82,11 @@ button {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255,255,255,0.18);
 }
+
+/* Layout (Nov 2026): one page width for every page, the packed board (components/layout/Board.tsx) and the tile band. */
+:root { --page-max: 1680px; }
+/* Once measured, a board's cards span fine rows by their height, so a short card beside a tall one leaves no hole. */
+.ft-board[data-packed] { grid-auto-rows: 4px; row-gap: 0; align-items: start; }
+.ft-board > * { align-self: start; }
+/* The tile band: every single reading of a page in one strip at the top, each opening its history. */
+.ft-band { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 158px), 1fr)); gap: 10px; }

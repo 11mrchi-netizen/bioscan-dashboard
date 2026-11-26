@@ -9,6 +9,7 @@ import { metricHref } from '../lib/metrics'
 import { outsideRange as outside, rangeText as range, sweatRate } from '../lib/labTests'
 import './PlanBlock.css'
 import './Pages.css'
+import { Board } from '../components/layout/Board'
 
 interface Draw { id: number; draw_date: string; draw_time: string | null; lab_name: string | null; fasted: boolean | null; hours_since_training: number | null }
 interface Result { id: number; draw_id: number; marker_name: string; value: number | null; value_text: string | null; unit: string | null; ref_low: number | null; ref_high: number | null; flag: string | null }
@@ -68,7 +69,7 @@ export default function Tests() {
       {st.error && <p className="pb-warn">Could not load: {st.error}</p>}
       {st.loading && draws.length === 0 && <p className="state-loading">LOADING…</p>}
 
-      <div className="pg-grid">
+      <Board className="pg-grid">
         <section className="pg-card">
           <h3 className="pg-card-title mono"><span>GRIP STRENGTH</span><span>{taken.grip.length}</span></h3>
           {taken.grip.length === 0 ? <p className="pg-note">No grip test yet.</p> : (
@@ -107,7 +108,7 @@ export default function Tests() {
             ))}</ul>
           )}
         </section>
-      </div>
+      </Board>
 
       <h3 className="pg-title mono" style={{ fontSize: 12 }}>BLOOD DRAWS</h3>
       {!st.loading && draws.length === 0 && !st.error && <p className="state-empty">NO DRAWS YET.</p>}
@@ -124,7 +125,7 @@ export default function Tests() {
         </section>
       )}
 
-      <div className="pg-grid">
+      <Board className="pg-grid">
         {draws.map((d) => {
           const rows = (byDraw.get(d.id) ?? []).filter(match)
           if (q && rows.length === 0) return null
@@ -143,7 +144,7 @@ export default function Tests() {
             </section>
           )
         })}
-      </div>
+      </Board>
     </div>
   )
 }

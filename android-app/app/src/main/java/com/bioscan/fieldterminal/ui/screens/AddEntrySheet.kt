@@ -270,12 +270,13 @@ fun EntrySheet(
         containerColor = FT.Surface,
         contentColor = FT.TextPrimary,
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(logEntryWhen(entry, LocalDate.now()), style = FTType.LabelCaps, color = FT.TextMuted)
                 Text(entry.headline, style = sheetHeaderTitleStyle, color = FT.TextPrimary)
                 entry.detail?.takeIf { it.isNotBlank() }?.let { Text(it, style = FTType.Body, color = FT.TextSecondary) }
             }
+            if (entry.source == LogSource.Meal) MealProfileBlock(entry.id)
 
             // Deleting hides the entry at once and holds the delete for a few seconds with UNDO (ui/components/UndoToast.kt).
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {

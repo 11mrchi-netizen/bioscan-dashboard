@@ -47,15 +47,15 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     'training_definitions', 'training_settings', 'v_training_block_metrics', 'training_plans', 'training_thresholds',
     'planned_session_deviations', 'session_plan_links', 'run_best_efforts', 'v_personal_records',
     // nutrition, supplements, fuel
-    'meals', 'meal_items', 'nutrient_intake', 'foods', 'food_nutrients', 'food_servings', 'food_sources',
+    'meals', 'meal_items', 'meal_profiles', 'food_group_rules', 'nutrient_intake', 'foods', 'food_nutrients', 'food_servings', 'food_sources',
     'breakfast_templates', 'meal_prep_weeks', 'fuel_plans', 'fuel_plan_reviews', 'fuel_schedules', 'fuel_standards', 'fueling_intake_log',
-    'fueling_products', 'fueling_recipe_ingredients', 'fueling_recipe_versions', 'supplements', 'supplement_changes', 'regimen_references', 'regimen_vials', 'supplement_log',
+    'fueling_products', 'fueling_recipe_ingredients', 'fueling_recipe_versions', 'supplements', 'supplement_changes', 'regimen_references', 'substance_kinetics', 'regimen_vials', 'supplement_log',
     'supplement_products', 'supplement_ingredients', 'supplement_product_ingredients', 'supplement_nutrients',
     'supplement_sources', 'supplement_source_snapshots', 'supplement_stock_events', 'interaction_records',
     // labs
     'lab_draws', 'lab_results',
     // analysis and evidence
-    'analysis_results', 'score_snapshots', 'score_history', 'evidence_ledger', 'evidence_records', 'lab_watch_rules', 'registry_reviews', 'registered_questions', 'experiments',
+    'analysis_results', 'derived_daily', 'session_fuel', 'score_snapshots', 'score_history', 'evidence_ledger', 'evidence_records', 'lab_watch_rules', 'registry_reviews', 'registered_questions', 'experiments',
     'interventions', 'intervention_adherence', 'intervention_state_history', 'protocols', 'protocol_interventions',
     'protocol_state_history', 'protocol_templates', 'intervention_events', 'intervention_expectations', 'intervention_draws', 'protocol_adjustment_proposals', 'decisions', 'series_break_decisions',
     'health_vocab', 'grip_strength_norms',
@@ -107,7 +107,7 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
   ...internal(
     'sync_log', 'zepp_raw_extracts', 'zepp_history_pull', 'zepp_sync_state', 'calendar_sync_state', 'notification_log',
     'notification_prefs', 'notification_rules', 'log_agent_runs', 'saved_views', 'benchmark_artifacts',
-    'collector_heartbeats', 'daily_field_provenance', 'ai_estimates', 'nutrition_backfill_review',
+    'collector_heartbeats', 'daily_field_provenance', 'collector_latest', 'provenance_writer_latest', 'ai_estimates', 'nutrition_backfill_review',
     'exercise_session_tombstones', 'experiment_exclusion_snapshots', 'food_match_memory', 'clothing_items', 'laundry_loads',
     'agent_threads', 'agent_turns', 'agent_hints', 'agent_digests', 'agent_settings',
     // device push tokens; the raw inputs behind a meal estimate (typed text, photo paths), read through meals instead

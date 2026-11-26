@@ -132,6 +132,8 @@ private fun AuthGate(pendingNotificationKind: String?, onNotificationHandled: ()
     LaunchedEffect(isAuthenticated) {
         if (isAuthenticated) {
             HealthConnectSyncWorker.enqueue(context)
+            // And hourly while the app is closed, so the dashboard fills in without opening it.
+            HealthConnectSyncWorker.schedulePeriodic(context)
             ZeppSyncWorker.enqueue(context)
             NotificationDispatchWorker.enqueue(context)
             com.bioscan.fieldterminal.data.WeekPlanPublishWorker.enqueue(context)

@@ -41,7 +41,7 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 // off mornings, today's draw and the daily tests, do the summaries earn their place) and the sexual-health correlations
 // (were on Health › Sexual health). One load for the tab, the same reads Today made for them.
 @Composable
-fun N1Tab() {
+fun N1Tab(openReport: String? = null, onReportHandled: () -> Unit = {}) {
     val page = remember { N1State() }
     var registerError by remember { mutableStateOf<String?>(null) }
     var experiments by remember { mutableStateOf<List<ExperimentRow>>(emptyList()) }
@@ -82,6 +82,8 @@ fun N1Tab() {
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
+        // Weekly and monthly reports (docs/reports): the newest of each, each opening its page.
+        ReportsCard(openKey = openReport, onOpenHandled = onReportHandled)
         EvidenceBoardCard(evidenceBoard(page.relationships, page.registeredResults), page.evidence, onTest = { testing = it })
         CaseCrossoverCard(
             page.evidence.crossover,

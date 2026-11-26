@@ -33,14 +33,18 @@ class NutritionRedesignTest {
     }
 
     @Test
-    fun proteinIsListedInMealOrder() {
+    fun proteinIsSplitByMealName() {
         val meals = listOf(
             MealRow(loggedAt = "2026-10-01T19:00:00Z", proteinG = 40.0),
             MealRow(loggedAt = "2026-10-01T08:00:00Z", proteinG = 25.0),
+            MealRow(loggedAt = "2026-10-01T08:30:00Z", proteinG = 5.0),
+            MealRow(loggedAt = "2026-10-01T13:00:00Z", proteinG = 30.0, mealSlot = "lunch"),
             MealRow(loggedAt = "2026-10-02T08:00:00Z"),
         )
         val out = proteinByMeal(meals)
-        assertEquals(listOf(25.0, 40.0), out[d])
-        assertEquals(listOf(0.0), out[d.plusDays(1)])
+        // breakfast 25, the second morning meal a snack, lunch by label, 19:00 unlabelled is dinner
+        assertEquals(listOf(25.0, 0.0, 30.0, 5.0, 0.0, 40.0), out[d])
+        assertEquals(listOf(0.0, 0.0, 0.0, 0.0, 0.0, 0.0), out[d.plusDays(1)])
+        assertEquals(listOf("Breakfast", "Snack"), mealNames(meals.subList(1, 3)))
     }
 }

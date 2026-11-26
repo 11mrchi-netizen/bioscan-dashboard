@@ -47,6 +47,7 @@ export const SERIES_HUE: Record<string, string> = {
   water_intake: 'm-hydration', meal_energy: 'm-calories', meal_protein: 'm-protein', meal_carbs: 'm-carbs', meal_fat: 'm-fat',
   meal_fiber: 'm-fiber', run_duration: 'm-duration', run_distance: 'm-distance', run_avg_hr: 'm-heart-rate', strength_duration: 'm-duration',
   session_rpe: 'm-rpe',
+  gut_day_score: 'm-gut-comfort', energy_availability: 'm-energy-availability',
 }
 
 /**
@@ -59,7 +60,7 @@ export const OUTCOME_HUE: Record<string, string> = {
   hrv: 'm-hrv', rhr: 'm-resting-hr', sleep: 'm-sleep-duration', sleep_hours: 'm-sleep-duration', deep_rem_min: 'm-stage-deep',
   energy: 'm-energy', mood: 'm-mood', stress: 'm-stress', soreness: 'm-soreness', resp_rate: 'm-respiratory',
   fueling_carb_rate: 'm-carbs', screen_bed_min: 'm-night-screen', screen_pm_social: 'm-time-phone', outdoor_daylight_min: 'm-daylight',
-  sleep_score: 'm-sleep-score', recovery_score: 'ft-domain-cardio',
+  sleep_score: 'm-sleep-score', recovery_score: 'ft-domain-cardio', gut: 'm-gut-comfort', gut_day_score: 'm-gut-comfort',
 }
 
 /** `var(--token)` of an outcome or a series; a chart that names no known metric draws in the neutral weight-trend hue (contract). */
@@ -163,6 +164,7 @@ export const SERIES_DOMAIN: Record<string, string> = {
   hrv: 'RECOVERY', rhr: 'RECOVERY', spo2: 'RECOVERY', vo2max: 'RECOVERY', energy: 'RECOVERY', soreness: 'RECOVERY',
   steps: 'LOAD', calories_active: 'LOAD', calories_total: 'LOAD', zone_minutes: 'LOAD', run_duration: 'LOAD', run_distance: 'LOAD', run_avg_hr: 'LOAD', strength_duration: 'LOAD', session_rpe: 'LOAD',
   water_intake: 'FUEL', meal_energy: 'FUEL', meal_protein: 'FUEL', meal_carbs: 'FUEL', meal_fat: 'FUEL', meal_fiber: 'FUEL',
+  gut_day_score: 'FUEL', energy_availability: 'FUEL',
 }
 
 /** The page wash of a metric (visual contract: background = domain): its ring's domain; CHARGE its own wash; Me items and the rest, BALANCE. */

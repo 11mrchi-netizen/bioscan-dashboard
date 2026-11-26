@@ -470,3 +470,23 @@ data class SportSessionRow(
     @SerialName("max_hr") val maxHr: Double? = null,
     @SerialName("elevation_gain_m") val elevationGainM: Double? = null,
 )
+
+/** One value of derived_daily (the nightly run's computed daily series: gut_day_score, energy_availability). */
+@Serializable
+data class DerivedDailyRow(val date: String, val value: Double)
+
+/** The food around one training session (session_fuel, written by the nightly run from analysis-core trainingFuel.ts). */
+@Serializable
+data class SessionFuelRow(
+    @SerialName("session_id") val sessionId: Long,
+    val date: String,
+    @SerialName("duration_min") val durationMin: Int,
+    val long: Boolean,
+    @SerialName("hours_since_meal") val hoursSinceMeal: Double? = null,
+    val fasted: Boolean,
+    @SerialName("carbs_before_g") val carbsBeforeG: Int,
+    @SerialName("carbs_during_g") val carbsDuringG: Int? = null,
+    @SerialName("protein_after_g") val proteinAfterG: Int,
+    @SerialName("carbs_after_g") val carbsAfterG: Int,
+    @SerialName("protein_dose_g") val proteinDoseG: Int,
+)

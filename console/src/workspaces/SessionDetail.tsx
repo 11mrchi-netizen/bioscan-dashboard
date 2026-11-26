@@ -3,6 +3,7 @@
 // a strength session's exercises and sets. The plan it belongs to is shown, and a still-open plan of that day can be linked to it.
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
 import { useLoadEffect } from '../lib/useLoadEffect'
 import { hm, longDate } from '../lib/planReads'
 import { metricHref, sessionSeries, type SessionField } from '../lib/metrics'
@@ -105,6 +106,8 @@ function Detail({ row, plan, onChanged, onBack }: { row: SessionRow; plan: { lin
         {row.avg_power_w != null && <Tile k="AVG POWER" v={n(row.avg_power_w, ' W')} />}
       </section>
 
+      <SessionFuel id={row.id} />
+
       <section className="pg-card sd-plan">
         <h3 className="pg-card-title mono"><span>THE PLAN</span></h3>
         {plan.linked ? (
@@ -200,5 +203,57 @@ function Exercises({ value, onChange, source }: { value: EditableExercise[]; onC
       <button className="btn-ghost mono" onClick={() => onChange([...value, blankExercise()])}>+ ADD EXERCISE</button>
       <p className="pg-note">A set with no reps or weight is left out when saving; an exercise with no name or no set is too.</p>
     </div>
+  )
+}
+
+interface FuelRow {
+  hours_since_meal: number | null; fasted: boolean; long: boolean; carbs_before_g: number; carbs_during_g: number | null
+  protein_after_g: number; carbs_after_g: number; protein_dose_g: number
+}
+
+/**
+ * FUEL: the food around the session (session_fuel, written nightly from analysis-core trainingFuel.ts,
+ * docs/nutrition/food-and-training.md), as on the phone's session page. Absent for walks, short sessions and until the run.
+ */
+function SessionFuel({ id }: { id: number }) {
+  const [f, setF] = useState<FuelRow | null>(null)
+  useEffect(() => {
+    let live = true
+    void supabase.from('session_fuel').select('hours_since_meal, fasted, long, carbs_before_g, carbs_during_g, protein_after_g, carbs_after_g, protein_dose_g')
+      .eq('session_id', id).maybeSingle().then(({ data }) => { if (live) setF((data as FuelRow | null) ?? null) })
+    return () => { live = false }
+  }, [id])
+  if (!f) return null
+  const warn = { color: 'var(--warn)' }
+  return (
+    <section className="pg-card sd-plan">
+      <h3 className="pg-card-title mono"><span>FUEL</span><span>FROM THE MEALS LOGGED</span></h3>
+      <ul className="pg-rows">
+        <li className="pg-row">
+          <span className="pg-row-title">Since the last meal</span>
+          <span className="pg-row-value">{f.hours_since_meal == null ? 'none in 18 h' : `${f.hours_since_meal.toFixed(1)} h`}</span>
+          {f.fasted && <span className="pg-row-sub" style={f.long ? warn : undefined}>Started fasted (no meal in the 4 h before and none for 8 h)</span>}
+        </li>
+        <li className="pg-row">
+          <span className="pg-row-title">Carbs in the 4 h before</span>
+          <span className="pg-row-value" style={{ color: 'var(--m-carbs)' }}>{f.carbs_before_g} g</span>
+        </li>
+        <li className="pg-row">
+          <span className="pg-row-title">Carbs during</span>
+          <span className="pg-row-value" style={f.carbs_during_g != null ? { color: 'var(--m-carbs)' } : undefined}>{f.carbs_during_g == null ? 'none logged' : `${f.carbs_during_g} g`}</span>
+          {f.long && f.carbs_during_g == null && <span className="pg-row-sub" style={f.fasted ? warn : undefined}>A long session: 30–60 g an hour helps</span>}
+        </li>
+        <li className="pg-row">
+          <span className="pg-row-title">Protein in the 2 h after</span>
+          <span className="pg-row-value" style={{ color: 'var(--m-protein)' }}>{f.protein_after_g} g</span>
+          <span className="pg-row-sub">{f.protein_after_g >= f.protein_dose_g ? `Reached your ${f.protein_dose_g} g` : `Under your ${f.protein_dose_g} g`}</span>
+        </li>
+        <li className="pg-row">
+          <span className="pg-row-title">Carbs in the 2 h after</span>
+          <span className="pg-row-value" style={{ color: 'var(--m-carbs)' }}>{f.carbs_after_g} g</span>
+        </li>
+      </ul>
+      <p className="pg-note">Filled in by the nightly run, so today's session shows tomorrow.</p>
+    </section>
   )
 }

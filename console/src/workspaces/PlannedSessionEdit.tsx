@@ -28,7 +28,7 @@ export default function PlannedSessionEdit() {
     if (!Number.isInteger(sid)) { if (cur()) setData(null); return }
     const r = await loadPlannedFull(sid)
     if (!r) { if (cur()) setData(null); return }
-    const [ctx, oneRms] = await Promise.all([loadEquipment(), loadOneRms(liftForms(r.session.prescription).map((l) => l.exercise))])
+    const [ctx, oneRms] = await Promise.all([loadEquipment(), loadOneRms()])
     if (cur()) setData({ ...r, ctx, oneRms })
   }, [sid, rev])
   if (st.error) return <div className="pg"><p className="pb-warn">Could not load: {st.error} <button className="btn-ghost mono" onClick={st.retry}>RETRY</button></p></div>
@@ -112,7 +112,9 @@ function Editor({ d, onReload }: { d: Loaded; onReload: () => void }) {
             <tbody>
               {lifts.map((l, i) => (
                 <tr key={l.index}>
-                  <td><b>{l.exercise}</b><span className="sd-watch mono"> {l.role}</span></td>
+                  <td><b>{l.exercise}</b><span className="sd-watch mono"> {l.role}</span>
+                    {!locked && <div><input className="pb-input" aria-label={`${l.exercise}: do instead`} placeholder="swap for…" value={l.swapTo} maxLength={80} onChange={(e) => setLift(i, { swapTo: e.target.value })} style={{ width: 160, marginTop: 4 }} /></div>}
+                    {l.swapTo.trim() !== '' && l.swapTo.trim() !== l.exercise && <span className="sd-watch mono">→ {l.swapTo.trim()} in this session only</span>}</td>
                   <td className="pe-range"><input className="pb-input sd-num" inputMode="numeric" aria-label={`${l.exercise} sets from`} value={l.setsMin} disabled={!!locked} onChange={(e) => setLift(i, { setsMin: e.target.value })} />
                     {' – '}<input className="pb-input sd-num" inputMode="numeric" aria-label={`${l.exercise} sets to`} value={l.setsMax} disabled={!!locked} onChange={(e) => setLift(i, { setsMax: e.target.value })} /></td>
                   <td className="pe-range"><input className="pb-input sd-num" inputMode="numeric" aria-label={`${l.exercise} reps from`} value={l.repsMin} disabled={!!locked} onChange={(e) => setLift(i, { repsMin: e.target.value })} />
@@ -121,7 +123,7 @@ function Editor({ d, onReload }: { d: Loaded; onReload: () => void }) {
                     <select className="pb-input" aria-label={`${l.exercise} load`} value={l.load} disabled={!!locked} onChange={(e) => setLift(i, { load: e.target.value as LoadChoice })}>
                       <option value="planned">AS PLANNED ({l.loadNow})</option>
                       <option value="fixed">A FIXED WEIGHT</option>
-                      {oneRmOf(l.exercise) != null && <option value="pct">% OF 1RM ({oneRmOf(l.exercise)} kg)</option>}
+                      {oneRmOf(l.swapTo.trim() || l.exercise) != null && <option value="pct">% OF 1RM ({oneRmOf(l.swapTo.trim() || l.exercise)} kg)</option>}
                       <option value="rpe">BY RPE</option>
                     </select>
                     {l.load === 'fixed' && <> <input className="pb-input sd-num" inputMode="decimal" aria-label={`${l.exercise} weight`} placeholder="kg" value={l.kg} onChange={(e) => setLift(i, { kg: e.target.value })} /> kg</>}
@@ -132,7 +134,7 @@ function Editor({ d, onReload }: { d: Loaded; onReload: () => void }) {
               ))}
             </tbody>
           </table>
-          <p className="pg-note">Changing sets, reps or a load makes a new version of this session and sets the old one aside (nothing is deleted). Accessory lines are changed the same way. A percentage needs a recorded 1RM.</p>
+          <p className="pg-note">To do another exercise in this session only, type it under the lift's name (for the whole block, use SWAP AN EXERCISE on PLAN). Changing an exercise, sets, reps or a load makes a new version of this session and sets the old one aside (nothing is deleted). Accessory lines are changed the same way. A percentage needs a recorded 1RM. To change a max for every session of the block at once, use MAXES on <a href="#/plan">PLAN</a>.</p>
         </section>
       )}
 

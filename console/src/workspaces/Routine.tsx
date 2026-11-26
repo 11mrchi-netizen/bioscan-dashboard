@@ -8,6 +8,7 @@ import { useLoadEffect } from '../lib/useLoadEffect'
 import { localDaysAgo } from '../lib/dates'
 import './PlanBlock.css'
 import './Pages.css'
+import { Board } from '../components/layout/Board'
 
 interface Activity { id: number; name: string; kind: string; category: string | null; target_min: number | null; days: number[] | null; time_of_day: string | null; archived_at: string | null }
 interface RLog { id: number; activity_id: number; date: string; started_at: string | null; ended_at: string | null; minutes: number | null; status: string; source: string | null; note: string | null }
@@ -58,7 +59,7 @@ export default function Routine() {
       </header>
       {st.error && <p className="pb-warn">Could not load: {st.error}</p>}
       {st.loading && acts.length === 0 && <p className="state-loading">LOADING…</p>}
-      <div className="pg-grid">
+      <Board className="pg-grid">
         {(['practice', 'pastime'] as const).map((kind) => {
           const rows = shown.filter((a) => a.kind === kind)
           return (
@@ -97,7 +98,7 @@ export default function Routine() {
             </table></div>
           )}
         </section>
-      </div>
+      </Board>
     </div>
   )
 }

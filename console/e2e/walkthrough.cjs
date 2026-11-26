@@ -124,6 +124,9 @@ T.me_views = [{ tab: 'BODY', built_at: new Date().toISOString(), view: { v: 1, t
 ] }] } }]
 T.collector_heartbeats = [{ stream: 'location', ts: new Date(Date.now() - 3600e3).toISOString() }]
 T.daily_field_provenance = [{ writer: 'zepp-extract', origin: 'zepp', written_at: new Date(Date.now() - 7200e3).toISOString() }]
+// the one-row-per-source views Integrity reads (migration 20261125063525_integrity_latest.sql)
+T.collector_latest = T.collector_heartbeats
+T.provenance_writer_latest = T.daily_field_provenance
 T.analysis_results = [{ kind: 'series_break', key: 'rhr', as_of: '2026-10-26', payload: { deviceSensitive: false, breaks: [{ date: '2026-09-01', kind: 'level', score: 4.2, status: 'candidate', reason: null, before: { n: 60, median: 52, robustSd: 2, integerShare: 0.1 }, after: { n: 50, median: 55, robustSd: 2, integerShare: 0.1 } }] } }]
 const relP = (label, outcome, state, effect, extra = {}) => ({ label, outcome, state, n: 210, noEffect: outcome === 'hrv' ? 2 : 1, effect, readiness: { have: 41, need: 60, unit: 'days with it' }, summary: `${label}: ${state}`, ...extra })
 const R = (kind, key, payload, state = null) => ({ user_id: 'u1', kind, key, as_of: '2026-10-26', engine_version: '3.0.0-alpha.9', inputs_hash: 'abc', state, payload, calculated_at: '2026-10-26T20:30:00Z' })
@@ -400,7 +403,7 @@ async function waitForServer() {
     await page.goto(`${BASE}#/setup/integrity`)
     await page.waitForSelector('.ig-tiles', { timeout: 20000 }); await page.waitForTimeout(300)
     check((await page.locator('.ig-tile').count()) === 4, 'Integrity shows the four overview tiles')
-    check((await page.locator('.ig-row').count()) === 32, 'the source matrix has a row per series')
+    check((await page.locator('.ig-row').count()) === require('../../supabase/functions/_shared/metric-registry/metric-series.json').series.length, 'the source matrix has a row per series')
     await page.goto(`${BASE}#/setup/integrity?series=sleep_hours`); await page.waitForTimeout(400)
     await page.click('.ig-sev-toggle.sev-info input'); await page.waitForTimeout(200)
     const sleepIssues = (await page.locator('.ig-issue').allTextContents()).join(' | ')

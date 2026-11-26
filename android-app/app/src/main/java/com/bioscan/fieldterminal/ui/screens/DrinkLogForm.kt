@@ -217,16 +217,13 @@ internal fun DrinkLogForm(
         if (uris.isNotEmpty()) labelPhotos = labelPhotos + uris
     }
 
-    // Water at once: the sheet closes, the write waits out the undo window and then adds to the day's total (the screens
+    // Water at once: the sheet closes, the write is saved on the tap (UNDO takes it off again) and adds to the day's total (the screens
     // refresh on the write itself, through ReadCache).
     fun quickWater(ml: Int) {
         val day = LocalDate.now().toString()
         onSaved()
-        Toasts.undoable(
-            "Water +$ml ml",
-            commit = { AddEntryRepository(SupabaseClientProvider.client).addDrink(day, ml) },
-            onUndo = {},
-        )
+        val water = AddEntryRepository(SupabaseClientProvider.client)
+        Toasts.committed("Water +$ml ml", commit = { water.addDrink(day, ml) }, undo = { water.addDrink(day, -ml) })
     }
 
     // A usual drink at its usual amount, the same way (an alcohol with no known strength opens AMOUNT instead).

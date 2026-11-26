@@ -2,6 +2,7 @@
 // is opened rarely and must show an entry saved a moment ago. Writes change only the columns the page edits, so a field the
 // phone owns is never overwritten from here.
 import { supabase } from './supabase'
+import { readAllSoft } from './readAll'
 import type { Encounter, Person, SoloDay, StiTest } from './intimacy'
 
 export const ENCOUNTER_COLUMNS =
@@ -36,15 +37,15 @@ export async function loadIntimacy(): Promise<IntimacyData> {
   const [encounters, people, solo, tests, places] = await Promise.all([
     all<Encounter>('encounters', ENCOUNTER_COLUMNS, 'date'),
     all<Person>('people', PERSON_COLUMNS, 'name'),
-    supabase.from('sexual_activity_daily').select('id,date,instances,notes').eq('activity_type', 'masturbation').order('date').range(0, 4999),
+    readAllSoft<SoloDay>(() => supabase.from('sexual_activity_daily').select('id,date,instances,notes').eq('activity_type', 'masturbation').order('date').order('id')),
     supabase.from('sti_tests').select(STI_COLUMNS).order('test_date', { ascending: false }),
     supabase.from('places').select('id,label,osm_name'),
   ])
-  if (solo.error) throw new Error(`sexual_activity_daily: ${solo.error.message}`)
+  if (solo.error) throw new Error(`sexual_activity_daily: ${solo.error}`)
   return {
     encounters: encounters.map((e) => ({ ...e, sexual: !!e.sexual })),
     people,
-    solo: ((solo.data ?? []) as SoloDay[]).map((s) => ({ ...s, instances: Array.isArray(s.instances) ? s.instances : [] })),
+    solo: solo.rows.map((s) => ({ ...s, instances: Array.isArray(s.instances) ? s.instances : [] })),
     tests: tests.error ? null : (tests.data ?? []) as StiTest[],
     testsError: tests.error?.message ?? null,
     places: new Map(((places.data ?? []) as { id: string; label: string | null; osm_name: string | null }[]).map((p) => [p.id, p.label ?? p.osm_name ?? 'a place with no name'])),
@@ -69,14 +70,14 @@ function byDay(rows: Record<string, unknown>[], dateCol: string, col: string): M
 
 export async function loadOutcomes(from: string): Promise<{ outcomes: Outcome[]; missing: string[] }> {
   const [w, s, wb, sc] = await Promise.all([
-    supabase.from('wearable_daily').select('date,hrv,rhr').gte('date', from).range(0, 4999),
-    supabase.from('sleep_daily').select('date,hours,score,deep_min').gte('date', from).range(0, 4999),
-    supabase.from('wellbeing_daily').select('date,energy,mood,stress,morning_erection_quality,arousal_level').gte('date', from).range(0, 4999),
-    supabase.from('score_history').select('day,charge').gte('day', from).range(0, 4999),
+    // All the days, past the 1,000-row cap (wearable_daily since 2016 is 3,700 rows), in date order.
+    readAllSoft<Record<string, unknown>>(() => supabase.from('wearable_daily').select('date,hrv,rhr').gte('date', from).order('date')),
+    readAllSoft<Record<string, unknown>>(() => supabase.from('sleep_daily').select('date,hours,score,deep_min').gte('date', from).order('date')),
+    readAllSoft<Record<string, unknown>>(() => supabase.from('wellbeing_daily').select('date,energy,mood,stress,morning_erection_quality,arousal_level').gte('date', from).order('date')),
+    readAllSoft<Record<string, unknown>>(() => supabase.from('score_history').select('day,charge').gte('day', from).order('day')),
   ])
   const missing = [w.error && 'wearable_daily', s.error && 'sleep_daily', wb.error && 'wellbeing_daily', sc.error && 'score_history'].filter(Boolean) as string[]
-  const W = (w.data ?? []) as Record<string, unknown>[], S = (s.data ?? []) as Record<string, unknown>[]
-  const B = (wb.data ?? []) as Record<string, unknown>[], C = (sc.data ?? []) as Record<string, unknown>[]
+  const W = w.rows, S = s.rows, B = wb.rows, C = sc.rows
   const outcomes: Outcome[] = [
     { id: 'hrv', label: 'Overnight HRV', unit: 'ms', hue: 'm-hrv', metric: 'series:hrv', better: 'higher', days: byDay(W, 'date', 'hrv') },
     { id: 'rhr', label: 'Resting heart rate', unit: 'bpm', hue: 'm-resting-hr', metric: 'series:rhr', better: 'lower', days: byDay(W, 'date', 'rhr') },

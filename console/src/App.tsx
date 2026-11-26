@@ -83,9 +83,9 @@ export default function App() {
         <Route path="analyse/:tab" element={<Lab />} />
         <Route path="review/:tab" element={<Review />} />
         {/* the old names (before web desk W1): Lab, Setup and the Log, with the query kept */}
-        <Route path="lab" element={<Navigate to="/analyse/compare" replace />} />
+        <Route path="lab" element={<RedirectKeep to="/analyse/compare" />} />
         <Route path="lab/:tab" element={<RedirectTab where={(t) => (t === 'reports' ? '/review/reports' : `/analyse/${t}`)} fallback="/analyse/compare" />} />
-        <Route path="setup" element={<Navigate to="/data/integrity" replace />} />
+        <Route path="setup" element={<RedirectKeep to="/data/integrity" />} />
         <Route path="setup/:tab" element={<RedirectTab where={(t) => (t === 'data' ? '/data/rows' : `/data/${t}`)} fallback="/data/integrity" />} />
         <Route path="log" element={<RedirectKeep to="/review/log" />} />
         {Object.entries(MOVED).map(([from, m]) => (

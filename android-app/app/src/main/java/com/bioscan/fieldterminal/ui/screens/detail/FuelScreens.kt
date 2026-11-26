@@ -41,6 +41,7 @@ import com.bioscan.fieldterminal.domain.fuel.DayHydration
 import com.bioscan.fieldterminal.domain.fuel.HydrationStatus
 import com.bioscan.fieldterminal.domain.macroMove
 import com.bioscan.fieldterminal.domain.perKg
+import com.bioscan.fieldterminal.domain.MEAL_NAMES
 import com.bioscan.fieldterminal.domain.proteinByMeal
 import com.bioscan.fieldterminal.domain.score.StoolLane
 import com.bioscan.fieldterminal.domain.score.bowelTiming
@@ -190,12 +191,11 @@ fun NutritionScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit) {
             }
         }
 
-        Section("PROTEIN PER MEAL", info = "Each column a day, split by meals in the order eaten. Even parts mean protein is spread through the day; a few large ones mean it is bunched into one or two meals.") {
+        Section("PROTEIN PER MEAL", info = "Each column a day, split by meal: the label it was logged under, else the main meal its time falls in (a second meal in the same part of the day is a snack). Even parts mean protein is spread through the day; a few large ones mean it is bunched into one or two meals.") {
             val byDay = remember(o) { proteinByMeal(o.meals).entries.map { it.key to it.value } }
-            val slots = byDay.maxOfOrNull { it.second.size }?.coerceAtMost(6) ?: 0
+            val shades = MEAL_NAMES.indices.map { NutrientColor.Protein.copy(alpha = 1f - it * 0.13f) }
             StackedBars(
-                dayColumns(byDay, today, days) { l -> (0 until slots).map { l.getOrElse(it) { 0.0 } } },
-                (0 until slots).map { NutrientColor.Protein.copy(alpha = 1f - it * 0.13f) }, (1..slots).map { "Meal $it" }, Fmt.int, "g", lastPartial = days <= 60 && byDay.any { it.first == today },
+                dayColumns(byDay, today, days) { it }, shades, MEAL_NAMES, Fmt.int, "g", lastPartial = days <= 60 && byDay.any { it.first == today },
             )
         }
 

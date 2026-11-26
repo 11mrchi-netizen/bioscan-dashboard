@@ -91,7 +91,7 @@ test('the extra metrics of an address: known, distinct, not the page itself, at 
 test('a metric page is saved as a view with its metric and comparison', () => {
   assert.equal(viewPath('/m/series%3Ahrv', '?with=series%3Arhr&with=sleep'), '/m/series%3Ahrv?with=series%3Arhr&with=sleep')
   assert.equal(viewPath('/m', ''), null)
-  assert.equal(viewPath('/lab/compare', '?view=periods&series=hrv'), '/lab/compare?view=periods&series=hrv')
+  assert.equal(viewPath('/analyse/compare', '?view=periods&series=hrv'), '/analyse/compare?view=periods&series=hrv')
   assert.equal(viewPath('/today', ''), null)
 })
 
@@ -100,10 +100,10 @@ test('every series has a picker group', () => {
 })
 
 test('saved views: a Lab or Setup tab keeps its tab and query; the old route names are not savable', () => {
-  assert.equal(viewPath('/lab/evidence', '?view=board'), '/lab/evidence?view=board')
-  assert.equal(viewPath('/lab/compare', '?view=periods&series=hrv%2Crhr'), '/lab/compare?view=periods&series=hrv%2Crhr')
+  assert.equal(viewPath('/analyse/evidence', '?view=board'), '/analyse/evidence?view=board')
+  assert.equal(viewPath('/analyse/compare', '?view=periods&series=hrv%2Crhr'), '/analyse/compare?view=periods&series=hrv%2Crhr')
   assert.equal(viewPath('/lab', ''), null)
-  assert.equal(viewPath('/setup/data', '?table=meals'), '/setup/data?table=meals')
+  assert.equal(viewPath('/data/rows', '?table=meals'), '/data/rows?table=meals')
   for (const old of ['/explore', '/evidence', '/models', '/data', '/integrity']) assert.equal(viewPath(old, '?x=1'), null) // the old names: no view was ever saved under them
 })
 

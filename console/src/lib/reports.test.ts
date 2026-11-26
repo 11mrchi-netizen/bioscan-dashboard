@@ -41,7 +41,7 @@ test('the latest report, its span, address and headline', () => {
   assert.equal(latest([]), null)
   assert.equal(spanText(w), '16 – 22 Nov')
   assert.equal(spanText(m), '1 – 31 Oct 2026')
-  assert.equal(reportHref('week:2026-11-16'), '#/lab/reports?key=week%3A2026-11-16')
+  assert.equal(reportHref('week:2026-11-16'), '#/review/reports?key=week%3A2026-11-16')
   assert.equal(headline(w), '1 better than the week before.')
   assert.equal(headline(m), 'Everything steady against the period before.')
 })

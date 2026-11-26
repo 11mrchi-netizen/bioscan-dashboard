@@ -105,7 +105,7 @@ try {
   await ctx.addInitScript(([key, val]: string[]) => localStorage.setItem(key, val), [`sb-${REF}-auth-token`, JSON.stringify({ access_token: jwt, refresh_token: 'r', token_type: 'bearer', expires_in: 3600, expires_at: exp, user: { id: 'u1', aud: 'authenticated', role: 'authenticated' } })])
   const textOf = async () => ((await page.textContent('body')) ?? '').replace(/\s+/g, ' ')
 
-  await page.goto(`${BASE}#/lab/reports?key=${report.key}`)
+  await page.goto(`${BASE}#/review/reports?key=${report.key}`)
   await page.getByText('TRAINING FUEL').first().waitFor({ timeout: 15000 })
   let text = await textOf()
   check(text.includes('MEAL QUALITY'), 'report: meal quality')
@@ -126,7 +126,7 @@ try {
   check(/Protein in the 2 h after\s*\d+ g/.test(text), 'session: protein after')
   await page.locator('section', { hasText: 'FROM THE MEALS LOGGED' }).first().screenshot({ path: path.join(OUT, 'nutrition-session.png') })
 
-  await page.goto(`${BASE}#/log?day=${day(50)}`)
+  await page.goto(`${BASE}#/review/log?day=${day(50)}`)
   await page.getByText('FOOD AND DRINK', { exact: false }).first().waitFor({ timeout: 15000 })
   text = await textOf()
   check(text.includes('1.6 kcal/g') && text.includes('fibre 11 g/1,000 kcal') && text.includes('foods: eggs, refined grains'), 'log: meal profile line')
@@ -147,7 +147,7 @@ try {
 
   for (const width of [390]) {
     await page.setViewportSize({ width, height: 2400 })
-    await page.goto(`${BASE}#/lab/reports?key=${report.key}`)
+    await page.goto(`${BASE}#/review/reports?key=${report.key}`)
     await page.getByText('TRAINING FUEL').first().waitFor({ timeout: 15000 })
     const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
     check(over <= 0, `report: no sideways scroll at ${width} px`, String(over))

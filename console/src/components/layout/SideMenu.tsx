@@ -15,9 +15,9 @@ export function SideMenu({ email, onSignOut, narrow }: { email?: string | null; 
         {NAV.map((s) => {
           const here = loc.section?.id === s.id
           return (
-            <li key={s.id} className={`menu-sec ${s.id === 'setup' ? 'menu-foot-sec' : ''}`}>
+            <li key={s.id} className={`menu-sec ${s.id === 'data' ? 'menu-foot-sec' : ''}`}>
               <Link to={to({ section: s })} data-nav={s.id} className={`menu-item level-1 mono ${here && !s.tabs ? 'on' : ''} ${here ? 'open' : ''}`} aria-current={here && !s.tabs ? 'page' : undefined}>
-                {s.id === 'setup' ? '⚙ ' : ''}{s.label}
+                {s.id === 'data' ? '⚙ ' : ''}{s.label}
               </Link>
               {here && s.tabs && (
                 <ul className="menu-sub">

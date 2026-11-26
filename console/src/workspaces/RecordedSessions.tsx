@@ -63,7 +63,7 @@ export default function RecordedSessions() {
         {rows.map((s) => (
           <li key={s.id} className="pg-row">
             <span className="pg-row-title">
-              <Link to={`/plan/sessions/${s.id}`} className="rs-link"><span className="mono">{longDate(s.start_time.slice(0, 10)).toUpperCase()} · {s.start_time.slice(11, 16)}</span>{'  '}{(s.type ?? 'session').toUpperCase()}</Link>
+              <Link to={`/review/sessions/${s.id}`} className="rs-link"><span className="mono">{longDate(s.start_time.slice(0, 10)).toUpperCase()} · {s.start_time.slice(11, 16)}</span>{'  '}{(s.type ?? 'session').toUpperCase()}</Link>
             </span>
             <span className="pg-row-value mono">{joined([
               s.duration_min != null && <SessionNum key="d" s={s} field="duration">{hm(s.duration_min)}</SessionNum>,

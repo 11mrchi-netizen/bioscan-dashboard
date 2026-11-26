@@ -1,5 +1,5 @@
 // LAB › EVIDENCE (was the Evidence workspace and the Models workspace; web redesign, phase 4). The view is in the address
-// (#/lab/evidence?view=board), so a link can open any of them; the side menu lists them (lib/nav.ts). Views:
+// (#/analyse/evidence?view=board), so a link can open any of them; the side menu lists them (lib/nav.ts). Views:
 //   (queue)   the decision queue, the evidence workbench and decision records (phase D; Decisions.tsx). Default; links to a
 //             question or a result (lib/links.ts) open the item here.
 //   board     the evidence board (analysis review phase D): every question of the fixed catalogue drawn to scale against its

@@ -220,7 +220,7 @@ export function MetricView({ rawRef: raw, embedded = false, setPrimary }: { rawR
                     {extras.map((e) => { const v = e.data.points.find((q) => q.day === p.day)?.value; return <td key={e.key} className="v">{v == null ? '–' : `${e.data.fmt(v)}${e.data.unit ? ` ${e.data.unit}` : ''}`}</td> })}
                     {(data.usual || data.band) && !compared && <td className="muted">{[p.direction ? directionWords(p.direction) : '', p.refLine ?? ''].filter(Boolean).join(' · ')}</td>}
                     <td className="metric-links">
-                      <Link to={`/log?day=${p.day}`}>DAY LOG</Link>
+                      <Link to={`/review/log?day=${p.day}`}>DAY LOG</Link>
                       <Link to={`/today?day=${p.day}`}>TODAY</Link>
                       {ref.kind === 'series' && <Link to={`/data?table=${encodeURIComponent(tableOf(ref.key))}&date=${p.day}`}>RECORDS</Link>}
                     </td>

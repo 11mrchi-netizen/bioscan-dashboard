@@ -1,13 +1,12 @@
-// PLAN › SESSIONS (web transition plan, phase 4): every planned session in a window, week by week: what it is, which block
+// PLAN › SESSIONS (web transition plan, phase 4; web desk W1: planned only, the recorded ones are Review › Sessions): every planned session in a window, week by week: what it is, which block
 // and week it belongs to, whether it moved, and what became of it (matched to a recorded session, skipped). Read-only:
 // sessions are made by Plan block and moved or confirmed on the phone.
 import { useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Navigate, useSearchParams } from 'react-router-dom'
 import { useLoadEffect } from '../lib/useLoadEffect'
 import { localToday, weekWindow, type WeekWindow } from '../lib/dates'
 import { loadPlannedSessions, longDate, mondayOf, type PlannedSession } from '../lib/planReads'
 import { PlanSessionRows } from './PlanSessionRows'
-import RecordedSessions from './RecordedSessions'
 import './PlanBlock.css'
 import './Pages.css'
 import { Board } from '../components/layout/Board'
@@ -16,8 +15,9 @@ const WINDOWS = [{ id: 'ahead', label: 'NEXT 6 WEEKS' }, { id: 'recent', label: 
 
 export default function Sessions() {
   const [params] = useSearchParams()
-  // Two views (the side menu lists them): the planned sessions week by week, and every recorded workout.
-  return params.get('view') === 'recorded' ? <RecordedSessions /> : <PlannedSessions />
+  // Recorded workouts moved to Review › Sessions (web desk, W1); an old link with ?view=recorded keeps its other parameters.
+  if (params.get('view') === 'recorded') { const q = new URLSearchParams(params); q.delete('view'); const s = q.toString(); return <Navigate to={`/review/sessions${s ? `?${s}` : ''}`} replace /> }
+  return <PlannedSessions />
 }
 
 function PlannedSessions() {

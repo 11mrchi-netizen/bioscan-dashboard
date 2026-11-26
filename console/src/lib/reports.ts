@@ -78,7 +78,7 @@ export function spanText(r: Pick<PeriodReport, 'start' | 'end' | 'grain'>): stri
 
 /** The page's address for one report. */
 export function reportHref(key: string): string {
-  return `#/lab/reports?key=${encodeURIComponent(key)}`
+  return `#/review/reports?key=${encodeURIComponent(key)}`
 }
 
 /** The one-line headline of a report for Today's card: what got better and worse. */

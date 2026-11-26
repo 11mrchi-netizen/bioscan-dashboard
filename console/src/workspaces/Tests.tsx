@@ -83,7 +83,7 @@ export default function Tests() {
           {taken.body.length === 0 ? <p className="pg-note">No body check-in yet. Monthly, before breakfast: grip, tape girths, skinfolds.</p> : (
             <ul className="pg-rows">{taken.body.slice(0, 8).map((x) => (
               <li key={x.id} className="pg-row"><span className="pg-row-title mono">{x.occurred_at.slice(0, 10)} · {x.occurred_at.slice(11, 16)}</span><span className="pg-row-value">{x.fasted ? 'fasted' : 'not fasted'}</span>
-                <span className="pg-row-sub">{[x.before_training != null && (x.before_training ? 'before training' : 'after training'), x.caliper && `caliper ${x.caliper}`, x.notes].filter(Boolean).join(' · ')} · <a href={`#/log?day=${x.occurred_at.slice(0, 10)}`}>day log</a></span></li>
+                <span className="pg-row-sub">{[x.before_training != null && (x.before_training ? 'before training' : 'after training'), x.caliper && `caliper ${x.caliper}`, x.notes].filter(Boolean).join(' · ')} · <a href={`#/review/log?day=${x.occurred_at.slice(0, 10)}`}>day log</a></span></li>
             ))}</ul>
           )}
         </section>

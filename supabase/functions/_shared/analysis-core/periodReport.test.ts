@@ -267,3 +267,10 @@ test('meal quality: each index of the meal profile on its own line, against the 
 })
 
 const round1 = (v: number) => Math.round(v * 10) / 10
+
+test('suggestions: a repeat blood test once the last draw is 12 weeks old and a regimen item is followed', () => {
+  const base = { metrics: [], micro: { lines: [], foodDays: 0 } as never, regimen: [{ id: 1, name: 'X', status: 'followed', asNeeded: false, taken: 5, planned: 5, rate: 1, daysOn: 10 }] as never, lab: [], weightKg: null, untested: [] }
+  assert.ok(suggestions({ ...base, daysSinceDraw: 90 }).some((s) => s.id === 'retest_blood'))
+  assert.ok(!suggestions({ ...base, daysSinceDraw: 60 }).some((s) => s.id === 'retest_blood'))
+  assert.ok(!suggestions({ ...base, daysSinceDraw: null }).some((s) => s.id === 'retest_blood'))
+})

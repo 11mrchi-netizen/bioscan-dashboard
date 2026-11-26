@@ -381,9 +381,9 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
     loadHealthInputs(admin, userId),
     // Routine intelligence (R1-R3 tables): read softly, like the phase B tables. Apps are filtered to the late-screen
     // categories here rather than in the query, so the reader needs only eq / gte / order / range.
-    fetchAll<NonNullable<RoutineInputs['phone']>[number]>(q('phone_usage_daily', 'date, bed_window_min, night_screen_min, night_unlocks', 'date', since)),
+    fetchAll<NonNullable<RoutineInputs['phone']>[number]>(q('phone_usage_daily', 'date, bed_window_min, night_screen_min, night_unlocks, screen_min, unlocks, longest_free_min', 'date', since)),
     fetchAll<NonNullable<RoutineInputs['phoneApps']>[number]>(q('phone_app_usage_daily', 'date, category, after_21_min', 'date', since)),
-    fetchAll<NonNullable<RoutineInputs['mobility']>[number]>(q('mobility_daily', 'date, coverage_pct, day_type, outdoor_daylight_min', 'date', since)),
+    fetchAll<NonNullable<RoutineInputs['mobility']>[number]>(q('mobility_daily', 'date, coverage_pct, day_type, outdoor_daylight_min, entropy_norm, new_places', 'date', since)),
     fetchAll<NonNullable<RoutineInputs['commutes']>[number]>((a: number, b: number) =>
       admin.from('trips').select('start_at, end_at, active_min').eq('user_id', userId).eq('is_commute', true).gte('start_at', sinceStamp).order('start_at').range(a, b)),
     // The app's scored mornings: read softly (the table may not exist yet, or the app may not have written it).

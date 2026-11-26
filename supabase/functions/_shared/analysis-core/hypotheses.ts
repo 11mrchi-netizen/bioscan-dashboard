@@ -227,6 +227,20 @@ function heatQuestions(): Hypothesis[] {
   ]
 }
 
+// Catalogue 2.5.0: whole-day phone and movement measures (about 35 days so far; they read "not yet" until about 60).
+function dayShapeQuestions(): Hypothesis[] {
+  const q = (id: string, label: string, cause: string, causeScale: number, causeText: string, lag: number, spec: object, targetText: string, model: string): Hypothesis => ({
+    id, label, cause, lag, exposure: 'continuous', causeScale, ...spec, causeText, targetText, expectedSign: 0, exposureModel: model,
+  } as Hypothesis)
+  return [
+    q('screen_total_sleep', 'Screen time and that night\'s sleep', 'screen_total_min', 60, 'Each extra hour of screen time', 1, SLEEP, 'that night\'s sleep', PHONE_MODEL),
+    q('screen_total_energy', 'Screen time and next-day energy', 'screen_total_min', 60, 'Each extra hour of screen time', 1, ENERGY, 'next-day energy', PHONE_MODEL),
+    q('unlocks_energy', 'Phone pick-ups and next-day energy', 'unlocks_day', 20, 'Each 20 more phone unlocks', 1, ENERGY, 'next-day energy', PHONE_MODEL),
+    q('mobility_entropy_energy', 'A more varied day and next-day energy', 'mobility_entropy', 0.1, 'Each 0.1 higher spread of the day across places', 1, ENERGY, 'next-day energy', MOBILITY_MODEL),
+    q('new_places_energy', 'A new place visited and next-day energy', 'new_places_day', 1, 'Each new place visited', 1, ENERGY, 'next-day energy', MOBILITY_MODEL),
+  ]
+}
+
 export const HYPOTHESES: Hypothesis[] = [
   {
     id: 'alcohol_hrv', label: 'Alcohol and next-morning HRV', cause: 'alcohol_any', lag: 1, exposure: 'binary', ...HRV,
@@ -328,6 +342,7 @@ export const HYPOTHESES: Hypothesis[] = [
   ...sleepQualityQuestions(),
   ...hydrationQuestions(),
   ...heatQuestions(),
+  ...dayShapeQuestions(),
 ]
 
 // Analysis review phase E: questions a person registers from a hint (what came before off mornings). Each is tested only

@@ -709,7 +709,7 @@ export interface Suggestion {
   ref: string | null
 }
 
-export const TARGETS = { sleepHours: 7, steps: 7000, waterMl: 2500, fiberG: 30, proteinPerKg: 1.6, untestedDays: 90 }
+export const TARGETS = { sleepHours: 7, steps: 7000, waterMl: 2500, fiberG: 30, proteinPerKg: 1.6, untestedDays: 90, retestDays: 84 }
 
 const fmtN = (v: number, d = 1) => (Math.abs(v) >= 100 ? Math.round(v).toLocaleString('en-US') : String(Number(v.toFixed(d))))
 
@@ -751,6 +751,8 @@ export interface SuggestionInputs {
   grain?: ReportGrain
   /** The food trigger screen, for its "worth testing" suggestion. */
   foodTriggers?: FoodTriggerSection
+  /** Days since the latest blood draw (lab_draws), or null when there is none or it is unknown. */
+  daysSinceDraw?: number | null
 }
 
 /** Every rule that fires, most pressing first; the report shows the first five. */
@@ -808,6 +810,10 @@ export function suggestions(x: SuggestionInputs): Suggestion[] {
     if (l.verdict === 'worse') out.push({ id: `lab_${l.id}`, priority: 1, ref: null, text: `${l.name}: ${l.detail} Consider stopping it.`, because: 'Lab result' })
     if (l.verdict === 'not_followed') out.push({ id: `lab_${l.id}`, priority: 2, ref: null, text: `${l.name}: ${l.detail} Restart it properly or end the test.`, because: 'Lab adherence' })
   }
+  // A repeat blood test is the only way to see what a long-running regimen changed in the body; 12 weeks is the usual gap.
+  if (x.daysSinceDraw != null && x.daysSinceDraw >= TARGETS.retestDays && x.regimen.some((r) => !r.asNeeded && r.status === 'followed')) {
+    out.push({ id: 'retest_blood', priority: 2, ref: null, text: `Book a repeat blood test: the last one was ${x.daysSinceDraw} days ago, and a second draw is what shows what the regimen changed (vitamin D, ferritin, zinc and copper, B12, omega-3).`, because: `${x.daysSinceDraw} days since the last draw` })
+  }
   const longUntested = x.untested.filter((u) => !u.asNeeded && (u.daysOn ?? 0) >= TARGETS.untestedDays && u.status === 'followed')
   if (longUntested.length) {
     const names = longUntested.slice(0, 3).map((u) => u.name)
@@ -863,11 +869,12 @@ export function buildReport(x: {
   trainingFuel?: TrainingFuelSection
   foodTriggers?: FoodTriggerSection
   weightKg: number | null
+  daysSinceDraw?: number | null
 }): PeriodReport {
   const prev = previousOf(x.period)
   const tested = new Set(x.lab.map((l) => l.supplementId).filter((v): v is number => v !== null))
   const untested = x.regimen.filter((r) => !tested.has(r.id))
-  const all = suggestions({ metrics: x.metrics, micro: x.micro, regimen: x.regimen, lab: x.lab, weightKg: x.weightKg, untested, trainingFuel: x.trainingFuel, grain: x.period.grain, foodTriggers: x.foodTriggers })
+  const all = suggestions({ metrics: x.metrics, micro: x.micro, regimen: x.regimen, lab: x.lab, weightKg: x.weightKg, untested, trainingFuel: x.trainingFuel, grain: x.period.grain, foodTriggers: x.foodTriggers, daysSinceDraw: x.daysSinceDraw })
   const notFollowed = [...x.regimen.filter((r) => r.status === 'not_followed').map((r) => r.name), ...x.lab.filter((l) => l.verdict === 'not_followed').map((l) => l.name)]
   return {
     version: REPORT_VERSION, key: periodKey(x.period), grain: x.period.grain, label: periodLabel(x.period),

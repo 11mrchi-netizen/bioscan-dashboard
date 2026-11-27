@@ -195,7 +195,10 @@ class ZeppRepository(private val supabase: SupabaseClient) {
             row.zeppTemplateId?.let { deleteIds += it }
             specs[row.id] = hash to spec
         }
-        if (specs.isEmpty() && deleteIds.isEmpty()) return "Zepp templates up to date"
+        // Every template id a planned session still points at (past, dropped and replaced ones are going away). Anything
+        // else this app once made is an orphan (its session row was removed, or a delete failed and the id was cleared).
+        val keepIds = table.select(columns = cols) { filter { neq("zepp_template_id", "") } }
+            .decodeList<ZeppPlannedRow>().mapNotNull { it.zeppTemplateId }.filter { it !in deleteIds }
 
         val response = supabase.functions.invoke(function = "zepp-training") {
             contentType(ContentType.Application.Json)
@@ -203,6 +206,8 @@ class ZeppRepository(private val supabase: SupabaseClient) {
                 put("action", "push_templates")
                 putJsonArray("templates") { specs.values.forEach { add(it.second) } }
                 putJsonArray("deleteIds") { deleteIds.forEach { add(JsonPrimitive(it)) } }
+                putJsonArray("keepIds") { keepIds.forEach { add(JsonPrimitive(it)) } }
+                put("pruneOrphans", true)
             }.toString())
         }
         if (!response.status.isSuccess()) return "Zepp push failed: HTTP ${response.status.value}"
@@ -229,6 +234,8 @@ class ZeppRepository(private val supabase: SupabaseClient) {
         val failed = answer["failed"]?.jsonArray?.size ?: 0
         buildString {
             append("Zepp: ${createdKeys.size} template(s) sent, ${answer["deleted"]?.jsonPrimitive?.content ?: "0"} removed")
+            val pruned = answer["pruned"]?.jsonPrimitive?.content ?: "0"
+            if (pruned != "0") append(", $pruned orphan(s) cleared")
             if (failed > 0) append(", $failed failed")
             if (unmapped.isNotEmpty()) append(". No Zepp exercise for: ${unmapped.joinToString()}")
         }

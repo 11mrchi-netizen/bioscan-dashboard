@@ -53,7 +53,7 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 // found, check the latest day of mobility and the commute against what you remember. Suggestions (Setup's home location,
 // weekday office hours, OpenStreetMap around the point) are only offered; nothing is labelled without a tap. ADD PLACE
 // names a place from coordinates (pasted, a map link, or where the phone is now) before or after it is visited.
-// [showDay] adds the latest day of mobility and the commute (Setup); Lab › ROUTINE shows those in its own cards.
+// [showDay] adds the latest day of mobility and the commute (Setup); Me › ROUTINE shows those in its own cards.
 @Composable
 fun PlacesCard(showDay: Boolean = true) {
     val scope = rememberCoroutineScope()
@@ -89,7 +89,7 @@ fun PlacesCard(showDay: Boolean = true) {
     ) {
         error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
         homeWorkProblem(places.map { it.toPlace() }, places.firstOrNull { it.source == "home_setting" }?.id)
-            ?.let { Text("$it Tap a place below to label it, or use Lab › ROUTINE › OPEN DAY MAP to see where each one is.", style = FTType.BodySmall, color = FT.Warn) }
+            ?.let { Text("$it Tap a place below to label it, or use Me › ROUTINE › OPEN DAY MAP to see where each one is.", style = FTType.BodySmall, color = FT.Warn) }
 
         if (showDay) {
             mobility?.let { m -> MobilitySummary(m) }

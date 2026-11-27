@@ -99,17 +99,17 @@ abstract class PolishComponentsBase {
                         androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
                         FTIconButton(FTIcons.Settings, "Settings", {})
                     }
-                    SubTabRow(MeTab.entries, tab, { it.label }, { tab = it })
+                    SubTabRow(MeTab.row, tab, { it.label }, { tab = it })
                 }
             }
         }
         compose.onNodeWithContentDescription("Settings").assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp)
-        for (t in MeTab.entries) compose.onNodeWithText(t.label).assertHeightIsAtLeast(0.dp)
+        for (t in MeTab.row) compose.onNodeWithText(t.label).assertHeightIsAtLeast(0.dp)
         shot("me_tabs_first")
         // The last tab, off-screen on a narrow phone, is selected: the row brings it into view.
-        compose.runOnIdle { tab = MeTab.entries.last() }
+        compose.runOnIdle { tab = MeTab.row.last() }
         compose.waitForIdle()
-        compose.onNodeWithText(MeTab.entries.last().label).assertIsDisplayed()
+        compose.onNodeWithText(MeTab.row.last().label).assertIsDisplayed()
         shot("me_tabs_last")
     }
 

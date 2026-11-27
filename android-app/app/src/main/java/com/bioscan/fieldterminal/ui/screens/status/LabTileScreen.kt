@@ -77,7 +77,6 @@ fun LabTileScreen(
         subtitle = when (tab) {
             LabTab.N1 -> "WHAT GOES WITH WHAT · EXPERIMENTS · SUMMARIES"
             LabTab.Tests -> "START A TEST · RESULTS GO TO LOG · BREATHWORK"
-            LabTab.Routine -> "DAY MAP · THE WEEK BY PLACE · COMMUTE · PHONE"
             LabTab.Explore -> "ANY TWO MEASURES · DAYS LATER · HOW SURE"
         },
         accent = FT.DomainLabs,
@@ -87,7 +86,6 @@ fun LabTileScreen(
         when (tab) {
             LabTab.N1 -> N1Tab(openReport = openReport, onReportHandled = onReportHandled)
             LabTab.Tests -> TestsTab(reloadKey = testsReload, onStart = { test = it }, onOpenBreathwork = onOpenBreathwork)
-            LabTab.Routine -> RoutineTab(onOpenDay = onOpenDayMap)
             LabTab.Explore -> ExploreTab()
         }
     }

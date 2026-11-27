@@ -48,13 +48,24 @@ enum class MeTab(val label: String) {
     Performance("PERFORMANCE"),
     Body("BODY"),
     Health("HEALTH"),
+    // Not in the tab row since M2b: opened from Health › PREVENTION AND RISK. The entries stay so a saved state and the
+    // notification links still resolve (they show Health as the selected tab).
     Bloodwork("BLOODWORK"),
     // Sex and encounters: stats, trends, correlations, STI tests and the partners (ui/screens/me/IntimacyPage.kt).
     Intimacy("INTIMACY"),
-    // Routine R8: the long view of the routine (ui/screens/me/RoutinePage.kt).
+    // Routine R8 and R5: the long view of the routine and what you do for it (ui/screens/me/RoutinePage.kt, status/RoutineTab.kt).
     Routine("ROUTINE"),
     // Risk profile R1: the air breathed and the ways to improve (ui/screens/me/ExposuresPage.kt).
     Exposures("EXPOSURES"),
+    ;
+
+    /** The tab this one is shown under in the row (Bloodwork, Intimacy and Exposures sit under Health). */
+    val rowTab: MeTab get() = when (this) { Bloodwork, Intimacy, Exposures -> Health; else -> this }
+
+    companion object {
+        /** The five tabs of the row (contract A11): the admission test puts a new Me screen under one of these. */
+        val row: List<MeTab> = listOf(Healthspan, Performance, Body, Health, Routine)
+    }
 }
 
 // LAB's old pushed route (it was a Status tile before it became a dock tab); kept so a saved back stack still resolves.
@@ -67,10 +78,8 @@ enum class TileRoute(val route: String) {
 // the training block, the food plan with meal prep and race fuel; TESTS starts the tests whose results are logged in Log.
 enum class LabTab(val label: String) {
     N1("N=1"),
-    // SUPPLEMENTS and PLANNING moved to the PLAN tab (REGIMEN, TRAINING, FOOD, RACE).
+    // SUPPLEMENTS and PLANNING moved to the PLAN tab (REGIMEN, TRAINING, FOOD, RACE); ROUTINE moved to Me.
     Tests("TESTS"),
-    // Routine intelligence R5: the week by place, the commute and the phone (docs/routine-intelligence).
-    Routine("ROUTINE"),
     // Any two daily measures against each other, with a lag (domain/Correlation.kt).
     Explore("EXPLORE"),
 }

@@ -79,7 +79,7 @@ import java.util.Locale
 import java.util.UUID
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Routine R7 on Lab › ROUTINE (domain/routine/Practices.kt):
+// Routine R7 on Me › ROUTINE (domain/routine/Practices.kt):
 //   PRACTICES       today's practices with DONE / START / SKIP, how each has been kept over 28 days, ADD A PRACTICE;
 //   TIME            the running timer (STOP, DISCARD), one tap to start timing anything, ADD TIME AFTERWARDS, today's blocks;
 //   THE WEEK'S TIME what was logged and what other data shows (watch, location, phone, sleep), today and the daily average

@@ -92,7 +92,7 @@ fun BodyMeasurementsCard(
     com.bioscan.fieldterminal.ui.screens.detail.Section("BODY MEASUREMENTS", info = INFO + "\n\n" + INFO_DETAILS) {
         Text(
             latest?.let { "Last check-in ${it.date.format(DAY)} · next due ${bodyCheckinDueOn(it.date)!!.format(DAY)}" }
-                ?: "No check-in yet. Tape and skinfolds, once a month before breakfast: about 15 minutes. Start one from LAB › Body check-in or the + button.",
+                ?: "No check-in yet. Tape and skinfolds, once a month before breakfast: about 15 minutes. Start one from + › Body check-in or the + button.",
             style = FTType.BodySmall,
             color = FT.TextSecondary,
         )

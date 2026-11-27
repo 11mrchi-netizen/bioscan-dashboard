@@ -7,7 +7,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
-// Routine intelligence R5 (docs/routine-intelligence/01-research-and-plan.md, section 10): what Lab › ROUTINE, Today and
+// Routine intelligence R5 (docs/routine-intelligence/01-research-and-plan.md, section 10): what Me › ROUTINE, Today and
 // the Log draw, from rows R1-R3 published. Pure.
 
 // ---- The week by place category ----

@@ -171,7 +171,7 @@ fun RoutinePageContent(
             info = "A daily average over the last 28 complete days: what you logged, training from the watch, walking and " +
                 "cycling in trips, commuting door to door, time outdoors in daylight, phone video and social apps, sleep. " +
                 "Tap one for its history.",
-            empty = "Nothing yet: log time on Lab › ROUTINE, or turn on Locations and Phone use in Setup.",
+            empty = "Nothing yet: log time at the top of this page, or turn on Locations and Phone use in Setup.",
         )
         LinesCard(
             "PLACES", d.places, through, onOpen = open,
@@ -312,11 +312,11 @@ private fun PracticesCard(activities: List<RoutineActivity>, logs: List<RoutineL
     FTCard(
         title = "PRACTICES",
         info = "Each practice of the last 28 days: the scheduled days it was done, the time logged and its streaks. Tap one " +
-            "for its 12-week calendar. Practices are added and changed on Lab › ROUTINE.",
+            "for its 12-week calendar. Practices are added and changed at the top of this page.",
     ) {
         val list = practicesInWindow(activities, logs, today)
         if (list.isEmpty()) {
-            Text("No practices yet. Add one on Lab › ROUTINE.", style = FTType.BodySmall, color = FT.TextSecondary)
+            Text("No practices yet. Add one at the top of this page.", style = FTType.BodySmall, color = FT.TextSecondary)
             return@FTCard
         }
         list.forEach { a ->

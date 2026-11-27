@@ -23,7 +23,7 @@ fun notificationDestination(kind: String?): NotificationDestination = when (kind
     NotificationKind.HEALTH_CHECKIN -> NotificationDestination.HEALTH
     // Rating, drawing and follow-ups all happen on Lab › N=1, in the repeatable-interventions card.
     NotificationKind.EVENT_RATING, NotificationKind.EVENT_DRAW, NotificationKind.EVENT_FOLLOWUP -> NotificationDestination.EVENTS
-    // A practice reminder (and the routine timer) open Lab › ROUTINE, where PRACTICES and TIME are.
+    // A practice reminder (and the routine timer) open Me › ROUTINE, where PRACTICES and TIME are.
     NotificationKind.PRACTICE_DUE -> NotificationDestination.ROUTINE
     // A due questionnaire opens Me › EXPOSURES, where TAKE is.
     NotificationKind.QUESTIONNAIRE_DUE -> NotificationDestination.EXPOSURES

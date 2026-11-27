@@ -66,34 +66,25 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Routine intelligence R5 (docs/routine-intelligence/01-research-and-plan.md, section 10): Lab › ROUTINE. Practices, logged
-// time and the week's time (R7), then the week by place, the commute with other ways to make it, and the phone. Views of what was recorded, not findings: what goes with
+// Routine intelligence R5 (docs/routine-intelligence/01-research-and-plan.md, section 10), now the top of Me › ROUTINE (it was Lab › ROUTINE):
+// practices, logged time and the week's time (R7), the day map and the commute with other ways to make it.
+// The week by place, the places list and the phone are in the page below it. Views of what was recorded, not findings: what goes with
 // what lives on N=1's evidence board, under the contract's rules.
 @Composable
 fun RoutineTab(onOpenDay: (LocalDate) -> Unit = {}) {
     val scope = rememberCoroutineScope()
-    val routine = remember { RoutineRepository(SupabaseClientProvider.client) }
     val placesRepo = remember { PlacesRepository(SupabaseClientProvider.client) }
-    var strip by remember { mutableStateOf<List<StripDay>?>(null) }
     var places by remember { mutableStateOf<List<PlaceRow>>(emptyList()) }
     var journeys by remember { mutableStateOf<List<CommuteJourney>?>(null) }
     var reload by remember { mutableIntStateOf(0) }
-    var phone by remember { mutableStateOf<PhoneWeek?>(null) }
-    var apps by remember { mutableStateOf<List<AppWeekTotal>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
 
     val cacheVersion = rememberCacheVersion()
     LaunchedEffect(cacheVersion, reload) {
         scope.launchSafe(onError = { error = describeLoadFailure(it) }) {
-            val yesterday = LocalDate.now().minusDays(1)
-            val week = yesterday.minusDays(6)
             places = placesRepo.loadPlaces()
-            val mobility = routine.mobilitySince(week)
-            strip = weekStrip(mobility.associate { LocalDate.parse(it.date) to (it.minutesByCategory to it.coveragePct) }, yesterday)
             val categories = places.associate { it.id to PlaceCategory.of(it.category) }
             journeys = commuteJourneys(placesRepo.tripsSince(Instant.now().minusSeconds(28 * 86_400)), categoryOf = { categories[it] })
-            phone = phoneWeek(routine.phoneSince(week).filter { !it.date.isAfter(yesterday) })
-            apps = routine.appsSince(week)
             error = null
         }
     }
@@ -103,67 +94,11 @@ fun RoutineTab(onOpenDay: (LocalDate) -> Unit = {}) {
         // Routine R7: practices, logged time and the week's time (ui/screens/routine/PracticesCards.kt).
         RoutineTimeSection()
         FTButton("OPEN DAY MAP", modifier = Modifier.fillMaxWidth(), emphasis = FTButtonEmphasis.Primary) { onOpenDay(LocalDate.now()) }
-        WeekCard(strip, onOpenDay)
-        // Naming places is what turns the week and the commute into categories, so it sits here as well as in Setup.
-        PlacesCard(showDay = false)
         CommuteCard(journeys, places, onOpenDay, onFixHome = { setup ->
             scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { reload++ }) {
                 placesRepo.saveLabel(setup.id, "Home", PlaceCategory.HOME)
             }
         })
-        PhoneCard(phone, apps)
-    }
-}
-
-private fun groupColor(g: StripGroup): Color = when (g) {
-    StripGroup.HOME -> FT.Ok
-    StripGroup.WORK -> FT.DomainMap // was DomainTraining, which is Emerald: Home and Work looked the same
-    StripGroup.TRANSIT -> FT.Warn
-    StripGroup.OTHER -> FT.DomainLabs
-    StripGroup.UNKNOWN -> FT.GlassBorder
-}
-
-private val dayFmt = DateTimeFormatter.ofPattern("EEE d")
-
-@Composable
-private fun WeekCard(strip: List<StripDay>?, onOpenDay: (LocalDate) -> Unit) {
-    FTCard(
-        title = "THE WEEK BY PLACE",
-        info = "Each day from midnight to midnight, by the category of the places you were at (Setup › Profile & goals › " +
-            "Data capture › PLACES), time on the move, and time nothing recorded (unknown, never counted as home). Tap a day " +
-            "to open its map.",
-    ) {
-        if (strip == null) {
-            Text("Loading…", style = FTType.BodySmall, color = FT.TextSecondary)
-            return@FTCard
-        }
-        if (strip.all { it.coveragePct == null }) {
-            Text("No recorded days yet. Turn on Locations in Setup › Profile & goals › Data capture.", style = FTType.BodySmall, color = FT.TextSecondary)
-            return@FTCard
-        }
-        strip.forEach { day ->
-            Row(
-                Modifier.fillMaxWidth().ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { onOpenDay(day.date) }.padding(vertical = 3.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Text(day.date.format(dayFmt), style = FTType.Label, color = FT.TextSecondary, modifier = Modifier.width(48.dp))
-                Row(Modifier.weight(1f).height(12.dp).clip(RoundedCornerShape(FT.RadiusSmall))) {
-                    StripGroup.entries.forEach { g ->
-                        val min = day.minutes[g] ?: 0.0
-                        if (min > 0) Box(Modifier.weight(min.toFloat()).height(12.dp).background(groupColor(g)))
-                    }
-                }
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            StripGroup.entries.forEach { g ->
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Box(Modifier.width(8.dp).height(8.dp).background(groupColor(g)))
-                    Text(g.label, style = FTType.Label, color = FT.TextSecondary)
-                }
-            }
-        }
     }
 }
 
@@ -290,27 +225,6 @@ private fun CommuteCard(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun PhoneCard(week: PhoneWeek?, apps: List<AppWeekTotal>) {
-    FTCard(
-        title = "PHONE · LAST 7 DAYS",
-        info = "From Android's own usage events (Setup › Profile & goals › Data capture › PHONE USE). The hour before sleep and " +
-            "the night use need the night's sleep record from Health Connect.",
-    ) {
-        if (week == null) {
-            Text("No phone use recorded yet.", style = FTType.BodySmall, color = FT.TextSecondary)
-            return@FTCard
-        }
-        Line("Screen time, daily mean", hm(week.meanScreenMin))
-        Line("Hour before sleep, mean", week.meanBedWindowMin?.let(::hm) ?: "-")
-        Line("Nights with the phone unlocked", "${week.nightsUnlocked} of ${week.nightsMeasured}")
-        if (apps.isNotEmpty()) {
-            Text("MOST USED", style = FTType.Label, color = FT.TextSecondary)
-            apps.forEach { a -> Line(a.label ?: a.pkg, "${hm(a.minutes)} · ${a.launches}×") }
         }
     }
 }

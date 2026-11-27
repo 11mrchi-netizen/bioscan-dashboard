@@ -13,7 +13,7 @@ import {
   bandWord, chargeRankLine, directionGlyph, directionWords, DOMAINS, domainSentence, driverSummary, formatJudgedValue, referenceLine,
   type DayScores, type DomainKey,
 } from '../lib/scoreText'
-import { loadToday, shownScore, stripCharge, type TodayData } from './todayData'
+import { loadToday, shownScore, stripCharge, type HistoryDay, type TodayData } from './todayData'
 import { type LiveKind, type LivePlan, livePlan } from './todayLive'
 import { SubstanceCard } from './Substances'
 import { MealOverlay } from './MealOverlay'
@@ -80,16 +80,16 @@ export function Today({ day, onDay }: { day: string; onDay: (d: string) => void 
             : (
               <>
                 <div className="today-scores">
-                  <Ring value={charge} size={168} stroke="url(#charge-spectrum)" label="CHARGE" big selected={overlay === 'CHARGE'} onOpen={details ? () => setOverlay(overlay === 'CHARGE' ? null : 'CHARGE') : undefined} />
+                  <Ring value={charge} size={168} stroke="url(#charge-spectrum)" label="CHARGE" big selected={overlay === 'CHARGE'} onOpen={charge != null ? () => setOverlay(overlay === 'CHARGE' ? null : 'CHARGE') : undefined} />
                   <div className="today-rings">
                     {DOMAINS.map((r) => (
                       <Ring key={r.key} value={round(shownScore(data!, day, r.key))} size={92} stroke={r.hue} label={r.label}
-                        selected={overlay === r.key} onOpen={details?.domains[r.key] ? () => setOverlay(overlay === r.key ? null : r.key) : undefined} />
+                        selected={overlay === r.key} onOpen={details?.domains[r.key] || shownScore(data!, day, r.key) != null ? () => setOverlay(overlay === r.key ? null : r.key) : undefined} />
                     ))}
                   </div>
                 </div>
                 {details ? <p className="today-hint">{chargeRankLine(details.charge) ?? ''} Choose a ring for what moved it; it opens beside.</p>
-                  : <p className="today-hint">The scores of this day were saved without their detail (kept from 6 Oct 2026 on): the rings do not open.</p>}
+                  : <p className="today-hint">{noDetailNote(data, day, isToday)}</p>}
               </>
             )}
           <div className="today-links">
@@ -99,6 +99,7 @@ export function Today({ day, onDay }: { day: string; onDay: (d: string) => void 
         </section>
 
         {overlay && details && <FocusCard scores={details} which={overlay} day={day} onPick={setOverlay} onClose={() => setOverlay(null)} />}
+        {overlay && !details && data && <LightFocusCard data={data} which={overlay} day={day} onClose={() => setOverlay(null)} />}
 
         {data && <PlanCard data={data} day={day} readAt={readAt} />}
 
@@ -251,6 +252,46 @@ function SoFarBar({ s }: { s: NonNullable<LivePlan['so_far']> }) {
         {parts.map((p) => <span key={p.label}><b style={{ background: p.color }} />{p.label} {Math.round(p.g)} g</span>)}
       </div>
     </div>
+  )
+}
+
+/** Why a day has no inputs behind its rings: a morning still open (the phone keeps the detail once it settles the morning), or one kept before the detail was. */
+function noDetailNote(data: TodayData, day: string, isToday: boolean): string {
+  const at = data.history.find((x) => x.day === day)?.updated_at
+  const when = at ? new Date(at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : null
+  if (isToday || day > localToday()) {
+    return `This morning is not settled yet. The phone saves the inputs behind each ring when it settles the morning; until then these are its last numbers${when ? `, saved at ${when}` : ''}. Open the phone to score it again.`
+  }
+  return 'The scores of this day were saved without their inputs (kept from 6 Oct 2026 on). The rings still open to their history.'
+}
+
+/** The focus of a ring on a day with numbers only (score_history): the number, how it sits, the last 28 days, the way on to its history. */
+function LightFocusCard({ data, which, day, onClose }: { data: TodayData; which: Exclude<Overlay, null>; day: string; onClose: () => void }) {
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', k)
+    return () => window.removeEventListener('keydown', k)
+  }, [onClose])
+  const meta = DOMAINS.find((x) => x.key === which)
+  const value = shownScore(data, day, which)
+  const key = which === 'CHARGE' ? 'charge' : which.toLowerCase()
+  const points = data.history.map((h) => (which === 'CHARGE' ? h.charge : (h[key as keyof HistoryDay] as number | null)))
+  const known = points.filter((v): v is number => typeof v === 'number')
+  const W = 300, H = 64
+  const path = points.map((v, i) => (v == null ? null : `${(i / Math.max(1, points.length - 1)) * W},${H - (Math.max(0, Math.min(100, v)) / 100) * H}`)).filter(Boolean).join(' ')
+  return (
+    <section className="ft-card today-focus" aria-label={`${which} in focus`}>
+      <button className="ov-close" onClick={onClose} aria-label="Close">×</button>
+      <div className="ov-eyebrow" style={meta ? { color: meta.hue } : undefined}>{which} · {longDate(day)}</div>
+      <div className="ov-head"><span className="ov-score">{value == null ? '–' : Math.round(value)}</span><span className="ov-band">{value == null ? 'NOT SCORED' : bandWord(which === 'CHARGE' ? null : which, value)}</span></div>
+      <p className="ov-line">The inputs behind this number are not saved for this day yet; the phone keeps them when it settles the morning. Its history is here.</p>
+      {known.length > 1 && (
+        <svg viewBox={`0 0 ${W} ${H}`} className="ov-spark" role="img" aria-label={`${which}, the last ${points.length} days`}>
+          <polyline points={path} fill="none" stroke={meta?.hue ?? 'var(--ft-fg)'} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        </svg>
+      )}
+      <a className="dash-link" href={historyHref(key, day)}>HISTORY →</a>
+    </section>
   )
 }
 

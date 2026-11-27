@@ -68,6 +68,8 @@ for (let i = 0; i < 118; i++) {
 // keyed as the phone keys them (an input is on the morning it is published on: the same day as its wearable / sleep row)
 T.score_history = []
 T.score_snapshots = []
+// a morning the phone has not settled yet: numbers in the history, no kept scores behind them (what a day in progress looks like)
+const OPEN_DAY = '2026-10-28'
 for (let t = Date.UTC(2026, 8, 1); t <= Date.UTC(2026, 9, 26); t += 864e5) {
   const d = day(t), k = (t - Date.UTC(2026, 8, 1)) / 864e5
   const w = T.wearable_daily.find((x) => x.date === d), sl = T.sleep_daily.find((x) => x.date === d)
@@ -79,6 +81,8 @@ for (let t = Date.UTC(2026, 8, 1); t <= Date.UTC(2026, 9, 26); t += 864e5) {
     SLEEP: dom('SLEEP', 88, [inp('sleep.hours', 'Sleep duration', sl?.hours ?? 7, 7)]),
   } } })
 }
+T.score_history.push({ day: OPEN_DAY, charge: 51, recovery: null, sleep: 15, load: null, fuel: null, balance: null, updated_at: '2026-10-27T23:09:00+00:00' })
+T.score_snapshots = T.score_snapshots.filter((x) => x.day !== OPEN_DAY)
 // the scale, for Me › BODY's analysis (Body.tsx): impedance weigh-ins, the Health Connect body fat beside them, the profile
 T.scale_readings = []; T.body_metrics = []
 for (let i = 0; i < 70; i++) {
@@ -555,6 +559,10 @@ async function waitForServer() {
     check((await page.locator('.today-focus').count()) === 0 && !page.url().includes('focus='), 'Escape closes the focus')
     await page.goto(`${BASE}#/today?day=2026-10-20&focus=recovery`); await page.waitForSelector('.today-focus .ov-input', { timeout: 15000 })
     check(true, 'a focus link opens the ring')
+    await page.goto(`${BASE}#/today?day=${OPEN_DAY}`); await page.waitForSelector('.today-hero', { timeout: 15000 })
+    check((await text('.today-hint')).includes('without their inputs') && (await text('.today-hint')).includes('still open'), 'a past day with numbers only says why the rings have no inputs', await text('.today-hint'))
+    await page.locator('.today-rings .ring-btn', { hasText: 'SLEEP' }).click(); await page.waitForSelector('.today-focus', { timeout: 5000 })
+    check((await page.locator('.today-focus a[href*="/m/sleep"]').count()) === 1 && (await page.locator('.today-focus svg.ov-spark').count()) === 1, 'a ring on such a day still opens: its number, its last days and the history link')
     await page.goBack().catch(() => {}); await page.goto(`${BASE}#/today?day=2026-10-20`); await page.waitForSelector('.ring-btn', { timeout: 15000 })
     await page.locator('.today-rings .ring-btn', { hasText: 'RECOVERY' }).click(); await page.waitForSelector('.ov-input', { timeout: 5000 })
     await page.locator('.ov-input', { hasText: 'Overnight HRV' }).click(); await page.waitForSelector('.metric-chart canvas', { timeout: 15000 })

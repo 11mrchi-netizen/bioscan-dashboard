@@ -43,6 +43,11 @@ place, Escape or × closes it, Back undoes it, and a link opens it. The meal vie
 (illness and signals lines, scorecards, relations, TSB, weights, the stool, bowel, stress and night pictures) need the phone to save them
 with the day; that is the next part of W2 (decided 26 Nov).
 
+A day the phone has not settled yet (today, early in the morning) has only the phone's last numbers (`score_history`) and no kept scores
+(`score_snapshots` are written for a settled, FINAL morning). Its rings still open, to a light card (the number, its band, the last
+28 days, the history link), and the page says when the phone last saved and that the inputs come when it settles the morning. The numbers
+stay as old as the phone's last save: that is what the saved day view (next part of W2) is for.
+
 ## The structure
 
 One app, one shell, one router (`console/src/App.tsx`). Five tabs in the phone's order, and a gear:

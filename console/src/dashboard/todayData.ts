@@ -7,7 +7,7 @@ import type { DayScores, DomainKey } from '../lib/scoreText'
 import { plusDays } from '../lib/dates'
 import type { DayLogs } from './todayLive'
 
-export interface HistoryDay { day: string; charge: number | null; recovery: number | null; sleep: number | null; load: number | null; fuel: number | null; balance: number | null }
+export interface HistoryDay { day: string; charge: number | null; recovery: number | null; sleep: number | null; load: number | null; fuel: number | null; balance: number | null; updated_at?: string }
 
 /** One row of TODAY'S PLAN (data/TodayPlanPublisher.kt, plan.v = 1). */
 export interface PlanRowJson { time?: string; title: string; detail?: string; done: boolean; kind: 'MEAL' | 'SESSION' | 'SUPPLEMENTS' | 'CLOSE'; kcal?: number; duration_min?: number }
@@ -18,7 +18,7 @@ export interface TodayData { history: HistoryDay[]; kept: Record<string, number>
 
 export async function loadToday(day: string, from: string): Promise<TodayData> {
   const [h, k, s, p, logs] = await Promise.all([
-    supabase.from('score_history').select('day,charge,recovery,sleep,load,fuel,balance').gte('day', from).lte('day', day).order('day'),
+    supabase.from('score_history').select('day,charge,recovery,sleep,load,fuel,balance,updated_at').gte('day', from).lte('day', day).order('day'),
     supabase.from('score_snapshots').select('day,charge:scores->charge->score').gte('day', from).lte('day', day),
     supabase.from('score_snapshots').select('scores').eq('day', day).maybeSingle(),
     supabase.from('today_plans').select('plan,built_at').eq('day', day).maybeSingle(),

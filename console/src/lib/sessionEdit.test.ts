@@ -63,3 +63,18 @@ test('pace for a run, speed for a ride, nothing without a distance', () => {
   assert.equal(paceOrSpeed('strength', 60, null), null)
   assert.equal(paceOrSpeed('run', 0, 5), null)
 })
+
+test('gear: a recorded list (even an empty one) is kept, an unrecorded set stays unrecorded, and changing gear counts as an edit', () => {
+  const before = { exercises: [{ name: 'Deadlift', sets: [{ reps: 5, weight_kg: 150, gear: ['straps'] }, { reps: 5, weight_kg: 100, gear: [] }, { reps: 5, weight_kg: 90 }] }] }
+  const ex = exercisesOf(before)
+  const form = ex.map(toEditable)
+  assert.deepEqual(form[0].sets.map((s) => s.gear), [['straps'], [], null])
+  const out = form.map((e) => toExercise(e)!)
+  assert.deepEqual(out[0].sets.map((s) => s.gear), [['straps'], [], undefined])
+  assert.equal('gear' in out[0].sets[2], false, 'an unrecorded set gets no gear key')
+  assert.equal(editedDetails(before, { exercises: out }).exercises_source, undefined, 'nothing changed')
+  form[0].sets[2].gear = []
+  const changed = editedDetails(before, { exercises: form.map((e) => toExercise(e)!) })
+  assert.equal(changed.exercises_source, 'app', 'recording "no gear" on a set is an edit of the person')
+  assert.deepEqual(exercisesOf(changed)[0].sets[2].gear, [])
+})

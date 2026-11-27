@@ -7,6 +7,8 @@ import { supabase } from '../lib/supabase'
 import { useLoadEffect } from '../lib/useLoadEffect'
 import { hm, longDate } from '../lib/planReads'
 import { metricHref, sessionSeries, type SessionField } from '../lib/metrics'
+import { loadGearRules } from '../lib/gearData'
+import { GEAR_LABEL, GEAR_TAGS, cleanGear, describeRules, suggestGear, type GearRule } from '../../../supabase/functions/_shared/training-core/index.ts'
 import { linkPlanned, loadPlannedFor, loadSession, saveSession, type PlannedLink, type SessionRow } from '../lib/sessionData'
 import {
   blankExercise, blankSet, exercisesOf, paceOrSpeed, ROUTE_TYPES, RUN_TYPES, sessionPatch, toEditable, toExercise, type EditableExercise,
@@ -47,6 +49,8 @@ function Detail({ row, plan, onChanged, onBack }: { row: SessionRow; plan: { lin
   const [routeType, setRouteType] = useState<string>(String(row.details?.route_type ?? ''))
   const [runType, setRunType] = useState<string>(String(row.details?.run_type ?? ''))
   const [exs, setExs] = useState<EditableExercise[]>(() => { const e = exercisesOf(row.details).map(toEditable); return e.length ? e : isStrength ? [blankExercise()] : [] })
+  const [gearRules, setGearRules] = useState<GearRule[]>([])
+  useEffect(() => { if (isStrength) loadGearRules().then(setGearRules).catch(() => setGearRules([])) }, [isStrength])
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
 
@@ -141,7 +145,7 @@ function Detail({ row, plan, onChanged, onBack }: { row: SessionRow; plan: { lin
           <textarea className="pb-input" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything else worth noting" />
         </label>
 
-        {isStrength && <Exercises value={exs} onChange={setExs} source={row.details?.exercises_source as string | undefined} />}
+        {isStrength && <Exercises value={exs} onChange={setExs} rules={gearRules} source={row.details?.exercises_source as string | undefined} />}
 
         <div className="sd-actions">
           <button className="pb-primary mono" disabled={busy || !verdict.dirty || !!verdict.error} onClick={() => void save()}>{busy ? 'SAVING…' : 'SAVE'}</button>
@@ -171,7 +175,7 @@ function Choice({ label, options, value, onChange }: { label: string; options: r
   )
 }
 
-function Exercises({ value, onChange, source }: { value: EditableExercise[]; onChange: (v: EditableExercise[]) => void; source?: string }) {
+function Exercises({ value, onChange, rules, source }: { value: EditableExercise[]; onChange: (v: EditableExercise[]) => void; rules: GearRule[]; source?: string }) {
   const setEx = (i: number, f: (e: EditableExercise) => EditableExercise) => onChange(value.map((e, k) => (k === i ? f(e) : e)))
   return (
     <div className="sd-ex">
@@ -183,14 +187,30 @@ function Exercises({ value, onChange, source }: { value: EditableExercise[]; onC
             <button className="btn-ghost mono" onClick={() => onChange(value.filter((_, k) => k !== i))} disabled={value.length === 1 && !e.name && e.sets.every((s) => !s.reps && !s.weightKg)}>REMOVE</button>
           </div>
           <table className="sd-sets">
-            <thead><tr><th>SET</th><th>REPS</th><th>KG</th><th>RPE</th><th>% 1RM</th><th>WATCH</th><th /></tr></thead>
+            <thead><tr><th>SET</th><th>REPS</th><th>KG</th><th>RPE</th><th>% 1RM</th><th>GEAR</th><th>WATCH</th><th /></tr></thead>
             <tbody>
               {e.sets.map((s, j) => (
                 <tr key={j}>
                   <td className="mono">{j + 1}</td>
                   {(['reps', 'weightKg', 'rpe', 'percentOneRm'] as const).map((f) => (
-                    <td key={f}><input className="pb-input sd-num" inputMode="decimal" value={s[f]} aria-label={`${e.name || 'Exercise'} set ${j + 1} ${f}`} onChange={(ev) => setEx(i, (x) => ({ ...x, sets: x.sets.map((y, k) => (k === j ? { ...y, [f]: ev.target.value } : y)) }))} /></td>
+                    <td key={f}><input className="pb-input sd-num" inputMode="decimal" value={s[f]} aria-label={`${e.name || 'Exercise'} set ${j + 1} ${f}`} onChange={(ev) => setEx(i, (x) => ({ ...x, sets: x.sets.map((y, k) => {
+                      if (k !== j) return y
+                      const next = { ...y, [f]: ev.target.value }
+                      // a new set follows the person's rules as its weight is typed, until gear is picked by hand
+                      if (f === 'weightKg' && y.gearAuto && x.name.trim() !== '') { const w = Number(ev.target.value); next.gear = ev.target.value.trim() !== '' && Number.isFinite(w) ? suggestGear(rules, x.name, w) : null }
+                      return next
+                    }) }))} /></td>
                   ))}
+                  <td>
+                    <div className="pb-chips" role="group" aria-label={`${e.name || 'Exercise'} set ${j + 1} gear`}>
+                      {GEAR_TAGS.map((g) => {
+                        const on = !!s.gear?.includes(g)
+                        return <button key={g} type="button" className={`pb-chip small ${on ? 'on' : ''}`} aria-pressed={on} title={GEAR_LABEL[g]}
+                          onClick={() => setEx(i, (x) => ({ ...x, sets: x.sets.map((y, k) => (k === j ? { ...y, gearAuto: false, gear: cleanGear(on ? (y.gear ?? []).filter((t) => t !== g) : [...(y.gear ?? []), g]) } : y)) }))}>{g.toUpperCase()}</button>
+                      })}
+                      {s.gear == null && <span className="sd-watch mono">NOT RECORDED</span>}
+                    </div>
+                  </td>
                   <td className="sd-watch mono">{[s.carried.duration_sec != null && `${s.carried.duration_sec} s`, s.carried.avg_hr != null && `${s.carried.avg_hr} bpm`].filter(Boolean).join(' · ')}</td>
                   <td><button className="btn-ghost mono" onClick={() => setEx(i, (x) => ({ ...x, sets: x.sets.filter((_, k) => k !== j) }))} aria-label={`Remove set ${j + 1}`}>×</button></td>
                 </tr>
@@ -198,10 +218,16 @@ function Exercises({ value, onChange, source }: { value: EditableExercise[]; onC
             </tbody>
           </table>
           <button className="btn-ghost mono" onClick={() => setEx(i, (x) => ({ ...x, sets: [...x.sets, blankSet()] }))}>+ ADD SET</button>
+          {e.name.trim() !== '' && describeRules(rules, e.name) !== '' && (
+            <>
+              {' '}<button className="btn-ghost mono" onClick={() => setEx(i, (x) => ({ ...x, sets: x.sets.map((y) => { const w = Number(y.weightKg); return y.weightKg.trim() === '' || !Number.isFinite(w) ? y : { ...y, gearAuto: false, gear: suggestGear(rules, x.name, w) } }) }))}>APPLY MY GEAR RULES</button>
+              <span className="sd-watch mono"> {describeRules(rules, e.name).toUpperCase()}</span>
+            </>
+          )}
         </div>
       ))}
       <button className="btn-ghost mono" onClick={() => onChange([...value, blankExercise()])}>+ ADD EXERCISE</button>
-      <p className="pg-note">A set with no reps or weight is left out when saving; an exercise with no name or no set is too.</p>
+      <p className="pg-note">A set with no reps or weight is left out when saving; an exercise with no name or no set is too. Gear: a new set fills in from your gear rules as you type its weight (PLAN › GEAR sets the rules); sets from before gear existed stay NOT RECORDED until you pick or apply it, and are left out of the with-and-without comparison.</p>
     </div>
   )
 }

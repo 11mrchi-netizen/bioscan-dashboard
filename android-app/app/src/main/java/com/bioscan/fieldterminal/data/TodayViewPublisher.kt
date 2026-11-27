@@ -19,8 +19,8 @@ import java.time.LocalDate
 
 const val TODAY_VIEW_KEEP_DAYS = 120L
 
-/** A view bigger than this loses its chart series (the numbers, scorecards and strips stay). */
-const val TODAY_VIEW_MAX_BYTES = 150_000
+/** A view bigger than this (about 265k for a 240-day history, compresses well in jsonb) loses its chart series (the numbers, scorecards and strips stay). */
+const val TODAY_VIEW_MAX_BYTES = 400_000
 
 private val viewJson = Json { ignoreUnknownKeys = true; allowSpecialFloatingPointValues = true; encodeDefaults = true }
 

@@ -21,6 +21,7 @@ class TodayViewPublisherTest {
         assertEquals(view.day.toString(), (json["day"] as JsonPrimitive).content)
         assertTrue("scores" in json && "chargeStrip" in json && "series" in json)
         assertEquals(full > TODAY_VIEW_MAX_BYTES, trimmed)
+        assertTrue("a normal history keeps its chart series", !trimmed)
         if (trimmed) assertEquals(0, (json["series"] as JsonObject).size)
     }
 

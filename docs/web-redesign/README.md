@@ -30,7 +30,7 @@ changes content. The menu is now **Today, Me, Plan, Analyse, Review** and the **
 |---|---|---|
 | Analyse (was Lab) | `#/analyse/<tab>` | Compare, Evidence, Experiments, Regimen, Tests, Routine (the last three stay until the topic pages of W5) |
 | Review | `#/review/<tab>` | Reports (was Lab › Reports), Sessions (the recorded workouts, was Plan › Sessions › Recorded; one workout is `#/review/sessions/<id>`), Log (was `#/log`) |
-| Plan | `#/plan/<tab>` | Overview, Training, Food, Sessions (the planned ones only), Races |
+| Plan | `#/plan/<tab>` | Overview, Training, Food, Sessions (the planned ones only), Gear (rules + with/without), Races |
 | Data (was Setup) | `#/data/<tab>` | Integrity, Rows (was Data), Connections |
 
 Every old address redirects with its query kept (`#/lab/...`, `#/setup/...`, `#/log`, `#/plan/sessions/<id>`, `?view=recorded`), saved
@@ -46,7 +46,7 @@ One app, one shell, one router (`console/src/App.tsx`). Five tabs in the phone's
 | **Today** | `#/today?day=` | The phone's TODAY for any day: CHARGE and the five rings, the overlays behind them, the day's plan. A ring opens its inputs; an input opens its metric page. |
 | **Me** | `#/me?tab=` | The phone's eight tabs, drawn from what the phone worked out (`me_views`). BODY carries the scale analysis below it; EXPOSURES carries the risk analysis. INTIMACY is drawn by the web itself from the tables (see below). |
 | **Lab** | `#/lab/<tab>` | Ask, compare, test, decide. COMPARE, EVIDENCE, EXPERIMENTS, REGIMEN, TESTS, ROUTINE. |
-| **Plan** | `#/plan/<tab>` | OVERVIEW, TRAINING (block planner), FOOD (meal prep), SESSIONS, RACES. The phone's tab names. |
+| **Plan** | `#/plan/<tab>` | OVERVIEW, TRAINING (block planner), FOOD (meal prep), SESSIONS, GEAR (lifting gear rules and the with/without comparison, `docs/training-programming/03-lifting-gear.md`), RACES. The phone's tab names. |
 | **Log** | `#/log?day=` | The day's log, and the fixes (editing is secondary). |
 | ⚙ **Setup** | `#/setup/<tab>` | INTEGRITY, DATA, CONNECTIONS: the plumbing. |
 

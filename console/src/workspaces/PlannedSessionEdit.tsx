@@ -5,6 +5,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useLoadEffect } from '../lib/useLoadEffect'
+import { loadGearRules } from '../lib/gearData'
 import { localToday } from '../lib/dates'
 import { longDate } from '../lib/planReads'
 import {
@@ -12,12 +13,13 @@ import {
 } from '../lib/planEditData'
 import { buildPrescription, formOf, liftForms, prescriptionChanged, sessionChanges, startShiftDays, whyLocked, movedFrom, type LiftForm, type LoadChoice, type SessionForm } from '../lib/planEdit'
 import { movementKey } from '../../../supabase/functions/_shared/training-core/maxes.ts'
+import { describeRules, type GearRule } from '../../../supabase/functions/_shared/training-core/gear.ts'
 import type { ResolveContext } from '../../../supabase/functions/_shared/training-core/index.ts'
 import './PlanBlock.css'
 import './Pages.css'
 import './SessionDetail.css'
 
-type Loaded = { session: PlannedFull; block: BlockLite; ctx: Omit<ResolveContext, 'oneRmKg'>; oneRms: Map<string, number> }
+type Loaded = { session: PlannedFull; block: BlockLite; ctx: Omit<ResolveContext, 'oneRmKg'>; oneRms: Map<string, number>; gear: GearRule[] }
 
 export default function PlannedSessionEdit() {
   const { id } = useParams()
@@ -28,8 +30,8 @@ export default function PlannedSessionEdit() {
     if (!Number.isInteger(sid)) { if (cur()) setData(null); return }
     const r = await loadPlannedFull(sid)
     if (!r) { if (cur()) setData(null); return }
-    const [ctx, oneRms] = await Promise.all([loadEquipment(), loadOneRms()])
-    if (cur()) setData({ ...r, ctx, oneRms })
+    const [ctx, oneRms, gear] = await Promise.all([loadEquipment(), loadOneRms(), loadGearRules().catch(() => [] as GearRule[])])
+    if (cur()) setData({ ...r, ctx, oneRms, gear })
   }, [sid, rev])
   if (st.error) return <div className="pg"><p className="pb-warn">Could not load: {st.error} <button className="btn-ghost mono" onClick={st.retry}>RETRY</button></p></div>
   if (data === undefined) return <div className="pg"><p className="state-loading mono">LOADING…</p></div>
@@ -38,7 +40,7 @@ export default function PlannedSessionEdit() {
 }
 
 function Editor({ d, onReload }: { d: Loaded; onReload: () => void }) {
-  const { session: s, block, ctx, oneRms } = d
+  const { session: s, block, ctx, oneRms, gear } = d
   const navigate = useNavigate()
   const today = localToday()
   const locked = whyLocked(s, block.status, today)
@@ -114,7 +116,8 @@ function Editor({ d, onReload }: { d: Loaded; onReload: () => void }) {
                 <tr key={l.index}>
                   <td><b>{l.exercise}</b><span className="sd-watch mono"> {l.role}</span>
                     {!locked && <div><input className="pb-input" aria-label={`${l.exercise}: do instead`} placeholder="swap for…" value={l.swapTo} maxLength={80} onChange={(e) => setLift(i, { swapTo: e.target.value })} style={{ width: 160, marginTop: 4 }} /></div>}
-                    {l.swapTo.trim() !== '' && l.swapTo.trim() !== l.exercise && <span className="sd-watch mono">→ {l.swapTo.trim()} in this session only</span>}</td>
+                    {l.swapTo.trim() !== '' && l.swapTo.trim() !== l.exercise && <span className="sd-watch mono">→ {l.swapTo.trim()} in this session only</span>}
+                    {describeRules(gear, l.swapTo.trim() || l.exercise) !== '' && <div className="sd-watch mono">GEAR: {describeRules(gear, l.swapTo.trim() || l.exercise).toUpperCase()}</div>}</td>
                   <td className="pe-range"><input className="pb-input sd-num" inputMode="numeric" aria-label={`${l.exercise} sets from`} value={l.setsMin} disabled={!!locked} onChange={(e) => setLift(i, { setsMin: e.target.value })} />
                     {' – '}<input className="pb-input sd-num" inputMode="numeric" aria-label={`${l.exercise} sets to`} value={l.setsMax} disabled={!!locked} onChange={(e) => setLift(i, { setsMax: e.target.value })} /></td>
                   <td className="pe-range"><input className="pb-input sd-num" inputMode="numeric" aria-label={`${l.exercise} reps from`} value={l.repsMin} disabled={!!locked} onChange={(e) => setLift(i, { repsMin: e.target.value })} />

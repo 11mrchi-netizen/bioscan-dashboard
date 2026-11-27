@@ -7,12 +7,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.data.GearRulesRepository
 import com.bioscan.fieldterminal.data.PlannedMatch
+import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.StrengthExerciseDto
+import com.bioscan.fieldterminal.domain.training.GEAR_LABEL
+import com.bioscan.fieldterminal.domain.training.GearRule
 import com.bioscan.fieldterminal.domain.training.LoggedSet
+import com.bioscan.fieldterminal.domain.training.describeGearRules
 import com.bioscan.fieldterminal.domain.training.PlanVerdict
 import com.bioscan.fieldterminal.domain.training.PlannedLift
 import com.bioscan.fieldterminal.domain.training.compareToPlan
@@ -42,6 +52,9 @@ fun PlannedSessionCard(match: PlannedMatch, logged: List<StrengthExerciseDto>, a
     val lifts = remember(match) { parsePlannedLifts(match.row.prescription) }
     val cond = remember(match) { parsePlannedConditioning(match.row.prescription) }
     val loggedByKey = remember(logged) { logged.associateBy { looseMovementKey(it.name) } }
+    // The person's gear rules for each lift, shown with what the sets were logged with (none shown when they cannot be read).
+    var gearRules by remember { mutableStateOf<List<GearRule>>(emptyList()) }
+    LaunchedEffect(Unit) { gearRules = catching { GearRulesRepository(SupabaseClientProvider.client).load() }.getOrDefault(emptyList()) }
     FTCard(title = "PLANNED") {
         Text(match.row.title, style = FTType.RowTitle, color = FT.TextPrimary)
         Text(
@@ -59,6 +72,8 @@ fun PlannedSessionCard(match: PlannedMatch, logged: List<StrengthExerciseDto>, a
                 val scheme = listOfNotNull(p.sets?.text(), p.reps?.text()).joinToString(" x ")
                 FTMetricRow("Planned", listOf(scheme, p.targetText()).filter { it.isNotEmpty() }.joinToString("  @  "))
                 if (sets.isNotEmpty()) FTMetricRow("Logged", sets.joinToString(", ") { "${it.reps} x ${kg(it.kg)}" })
+                describeGearRules(gearRules, p.exercise).takeIf { it.isNotEmpty() }?.let { FTMetricRow("Gear rule", it) }
+                loggedByKey[looseMovementKey(p.exercise)]?.sets?.let { ss -> gearLoggedText(ss.map { it.gear }) }?.let { FTMetricRow("Gear logged", it) }
                 p.technique?.let { Text("option: $it", style = FTType.Caption, color = FT.TextMuted) }
             }
         }
@@ -73,6 +88,17 @@ fun PlannedSessionCard(match: PlannedMatch, logged: List<StrengthExerciseDto>, a
             Text("Linked to the plan.", style = FTType.Caption, color = FT.TextMuted, modifier = Modifier.padding(top = 6.dp))
         }
     }
+}
+
+// "straps on 3 of 5 sets" from the sets' gear lists (null = not recorded, left out); null when none of them was recorded.
+private fun gearLoggedText(perSet: List<List<String>?>): String? {
+    val recorded = perSet.filterNotNull()
+    if (recorded.isEmpty()) return null
+    val parts = com.bioscan.fieldterminal.domain.training.GEAR_TAGS.mapNotNull { t ->
+        val n = recorded.count { t in it }
+        if (n == 0) null else "${GEAR_LABEL.getValue(t).lowercase()} on $n of ${perSet.size}"
+    }
+    return if (parts.isEmpty()) "no gear on ${recorded.size} of ${perSet.size} sets" else parts.joinToString(" · ")
 }
 
 private fun verdictColor(v: PlanVerdict) = when (v) {

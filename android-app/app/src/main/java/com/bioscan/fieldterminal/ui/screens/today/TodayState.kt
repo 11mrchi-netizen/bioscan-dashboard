@@ -127,6 +127,8 @@ internal class TodayState(kept: TodaySnapshot?) {
             if (v != null && k != null && !partFailed) TodayStore.writeDisk(context, KeptToday(TodayStore.FORMAT, day, System.currentTimeMillis(), k, v, rows, sf, closed))
             // The web Dashboard shows this day's plan as drawn here (data/TodayPlanPublisher.kt); a failed write never blocks the page.
             if (!partFailed) catching { com.bioscan.fieldterminal.data.TodayPlanPublisher.publish(SupabaseClientProvider.client, day, rows, sf) }
+            // And the scored morning itself, for the web desk's rings (data/TodayViewPublisher.kt).
+            if (!partFailed && v != null) catching { com.bioscan.fieldterminal.data.TodayViewPublisher.publish(SupabaseClientProvider.client, v) }
         }
         loading = false
     }

@@ -57,6 +57,7 @@ migration — it's the existing `exercise_sessions.details` jsonb column):
           "rpe": "number 0-10, optional",
           "rir": "int, optional — new field, see below",
           "percent_1rm": "number, optional",
+          "gear": "string[], optional — added 27 Nov: absent = not recorded, [] = none (docs/training-programming/03-lifting-gear.md)",
           "rest_sec": "int, optional — new field, see below"
         }
       ]

@@ -17,6 +17,8 @@ import androidx.work.WorkerParameters
 import com.bioscan.fieldterminal.data.model.EventRow
 import com.bioscan.fieldterminal.data.model.NotificationKind
 import com.bioscan.fieldterminal.data.model.NotificationOutcome
+import com.bioscan.fieldterminal.data.model.NotificationRuleRow
+import io.github.jan.supabase.SupabaseClient
 import com.bioscan.fieldterminal.data.routine.PracticesRepository
 import com.bioscan.fieldterminal.data.routine.RoutineActionReceiver
 import com.bioscan.fieldterminal.domain.bodyCheckinNeeded
@@ -30,7 +32,10 @@ import com.bioscan.fieldterminal.domain.notifications.PromptWindow
 import com.bioscan.fieldterminal.domain.notifications.ShownEntry
 import com.bioscan.fieldterminal.domain.notifications.dueFuelPrompts
 import com.bioscan.fieldterminal.domain.notifications.eveningLogNeeded
+import com.bioscan.fieldterminal.domain.notifications.checkinNeeded
 import com.bioscan.fieldterminal.domain.notifications.eventDrawNeeded
+import com.bioscan.fieldterminal.domain.notifications.staleFuelKeys
+import com.bioscan.fieldterminal.domain.routine.practicesLoggedOn
 import com.bioscan.fieldterminal.domain.notifications.firedAtLocal
 import com.bioscan.fieldterminal.domain.notifications.followUpsDue
 import com.bioscan.fieldterminal.domain.notifications.fuelPrompts
@@ -86,6 +91,7 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
             .mapNotNull { e -> firedAtLocal(e.firedAt, zone)?.let { ShownEntry(e.ruleKind, it) } }
 
         val nm = NotificationManagerCompat.from(applicationContext)
+        catching { withdrawDone(nm, rules, supabase, repo, today, now) }
 
         for (rule in rules) {
             if (!rule.enabled) continue
@@ -93,124 +99,14 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
             if (fireTime.isAfter(now)) continue
             if (!withinLimits(rule, prefs, now, shownToday)) continue
 
-            var logAllIds: List<Long> = emptyList()
-            var supplementBucket: String? = null
-            val (title, body) = when (rule.kind) {
-                NotificationKind.SUPPLEMENT_DUE -> {
-                    // Find which bucket this fire belongs to by matching the scheduled time
-                    val bucket = rule.schedule.buckets.entries
-                        .minByOrNull { (_, t) ->
-                            val bt = LocalTime.parse(t)
-                            Math.abs(Duration.between(bt, fireTime.toLocalTime()).toMinutes())
-                        }?.key ?: continue
-
-                    val suppRepo = SupplementsRepository(supabase)
-                    val overview = catching { suppRepo.loadOverview() }.getOrElse { continue }
-                    val activeIds = overview.active.mapNotNull { it.id }.toList()
-                    val takes = catching { suppRepo.loadRecentTakes(activeIds, today) }.getOrElse { RecentTakes(emptyMap(), emptyMap()) }
-                    val lastTaken = takes.lastTaken
-                    val takenToday = lastTaken.entries
-                        .filter { (_, d) -> d == today }
-                        .map { it.key }
-                        .toSet()
-
-                    val due = supplementsDueForBucket(
-                        overview.active,
-                        bucket,
-                        lastTaken,
-                        takenToday,
-                        today,
-                        rule.conditions.skipIfLogged,
-                        takes.takesToday,
-                    )
-                    if (due.isEmpty()) continue
-                    logAllIds = due.map { it.id }
-                    supplementBucket = bucket
-                    val names = due.take(3).joinToString(", ") { it.name }
-                    val more = if (due.size > 3) " +${due.size - 3} more" else ""
-                    "Time for your $bucket supplements" to "$names$more"
-                }
-
-                NotificationKind.CHECKIN_MORNING ->
-                    "Morning check-in" to "Log your morning readiness"
-
-                NotificationKind.CHECKIN_EVENING ->
-                    "Evening note" to "Log how your day went"
-
-                NotificationKind.WELLBEING_CHECKIN -> {
-                    // A failed lookup must not suppress or invent a prompt: skip this run and try again at the next window.
-                    val row = catching { repo.loadWellbeingForDate(today.toString()) }.getOrElse { continue }
-                    if (rule.conditions.skipIfLogged && !wellbeingCheckinNeeded(row?.energy, row?.mood, row?.stress, row?.soreness)) continue
-                    "Wellbeing check-in" to "Energy, mood, stress, soreness: 0-10"
-                }
-
-                NotificationKind.EVENING_LOG -> {
-                    val startOfLocalDay = today.atStartOfDay(ZoneId.systemDefault()).toInstant()
-                    val saved = catching { repo.countSavedAgentMessagesSince(startOfLocalDay) }.getOrElse { continue }
-                    if (rule.conditions.skipIfLogged && !eveningLogNeeded(saved)) continue
-                    "Anything to log today?" to "Drinks, supplements, recovery: say it in one message"
-                }
-
-                // Analysis review phase B: the structured check-in. A failed lookup skips this window rather than nagging.
-                NotificationKind.EVENING_CHECKIN -> {
-                    val saved = catching { EveningCheckinRepository(supabase).load(checkinDateFor(now)) }.getOrElse { continue }
-                    if (rule.conditions.skipIfLogged && !eveningCheckinNeeded(saved)) continue
-                    "Evening check-in" to "Drinks, caffeine after 14:00, a late meal: one tap each"
-                }
-
-                // The monthly body check-in: a failed lookup skips this window rather than nagging.
-                NotificationKind.BODY_CHECKIN -> {
-                    val last = catching { BodyCheckinRepository(supabase).lastCheckinDate() }.getOrElse { continue }
-                    if (rule.conditions.skipIfLogged && !bodyCheckinNeeded(last, today)) continue
-                    "Monthly body check-in" to "Grip, tape and skinfolds: before breakfast, about 15 minutes"
-                }
-
-                // Risk profile R2: only when a questionnaire is due; a failed lookup skips this window rather than nagging.
-                NotificationKind.QUESTIONNAIRE_DUE -> {
-                    val last = catching { InstrumentsRepository(supabase).lastAnswered() }.getOrElse { continue }
-                    val due = InstrumentsRepository.definitions(applicationContext).dueToday(last, today)
-                    if (due.isEmpty()) continue
-                    "Questionnaires due" to due.joinToString(", ") { it.name.lowercase() }.replaceFirstChar { it.uppercase() } + ": a few minutes, on Me › EXPOSURES"
-                }
-
-                // Health concerns: a failed lookup skips this window rather than nagging.
-                NotificationKind.HEALTH_CHECKIN -> {
-                    val last = catching { HealthConcernsRepository(supabase).lastCheckinDate() }.getOrElse { continue }
-                    if (rule.conditions.skipIfLogged && !healthCheckinNeeded(last, today)) continue
-                    "Health check-in" to "Anything bothering you today? NOTHING is one tap, and it counts."
-                }
-
-                // Repeatable interventions: each branch fetches, the decision is in domain/notifications/EventPrompts.kt. A read that
-                // returns nothing (offline, failed) means no prompt this window rather than a wrong one.
-                NotificationKind.EVENT_RATING -> {
-                    val events = promptEvents(InterventionEventsRepository(supabase).loadRecentEvents())
-                    val due = unratedEvents(events, Instant.now())
-                    if (due.isEmpty()) continue
-                    "How did it feel?" to "${due.size} ${if (due.size == 1) "event" else "events"} to rate, before you look at any numbers"
-                }
-
-                NotificationKind.EVENT_DRAW -> {
-                    val ev = InterventionEventsRepository(supabase)
-                    val enabled = ev.loadInterventions().filter { it.drawEnabled }.map { it.id }
-                    if (enabled.isEmpty()) continue
-                    val drawnToday = ev.loadDraws().filter { it.localDate == today.toString() }.map { it.interventionId }.toSet()
-                    if (!eventDrawNeeded(enabled, drawnToday)) continue
-                    "Today's draw" to "Flip the coin for ${interventionsToDraw(enabled, drawnToday).size} intervention(s): it decides before the day starts"
-                }
-
-                NotificationKind.EVENT_FOLLOWUP -> {
-                    val ev = InterventionEventsRepository(supabase)
-                    val windows = ev.loadExpectations().filter { it.outcomeKind == "tracked" && it.role == "primary" }
-                        .map { PromptWindow(it.interventionId, it.outcomeKey, it.windowStartH, it.windowEndH) }
-                    if (windows.isEmpty()) continue
-                    val values = ev.loadRecentTrackedValueTimes().mapNotNull { v -> parseInstant(v.observedAt)?.let { v.outcomeId to it } }
-                    val due = followUpsDue(promptEvents(ev.loadRecentEvents()), windows, values, Instant.now())
-                    if (due.isEmpty()) continue
-                    "Log the outcome" to "${due.size} ${if (due.size == 1) "event has" else "events have"} a window that closed with nothing logged"
-                }
-
-                else -> continue
+            val prompt = when (val c = check(rule, supabase, repo, today, now, fireTime)) {
+                is Check.Needed -> c.prompt
+                else -> continue // done already, or the lookup failed: nothing this window
             }
+            val title = prompt.title
+            val body = prompt.body
+            val logAllIds = prompt.logAllIds
+            val supplementBucket = prompt.bucket
 
             val builder = NotificationCompat.Builder(applicationContext, rule.kind)
                 .setSmallIcon(R.drawable.ic_stat_bioscan)
@@ -239,8 +135,11 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
             if (days != null) {
                 val shownKeys = catching { repo.loadShownSince(dayStart.minusSeconds(3 * 86_400L)) }.getOrElse { emptyList() }
                     .mapNotNull { it.dedupeKey }.toSet()
+                val allFuel = fuelPrompts(days, NotificationKind.FUEL_SESSION, NotificationKind.FUEL_EVENT)
+                // A session recorded, moved or deleted since its reminder was shown: the reminder goes with it.
+                for (key in staleFuelKeys(shownKeys, allFuel.map { it.first.key }.toSet())) nm.cancel(key.hashCode())
                 val due = dueFuelPrompts(
-                    fuelPrompts(days, NotificationKind.FUEL_SESSION, NotificationKind.FUEL_EVENT),
+                    allFuel,
                     prefs, now.minusMinutes(FUEL_PROMPT_WINDOW_MIN), now, shownKeys,
                 )
                 val shown = shownToday.toMutableList()
@@ -295,7 +194,11 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
         if (practiceRule != null && prefs.masterEnabled) {
             catching {
                 val practices = PracticesRepository(supabase)
-                val due = practicesDue(practices.activities(), practices.logsSince(today), now.minusMinutes(30), now)
+                val activities = practices.activities()
+                val logs = practices.logsSince(today)
+                // Done or skipped from the app (or the web) after the reminder showed: withdraw it.
+                for (id in practicesLoggedOn(logs, today)) nm.cancel(RoutineActionReceiver.reminderNotificationId(id))
+                val due = practicesDue(activities, logs, now.minusMinutes(30), now)
                 if (due.isNotEmpty()) {
                     val shownKeys = catching { repo.loadShownSince(dayStart) }.getOrElse { emptyList() }.mapNotNull { it.dedupeKey }.toSet()
                     val shown = shownToday.toMutableList()
@@ -323,6 +226,137 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
         }
 
         return Result.success()
+    }
+
+
+    // What the person still has to do for [rule], read from the data at the moment of asking (never from the schedule alone).
+    // [fireTime] is null when sweeping already-posted notifications: a kind that needs the slot (supplements) is then Unknown.
+    // A failed or empty read is Unknown, which neither posts nor cancels anything.
+    private suspend fun check(
+        rule: NotificationRuleRow, supabase: SupabaseClient, repo: NotificationRulesRepository,
+        today: LocalDate, now: LocalDateTime, fireTime: LocalDateTime?,
+    ): Check {
+        val skip = rule.conditions.skipIfLogged
+        return when (rule.kind) {
+            NotificationKind.SUPPLEMENT_DUE -> {
+                if (fireTime == null) return Check.Unknown
+                val bucket = rule.schedule.buckets.entries
+                    .minByOrNull { (_, t) -> Math.abs(Duration.between(LocalTime.parse(t), fireTime.toLocalTime()).toMinutes()) }?.key
+                    ?: return Check.Unknown
+                val suppRepo = SupplementsRepository(supabase)
+                val overview = catching { suppRepo.loadOverview() }.getOrElse { return Check.Unknown }
+                val activeIds = overview.active.mapNotNull { it.id }.toList()
+                val takes = catching { suppRepo.loadRecentTakes(activeIds, today) }.getOrElse { return Check.Unknown }
+                val takenToday = takes.lastTaken.entries.filter { (_, d) -> d == today }.map { it.key }.toSet()
+                val due = supplementsDueForBucket(overview.active, bucket, takes.lastTaken, takenToday, today, skip, takes.takesToday)
+                if (due.isEmpty()) return Check.Done
+                val names = due.take(3).joinToString(", ") { it.name }
+                val more = if (due.size > 3) " +${due.size - 3} more" else ""
+                Check.Needed(Prompt("Time for your $bucket supplements", "$names$more", due.map { it.id }, bucket))
+            }
+
+            // The morning and evening check-ins ask about the morning erection and the arousal level, both stored on today's
+            // wellbeing_daily row: once that value is there the check-in is done (checkinNeeded, same rule as the web cron).
+            NotificationKind.CHECKIN_MORNING, NotificationKind.CHECKIN_EVENING -> {
+                val row = catching { repo.loadWellbeingForDate(today.toString()) }.getOrElse { return Check.Unknown }
+                if (skip && !checkinNeeded(rule.kind, row?.morningErectionQuality, row?.arousalLevel)) return Check.Done
+                if (rule.kind == NotificationKind.CHECKIN_MORNING) Check.Needed(Prompt("Morning check-in", "Log your morning readiness"))
+                else Check.Needed(Prompt("Evening note", "Log how your day went"))
+            }
+
+            NotificationKind.WELLBEING_CHECKIN -> {
+                val row = catching { repo.loadWellbeingForDate(today.toString()) }.getOrElse { return Check.Unknown }
+                if (skip && !wellbeingCheckinNeeded(row?.energy, row?.mood, row?.stress, row?.soreness)) return Check.Done
+                Check.Needed(Prompt("Wellbeing check-in", "Energy, mood, stress, soreness: 0-10"))
+            }
+
+            NotificationKind.EVENING_LOG -> {
+                val startOfLocalDay = today.atStartOfDay(ZoneId.systemDefault()).toInstant()
+                val saved = catching { repo.countSavedAgentMessagesSince(startOfLocalDay) }.getOrElse { return Check.Unknown }
+                if (skip && !eveningLogNeeded(saved)) return Check.Done
+                Check.Needed(Prompt("Anything to log today?", "Drinks, supplements, recovery: say it in one message"))
+            }
+
+            NotificationKind.EVENING_CHECKIN -> {
+                val saved = catching { EveningCheckinRepository(supabase).load(checkinDateFor(now)) }.getOrElse { return Check.Unknown }
+                if (skip && !eveningCheckinNeeded(saved)) return Check.Done
+                Check.Needed(Prompt("Evening check-in", "Drinks, caffeine after 14:00, a late meal: one tap each"))
+            }
+
+            NotificationKind.BODY_CHECKIN -> {
+                val last = catching { BodyCheckinRepository(supabase).lastCheckinDate() }.getOrElse { return Check.Unknown }
+                if (skip && !bodyCheckinNeeded(last, today)) return Check.Done
+                Check.Needed(Prompt("Monthly body check-in", "Grip, tape and skinfolds: before breakfast, about 15 minutes"))
+            }
+
+            NotificationKind.QUESTIONNAIRE_DUE -> {
+                val last = catching { InstrumentsRepository(supabase).lastAnswered() }.getOrElse { return Check.Unknown }
+                val due = InstrumentsRepository.definitions(applicationContext).dueToday(last, today)
+                if (due.isEmpty()) return Check.Done
+                Check.Needed(Prompt("Questionnaires due", due.joinToString(", ") { it.name.lowercase() }.replaceFirstChar { it.uppercase() } + ": a few minutes, on Me › EXPOSURES"))
+            }
+
+            NotificationKind.HEALTH_CHECKIN -> {
+                val last = catching { HealthConcernsRepository(supabase).lastCheckinDate() }.getOrElse { return Check.Unknown }
+                if (skip && !healthCheckinNeeded(last, today)) return Check.Done
+                Check.Needed(Prompt("Health check-in", "Anything bothering you today? NOTHING is one tap, and it counts."))
+            }
+
+            // Repeatable interventions: the decision is in domain/notifications/EventPrompts.kt.
+            NotificationKind.EVENT_RATING -> {
+                val events = catching { promptEvents(InterventionEventsRepository(supabase).loadRecentEvents()) }.getOrElse { return Check.Unknown }
+                val due = unratedEvents(events, Instant.now())
+                if (due.isEmpty()) return Check.Done
+                Check.Needed(Prompt("How did it feel?", "${due.size} ${if (due.size == 1) "event" else "events"} to rate, before you look at any numbers"))
+            }
+
+            NotificationKind.EVENT_DRAW -> {
+                val ev = InterventionEventsRepository(supabase)
+                val enabled = catching { ev.loadInterventions().filter { it.drawEnabled }.map { it.id } }.getOrElse { return Check.Unknown }
+                if (enabled.isEmpty()) return Check.Done
+                val drawnToday = catching { ev.loadDraws().filter { it.localDate == today.toString() }.map { it.interventionId }.toSet() }.getOrElse { return Check.Unknown }
+                if (!eventDrawNeeded(enabled, drawnToday)) return Check.Done
+                Check.Needed(Prompt("Today's draw", "Flip the coin for ${interventionsToDraw(enabled, drawnToday).size} intervention(s): it decides before the day starts"))
+            }
+
+            NotificationKind.EVENT_FOLLOWUP -> {
+                val ev = InterventionEventsRepository(supabase)
+                val due = catching {
+                    val windows = ev.loadExpectations().filter { it.outcomeKind == "tracked" && it.role == "primary" }
+                        .map { PromptWindow(it.interventionId, it.outcomeKey, it.windowStartH, it.windowEndH) }
+                    val values = ev.loadRecentTrackedValueTimes().mapNotNull { v -> parseInstant(v.observedAt)?.let { v.outcomeId to it } }
+                    followUpsDue(promptEvents(ev.loadRecentEvents()), windows, values, Instant.now())
+                }.getOrElse { return Check.Unknown }
+                if (due.isEmpty()) return Check.Done
+                Check.Needed(Prompt("Log the outcome", "${due.size} ${if (due.size == 1) "event has" else "events have"} a window that closed with nothing logged"))
+            }
+
+            else -> Check.Unknown
+        }
+    }
+
+    // A posted reminder outlives its reason: logged from the app, from another phone or the web, it would still sit in the
+    // shade. Each run withdraws the ones whose check now says done. Only notifications still showing are looked up, so a
+    // quiet shade costs no requests; a failed lookup withdraws nothing.
+    private suspend fun withdrawDone(
+        nm: NotificationManagerCompat, rules: List<NotificationRuleRow>, supabase: SupabaseClient,
+        repo: NotificationRulesRepository, today: LocalDate, now: LocalDateTime,
+    ) {
+        val showing = nm.activeNotifications.map { it.id }.toSet()
+        if (showing.isEmpty()) return
+        for (rule in rules) {
+            if (!rule.conditions.skipIfLogged && rule.kind != NotificationKind.EVENT_RATING && rule.kind != NotificationKind.EVENT_FOLLOWUP) continue
+            if (rule.kind.hashCode() !in showing) continue
+            if (check(rule, supabase, repo, today, now, null) is Check.Done) nm.cancel(rule.kind.hashCode())
+        }
+    }
+
+    private class Prompt(val title: String, val body: String, val logAllIds: List<Long> = emptyList(), val bucket: String? = null)
+
+    private sealed interface Check {
+        class Needed(val prompt: Prompt) : Check
+        data object Done : Check // read fine, nothing left to do
+        data object Unknown : Check // read failed, or not decidable here: do nothing
     }
 
     companion object {

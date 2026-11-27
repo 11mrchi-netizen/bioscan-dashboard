@@ -12,15 +12,15 @@ class NavigationMapTest {
     @Test
     fun onlyLabKeepsItsOldTileRoute() {
         assertEquals(listOf("tile_labs"), TileRoute.entries.map { it.route })
-        assertEquals(listOf("N=1", "SUPPLEMENTS", "TESTS", "ROUTINE", "EXPLORE"), LabTab.entries.map { it.label })
+        assertEquals(listOf("N=1", "TESTS", "ROUTINE", "EXPLORE"), LabTab.entries.map { it.label })
     }
 
     // Scoring system rebuild: the dock is TODAY · PLAN · + LOG · LAB · ME; the status and user routes keep their strings.
     @Test
     fun dockFollowsTheScoringSystemStructure() {
-        assertEquals(listOf("TODAY", "PLAN", "+ LOG", "LAB", "ME"), TopLevelTab.entries.map { it.label })
+        assertEquals(listOf("TODAY", "PLAN", "+ LOG", "INSIGHTS", "ME"), TopLevelTab.entries.map { it.label })
         assertEquals(listOf("status", "plan", "log", "lab", "user"), TopLevelTab.entries.map { it.route })
-        assertEquals(listOf("TRAINING", "FOOD", "RACE", "SESSIONS"), PlanTab.entries.map { it.label })
+        assertEquals(listOf("TRAINING", "FOOD", "RACE", "REGIMEN"), PlanTab.entries.map { it.label })
         assertEquals(listOf("HEALTHSPAN", "PERFORMANCE", "BODY", "HEALTH", "BLOODWORK", "INTIMACY", "ROUTINE", "EXPOSURES"), MeTab.entries.map { it.label })
     }
 

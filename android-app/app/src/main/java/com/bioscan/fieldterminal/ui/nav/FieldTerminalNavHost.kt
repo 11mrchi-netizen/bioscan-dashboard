@@ -257,7 +257,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
             }
             composable(DetailPage.HYDRATION.route) { HydrationScreen(onBack = { navController.popBackStack() }) }
             composable(DetailPage.DIGESTION.route) { DigestionScreen(onBack = { navController.popBackStack() }) }
-            // Every recorded session, from the Load page's ALL SESSIONS.
+            // Every recorded session, from the Load page's ALL SESSIONS and Me › PERFORMANCE.
             composable("sessions") {
                 DetailScreen("SESSIONS", onBack = { navController.popBackStack() }, eyebrow = "LOAD", ranged = false) {
                     TrainingSessionsTab { id -> navController.navigate("session_detail/$id") }
@@ -272,7 +272,6 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                 composable(route) {
                     LabTileScreen(
                         onBack = if (route == TileRoute.Lab.route) ({ navController.popBackStack() }) else null,
-                        onOpenPantry = { navController.navigate("pantry") },
                         onOpenDayMap = { date -> navController.navigate("routine_day/$date") },
                         onOpenBreathwork = { navController.navigate(BREATHWORK_ROUTE) { launchSingleTop = true } },
                         onOpenWellness = { navController.navigate(WELLNESS_ROUTE) { launchSingleTop = true } },
@@ -290,7 +289,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                     onOpenPlanner = { navController.navigate("training_planner") },
                     onOpenAllBlocks = { navController.navigate("training_blocks") },
                     onOpenEvent = { id -> navController.navigate("event/$id") },
-                    onOpenSessionDetail = { id -> navController.navigate("session_detail/$id") },
+                    onOpenPantry = { navController.navigate("pantry") },
                     requestedTab = planRequestedTab,
                     onRequestedTabConsumed = { planRequestedTab = null },
                 )
@@ -323,6 +322,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                     onRequestedTabConsumed = { meRequestedTab = null },
                     onOpenDayMap = { date -> navController.navigate("routine_day/$date") },
                     onOpenRecords = { navController.navigate("records") },
+                    onOpenSessions = { navController.navigate("sessions") },
                 )
             }
             // Personal records (ME › PERFORMANCE › RECORDS).

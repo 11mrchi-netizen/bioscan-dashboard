@@ -240,6 +240,16 @@ class NotificationRulesTest {
         assertFalse(wellbeingCheckinNeeded(null, null, null, 0)) // a logged 0 is still a score
     }
 
+    // The 27 Nov bug: the morning check-in fired at 09:04 although today's wellbeing row was complete, because the worker
+    // never asked checkinNeeded. The morning one is done by the morning value, the evening one by the arousal value.
+    @Test
+    fun morningAndEveningCheckinsAreDoneByTheirOwnValue() {
+        assertFalse(checkinNeeded(NotificationKind.CHECKIN_MORNING, morningWood = 6, arousal = 5))
+        assertTrue(checkinNeeded(NotificationKind.CHECKIN_MORNING, morningWood = null, arousal = 5))
+        assertFalse(checkinNeeded(NotificationKind.CHECKIN_EVENING, morningWood = null, arousal = 0)) // a logged 0 counts
+        assertTrue(checkinNeeded(NotificationKind.CHECKIN_EVENING, morningWood = 6, arousal = null))
+    }
+
     @Test
     fun eveningLogSkippedOnceAMessageWasSavedToday() {
         assertTrue(eveningLogNeeded(0))

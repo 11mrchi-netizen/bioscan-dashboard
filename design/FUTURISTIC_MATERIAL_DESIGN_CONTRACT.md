@@ -269,6 +269,31 @@ back, no tint when neutral (`FTMovementChip`). This amends the rule that red, am
 movement counts as status here. The arrow and the word always say it too (↑ SUPPORTS, ↓ HOLDS BACK, = NEUTRAL; ABOVE /
 BELOW / AS EXPECTED), so colour is never the only signal. Used on TODAY'S RECOVERY and READY FOR.
 
+### Lead, Support, Depth (A10, 2026-11; agreed, not yet built)
+Every page, tab and overlay is built from three layers.
+- **Lead:** exactly one number or chart, with a verdict word and one sentence of why (no more than 90 characters). It is the
+  hero card (A3).
+- **Support:** up to five compact tiles or rows (value, direction in words and an arrow, the metric dot). A support item that
+  is tapped **becomes the lead in place** (the page's chart slot swaps to it, the selected row is platinum), or opens
+  `MetricHistoryOverlay` when the metric has no page of its own, or opens its own page when it is another topic. Back returns
+  to the previous lead.
+- **Depth:** everything else, folded, one line each. Explanations (weights, caps, scorecards, "what is X", data quality) share
+  one fold per page, **HOW THIS IS BUILT**.
+- **Admission ladder:** a new analysis enters Depth, becomes Support only once it has a verdict, and leads only on its own page.
+- No new colours, fonts or card types. One state pill per card (A8) and the glance strip (A3) still apply; the glance strip's
+  chips are the Support layer of a long tab.
+- Plan: `docs/app-structure/02-focus-and-structure.md`.
+
+### Tabs and the add tunnel (A11, 2026-11; agreed, not yet built)
+- **Each top-level tab answers one question** (TODAY: how am I and what now; PLAN: what am I doing next; + LOG: record
+  something; INSIGHTS: what does my data say; ME: who am I, slowly). A new screen goes in the tab whose question it answers; if
+  it fits none it goes in the Depth of the nearest page, never on a tab's top level.
+- **Logging is a tunnel:** at most five choices a screen, each with a label and a one-line hint; a door with one destination
+  opens it directly; the form is always the last step; the header shows the path (`ADD › FUEL › MEAL`); choices use plain
+  words. Frequent entries stay one tap away through LIKELY NOW, AGAIN and the Today plan items.
+- **Multi-page forms** show `STEP n OF m · NAME` in the header, in the interface-text role.
+- Plan: `docs/app-structure/02-focus-and-structure.md`.
+
 ### Pushed screens (A4, 2026-10)
 - Every pushed screen shows a title and a context line (`TileHeader`), with the section's domain dot when it belongs to one.
 - On screens with a sub-tab rail, the header and the rail stay pinned and only the content scrolls.

@@ -92,9 +92,9 @@ fun MeScreen(
             modifier = Modifier.fillMaxWidth().weight(1f),
             transitionSpec = { FTMotion.subTab(this, targetState.ordinal > initialState.ordinal) },
             label = "me-tab",
-        ) { tab ->
+        ) { shown ->
         Box(Modifier.fillMaxSize()) {
-            when (tab) {
+            when (shown) {
                 // The healthspan page scrolls itself.
                 MeTab.Healthspan -> UserProfileScreen(
                     onOpenAging = onOpenAging,
@@ -114,7 +114,7 @@ fun MeScreen(
                     IntimacyPage()
                 }
                 else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                    when (tab) {
+                    when (shown) {
                         MeTab.Performance -> Column(Modifier.padding(16.dp)) {
                             PerformanceHub(onOpenSport, onOpenRecords, onOpenSessions)
                         }

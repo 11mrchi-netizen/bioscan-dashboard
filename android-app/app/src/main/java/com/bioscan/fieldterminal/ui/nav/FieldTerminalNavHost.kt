@@ -168,8 +168,8 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                 goToTab(TopLevelTab.User)
             }
             NotificationDestination.ROUTINE -> {
-                labsRequestedTab = LabTab.Routine
-                navController.navigate(TileRoute.Lab.route) { launchSingleTop = true }
+                meRequestedTab = MeTab.Routine
+                goToTab(TopLevelTab.User)
             }
             NotificationDestination.REPORT -> {
                 reportRequested = target.substringAfter(':', "").ifEmpty { null }
@@ -295,7 +295,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
             // Lab › TESTS › BREATHWORK: presets, your own patterns and the guided session.
             composable(BREATHWORK_ROUTE) { BreathworkScreen(onBack = { navController.popBackStack() }) }
             composable("pantry") { PantryScreen(onBack = { navController.popBackStack() }) }
-            // The day map (Lab › ROUTINE): one day's path, places and timeline; places are labelled and marked here.
+            // The day map (Me › ROUTINE): one day's path, places and timeline; places are labelled and marked here.
             composable("routine_day/{date}") { backStackEntry ->
                 val date = backStackEntry.arguments?.getString("date")?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
                 DayMapScreen(

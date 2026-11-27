@@ -23,7 +23,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import java.time.Instant
 import java.time.LocalDate
 
-// Routine intelligence R5: the reads behind Lab › ROUTINE, Today's routine line and the Log's unlogged visits, and the
+// Routine intelligence R5: the reads behind Me › ROUTINE, Today's routine line and the Log's unlogged visits, and the
 // transit-alternatives function (supabase/functions/transit-alternatives).
 @Serializable
 private data class VisitWithPlaceRow(

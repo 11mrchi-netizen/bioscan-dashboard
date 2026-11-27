@@ -7,7 +7,7 @@ import org.junit.Test
 import java.time.LocalDate
 import java.time.ZoneId
 
-// Routine intelligence R5: what Lab › ROUTINE, Today and the Log draw, and the commute alternatives.
+// Routine intelligence R5: what Me › ROUTINE, Today and the Log draw, and the commute alternatives.
 class RoutineSummaryTest {
     private val zone = ZoneId.of("Asia/Taipei")
     private val d = LocalDate.of(2026, 10, 20)

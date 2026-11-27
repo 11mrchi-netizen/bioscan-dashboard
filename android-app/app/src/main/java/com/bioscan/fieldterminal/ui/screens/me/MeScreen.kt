@@ -31,7 +31,10 @@ import com.bioscan.fieldterminal.ui.screens.UserProfileScreen
 import com.bioscan.fieldterminal.ui.screens.health.ConcernsTab
 import com.bioscan.fieldterminal.ui.screens.performance.PerformanceHub
 import com.bioscan.fieldterminal.ui.screens.status.BodyTabContent
+import com.bioscan.fieldterminal.ui.screens.detail.LinkRow
+import com.bioscan.fieldterminal.ui.screens.detail.Section
 import com.bioscan.fieldterminal.ui.screens.status.LabsScreen
+import com.bioscan.fieldterminal.ui.screens.status.RoutineTab
 import com.bioscan.fieldterminal.ui.screens.user.Skill
 import java.time.LocalDate
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -70,18 +73,18 @@ fun MeScreen(
                 MeTab.Healthspan -> "HEALTHSPAN · AGING · LEVELS · BLOCK"
                 MeTab.Performance -> "EVERY SPORT YOU RECORD"
                 MeTab.Body -> "WEIGHT · BODY FAT · MEASUREMENTS"
-                MeTab.Health -> "INJURIES · PAIN · SYMPTOMS · ILLNESS"
-                MeTab.Bloodwork -> "LAB DRAWS · MARKERS"
-                MeTab.Intimacy -> "STATS · TRENDS · STI TESTS · PARTNERS"
+                MeTab.Health -> "INJURIES · PAIN · SYMPTOMS · ILLNESS · PREVENTION"
+                MeTab.Bloodwork -> "HEALTH · LAB DRAWS · MARKERS"
+                MeTab.Intimacy -> "HEALTH · STATS · TRENDS · STI TESTS · PARTNERS"
                 MeTab.Routine -> "THE DAYS · TIME · PLACES · PHONE · PRACTICES"
-                MeTab.Exposures -> "AIR · WHERE THE DOSE COMES FROM · WAYS TO IMPROVE"
+                MeTab.Exposures -> "HEALTH · AIR · WHERE THE DOSE COMES FROM · WAYS TO IMPROVE"
             },
             accent = FT.DomainUser,
             action = {
                 FTIconButton(FTIcons.Settings, "Settings", onOpenSettings)
             },
         )
-        SubTabRow(items = MeTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it })
+        SubTabRow(items = MeTab.row, selected = tab.rowTab, label = { it.label }, onSelect = { tab = it })
         Box(Modifier.fillMaxWidth().height(FT.BorderWidth).background(FT.GlassBorder))
         // Sub-tab switch: a short slide toward the tab's side with a fade (FTMotion; snaps with reduced motion).
         AnimatedContent(
@@ -106,17 +109,33 @@ fun MeScreen(
                     showHeader = false,
                 )
                 // Intimacy scrolls itself too: its three views (overview, partners, one partner) each start at the top.
-                MeTab.Intimacy -> IntimacyPage()
+                MeTab.Intimacy -> Column(Modifier.fillMaxSize()) {
+                    BackToHealth { tab = MeTab.Health }
+                    IntimacyPage()
+                }
                 else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                     when (tab) {
                         MeTab.Performance -> Column(Modifier.padding(16.dp)) {
                             PerformanceHub(onOpenSport, onOpenRecords, onOpenSessions)
                         }
                         MeTab.Body -> BodyTabContent()
-                        MeTab.Health -> ConcernsTab(onOpenConcern = onOpenConcern)
-                        MeTab.Bloodwork -> LabsScreen()
-                        MeTab.Routine -> RoutinePage(onOpenDay = onOpenDayMap)
-                        MeTab.Exposures -> ExposuresPage()
+                        MeTab.Health -> {
+                            ConcernsTab(onOpenConcern = onOpenConcern)
+                            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) { PreventionAndRisk(onOpen = { tab = it }) }
+                        }
+                        MeTab.Bloodwork -> {
+                            BackToHealth { tab = MeTab.Health }
+                            LabsScreen()
+                        }
+                        // What you do (practices, time, the day map, the commute) above the long view.
+                        MeTab.Routine -> {
+                            RoutineTab(onOpenDay = onOpenDayMap)
+                            RoutinePage(onOpenDay = onOpenDayMap)
+                        }
+                        MeTab.Exposures -> {
+                            BackToHealth { tab = MeTab.Health }
+                            ExposuresPage()
+                        }
                         MeTab.Healthspan, MeTab.Intimacy -> Unit
                     }
                 }
@@ -124,4 +143,19 @@ fun MeScreen(
         }
         }
     }
+}
+
+/** Health's fold of the screens that are about risk and prevention, not about what is wrong now (A11: five tabs, nothing deleted). */
+@Composable
+private fun PreventionAndRisk(onOpen: (MeTab) -> Unit) {
+    Section("PREVENTION AND RISK") {
+        LinkRow("BLOODWORK", "Lab draws and markers") { onOpen(MeTab.Bloodwork) }
+        LinkRow("EXPOSURES", "Air, where the dose comes from, ways to improve") { onOpen(MeTab.Exposures) }
+        LinkRow("INTIMACY", "Stats, trends, STI tests, partners") { onOpen(MeTab.Intimacy) }
+    }
+}
+
+@Composable
+private fun BackToHealth(onBack: () -> Unit) {
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) { LinkRow("‹ HEALTH", onClick = onBack) }
 }

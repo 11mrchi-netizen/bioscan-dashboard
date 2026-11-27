@@ -49,7 +49,7 @@ class RoutineActionReceiver : BroadcastReceiver() {
                     catching { NotificationRulesRepository(SupabaseClientProvider.client).appendLog(NotificationKind.PRACTICE_DUE, NotificationOutcome.ACTIONED, action = action.substringAfterLast('.').lowercase()) }
                 }
             } catch (e: Exception) {
-                // Nothing to show: the practice stays due on Lab › ROUTINE, and a timer stays running there.
+                // Nothing to show: the practice stays due on Me › ROUTINE, and a timer stays running there.
                 if (action == ACTION_TIMER_STOP) RoutineTimerStore.showOngoing(app)
             } finally {
                 pending.finish()

@@ -12,7 +12,7 @@ class NavigationMapTest {
     @Test
     fun onlyLabKeepsItsOldTileRoute() {
         assertEquals(listOf("tile_labs"), TileRoute.entries.map { it.route })
-        assertEquals(listOf("N=1", "TESTS", "ROUTINE", "EXPLORE"), LabTab.entries.map { it.label })
+        assertEquals(listOf("N=1", "TESTS", "EXPLORE"), LabTab.entries.map { it.label })
     }
 
     // Scoring system rebuild: the dock is TODAY · PLAN · + LOG · LAB · ME; the status and user routes keep their strings.
@@ -21,7 +21,10 @@ class NavigationMapTest {
         assertEquals(listOf("TODAY", "PLAN", "+ LOG", "INSIGHTS", "ME"), TopLevelTab.entries.map { it.label })
         assertEquals(listOf("status", "plan", "log", "lab", "user"), TopLevelTab.entries.map { it.route })
         assertEquals(listOf("TRAINING", "FOOD", "RACE", "REGIMEN"), PlanTab.entries.map { it.label })
-        assertEquals(listOf("HEALTHSPAN", "PERFORMANCE", "BODY", "HEALTH", "BLOODWORK", "INTIMACY", "ROUTINE", "EXPOSURES"), MeTab.entries.map { it.label })
+        // Me's row is five tabs (A11); Bloodwork, Intimacy and Exposures are opened from Health and keep their entries for saved state.
+        assertEquals(listOf("HEALTHSPAN", "PERFORMANCE", "BODY", "HEALTH", "ROUTINE"), MeTab.row.map { it.label })
+        assertEquals(listOf(MeTab.Health, MeTab.Health, MeTab.Health), listOf(MeTab.Bloodwork, MeTab.Intimacy, MeTab.Exposures).map { it.rowTab })
+        assertEquals(MeTab.row, MeTab.row.map { it.rowTab })
     }
 
     // The map's change requests: each ring's tiles open pages of their own; FUEL's are Nutrition, Hydration, Digestion.

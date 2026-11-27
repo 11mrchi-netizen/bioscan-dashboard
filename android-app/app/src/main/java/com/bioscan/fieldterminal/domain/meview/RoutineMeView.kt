@@ -110,7 +110,7 @@ fun routineMeView(
         "TIME", time, through,
         info = "A daily average over the last 28 complete days: what you logged, training from the watch, walking and cycling " +
             "in trips, commuting door to door, time outdoors in daylight, phone video and social apps, sleep.",
-        empty = "Nothing yet: log time on Lab › ROUTINE, or turn on Locations and Phone use in Setup.",
+        empty = "Nothing yet: log time on Me › ROUTINE, or turn on Locations and Phone use in Setup.",
     )
     sections += linesSection(
         "PLACES", places, through,
@@ -130,7 +130,7 @@ fun routineMeView(
     val practices = practicesInWindow(activities, logs, today)
     sections += MeSection(
         "PRACTICES",
-        if (practices.isEmpty()) listOf(MeNote("No practices yet. Add one on Lab › ROUTINE."))
+        if (practices.isEmpty()) listOf(MeNote("No practices yet. Add one on Me › ROUTINE."))
         else practices.map { a ->
             val kept = adherence(a, logs, today)
             val done = logs.filter { it.activityId == a.id && it.status == LogStatus.DONE && it.date.isAfter(today.minusDays(28)) }
@@ -141,7 +141,7 @@ fun routineMeView(
                 hue = "m-time-logged",
             )
         },
-        info = "Each practice of the last 28 days: the scheduled days it was done, the time logged and its streak. Practices are added and changed on Lab › ROUTINE.",
+        info = "Each practice of the last 28 days: the scheduled days it was done, the time logged and its streak. Practices are added and changed on Me › ROUTINE.",
     )
 
     val changes = (time + places + phone + regularity).mapNotNull { l -> compareWindows(l, through)?.let { l to it } }

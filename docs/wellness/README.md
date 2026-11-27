@@ -24,7 +24,7 @@ ELEVENLABS_API_KEY=... ELEVENLABS_VOICE_ID=... node scripts/wellness-audio/gener
 ```
 
 Run it on your own computer; the key stays there. Pick a calm voice in the ElevenLabs voice library and use its id. Existing
-files are kept unless `--force`. Rebuild the app after adding files. The first run is also the check that the service accepts
+files are kept unless `--force`. The recordings are git-ignored on purpose: the repository is public, so the audio stays on your computer, and a build made from another folder needs the `audio` folder copied in (without it the phone's own voice reads the cues). Rebuild the app after adding files. The first run is also the check that the service accepts
 these scripts.
 
 ## Not built yet

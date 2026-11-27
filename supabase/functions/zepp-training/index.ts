@@ -25,7 +25,7 @@ function json(body: unknown, status: number) {
   });
 }
 
-const PROBE_VERSION = "t18";
+const PROBE_VERSION = "t19";
 const MAX_STORED_CHARS = 200_000;
 // Read-only: nothing outside these prefixes is ever requested.
 const ALLOWED = [/^\/users\/training\//, /^\/v1\/sport\/shareTrainingTemplate/];
@@ -422,8 +422,25 @@ Deno.serve(async (req: Request) => {
         if (!/^\d{10,20}$/.test(String(id))) continue;
         if ((await callZepp("DELETE", `/users/training/templates/${id}`)).status === 200) deleted++;
       }
-      await record("push templates", "push_templates", { status: failed.length ? 207 : 200, text: JSON.stringify({ created: created.length, deleted, unmapped, failed }) });
-      return json({ created, unmapped, failed, deleted }, 200);
+      // Orphans: templates this push once made ("planned session <id>" in the description) that no planned session
+      // points at any more (its row was removed, or a delete failed and the id was cleared). body.keepIds lists every
+      // id still referenced; body.pruneOrphans deletes the rest, and "orphans" alone only lists them.
+      const orphans: Array<{ id: string; title: string }> = [];
+      let pruned = 0;
+      if (body.pruneOrphans === true || body.listOrphans === true) {
+        const keep = new Set<string>([...(Array.isArray(body.keepIds) ? body.keepIds.map(String) : []), ...created.map((c) => c.id)]);
+        const listed = await callZepp("GET", "/users/training/templates?size=100");
+        try {
+          for (const t of JSON.parse(listed.text)?.items ?? []) {
+            if (/^planned session \d+$/.test(String(t.description ?? "")) && !keep.has(String(t.id))) orphans.push({ id: String(t.id), title: String(t.title ?? "") });
+          }
+        } catch { /* none */ }
+        if (body.pruneOrphans === true && Array.isArray(body.keepIds)) {
+          for (const o of orphans) if ((await callZepp("DELETE", `/users/training/templates/${o.id}`)).status === 200) pruned++;
+        }
+      }
+      await record("push templates", "push_templates", { status: failed.length ? 207 : 200, text: JSON.stringify({ created: created.length, deleted, unmapped, failed, orphans: orphans.length, pruned }) });
+      return json({ created, unmapped, failed, deleted, orphans, pruned }, 200);
     }
 
     if (body?.action === "calendar_dump") {

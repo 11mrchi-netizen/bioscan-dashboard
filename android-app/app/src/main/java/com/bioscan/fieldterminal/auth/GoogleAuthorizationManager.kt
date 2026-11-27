@@ -33,6 +33,8 @@ object GoogleAuthorizationManager {
     private val SCOPES = listOf(
         Scope("https://www.googleapis.com/auth/calendar.readonly"),
         Scope("https://www.googleapis.com/auth/drive.readonly"),
+        // Makes the app's own "Training schedule" calendar and writes events there, and nowhere else (TrainingCalendarRepository).
+        Scope("https://www.googleapis.com/auth/calendar.app.created"),
     )
 
     suspend fun authorize(activity: Activity): AuthorizationResult = suspendCancellableCoroutine { cont ->

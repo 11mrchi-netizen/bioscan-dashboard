@@ -53,6 +53,7 @@ fun MeScreen(
     onRequestedTabConsumed: () -> Unit = {},
     onOpenDayMap: (LocalDate) -> Unit = {},
     onOpenRecords: () -> Unit = {},
+    onOpenSessions: () -> Unit = {},
 ) {
     var tab by rememberSaveable { mutableStateOf(requestedTab ?: MeTab.Healthspan) }
     LaunchedEffect(requestedTab) {
@@ -109,7 +110,7 @@ fun MeScreen(
                 else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                     when (tab) {
                         MeTab.Performance -> Column(Modifier.padding(16.dp)) {
-                            PerformanceHub(onOpenSport, onOpenRecords)
+                            PerformanceHub(onOpenSport, onOpenRecords, onOpenSessions)
                         }
                         MeTab.Body -> BodyTabContent()
                         MeTab.Health -> ConcernsTab(onOpenConcern = onOpenConcern)

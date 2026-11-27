@@ -22,7 +22,8 @@ enum class TopLevelTab(val route: String, val label: String) {
     Plan("plan", "PLAN"),
     // Tapping it opens the logging menu directly (FieldTerminalNavHost's logMenuRequest).
     Log("log", "+ LOG"),
-    Lab("lab", "LAB"),
+    // INSIGHTS (was LAB): what does my data say? The enum name and the "lab" route stay so a saved back stack still resolves.
+    Lab("lab", "INSIGHTS"),
     User("user", "ME"),
 }
 
@@ -37,7 +38,8 @@ enum class PlanTab(val label: String) {
     Training("TRAINING"),
     Food("FOOD"),
     Race("RACE"),
-    Sessions("SESSIONS"),
+    // The supplement schedule and pantry (was Lab › SUPPLEMENTS). Recorded sessions moved to Me › PERFORMANCE.
+    Regimen("REGIMEN"),
 }
 
 // ME's sub-tabs: the slow-moving picture.
@@ -65,8 +67,7 @@ enum class TileRoute(val route: String) {
 // the training block, the food plan with meal prep and race fuel; TESTS starts the tests whose results are logged in Log.
 enum class LabTab(val label: String) {
     N1("N=1"),
-    Supplements("SUPPLEMENTS"),
-    // PLANNING moved to the PLAN tab.
+    // SUPPLEMENTS and PLANNING moved to the PLAN tab (REGIMEN, TRAINING, FOOD, RACE).
     Tests("TESTS"),
     // Routine intelligence R5: the week by place, the commute and the phone (docs/routine-intelligence).
     Routine("ROUTINE"),

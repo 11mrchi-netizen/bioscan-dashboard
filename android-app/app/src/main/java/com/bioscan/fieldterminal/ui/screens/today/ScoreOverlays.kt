@@ -542,7 +542,7 @@ fun InputOverlay(view: ScoresView, key: DomainKey, inputKey: String, onBack: () 
                 val owner = ScoreSpecs.ALL.entries.firstOrNull { (_, spec) -> spec.groups.any { g -> g.inputs.any { it.key == r.key } } }?.key
                 RelationRow(r, onClick = owner?.let { o -> { onOpen(ScoreOverlay.Input(o, r.key)) } })
             }
-            if (related.isNotEmpty()) Text("Moves together, not proof of cause. Lab › N=1 tests it.", style = FTType.Micro, color = FT.TextMuted)
+            if (related.isNotEmpty()) Text("Moves together, not proof of cause. Insights › N=1 tests it.", style = FTType.Micro, color = FT.TextMuted)
         }
         OverlaySection("WHAT IS IT?") { Text(whatIsInput(spec.key), style = FTType.BodySmall, color = FT.TextSecondary) }
         Spacer(Modifier.height(24.dp))

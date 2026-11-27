@@ -30,7 +30,9 @@ import com.bioscan.fieldterminal.data.GeminiApiKeyStore
 import com.bioscan.fieldterminal.data.HealthConnectSyncResult
 import com.bioscan.fieldterminal.data.HealthConnectWriteBackResult
 import com.bioscan.fieldterminal.data.MapSettingsStore
+import com.bioscan.fieldterminal.auth.GoogleAuthorizationManager
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.TrainingCalendarRepository
 import com.bioscan.fieldterminal.data.ZeppRepository
 import com.bioscan.fieldterminal.data.ZeppSyncStateRow
 import com.bioscan.fieldterminal.data.catching
@@ -74,7 +76,7 @@ fun ConnectedServicesScreen(scope: CoroutineScope, onBack: () -> Unit) {
         ) {
             when (tab) {
                 ConnectedServicesTab.AiNutrition -> AiNutritionCard(context)
-                ConnectedServicesTab.Map -> MapCard(context)
+                ConnectedServicesTab.Map -> { MapCard(context); PlanCalendarCard(scope) }
                 ConnectedServicesTab.HealthConnect -> HealthConnectCard(context)
                 ConnectedServicesTab.Zepp -> ZeppCard(scope)
             }
@@ -215,6 +217,58 @@ private fun MapCard(context: Context) {
             style = FTType.Caption,
             color = FT.TextSecondary,
         )
+    }
+}
+
+// The plan -> Google Calendar projection (TrainingCalendarRepository): one calendar the app makes and owns. The first
+// run asks Google for the extra `calendar.app.created` permission; after that the button writes without asking.
+@Composable
+private fun PlanCalendarCard(scope: CoroutineScope) {
+    val activity = LocalContext.current as android.app.Activity
+    var busy by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf<String?>(null) }
+
+    suspend fun pushWith(token: String) {
+        result = try {
+            TrainingCalendarRepository(token, SupabaseClientProvider.client).push()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            "Calendar push failed: ${e.message ?: "unknown error"}"
+        }
+    }
+
+    val consent = rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartIntentSenderForResult()) { r ->
+        scope.launchSafe(onDone = { busy = false }) {
+            val token = try { GoogleAuthorizationManager.resultFromIntent(activity, r.data).accessToken } catch (e: Exception) { null }
+            if (token != null) pushWith(token) else result = "Calendar access was not granted."
+        }
+    }
+
+    FTCard(title = "TRAINING CALENDAR") {
+        Text(
+            "Writes your planned sessions to a separate Google calendar called \"${TrainingCalendarRepository.CALENDAR_NAME}\", made and owned by this app. " +
+                "The app is allowed to touch only that calendar, never your other events. Moved or dropped sessions are updated or removed there.",
+            style = FTType.BodySmall,
+            color = FT.TextSecondary,
+        )
+        FTButton(label = if (busy) "SENDING…" else "SEND PLAN TO GOOGLE CALENDAR") {
+            if (!busy) {
+                busy = true
+                scope.launchSafe(onDone = { busy = false }) {
+                    val auth = GoogleAuthorizationManager.authorize(activity)
+                    val pending = auth.pendingIntent
+                    if (auth.hasResolution() && pending != null) {
+                        consent.launch(androidx.activity.result.IntentSenderRequest.Builder(pending.intentSender).build())
+                        return@launchSafe // the result handler sends and clears busy
+                    }
+                    val token = auth.accessToken
+                    if (token != null) pushWith(token) else result = "Could not get a Google access token."
+                    busy = false
+                }
+            }
+        }
+        result?.let { Text(it, style = FTType.Caption, color = if (it.contains("failed") || it.contains("not")) FT.Warn else FT.TextSecondary) }
     }
 }
 

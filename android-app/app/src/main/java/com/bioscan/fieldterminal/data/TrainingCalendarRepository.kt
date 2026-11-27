@@ -42,7 +42,7 @@ import java.time.ZoneId
  */
 class TrainingCalendarRepository(private val accessToken: String, private val supabase: SupabaseClient) {
     companion object {
-        const val CALENDAR_NAME = "Bioscan Training"
+        const val CALENDAR_NAME = "Training schedule"
         private val client = HttpClient(OkHttp)
         private const val API = "https://www.googleapis.com/calendar/v3"
         private val json = LenientJson

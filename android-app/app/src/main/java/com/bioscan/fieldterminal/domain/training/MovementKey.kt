@@ -10,6 +10,7 @@ private val DROP = setOf("barbell", "standing", "and", "the", "a", "bb", "with")
 private val WORD_MAP = mapOf(
     "military" to "overhead", "shoulder" to "overhead", "inclined" to "incline",
     "ups" to "up", "squats" to "squat", "presses" to "press", "rows" to "row", "dips" to "dip", "lunges" to "lunge", "deadlifts" to "deadlift",
+    "pulls" to "pull", "dl" to "deadlift",
 )
 private val PHRASE_MAP = listOf(
     "chest press" to "bench press",
@@ -22,6 +23,9 @@ private val PHRASE_MAP = listOf(
 fun movementKey(name: String): String {
     var s = name.replace(Regex("\\([A-Z]{2,5}\\)"), " ").lowercase()
     s = s.replace(Regex("[^a-z0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
+    // "Trapbar", "Trap-Bar", "Hex Bar" and "Trap Bar" are one bar; likewise "Pushups" / "Push-up".
+    s = s.replace("trapbar", "trap bar").replace("hexbar", "trap bar").replace("hex bar", "trap bar")
+    s = s.replace("pushups", "push up").replace("pushup", "push up")
     s = s.replace("pullups", "pull up").replace("pullup", "pull up").replace("chinups", "chin up").replace("chinup", "chin up")
     for ((from, to) in PHRASE_MAP) s = s.replace(from, to)
     val tokens = s.split(' ').filter { it.isNotBlank() && it !in DROP }.map { WORD_MAP[it] ?: it }

@@ -116,7 +116,7 @@ private fun blockWindow(c: TrainingCycle, today: LocalDate): PerfWindow {
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun PerformanceHub(onOpenSport: (Sport) -> Unit, onOpenRecords: () -> Unit = {}) {
+fun PerformanceHub(onOpenSport: (Sport) -> Unit, onOpenRecords: () -> Unit = {}, onOpenSessions: () -> Unit = {}) {
     val (sessions, sessionsGuard) = rememberSportSessions()
     val today = remember { LocalDate.now() }
     val cycles by produceState<List<TrainingCycle>>(emptyList()) {
@@ -199,6 +199,11 @@ fun PerformanceHub(onOpenSport: (Sport) -> Unit, onOpenRecords: () -> Unit = {})
         }
 
         RecordsCard(onOpenRecords)
+
+        // Every recorded workout (it was PLAN › SESSIONS; PLAN is the future only now).
+        Section("ALL SESSIONS", trailing = "OPEN ›", onClick = onOpenSessions) {
+            Text("Every recorded workout, newest first.", style = FTType.Caption, color = FT.TextSecondary)
+        }
 
         sports.forEachIndexed { i, s -> SportTile(s, sportColor(i), window) { onOpenSport(s.sport) } }
     }

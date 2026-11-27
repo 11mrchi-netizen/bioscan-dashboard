@@ -560,6 +560,7 @@ async function waitForServer() {
     await page.goto(`${BASE}#/today?day=2026-10-20&focus=recovery`); await page.waitForSelector('.today-focus .ov-input', { timeout: 15000 })
     check(true, 'a focus link opens the ring')
     await page.goto(`${BASE}#/today?day=${OPEN_DAY}`); await page.waitForSelector('.today-hero', { timeout: 15000 })
+    await page.waitForFunction(() => /without their inputs/.test(document.querySelector('.today-hint')?.textContent ?? ''), null, { timeout: 8000 }).catch(() => {})
     check((await text('.today-hint')).includes('without their inputs') && (await text('.today-hint')).includes('still open'), 'a past day with numbers only says why the rings have no inputs', await text('.today-hint'))
     await page.locator('.today-rings .ring-btn', { hasText: 'SLEEP' }).click(); await page.waitForSelector('.today-focus', { timeout: 5000 })
     check((await page.locator('.today-focus a[href*="/m/sleep"]').count()) === 1 && (await page.locator('.today-focus svg.ov-spark').count()) === 1, 'a ring on such a day still opens: its number, its last days and the history link')

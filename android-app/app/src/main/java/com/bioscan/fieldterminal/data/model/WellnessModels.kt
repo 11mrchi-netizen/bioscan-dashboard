@@ -3,7 +3,7 @@ package com.bioscan.fieldterminal.data.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// wellness_sessions (supabase/migrations/20261127140000_wellness_sessions.sql): one guided wellness session. Counts and
+// wellness_sessions (supabase/migrations/20261127131608_wellness_sessions.sql): one guided wellness session. Counts and
 // ratings only; there is no free-text column.
 
 @Serializable

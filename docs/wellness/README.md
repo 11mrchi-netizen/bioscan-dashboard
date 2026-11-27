@@ -12,7 +12,7 @@ programme: the project's "Guided sexual-wellness sessions" doc. This page descri
 - **Progression** (`StopStartProgress`): starts at 3 cycles; two clean completed sessions in a row add a cycle (to 6);
   a session with more late stops than half its cycles takes one away. The stage is met after 6 completed sessions, the last
   three with 5+ cycles and at most one late stop between them.
-- **Data**: `wellness_sessions` (`supabase/migrations/20261127140000_wellness_sessions.sql`), own rows, counts and ratings
+- **Data**: `wellness_sessions` (`supabase/migrations/20261127131608_wellness_sessions.sql`), own rows, counts and ratings
   only, no free text. Times are the phone's wall clock labelled +00 (`WallClock`).
 - **Voice** (`data/WellnessVoice.kt`): plays `assets/wellness/audio/<cue>.mp3` when it exists, otherwise the phone's speech
   engine reads the cue. Words: `assets/wellness/stopstart-v1.json` (a new version number for any rewrite).

@@ -105,6 +105,9 @@ data class StrengthSetDto(
     @SerialName("duration_sec") val durationSec: Int? = null,
     @SerialName("avg_hr") val avgHr: Int? = null,
     @SerialName("detected_reps") val detectedReps: Int? = null,
+    // Lifting gear this set was done with (domain/training/Gear.kt). null = not recorded (every set from before gear existed);
+    // an empty list = recorded as no gear. Never read null as "no gear".
+    val gear: List<String>? = null,
 )
 
 // The full row for SessionDetailScreen's summary card, plus

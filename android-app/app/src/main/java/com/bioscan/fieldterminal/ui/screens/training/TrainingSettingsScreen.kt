@@ -55,13 +55,14 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenShoe: (Long) -> Unit = {}) 
     LaunchedEffect(Unit) { state.load() }
 
     Column(Modifier.fillMaxSize().background(FT.Base)) {
-        TileHeader(onBack = onBack, title = "TRAINING SETUP", subtitle = "EQUIPMENT · SHOES · SESSION TIMES", accent = FT.DomainTraining)
+        TileHeader(onBack = onBack, title = "TRAINING SETUP", subtitle = "EQUIPMENT · GEAR · SHOES · SESSION TIMES", accent = FT.DomainTraining)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (state.loading) {
                 Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = FT.DomainTraining) }
             } else {
                 state.error?.let { Text(it, color = FT.Bad, style = FTType.BodySmall) }
                 EquipmentCard(state)
+                GearRulesCard()
                 ShoesCard(onOpenShoe)
                 ScheduleCard(state)
                 HeartRateZonesCard(state)

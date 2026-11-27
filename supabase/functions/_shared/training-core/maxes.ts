@@ -8,6 +8,7 @@ const DROP = new Set(['barbell', 'standing', 'and', 'the', 'a', 'bb', 'with'])
 const WORD_MAP: Record<string, string> = {
   military: 'overhead', shoulder: 'overhead', inclined: 'incline',
   ups: 'up', squats: 'squat', presses: 'press', rows: 'row', dips: 'dip', lunges: 'lunge', deadlifts: 'deadlift',
+  pulls: 'pull', dl: 'deadlift',
 }
 const PHRASE_MAP: [string, string][] = [
   ['chest press', 'bench press'], ['bent over row', 'row'], ['bent over barbell row', 'row'], ['standing barbell press', 'overhead press'],
@@ -17,6 +18,9 @@ const PHRASE_MAP: [string, string][] = [
 export function movementKey(name: string): string {
   let s = name.replace(/\([A-Z]{2,5}\)/g, ' ').toLowerCase()
   s = s.replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
+  // "Trapbar", "Trap-Bar", "Hex Bar" and "Trap Bar" are one bar; likewise "Pushups" / "Push-up".
+  s = s.replaceAll('trapbar', 'trap bar').replaceAll('hexbar', 'trap bar').replaceAll('hex bar', 'trap bar')
+  s = s.replaceAll('pushups', 'push up').replaceAll('pushup', 'push up')
   s = s.replaceAll('pullups', 'pull up').replaceAll('pullup', 'pull up').replaceAll('chinups', 'chin up').replaceAll('chinup', 'chin up')
   for (const [from, to] of PHRASE_MAP) s = s.replaceAll(from, to)
   const tokens = s.split(' ').filter((t) => t !== '' && !DROP.has(t)).map((t) => WORD_MAP[t] ?? t)

@@ -123,6 +123,10 @@ fun practicesDue(activities: List<RoutineActivity>, logs: List<RoutineLog>, from
     }
 }
 
+/** The practices with a log (done or skipped) on [date]: their reminder, if still showing, is withdrawn. */
+fun practicesLoggedOn(logs: List<RoutineLog>, date: LocalDate): Set<Long> =
+    logs.filter { it.date == date }.map { it.activityId }.toSet()
+
 /** The key a practice's reminder is shown under, once a day. */
 fun practiceReminderKey(activityId: Long, date: LocalDate): String = "practice:$activityId:$date"
 

@@ -75,4 +75,11 @@ class FuelPromptsTest {
         val now = LocalDateTime.of(d, java.time.LocalTime.of(15, 10))
         assertTrue(dueFuelPrompts(prompts, prefs.copy(masterEnabled = false), now.minusMinutes(30), now, emptySet()).isEmpty())
     }
+
+    @Test
+    fun aShownFuelReminderWhosePlanIsGoneIsStale() {
+        val shown = setOf("fuel:a:pre", "fuel:b:post", "practice:3:2026-11-04", "report:2026-W44")
+        assertEquals(setOf("fuel:b:post"), staleFuelKeys(shown, currentKeys = setOf("fuel:a:pre")))
+        assertTrue(staleFuelKeys(shown, currentKeys = setOf("fuel:a:pre", "fuel:b:post")).isEmpty())
+    }
 }

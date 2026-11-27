@@ -1,6 +1,6 @@
 # Focus and structure (phone app, November 2026)
 
-Status: **agreed, not built.** Milestone M0 of the plan "Focus and structure plan: phone app"
+Status: **agreed; building** (M0 docs, M1 Sleep pilot and M2a are in the code; the rest is not). Milestone M0 of the plan "Focus and structure plan: phone app"
 (https://claude.ai/artifact/7RR8tvUMyoLC8YbUNJjupK). The analysis behind it is "Phone app: one focus per page"
 (https://claude.ai/artifact/RCM9DRrXogGqwScEQDVrkj). Nothing in this document is in the code yet; `ui/nav/TopLevelTab.kt` and
 `ui/nav/FieldTerminalNavHost.kt` stay authoritative until a milestone says otherwise. The web console is planned separately
@@ -115,6 +115,15 @@ Approve or change each. The first four are recommendations, used as the working 
 | 3 | Intimacy | Behind the privacy setting, out of the Me tab row, opened from Me › Health |
 | 4 | Long-press on + for the top three recents | Try it in M3 and keep it only if the taps count says so |
 | 5 | The charters, the move table and the tunnel labels above | Approve before anything is built |
+
+## Built so far
+
+| Milestone | What | State |
+|---|---|---|
+| M0 | This document, contract amendments A10 and A11 | merged (PR 71) |
+| M1 | Lead, Support, Depth on the Sleep detail page (`FocusKit.kt`, `FocusPattern.kt`) | merged (PR 71), checked by Davide on his phone |
+| M2a | PLAN › SESSIONS replaced by PLAN › REGIMEN (the supplements and pantry); Me › PERFORMANCE has an ALL SESSIONS row; the LAB dock tab and page are named INSIGHTS (the `lab` route and enum name stay so a saved back stack resolves); Lab's SUPPLEMENTS sub-tab is gone | built, in review |
+| M2b, M2c | Routine only in Me; Bloodwork and Exposures under Health; routes and notification links | not started |
 
 ## Not covered here
 

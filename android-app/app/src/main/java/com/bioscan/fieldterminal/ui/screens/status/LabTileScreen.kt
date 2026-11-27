@@ -33,12 +33,11 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // DAV-74/DAV-87: the Labs tile page; DAV-209 moved Supplements in from Fuel.
 // App restructure: the Lab tile holds what is tried, planned and tested: N=1 (the analysis cards that were on Today),
-// SUPPLEMENTS, PLANNING (the training block, the food plan with meal prep, race fuel) and TESTS. Bloodwork moved to
-// Health.
+// INSIGHTS (was LAB): what does my data say? N=1, TESTS (until they move to the + LOG tunnel), ROUTINE (until it is Me's only)
+// and EXPLORE. SUPPLEMENTS and PLANNING moved to PLAN, bloodwork to Health.
 @Composable
 fun LabTileScreen(
     onBack: (() -> Unit)?,
-    onOpenPantry: () -> Unit = {},
     onOpenDayMap: (LocalDate) -> Unit = {},
     onOpenBreathwork: () -> Unit = {},
     // Set by a deep link (supplement reminder -> SUPPLEMENTS, fuel reminder -> PLANNING › FOOD PLAN, body check-in
@@ -74,10 +73,9 @@ fun LabTileScreen(
     LaunchedEffect(tab) { scroll.scrollTo(0) }
     PinnedPage(
         onBack = onBack,
-        title = "LAB",
+        title = "INSIGHTS",
         subtitle = when (tab) {
             LabTab.N1 -> "WHAT GOES WITH WHAT · EXPERIMENTS · SUMMARIES"
-            LabTab.Supplements -> "ROSTER · PANTRY · EXPERIMENTS"
             LabTab.Tests -> "START A TEST · RESULTS GO TO LOG · BREATHWORK"
             LabTab.Routine -> "DAY MAP · THE WEEK BY PLACE · COMMUTE · PHONE"
             LabTab.Explore -> "ANY TWO MEASURES · DAYS LATER · HOW SURE"
@@ -88,7 +86,6 @@ fun LabTileScreen(
     ) {
         when (tab) {
             LabTab.N1 -> N1Tab(openReport = openReport, onReportHandled = onReportHandled)
-            LabTab.Supplements -> SupplementsScreen(onOpenPantry = onOpenPantry)
             LabTab.Tests -> TestsTab(reloadKey = testsReload, onStart = { test = it }, onOpenBreathwork = onOpenBreathwork)
             LabTab.Routine -> RoutineTab(onOpenDay = onOpenDayMap)
             LabTab.Explore -> ExploreTab()

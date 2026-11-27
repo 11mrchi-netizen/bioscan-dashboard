@@ -27,22 +27,23 @@ import com.bioscan.fieldterminal.ui.nav.PlanTab
 import com.bioscan.fieldterminal.ui.screens.events.EventsCard
 import com.bioscan.fieldterminal.ui.screens.fuel.FuelPlanPage
 import com.bioscan.fieldterminal.ui.screens.fuel.MealPrepPage
-import com.bioscan.fieldterminal.ui.screens.status.TrainingSessionsTab
+import com.bioscan.fieldterminal.ui.screens.status.SupplementsScreen
 import com.bioscan.fieldterminal.ui.screens.training.TrainingPlanTab
 import com.bioscan.fieldterminal.ui.theme.FTType
 import java.time.LocalDate
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// PLAN, a dock tab. What is planned and what was done:
-// the training block, the food plan with meal prep, events with their race fuel, and the sessions. The content is the
-// existing screens' (was Lab › Planning and Training › Sessions), hosted here unchanged.
+// PLAN, a dock tab. What am I doing next:
+// the training block, the food plan with meal prep, events with their race fuel, and the regimen (supplements, medications,
+// pantry). Future only: the recorded sessions are in ME › PERFORMANCE. The content is the existing screens', hosted here
+// unchanged (was Lab › Planning and Lab › Supplements).
 
 @Composable
 fun PlanScreen(
     onOpenPlanner: () -> Unit,
     onOpenAllBlocks: () -> Unit,
     onOpenEvent: (Long) -> Unit,
-    onOpenSessionDetail: (Long) -> Unit,
+    onOpenPantry: () -> Unit,
     // A deep link (the fuel reminder -> FOOD, the block card on ME -> TRAINING); applied once, then cleared.
     requestedTab: PlanTab? = null,
     onRequestedTabConsumed: () -> Unit = {},
@@ -63,7 +64,7 @@ fun PlanScreen(
             PlanTab.Training -> "CURRENT BLOCK · THIS WEEK · BLOCKS"
             PlanTab.Food -> "NEXT 10 DAYS · MEAL PREP"
             PlanTab.Race -> "EVENTS · RACE FUEL"
-            PlanTab.Sessions -> "EVERY RECORDED SESSION"
+            PlanTab.Regimen -> "SUPPLEMENTS · MEDICATIONS · PANTRY · EXPERIMENTS"
         },
         accent = FT.DomainTraining,
         rail = { SubTabRow(items = PlanTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
@@ -79,7 +80,7 @@ fun PlanScreen(
                 Text("Each event opens its own fuel plan on its FUEL tab.", style = FTType.Caption, color = FT.TextSecondary)
                 EventsCard(onOpenEvent = onOpenEvent)
             }
-            PlanTab.Sessions -> TrainingSessionsTab(onOpenSessionDetail)
+            PlanTab.Regimen -> SupplementsScreen(onOpenPantry = onOpenPantry)
         }
     }
 }

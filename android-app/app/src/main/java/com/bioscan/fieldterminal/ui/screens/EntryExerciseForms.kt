@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.ExerciseLibraryRepository
+import com.bioscan.fieldterminal.data.GearRulesRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.ExerciseLibraryMatch
@@ -29,6 +30,13 @@ import com.bioscan.fieldterminal.data.model.StrengthExerciseDto
 import com.bioscan.fieldterminal.data.model.StrengthSetDto
 import com.bioscan.fieldterminal.domain.editedDetails
 import com.bioscan.fieldterminal.domain.spec
+import com.bioscan.fieldterminal.domain.training.GEAR_LABEL
+import com.bioscan.fieldterminal.domain.training.GEAR_TAGS
+import com.bioscan.fieldterminal.domain.training.GearRule
+import com.bioscan.fieldterminal.domain.training.cleanGear
+import com.bioscan.fieldterminal.domain.training.describeGearRules
+import com.bioscan.fieldterminal.domain.training.suggestGear
+import androidx.compose.ui.semantics.Role
 import com.bioscan.fieldterminal.ui.components.FTRatingSlider
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ftClickable
@@ -66,6 +74,12 @@ internal fun ExerciseDetailsForm(
         mutableStateListOf(*seeded.ifEmpty { listOf(EditableExercise()) }.toTypedArray())
     }
 
+    // The person's gear rules, for pre-filling a new set's gear from its weight; none when they cannot be read (gear then just starts empty).
+    var gearRules by remember { mutableStateOf<List<GearRule>>(emptyList()) }
+    LaunchedEffect(type) {
+        if (type == "strength") gearRules = catching { GearRulesRepository(SupabaseClientProvider.client).load() }.getOrDefault(emptyList())
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(
             "Health Connect supplies the time, distance, and heart rate for this $type session — " +
@@ -82,7 +96,7 @@ internal fun ExerciseDetailsForm(
         if (type == "strength") {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 FormLabel("EXERCISES")
-                exercises.forEachIndexed { i, exercise -> ExerciseEditor(exercise, canRemove = exercises.size > 1) { exercises.removeAt(i) } }
+                exercises.forEachIndexed { i, exercise -> ExerciseEditor(exercise, canRemove = exercises.size > 1, gearRules = gearRules) { exercises.removeAt(i) } }
                 Text(
                     "+ ADD EXERCISE",
                     style = FTType.MonoCaption,
@@ -122,7 +136,13 @@ private class EditableSet(
     val durationSec: Int? = null,
     val avgHr: Int? = null,
     val detectedReps: Int? = null,
+    gear: List<String>? = null,
+    gearAuto: Boolean = false,
 ) {
+    // null = gear not recorded (sets from before gear existed); a list, even an empty one, = recorded.
+    // gearAuto: a new set still follows the person's gear rules as its weight is typed, until gear is picked by hand.
+    var gear by mutableStateOf(gear)
+    var gearAuto by mutableStateOf(gearAuto)
     var reps by mutableStateOf(reps)
     var weightKg by mutableStateOf(weightKg)
     var rpe by mutableStateOf(rpe)
@@ -133,7 +153,7 @@ private class EditableExercise(name: String = "", val exerciseCode: Int? = null)
     // The Zepp code names the exercise Zepp recorded; renamed, it would point at the wrong one, so it is dropped then.
     val originalName = name
     var name by mutableStateOf(name)
-    val sets = mutableStateListOf(EditableSet())
+    val sets = mutableStateListOf(EditableSet(gearAuto = true))
 }
 
 private fun StrengthExerciseDto.toEditable() = EditableExercise(name, exerciseCode).also { editable ->
@@ -142,7 +162,7 @@ private fun StrengthExerciseDto.toEditable() = EditableExercise(name, exerciseCo
         editable.sets.add(
             EditableSet(
                 s.reps.toString(), s.weightKg.toString(), s.rpe?.toString() ?: "", s.percentOneRm?.toString() ?: "",
-                durationSec = s.durationSec, avgHr = s.avgHr, detectedReps = s.detectedReps,
+                durationSec = s.durationSec, avgHr = s.avgHr, detectedReps = s.detectedReps, gear = s.gear,
             ),
         )
     }
@@ -164,6 +184,7 @@ private fun EditableExercise.toDtoOrNull(): StrengthExerciseDto? {
             durationSec = s.durationSec,
             avgHr = s.avgHr,
             detectedReps = s.detectedReps,
+            gear = s.gear?.let { cleanGear(it) },
         )
     }
     val code = exerciseCode.takeIf { name.trim() == originalName.trim() }
@@ -183,7 +204,7 @@ private fun EditableExercise.toDtoOrNull(): StrengthExerciseDto? {
 // the field stays free text underneath (matching the original handoff's own
 // "typo-tolerant at entry time" framing).
 @Composable
-private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRemove: () -> Unit) {
+private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, gearRules: List<GearRule>, onRemove: () -> Unit) {
     val libraryRepo = remember { ExerciseLibraryRepository(SupabaseClientProvider.client) }
     var suggestions by remember { mutableStateOf<List<ExerciseLibraryMatch>>(emptyList()) }
     var suppressSearch by remember { mutableStateOf(false) }
@@ -242,8 +263,17 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FieldTextField(set.reps, { set.reps = it }, "Reps", modifier = Modifier.weight(1f), keyboardType = KeyboardType.Number)
-                    FieldTextField(set.weightKg, { set.weightKg = it }, "Weight (kg)", modifier = Modifier.weight(1f), keyboardType = KeyboardType.Number)
+                    FieldTextField(
+                        set.weightKg,
+                        {
+                            set.weightKg = it
+                            // a new set follows the person's gear rules as its weight is typed
+                            if (set.gearAuto && exercise.name.isNotBlank()) set.gear = it.toDoubleOrNull()?.let { w -> suggestGear(gearRules, exercise.name, w) }
+                        },
+                        "Weight (kg)", modifier = Modifier.weight(1f), keyboardType = KeyboardType.Number,
+                    )
                 }
+                GearPicker(set, exercise.name, gearRules)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FieldTextField(set.rpe, { set.rpe = it }, "RPE (optional)", modifier = Modifier.weight(1f), keyboardType = KeyboardType.Number)
                     FieldTextField(set.percentOneRm, { set.percentOneRm = it }, "% 1RM (optional)", modifier = Modifier.weight(1f), keyboardType = KeyboardType.Number)
@@ -270,12 +300,53 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
                 val previous = exercise.sets.lastOrNull()
                 exercise.sets.add(
                     if (previous != null) {
-                        EditableSet(previous.reps, previous.weightKg, previous.rpe, previous.percentOneRm)
+                        EditableSet(previous.reps, previous.weightKg, previous.rpe, previous.percentOneRm, gear = previous.gear, gearAuto = previous.gearAuto)
                     } else {
                         EditableSet()
                     },
                 )
             },
         )
+
+        if (exercise.name.isNotBlank() && describeGearRules(gearRules, exercise.name).isNotEmpty()) {
+            Text(
+                "APPLY MY GEAR RULES",
+                style = FTType.MonoCaption,
+                color = FT.DomainLog,
+                modifier = Modifier.ftClickable {
+                    // every set that has a weight takes the gear the rules call for at that weight
+                    exercise.sets.forEach { s ->
+                        val w = s.weightKg.toDoubleOrNull() ?: return@forEach
+                        s.gearAuto = false
+                        s.gear = suggestGear(gearRules, exercise.name, w)
+                    }
+                },
+            )
+        }
+    }
+}
+
+
+// The gear of one set: tap to add or take off; the chips start from the person's rules for this lift and weight (Plan > Training setup >
+// Gear rules). "Not recorded" is its own state, so a set from before gear existed is never read as "no gear".
+@Composable
+private fun GearPicker(set: EditableSet, exerciseName: String, rules: List<GearRule>) {
+    val picked = set.gear.orEmpty().toSet()
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        val rule = describeGearRules(rules, exerciseName)
+        FormLabel(
+            when {
+                set.gear == null -> "GEAR \u00b7 NOT RECORDED"
+                picked.isEmpty() -> "GEAR \u00b7 NONE"
+                else -> "GEAR"
+            },
+        )
+        val labels = GEAR_TAGS.map { GEAR_LABEL.getValue(it) }
+        ChipGrid(labels, perRow = 4, role = Role.Checkbox, isSelected = { GEAR_TAGS[labels.indexOf(it)] in picked }) { label ->
+            val tag = GEAR_TAGS[labels.indexOf(label)]
+            set.gearAuto = false
+            set.gear = cleanGear(if (tag in picked) picked - tag else picked + tag)
+        }
+        if (rule.isNotEmpty()) Text("Your rule: $rule", style = FTType.Micro, color = FT.TextMuted)
     }
 }

@@ -11,14 +11,15 @@ export const RUN_TYPES = ['easy', 'tempo', 'long', 'hills', 'intervals', 'race',
 export const EXERCISES_FROM_APP = 'app'
 
 export type Details = Record<string, unknown>
-export interface StrengthSet { reps: number; weight_kg: number; rpe?: number | null; rir?: number | null; percent_1rm?: number | null; duration_sec?: number | null; avg_hr?: number | null; detected_reps?: number | null }
+export interface StrengthSet { reps: number; weight_kg: number; rpe?: number | null; rir?: number | null; percent_1rm?: number | null; duration_sec?: number | null; avg_hr?: number | null; detected_reps?: number | null; gear?: string[] | null }
 export interface StrengthExercise { name: string; exercise_code?: number | null; sets: StrengthSet[] }
 
 /** What the form holds: text per field, since a set mid-entry is routinely blank or partial. What the watch measured rides along unchanged. */
-export interface EditableSet { reps: string; weightKg: string; rpe: string; percentOneRm: string; carried: Pick<StrengthSet, 'rir' | 'duration_sec' | 'avg_hr' | 'detected_reps'> }
+/** `gear`: null = not recorded (every set from before gear existed); a list, even an empty one, = recorded. `gearAuto`: still following the person's rules as the weight is typed. */
+export interface EditableSet { reps: string; weightKg: string; rpe: string; percentOneRm: string; gear: string[] | null; gearAuto: boolean; carried: Pick<StrengthSet, 'rir' | 'duration_sec' | 'avg_hr' | 'detected_reps'> }
 export interface EditableExercise { name: string; originalName: string; exerciseCode: number | null; sets: EditableSet[] }
 
-export const blankSet = (): EditableSet => ({ reps: '', weightKg: '', rpe: '', percentOneRm: '', carried: {} })
+export const blankSet = (): EditableSet => ({ reps: '', weightKg: '', rpe: '', percentOneRm: '', gear: null, gearAuto: true, carried: {} })
 export const blankExercise = (): EditableExercise => ({ name: '', originalName: '', exerciseCode: null, sets: [blankSet()] })
 
 export function exercisesOf(details: Details | null | undefined): StrengthExercise[] {
@@ -31,6 +32,7 @@ export function toEditable(e: StrengthExercise): EditableExercise {
     name: e.name, originalName: e.name, exerciseCode: e.exercise_code ?? null,
     sets: e.sets.map((s) => ({
       reps: String(s.reps), weightKg: String(s.weight_kg), rpe: s.rpe == null ? '' : String(s.rpe), percentOneRm: s.percent_1rm == null ? '' : String(s.percent_1rm),
+      gear: Array.isArray(s.gear) ? s.gear : null, gearAuto: false,
       carried: { rir: s.rir ?? null, duration_sec: s.duration_sec ?? null, avg_hr: s.avg_hr ?? null, detected_reps: s.detected_reps ?? null },
     })),
   }
@@ -46,7 +48,7 @@ export function toExercise(e: EditableExercise): StrengthExercise | null {
   for (const s of e.sets) {
     const reps = intOrNull(s.reps), weight = numOrNull(s.weightKg)
     if (reps == null || weight == null) continue
-    sets.push({ reps, weight_kg: weight, rpe: intOrNull(s.rpe), rir: s.carried.rir ?? null, percent_1rm: numOrNull(s.percentOneRm), duration_sec: s.carried.duration_sec ?? null, avg_hr: s.carried.avg_hr ?? null, detected_reps: s.carried.detected_reps ?? null })
+    sets.push({ reps, weight_kg: weight, rpe: intOrNull(s.rpe), rir: s.carried.rir ?? null, percent_1rm: numOrNull(s.percentOneRm), duration_sec: s.carried.duration_sec ?? null, avg_hr: s.carried.avg_hr ?? null, detected_reps: s.carried.detected_reps ?? null, ...(s.gear ? { gear: s.gear } : {}) })
   }
   if (sets.length === 0) return null
   // The Zepp code names the exercise Zepp recorded; renamed, it would point at the wrong one, so it is dropped then.
@@ -55,7 +57,7 @@ export function toExercise(e: EditableExercise): StrengthExercise | null {
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 /** The comparison that decides whether exercises changed: null and absent fields are the same thing. */
-const norm = (list: StrengthExercise[]) => list.map((e) => ({ name: e.name, code: e.exercise_code ?? null, sets: e.sets.map((s) => [s.reps, s.weight_kg, s.rpe ?? null, s.rir ?? null, s.percent_1rm ?? null, s.duration_sec ?? null, s.avg_hr ?? null, s.detected_reps ?? null]) }))
+const norm = (list: StrengthExercise[]) => list.map((e) => ({ name: e.name, code: e.exercise_code ?? null, sets: e.sets.map((s) => [s.reps, s.weight_kg, s.rpe ?? null, s.rir ?? null, s.percent_1rm ?? null, s.duration_sec ?? null, s.avg_hr ?? null, s.detected_reps ?? null, s.gear ?? null]) }))
 
 export interface DetailEdits {
   /** `undefined`: leave as it is (not a run); `null`: clear. */

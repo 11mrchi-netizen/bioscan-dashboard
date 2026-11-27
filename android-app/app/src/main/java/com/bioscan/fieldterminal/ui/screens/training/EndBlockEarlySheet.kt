@@ -90,6 +90,8 @@ fun EndBlockEarlySheet(blockId: Long, onDismiss: () -> Unit, onDone: () -> Unit)
             saving = true
             scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { saving = false }) {
                 endBlockEarly(supabase, bb, lastDay, if (stepUp) steps else emptyList())
+                // The dropped sessions' templates come off the watch now, not at the next app open (best effort).
+                runCatching { com.bioscan.fieldterminal.data.ZeppRepository(supabase).pushUpcoming() }
                 onDone()
             }
         },

@@ -4,6 +4,9 @@
 > scoring system. See `docs/scoring-system/README.md` (Build status). The Training, Nutrition and Health pages below
 > are detail pages now, opened from the domain overlays' THE FULL PICTURE tiles. The map below is the
 > October structure, kept for history.
+>
+> **Next structure (agreed, not built):** `02-focus-and-structure.md` (five tabs with one question each, Lab becomes
+> INSIGHTS, the Lead, Support, Depth page pattern and the add tunnel).
 
 The owner's "Field terminal new structure" document, as built, and the six content changes that came with it. The
 code is authoritative: `ui/nav/TopLevelTab.kt` holds every tab set, `ui/nav/FieldTerminalNavHost.kt` the routes and

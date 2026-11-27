@@ -122,7 +122,7 @@ Zepp exercise, and a lift without an entry is skipped and reported. The app side
 `ZeppRepository.pushUpcoming()`: strength sessions of the next 7 days, ids/hash stored on
 `planned_sessions.zepp_template_id / zepp_pushed_hash / zepp_pushed_at`, unchanged sessions skipped, changed ones
 replaced, past ones deleted. It runs from Settings > Connected services > Zepp ("SEND NEXT 7 DAYS TO ZEPP") and after
-every on-open sync. Warm-ups: `domain/training/WarmUp.kt`.
+every on-open sync, and right after a block is ended early. Each push also clears orphans: templates described "planned session <id>" that no planned session points at (the session row was removed, or a delete failed and the id was cleared) are deleted (`keepIds` + `pruneOrphans`; `listOrphans` only lists them). The app writes nothing to Google Calendar: the "Training" calendar push in the architecture doc is not built. Warm-ups: `domain/training/WarmUp.kt`.
 
 ## 4. Tools in the repo
 

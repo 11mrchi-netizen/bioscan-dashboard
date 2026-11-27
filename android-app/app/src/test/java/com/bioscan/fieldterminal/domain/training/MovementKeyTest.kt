@@ -28,6 +28,16 @@ class MovementKeyTest {
         assertNotEquals(movementKey("Weighted Pull-up"), movementKey("Pull Up"))
     }
 
+    // The exercise library says "Trap Bar Deadlift", the definitions say "Trapbar Deadlift".
+    @Test
+    fun trapBarSpellingsAndLibraryPairsShareAKey() {
+        val trap = listOf("Trap Bar Deadlift", "Trapbar Deadlift", "Trap-Bar Deadlift", "TRAPBAR DEADLIFT", "Hex Bar Deadlift", "Trapbar DL", "Trap Bar Deadlifts").map(::movementKey).toSet()
+        assertEquals(1, trap.size)
+        assertEquals(movementKey("Rack Pull"), movementKey("Rack Pulls"))
+        assertEquals(movementKey("Push-ups"), movementKey("Pushups"))
+        assertNotEquals(movementKey("Trap Bar Deadlift"), movementKey("Deadlift"))
+    }
+
     @Test
     fun differentMovementsKeepSeparateKeys() {
         assertNotEquals(movementKey("Squat"), movementKey("Front Squat"))

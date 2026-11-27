@@ -88,6 +88,9 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     // the Me tabs as the phone worked them out, for the web Dashboard: a derived copy that mixes every group (health,
     // routine, sexual health); the assistant reads the source tables under their own groups instead
     'me_views',
+    // the phone's scored morning per day, for the web Today: a derived copy of every score input (illness, stool, stress,
+    // sleep), so it stays closed; the assistant reads the source tables under their own groups
+    'today_views',
     // free text by nature
     'notes',
     // the home's environment (docs/home-environment): light and changes in the readings show when someone is home, so

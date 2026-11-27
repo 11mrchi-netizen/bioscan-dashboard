@@ -1,0 +1,15 @@
+{
+  "version": "stopstart-v1",
+  "voice_note": "Written to be read in a calm, unhurried clinical voice, the register of a sex therapist or pelvic-floor physiotherapist. Instruction only; nothing erotic.",
+  "cues": {
+    "settle": "Find a private, comfortable position and let your breathing slow. Breathe in through the nose, and out slowly through the mouth. Let your pelvic floor and your jaw soften. This is practice, there is nothing to achieve.",
+    "build": "Begin stimulation at a steady pace. Pay attention to the rise of arousal, and rate it in your mind from zero to ten. When it reaches about seven, the point where you can still feel in control, stop and tap STOP.",
+    "stop": "Stop all stimulation now. Keep your hands still. Breathe out slowly and let your muscles release.",
+    "late": "That was close to the point of no return. That is useful information, not a failure. Next cycle, stop a little earlier, at about seven.",
+    "pause_wait": "Keep breathing slowly. Notice the arousal level falling. Wait until it has dropped to about four before you continue.",
+    "pause_ready": "When you feel ready, and the arousal has settled to about four, tap RESUME.",
+    "resume": "Begin again, at the same steady pace. Attend to the rising sensation, and stop again at about seven.",
+    "cooldown": "That completes the cycles. Stop stimulation and rest. Breathe slowly for a minute, and let your whole body relax.",
+    "done": "Well done. Before you finish, rate how the session felt."
+  }
+}

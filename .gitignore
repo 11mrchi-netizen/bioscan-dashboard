@@ -6,3 +6,5 @@ console/.env
 .DS_Store
 perf-harness/
 supabase/.temp/
+# Recorded voice for Lab › WELLNESS: stays on the owner's computer (see docs/wellness/README.md)
+android-app/app/src/main/assets/wellness/audio/

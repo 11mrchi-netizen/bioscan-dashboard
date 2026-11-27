@@ -33,6 +33,9 @@ const val SETUP_ROUTE = "setup"
 /** Breathwork, pushed from Lab › TESTS. */
 const val BREATHWORK_ROUTE = "breathwork"
 
+/** Wellness (guided stop-start training), pushed from Lab › TESTS. */
+const val WELLNESS_ROUTE = "wellness"
+
 // PLAN's sub-tabs: what is planned and what was done.
 enum class PlanTab(val label: String) {
     Training("TRAINING"),

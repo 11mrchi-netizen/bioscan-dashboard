@@ -40,6 +40,7 @@ fun LabTileScreen(
     onBack: (() -> Unit)?,
     onOpenDayMap: (LocalDate) -> Unit = {},
     onOpenBreathwork: () -> Unit = {},
+    onOpenWellness: () -> Unit = {},
     // Set by a deep link (supplement reminder -> SUPPLEMENTS, fuel reminder -> PLANNING › FOOD PLAN, body check-in
     // reminder -> TESTS with the check-in up); applied once, then cleared via the callback.
     requestedTab: LabTab? = null,
@@ -86,7 +87,7 @@ fun LabTileScreen(
     ) {
         when (tab) {
             LabTab.N1 -> N1Tab(openReport = openReport, onReportHandled = onReportHandled)
-            LabTab.Tests -> TestsTab(reloadKey = testsReload, onStart = { test = it }, onOpenBreathwork = onOpenBreathwork)
+            LabTab.Tests -> TestsTab(reloadKey = testsReload, onStart = { test = it }, onOpenBreathwork = onOpenBreathwork, onOpenWellness = onOpenWellness)
             LabTab.Routine -> RoutineTab(onOpenDay = onOpenDayMap)
             LabTab.Explore -> ExploreTab()
         }
@@ -107,7 +108,7 @@ enum class LabTest { BloodPressure, Grip, BodyCheckIn, SweatTest, RunningForm }
 // Lab › TESTS: where a test starts. Its result is saved like any other entry, so it shows in Log and on the cards that
 // read it (grip and the check-in on Health › Body, the sweat test in race fuel plans).
 @Composable
-private fun TestsTab(reloadKey: Int, onStart: (LabTest) -> Unit, onOpenBreathwork: () -> Unit) {
+private fun TestsTab(reloadKey: Int, onStart: (LabTest) -> Unit, onOpenBreathwork: () -> Unit, onOpenWellness: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -119,6 +120,8 @@ private fun TestsTab(reloadKey: Int, onStart: (LabTest) -> Unit, onOpenBreathwor
         TestRow("RUNNING FORM ANALYSER", "A 10–20 s side-on clip, read on the phone: foot landing, knee and shin, trunk lean, bounce and, in slow motion, contact time.") { onStart(LabTest.RunningForm) }
         // A guided breathing pacer with presets and your own patterns; each session is saved to the Log.
         TestRow("BREATHWORK", "Box, 4-7-8, coherent, the physiological sigh, or a pattern of your own, paced by a guide circle.", startLabel = "OPEN", onStart = onOpenBreathwork)
+        // Guided stop-start training, paced by the clock and two taps; each session is saved (counts and ratings only).
+        TestRow("WELLNESS", "Guided stop-start training, a few cycles at a time. The next session follows how the last ones went.", startLabel = "OPEN", onStart = onOpenWellness)
     }
 }
 

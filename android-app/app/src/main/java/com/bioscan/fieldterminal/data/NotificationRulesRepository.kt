@@ -20,7 +20,11 @@ import kotlinx.serialization.json.put
 import java.time.Instant
 
 @Serializable
-data class WellbeingScoresRow(val energy: Int? = null, val mood: Int? = null, val stress: Int? = null, val soreness: Int? = null)
+data class WellbeingScoresRow(
+    val energy: Int? = null, val mood: Int? = null, val stress: Int? = null, val soreness: Int? = null,
+    @SerialName("morning_erection_quality") val morningErectionQuality: Int? = null,
+    @SerialName("arousal_level") val arousalLevel: Int? = null,
+)
 
 @Serializable
 private data class AgentRunIdRow(val id: String)
@@ -202,7 +206,7 @@ class NotificationRulesRepository(private val supabase: SupabaseClient) {
     // Today's scores, for the wellbeing check-in's skip-if-logged test (null row = nothing logged today).
     suspend fun loadWellbeingForDate(date: String): WellbeingScoresRow? =
         supabase.postgrest.from("wellbeing_daily")
-            .select(columns = Columns.list("energy,mood,stress,soreness")) { filter { eq("date", date) } }
+            .select(columns = Columns.list("energy,mood,stress,soreness,morning_erection_quality,arousal_level")) { filter { eq("date", date) } }
             .decodeList<WellbeingScoresRow>()
             .firstOrNull()
 

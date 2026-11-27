@@ -86,3 +86,7 @@ fun dueFuelPrompts(
         if (at.isAfter(after) && !at.isAfter(now) && now.isBefore(deadline)) p.copy(at = at) else null
     }.sortedBy { it.at }
 }
+
+/** Shown fuel reminders whose prompt no longer exists in the current plan (session recorded, moved or removed): to withdraw. */
+fun staleFuelKeys(shownKeys: Set<String>, currentKeys: Set<String>): Set<String> =
+    shownKeys.filter { it.startsWith("fuel:") && it !in currentKeys }.toSet()

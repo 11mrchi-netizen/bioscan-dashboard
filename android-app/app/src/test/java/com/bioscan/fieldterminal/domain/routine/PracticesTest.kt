@@ -84,4 +84,10 @@ class PracticesTest {
         assertEquals("Tue Thu", scheduleWords(setOf(4, 2)))
         assertEquals("1 h 05", minutesWords(65.0))
     }
+
+    @Test
+    fun aPracticeLoggedTodayIsWithdrawnOnlyForToday() {
+        val skip = RoutineLog(9, 2, tue, null, null, null, LogStatus.SKIPPED, LogSource.REMINDER)
+        assertEquals(setOf(1L, 2L), practicesLoggedOn(listOf(done(1, tue), skip, done(3, tue.minusDays(1))), tue))
+    }
 }
